@@ -1,0 +1,733 @@
+# Roadmap
+
+## Overview
+
+`my-dev-kit` is a CLI-first development context kit for indexing codebases, building graph artifacts, searching project structure, slicing relevant neighborhoods, and retrieving bounded source context for LLM-assisted development.
+
+The product goal is simple: help developers and coding agents understand large projects without dumping whole files, broad folders, or unfiltered documentation into a prompt.
+
+The current release focuses on deterministic local artifacts:
+
+- `symbol-index.json`
+- `code-graph.json`
+- optional call graph artifacts
+- bounded source retrieval
+- graph slices
+- DOT, SVG, and PNG graph views
+- deterministic keyword search over index artifacts
+
+Future releases improve precision, scale, language coverage, frontend workflows, data-model understanding, and retrieval quality.
+
+## Version 1.0.0
+
+Version 1.0.0 is the first stable CLI release of `my-dev-kit`.
+
+### Command surface
+
+Version 1.0.0 includes six primary commands:
+
+- `index`
+- `lookup`
+- `source`
+- `slice`
+- `view`
+- `search`
+
+### Implemented capabilities
+
+#### Indexing
+
+- TypeScript indexing
+- JavaScript indexing
+- Python indexing
+- symbol extraction for functions, classes, constants, imports, exports, and source locations
+- file-level graph nodes
+- symbol-level graph nodes
+- typed graph edges
+- static call graph generation through `--call-graph`
+- conservative TypeScript, JavaScript, and Python call extraction
+- `symbol-index.json` output
+- `code-graph.json` output
+
+#### Lookup
+
+- exact node lookup
+- configurable graph depth
+- file and symbol lookup support
+- structured output for downstream tooling
+
+#### Source retrieval
+
+- line-range retrieval
+- symbol-name retrieval
+- node-ID retrieval
+- bounded source extraction
+- `json`, `plain`, and `numbered` output formats
+- file output through `--out <path>`
+
+#### Graph slicing
+
+- bounded graph-neighborhood extraction
+- focus-node slicing
+- graph context suitable for prompt preparation
+- typed node and edge output
+
+#### Graph viewing
+
+- Graphviz DOT output
+- SVG output through Graphviz
+- PNG output through Graphviz
+- semantic edge styling
+- labeled edge styling
+- minimal edge styling
+- graph legend support for semantic views
+
+#### Search
+
+- deterministic keyword search over index artifacts
+- field-weighted ranking
+- search over files, symbols, paths, and graph metadata
+- retrieval-oriented candidate discovery
+
+## Version 1.0.x
+
+Version 1.0.x releases focus on release hardening, documentation quality, and safer retrieval workflows without changing the core artifact model.
+
+### Large-repository safety
+
+Planned improvements:
+
+- default ignore rules for common generated folders
+- `--exclude` support where missing
+- `--dry-run` support for expensive commands
+- progress reporting during indexing
+- clearer output when a repository is large
+- safer behavior when a command would scan too many files
+- documentation for indexing large monorepos
+
+### Retrieval workflow reporting
+
+Planned improvements:
+
+- report search queries used
+- report selected candidate nodes
+- report lookup targets
+- report slice focus nodes
+- report source nodes retrieved
+- report source line ranges retrieved
+- report fallback reason when line-range retrieval is used
+- report fallback reason when a full-file read is recommended by an external coding agent
+
+The graph-guided workflow should be easy to audit:
+
+1. search candidate nodes
+2. lookup the strongest nodes
+3. slice around the strongest node or nodes
+4. retrieve source by exact node or symbol
+5. use line ranges only when symbol retrieval is not enough
+
+### Documentation and examples
+
+Planned improvements:
+
+- clearer `README.md`
+- clearer `QUICKSTART.md`
+- clearer `COMMANDS.md`
+- clearer graph-guided retrieval examples
+- better examples for existing projects
+- better examples for multi-root projects
+- clearer explanation of generated artifacts
+- clearer explanation of when to use each command
+- removal of confusing or unused example scripts
+
+## Version 1.1.0
+
+Version 1.1.0 focuses on source retrieval expansion.
+
+The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
+
+### Source continuation
+
+Planned features:
+
+- continue retrieving a large symbol after the first bounded result
+- retrieve the next source window from a known line
+- make truncation recoverable without reading the whole file
+
+Candidate command shapes:
+
+- `source --node <symbol-id> --continue`
+- `source --file <path> --symbol <name> --continue-from <line>`
+
+### Local context expansion
+
+Planned features:
+
+- include imports for a retrieved symbol
+- include local type definitions used by a retrieved symbol
+- include local prop types used by a React component
+- include local constants used by a symbol
+- include local helper functions called by a symbol
+- include local helper components used by a component
+- include sibling source blocks when they are direct local dependencies
+
+Candidate command shapes:
+
+- `source --node <symbol-id> --include-imports`
+- `source --node <symbol-id> --include-local-types`
+- `source --node <symbol-id> --include-local-components`
+- `source --node <symbol-id> --include-props`
+- `source --node <symbol-id> --include-local-deps`
+- `source --node <symbol-id> --expand-to-local-dependencies`
+
+### Source bundle output
+
+Planned features:
+
+- bounded source bundles around one symbol
+- local dependency closure with a max-line cap
+- explanation for each included source block
+- deterministic ordering of included blocks
+- compact output suitable for coding-agent prompts
+
+Candidate command shape:
+
+- `source --node <symbol-id> --include-local-deps --max-lines <n>`
+
+## Version 1.2.0
+
+Version 1.2.0 focuses on React, TSX, and frontend test indexing.
+
+The goal is to make frontend work retrievable by the structures developers actually use: components, props, hooks, JSX branches, visible text, routes, test names, and locators.
+
+### TSX and React indexing
+
+Planned features:
+
+- exported component indexing
+- local component indexing
+- prop type indexing
+- local type indexing
+- hook block indexing
+- `useState` declaration indexing
+- `useEffect` block indexing
+- callback and event-handler indexing
+- JSX branch indexing
+- JSX section indexing
+- important UI string indexing
+- `data-testid` indexing
+- ARIA label indexing
+
+Possible node examples:
+
+- `component:apps/web/app/evidence-seed/page.tsx#EvidenceSeedPage`
+- `handler:apps/web/app/evidence-seed/page.tsx#EvidenceSeedPage.handleRunIngestion`
+- `state:apps/web/app/evidence-seed/page.tsx#evidenceRecordsVisible`
+- `jsx:apps/web/app/evidence-seed/page.tsx#stage-3-evidence`
+- `ui-string:apps/web/app/evidence-seed/page.tsx#Continue-to-evidence-review`
+
+### React relationship extraction
+
+Planned relationship types:
+
+- component renders component
+- component passes prop
+- prop references handler
+- handler sets state
+- handler reads state
+- state controls JSX branch
+- effect restores state
+- button invokes handler
+- link points to target ID
+- JSX anchor points to route or section
+
+### Test-file indexing
+
+Planned features:
+
+- `describe` block indexing
+- `test` block indexing
+- `it` block indexing
+- `beforeEach` and `afterEach` indexing
+- local test helper indexing
+- Playwright route string indexing
+- locator chain indexing
+- visible text indexing
+- test ID indexing
+
+Candidate command shapes:
+
+- `source --test-title <title>`
+- `source --contains <exact-string>`
+- `source --route <route>`
+- `search --test-title <title>`
+- `search --test-id <id>`
+
+### Exact string and locator retrieval
+
+Planned searchable targets:
+
+- visible text
+- route paths
+- `data-testid` values
+- ARIA labels
+- placeholders
+- button names
+- link names
+- locator expressions
+- test titles
+- page titles
+- status labels
+
+## Version 1.3.0
+
+Version 1.3.0 focuses on route-aware and browser-state-aware retrieval.
+
+The goal is to help developers answer a practical frontend question: what code, state, test, and route are involved in making this UI visible?
+
+### Route-aware indexing
+
+Planned features:
+
+- route path to page component relationships
+- route path to API handler relationships
+- page component to navigation call relationships
+- route path to tests mentioning the route
+- route path to UI links
+- route path to access-policy entries when detectable
+- route-centered graph slicing
+
+Candidate command shapes:
+
+- `search --route <route>`
+- `slice --route <route>`
+- `slice --route <route> --include-tests`
+- `slice --route <route> --include-policy`
+
+### Browser storage tracing
+
+Planned features:
+
+- session storage key indexing
+- local storage key indexing
+- read-site detection
+- write-site detection
+- clear-site detection
+- storage key to component relationship
+- storage key to route relationship
+- storage key to artifact type relationship when detectable
+
+Useful examples:
+
+- `evidence-seed-artifact`
+- `structured-content-bundle`
+- `evidence-record-set`
+- `evidence-review-snapshot`
+- `evidence-graph-visualization-snapshot`
+- `workspace-editor-draft.v1`
+
+### UI reachability analysis
+
+Planned features:
+
+- report whether a component is imported
+- report whether a component is rendered
+- report whether rendering is conditional
+- report which state gates a UI branch
+- report which route reaches a component
+- report which user action reaches a component
+- report which test proves visibility
+- flag components that are defined but not reachable
+
+Candidate command shapes:
+
+- `lookup --ui <component-or-string>`
+- `slice --ui <component-or-string>`
+- `view --route <route>`
+- `search --storage-key <key>`
+
+## Version 1.4.0
+
+Version 1.4.0 focuses on data-model graph extraction.
+
+The goal is to add a separate graph layer for data entities and relationships without mixing data-model relationships into the general code graph.
+
+### Data-model extraction
+
+Planned features:
+
+- entity extraction
+- field extraction
+- primary key extraction
+- foreign key extraction
+- one-to-one relationship extraction
+- one-to-many relationship extraction
+- many-to-one relationship extraction
+- many-to-many relationship extraction
+- calculated field or measure dependency extraction where practical
+- schema-to-code relationship mapping where practical
+
+### Supported sources
+
+Candidate extraction sources:
+
+- Prisma schemas
+- SQL migration files
+- Django models
+- SQLAlchemy models
+- TypeORM entities
+- Sequelize models
+- decorator-based TypeScript model classes
+- plain TypeScript, JavaScript, and Python model code when patterns are detectable
+
+### Artifacts
+
+Planned artifacts:
+
+- `data-model.json`
+- `data-model-graph.json`
+
+The data-model graph should remain separate from `code-graph.json`.
+
+The code graph describes code structure. The data-model graph describes data entities, fields, and relationships.
+
+### Graph views
+
+Planned features:
+
+- DOT output for data-model graph
+- SVG and PNG output for data-model graph
+- relationship labels for entity graphs
+- filtering by entity
+- filtering by relationship type
+
+## Version 1.5.0
+
+Version 1.5.0 focuses on schema and layer classification.
+
+The goal is to help developers and coding agents avoid editing the wrong layer.
+
+### Symbol and type classification
+
+Planned classifications:
+
+- canonical type
+- artifact type
+- database model
+- projection type
+- view model
+- UI-only state
+- test fixture
+- persistence adapter
+- route handler
+- client component
+- server component
+- generated file
+- configuration file
+
+### Context report improvements
+
+Planned report fields:
+
+- what is reachable today
+- what is defined but unused
+- what is read-only
+- what is editable
+- what is guest-safe
+- what is authenticated-only
+- what is canonical state
+- what is projection state
+- what route or user action reaches each component
+- files that are safe to modify first
+- files that should be avoided for the task
+
+### Readiness categories
+
+Planned categories:
+
+- `ready`
+- `needs-more-context`
+- `risky-assumption`
+- `wrong-layer-risk`
+- `unreachable-ui-risk`
+- `requires-test-validation`
+- `requires-browser-validation`
+
+## Version 1.6.0
+
+Version 1.6.0 focuses on graph-guided planner packets and retrieval quality.
+
+The goal is to make graph locality directly affect what context is retained for a coding task.
+
+### Graph-focused retrieval
+
+Planned features:
+
+- focus-node selection from ranked retrieval winners
+- multi-seed graph focus when confidence is low
+- subsystem-aware retrieval mode
+- feature-add retrieval mode
+- stronger ranking for sibling implementations
+- stronger ranking for subsystem contracts
+- stronger ranking for registries
+- stronger ranking for local tests
+- penalties for unrelated top-level files
+
+### Planner packet pruning
+
+Planned features:
+
+- hard caps on candidate files
+- hard caps on doc sections
+- hard caps on source slices
+- hard caps on graph nodes and edges
+- graph-local file retention
+- graph-local doc retention
+- graph-local source-slice retention
+- explicit explanation for retained and dropped entries
+
+### Graph-first prompt packing
+
+Planned features:
+
+- prioritize graph-local code blocks
+- prioritize graph-local doc sections
+- prioritize graph-local source slices
+- compress broad retrieval summaries when graph confidence is high
+- omit broad context blocks when graph-local context is enough
+- keep fallback behavior for low-confidence graph focus
+
+## Version 1.7.0
+
+Version 1.7.0 focuses on retrieval-quality regression benchmarks.
+
+The goal is to make bounded-context quality testable.
+
+### Benchmark coverage
+
+Planned benchmark task types:
+
+- add a sibling implementation in a known subsystem
+- modify a registry-driven feature
+- update a route-level UI
+- update a Playwright test by route
+- modify a React component prop flow
+- retrieve a session-storage workflow
+- locate a hidden conditional render branch
+- update a large TSX component without full-file retrieval
+- distinguish canonical schema from projection schema
+- retrieve data-model relationships for a schema-heavy project
+
+### Assertions
+
+Planned assertions:
+
+- top-K retrieval quality
+- graph-focus correctness
+- planner packet size limits
+- absence of unrelated generic files in top ranks
+- source expansion correctness
+- source continuation correctness
+- no unnecessary full-file reads
+- route, UI, and test coverage
+- data-model graph correctness where applicable
+
+### Metrics
+
+Planned metrics:
+
+- selected file count
+- selected doc section count
+- selected source slice count
+- selected graph node count
+- selected graph edge count
+- full-file reads avoided
+- full-file reads allowed
+- full-file reads unjustified
+- fallback reason counts
+- prompt-size reduction from graph-guided retrieval
+
+## Version 1.8.0
+
+Version 1.8.0 focuses on scalability and indexing ergonomics.
+
+The goal is to make `my-dev-kit` more practical for larger repositories.
+
+### Incremental indexing
+
+Planned features:
+
+- changed-file detection
+- cache reuse
+- partial index rebuild
+- stable artifact IDs across rebuilds
+- invalidation when configuration changes
+- clear cache reset command
+
+### Watch mode
+
+Planned features:
+
+- watch source roots
+- rebuild changed files
+- update affected graph artifacts
+- report changed nodes and edges
+- keep output deterministic
+
+### Graph diff
+
+Planned features:
+
+- compare two index runs
+- report added nodes
+- report removed nodes
+- report changed nodes
+- report added edges
+- report removed edges
+- report changed edge metadata
+
+### Search and lookup filtering
+
+Planned features:
+
+- filter search by node kind
+- filter search by symbol kind
+- filter search by edge kind
+- filter lookup output by edge kind
+- filter graph slices by node and edge kinds
+
+## Version 1.9.0
+
+Version 1.9.0 focuses on language and framework coverage.
+
+The goal is to expand support while keeping static analysis conservative.
+
+### Python improvements
+
+Planned features:
+
+- richer alias handling
+- better cross-module call resolution
+- better method-call resolution
+- better class-member extraction
+- better decorator metadata extraction
+- better Django model extraction
+- better SQLAlchemy model extraction
+
+### JavaScript improvements
+
+Planned features:
+
+- improved JSDoc type extraction
+- better CommonJS handling where practical
+- better mixed JavaScript and TypeScript project support
+
+### Framework improvements
+
+Candidate framework targets:
+
+- React
+- Next.js
+- Playwright
+- Vitest
+- NestJS
+- Express
+- FastAPI
+- Django
+- SQLAlchemy
+- Prisma
+
+### Additional language support
+
+Candidate future languages:
+
+- Go
+- Rust
+- Java
+- C#
+- Kotlin
+
+Additional language support should be added through language adapters rather than hardcoded into one scanner.
+
+## Version 2.0.0
+
+Version 2.0.0 is reserved for a larger artifact and plugin model.
+
+The goal is to turn the v1 CLI into a more extensible retrieval platform while preserving the core graph-guided workflow.
+
+### Artifact schema v2
+
+Candidate first-class node types:
+
+- file
+- symbol
+- local function
+- React component
+- hook
+- state variable
+- JSX branch
+- UI string
+- test block
+- route
+- storage key
+- data entity
+- data field
+- artifact type
+- database model
+- projection type
+- graph-local evidence bundle
+
+### Plugin architecture
+
+Candidate plugin categories:
+
+- language plugins
+- framework plugins
+- test-framework plugins
+- ORM plugins
+- schema plugins
+- graph-view plugins
+- retrieval-ranking plugins
+
+### Retrieval API
+
+Candidate command groups:
+
+- `search`
+- `lookup`
+- `slice`
+- `source`
+- `source-bundle`
+- `route-map`
+- `ui-reachability`
+- `storage-trace`
+- `schema-classify`
+- `data-model`
+- `graph-diff`
+
+### Compatibility
+
+Version 2.0.0 should include a compatibility plan for v1 artifacts.
+
+If artifact formats change, the release should provide one of the following:
+
+- a migration command
+- a compatibility reader
+- a documented version boundary
+- a clear artifact regeneration path
+
+## Long-term direction
+
+`my-dev-kit` should remain local-first, deterministic, and inspectable.
+
+The core product direction is:
+
+- compact structural artifacts instead of raw context dumps
+- graph-guided retrieval instead of full-file reads
+- bounded source context instead of broad source injection
+- explicit fallback reporting instead of hidden assumptions
+- conservative static analysis instead of overclaimed runtime understanding
+- framework-aware retrieval where it improves real development workflows
+- clear artifacts that can be inspected, versioned, and reused by humans or coding agents
+
+The product should continue to work as a standalone CLI. Any future UI, hosted service, or agent integration should build on the same artifact model rather than replacing it.

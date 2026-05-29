@@ -1,0 +1,206 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { buildCodeGraph } from '../graph/buildCodeGraph.js'
+import { toForwardSlash } from '../io/pathUtils.js'
+import { buildIndex, type BuildIndexProgressEvent } from '../symbol-index/builder.js'
+import { buildIndexManifest } from './buildIndexManifest.js'
+import {
+  discoverSourceFiles,
+  type SourceDiscoveryProgressEvent,
+  type SourceDiscoveryResult,
+} from './discoverSourceFiles.js'
+import { writeIndexArtifacts } from './writeIndexManifest.js'
+import type { IndexManifest } from './manifestTypes.js'
+
+export interface RunIndexCommandOptions {
+  root?: string
+  src?: string[]
+  language?: string
+  out?: string
+  callGraph?: boolean
+  json?: boolean
+  exclude?: string[]
+  dryRun?: boolean
+  progress?: boolean
+}
+
+export type RunIndexCommandResult = RunIndexCommandIndexResult | RunIndexCommandDryRunResult
+
+export interface RunIndexCommandIndexResult {
+  mode: 'index'
+  manifest: IndexManifest
+  outputDir: string
+  symbolIndexPath: string
+  codeGraphPath: string
+  callGraphPath: string | null
+}
+
+export interface RunIndexCommandDryRunResult {
+  mode: 'dry-run'
+  projectRoot: string
+  sourceRoots: string[]
+  outputDir: string
+  defaultIgnoredDirectoryNames: string[]
+  userExcludes: string[]
+  totalFilesDiscovered: number
+  totalFilesEligibleForIndexing: number
+  totalFilesSkipped: number
+  skippedByDefaultIgnore: number
+  skippedByUserExclude: number
+  skippedByFilePattern: number
+  skippedUnsupportedFiles: number
+  languageCounts: Record<string, number>
+  largestFiles: Array<{ path: string; sizeBytes: number }>
+  sampleIndexedFiles: string[]
+  sampleSkippedFiles: SourceDiscoveryResult['sampleSkippedFiles']
+}
+
+const SUPPORTED_LANGUAGES = new Set(['typescript', 'javascript', 'python'])
+
+export async function runIndexCommand(
+  options: RunIndexCommandOptions & { dryRun: true }
+): Promise<RunIndexCommandDryRunResult>
+export async function runIndexCommand(
+  options: RunIndexCommandOptions & { dryRun?: false | undefined }
+): Promise<RunIndexCommandIndexResult>
+export async function runIndexCommand(options: RunIndexCommandOptions): Promise<RunIndexCommandResult>
+export async function runIndexCommand(options: RunIndexCommandOptions): Promise<RunIndexCommandResult> {
+  const commandStartTime = Date.now()
+  const projectRoot = path.resolve(options.root ?? '.')
+  const sourceRoots = options.src ?? []
+  const warnings: string[] = []
+  const errors: string[] = []
+
+  if (sourceRoots.length === 0) {
+    throw new Error('The index command requires at least one --src <path> source root.')
+  }
+
+  if (options.language && !SUPPORTED_LANGUAGES.has(options.language)) {
+    throw new Error(`Unsupported language "${options.language}". Supported values: typescript, javascript, python.`)
+  }
+
+  const normalizedSourceRoots = sourceRoots.map((sourceRoot) => toForwardSlash(sourceRoot))
+  for (const sourceRoot of normalizedSourceRoots) {
+    const absoluteSourceRoot = path.resolve(projectRoot, sourceRoot)
+    if (!fs.existsSync(absoluteSourceRoot) || !fs.statSync(absoluteSourceRoot).isDirectory()) {
+      throw new Error(`Source root does not exist or is not a directory: ${sourceRoot}`)
+    }
+  }
+
+  const outputDir = path.resolve(projectRoot, options.out ?? '.my-dev-kit-v1')
+  const progress = createProgressReporter(options.progress === true, commandStartTime)
+
+  if (options.dryRun) {
+    const discovery = discoverSourceFiles({
+      repoRoot: projectRoot,
+      sourceRoots: normalizedSourceRoots,
+      userExcludes: options.exclude,
+      onProgress: progress,
+    })
+    return buildDryRunResult(projectRoot, normalizedSourceRoots, outputDir, discovery)
+  }
+
+  const buildResult = buildIndex({
+    repoRoot: projectRoot,
+    sourceRoots: normalizedSourceRoots,
+    buildCallGraph: options.callGraph === true,
+    excludePatterns: options.exclude,
+    onProgress: progress,
+  })
+
+  const languages = inferLanguages(buildResult.index.files.map((file) => file.language), options.language)
+  const codeGraph = buildCodeGraph({
+    symbolIndex: buildResult.index,
+    callGraph: buildResult.callGraph,
+  })
+  const manifest = buildIndexManifest({
+    projectRoot: toForwardSlash(projectRoot),
+    sourceRoots: normalizedSourceRoots,
+    languages,
+    callGraphEnabled: options.callGraph === true,
+    callGraphProduced: buildResult.callGraph !== null,
+    symbolIndex: buildResult.index,
+    codeGraph,
+    warnings,
+    errors,
+  })
+
+  progress?.({
+    phase: 'artifact-write-start',
+    message: 'Final artifact writing started',
+    elapsedMs: Date.now() - commandStartTime,
+  })
+  writeIndexArtifacts({
+    outputDir,
+    manifest,
+    symbolIndex: buildResult.index,
+    codeGraph,
+    callGraph: buildResult.callGraph,
+  })
+  progress?.({
+    phase: 'artifact-write-complete',
+    message: 'Final artifact writing completed',
+    elapsedMs: Date.now() - commandStartTime,
+  })
+
+  return {
+    mode: 'index',
+    manifest,
+    outputDir: toForwardSlash(outputDir),
+    symbolIndexPath: toForwardSlash(path.join(outputDir, 'symbol-index.json')),
+    codeGraphPath: toForwardSlash(path.join(outputDir, 'code-graph.json')),
+    callGraphPath: buildResult.callGraph ? toForwardSlash(path.join(outputDir, 'call-graph.json')) : null,
+  }
+}
+
+function inferLanguages(languages: string[], requestedLanguage: string | undefined): string[] {
+  if (requestedLanguage) return [requestedLanguage]
+  return [...new Set(languages)].sort()
+}
+
+function buildDryRunResult(
+  projectRoot: string,
+  sourceRoots: string[],
+  outputDir: string,
+  discovery: SourceDiscoveryResult
+): RunIndexCommandDryRunResult {
+  return {
+    mode: 'dry-run',
+    projectRoot: toForwardSlash(projectRoot),
+    sourceRoots,
+    outputDir: toForwardSlash(outputDir),
+    defaultIgnoredDirectoryNames: discovery.defaultIgnoredDirectoryNames,
+    userExcludes: discovery.userExcludes,
+    totalFilesDiscovered: discovery.totalFilesDiscovered,
+    totalFilesEligibleForIndexing: discovery.totalFilesEligibleForIndexing,
+    totalFilesSkipped: discovery.totalFilesSkipped,
+    skippedByDefaultIgnore: discovery.skippedByDefaultIgnore,
+    skippedByUserExclude: discovery.skippedByUserExclude,
+    skippedByFilePattern: discovery.skippedByFilePattern,
+    skippedUnsupportedFiles: discovery.skippedUnsupportedFiles,
+    languageCounts: discovery.languageCounts,
+    largestFiles: discovery.largestFiles,
+    sampleIndexedFiles: discovery.sampleIndexedFiles,
+    sampleSkippedFiles: discovery.sampleSkippedFiles,
+  }
+}
+
+type ProgressEvent =
+  | BuildIndexProgressEvent
+  | SourceDiscoveryProgressEvent
+  | { phase: 'artifact-write-start' | 'artifact-write-complete'; message: string; elapsedMs: number }
+
+function createProgressReporter(enabled: boolean, commandStartTime: number): ((event: ProgressEvent) => void) | undefined {
+  if (!enabled) return undefined
+  return (event) => {
+    const elapsedSeconds = ((event.elapsedMs || Date.now() - commandStartTime) / 1000).toFixed(1)
+    const counts =
+      'filesEligible' in event
+        ? ` discovered=${event.filesDiscovered} eligible=${event.filesEligible} skipped=${event.filesSkipped}`
+        : 'filesIndexed' in event
+          ? ` indexed=${event.filesIndexed}/${event.totalFiles}`
+          : ''
+    const sourceRoot = 'currentSourceRoot' in event && event.currentSourceRoot ? ` source=${event.currentSourceRoot}` : ''
+    process.stderr.write(`[my-dev-kit:index] ${event.message} (${elapsedSeconds}s)${sourceRoot}${counts}\n`)
+  }
+}

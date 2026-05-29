@@ -1,0 +1,27 @@
+{
+  "artifactKind": "my-dev-kit-v1-manifest",
+  "version": "1.0.0",
+  "createdAt": "2026-05-16T09:41:01.818Z",
+  "projectRoot": "Z:/Users/newuser/Projects/my-dev-kit-v1",
+  "sourceRoots": [
+    "examples/basic-ts/src"
+  ],
+  "languages": [
+    "typescript"
+  ],
+  "callGraphEnabled": false,
+  "artifacts": {
+    "symbolIndex": "symbol-index.json",
+    "codeGraph": "code-graph.json",
+    "callGraph": null
+  },
+  "summary": {
+    "fileCount": 3,
+    "symbolCount": 5,
+    "edgeCount": 13,
+    "warningCount": 0,
+    "errorCount": 0
+  },
+  "warnings": [],
+  "errors": []
+}

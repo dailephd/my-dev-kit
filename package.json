@@ -1,0 +1,51 @@
+{
+  "name": "@dailephd/my-dev-kit",
+  "version": "1.0.0",
+  "description": "Local codebase graph, indexing, slicing, source retrieval, search, and Graphviz visualization CLI.",
+  "type": "module",
+  "bin": {
+    "my-dev-kit": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/ARCHITECTURE.md",
+    "docs/CI_CD.md",
+    "docs/COMMANDS.md",
+    "docs/DEVELOPMENT.md",
+    "docs/GRAPH_SCHEMA.md",
+    "docs/QUICKSTART.md",
+    "docs/RELEASE.md",
+    "docs/ROADMAP.md",
+    "docs/SECURITY.md",
+    "docs/WORKFLOWS.md",
+    "examples/README.md",
+    "examples/basic-ts/src",
+    "examples/basic-ts/README.md",
+    "examples/basic-python/src",
+    "examples/basic-python/README.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "dailephd LLC",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.6",
+    "vitest": "^2.1.9"
+  }
+}

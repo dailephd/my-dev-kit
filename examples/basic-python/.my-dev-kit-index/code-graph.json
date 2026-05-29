@@ -1,0 +1,232 @@
+{
+  "artifactKind": "code-graph",
+  "schemaVersion": "1.0.0",
+  "createdAt": "2026-05-16T09:41:04.961Z",
+  "nodes": [
+    {
+      "id": "file:examples/basic-python/src/main.py",
+      "kind": "file",
+      "label": "main.py",
+      "path": "examples/basic-python/src/main.py",
+      "language": "python"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py",
+      "kind": "file",
+      "label": "utils.py",
+      "path": "examples/basic-python/src/utils.py",
+      "language": "python"
+    },
+    {
+      "id": "symbol:examples/basic-python/src/main.py#_build_message",
+      "kind": "symbol",
+      "label": "_build_message",
+      "path": "examples/basic-python/src/main.py",
+      "symbolName": "_build_message",
+      "symbolKind": "function",
+      "line": 21,
+      "exported": false
+    },
+    {
+      "id": "symbol:examples/basic-python/src/main.py#APP_NAME",
+      "kind": "symbol",
+      "label": "APP_NAME",
+      "path": "examples/basic-python/src/main.py",
+      "symbolName": "APP_NAME",
+      "symbolKind": "const",
+      "line": 8,
+      "exported": false
+    },
+    {
+      "id": "symbol:examples/basic-python/src/main.py#fetch_user",
+      "kind": "symbol",
+      "label": "fetch_user",
+      "path": "examples/basic-python/src/main.py",
+      "symbolName": "fetch_user",
+      "symbolKind": "function",
+      "line": 16,
+      "exported": false
+    },
+    {
+      "id": "symbol:examples/basic-python/src/main.py#greet",
+      "kind": "symbol",
+      "label": "greet",
+      "path": "examples/basic-python/src/main.py",
+      "symbolName": "greet",
+      "symbolKind": "function",
+      "line": 11,
+      "exported": true
+    },
+    {
+      "id": "symbol:examples/basic-python/src/main.py#UserService",
+      "kind": "symbol",
+      "label": "UserService",
+      "path": "examples/basic-python/src/main.py",
+      "symbolName": "UserService",
+      "symbolKind": "class",
+      "line": 26,
+      "exported": true
+    },
+    {
+      "id": "symbol:examples/basic-python/src/utils.py#_internal_helper",
+      "kind": "symbol",
+      "label": "_internal_helper",
+      "path": "examples/basic-python/src/utils.py",
+      "symbolName": "_internal_helper",
+      "symbolKind": "function",
+      "line": 12,
+      "exported": false
+    },
+    {
+      "id": "symbol:examples/basic-python/src/utils.py#DEFAULT_TIMEOUT",
+      "kind": "symbol",
+      "label": "DEFAULT_TIMEOUT",
+      "path": "examples/basic-python/src/utils.py",
+      "symbolName": "DEFAULT_TIMEOUT",
+      "symbolKind": "const",
+      "line": 4,
+      "exported": true
+    },
+    {
+      "id": "symbol:examples/basic-python/src/utils.py#format_name",
+      "kind": "symbol",
+      "label": "format_name",
+      "path": "examples/basic-python/src/utils.py",
+      "symbolName": "format_name",
+      "symbolKind": "function",
+      "line": 7,
+      "exported": true
+    },
+    {
+      "id": "symbol:examples/basic-python/src/utils.py#Formatter",
+      "kind": "symbol",
+      "label": "Formatter",
+      "path": "examples/basic-python/src/utils.py",
+      "symbolName": "Formatter",
+      "symbolKind": "class",
+      "line": 17,
+      "exported": true
+    },
+    {
+      "id": "symbol:examples/basic-python/src/utils.py#MAX_RETRIES",
+      "kind": "symbol",
+      "label": "MAX_RETRIES",
+      "path": "examples/basic-python/src/utils.py",
+      "symbolName": "MAX_RETRIES",
+      "symbolKind": "const",
+      "line": 3,
+      "exported": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "file:examples/basic-python/src/main.py--defines-->symbol:examples/basic-python/src/main.py#_build_message",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#_build_message",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--defines-->symbol:examples/basic-python/src/main.py#APP_NAME",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#APP_NAME",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--defines-->symbol:examples/basic-python/src/main.py#fetch_user",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#fetch_user",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--defines-->symbol:examples/basic-python/src/main.py#greet",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#greet",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--defines-->symbol:examples/basic-python/src/main.py#UserService",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#UserService",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--exports-->symbol:examples/basic-python/src/main.py#greet",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#greet",
+      "kind": "exports"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--exports-->symbol:examples/basic-python/src/main.py#UserService",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "symbol:examples/basic-python/src/main.py#UserService",
+      "kind": "exports"
+    },
+    {
+      "id": "file:examples/basic-python/src/main.py--imports-->file:examples/basic-python/src/utils.py",
+      "source": "file:examples/basic-python/src/main.py",
+      "target": "file:examples/basic-python/src/utils.py",
+      "kind": "imports",
+      "label": "import"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--defines-->symbol:examples/basic-python/src/utils.py#_internal_helper",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#_internal_helper",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--defines-->symbol:examples/basic-python/src/utils.py#DEFAULT_TIMEOUT",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#DEFAULT_TIMEOUT",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--defines-->symbol:examples/basic-python/src/utils.py#format_name",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#format_name",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--defines-->symbol:examples/basic-python/src/utils.py#Formatter",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#Formatter",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--defines-->symbol:examples/basic-python/src/utils.py#MAX_RETRIES",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#MAX_RETRIES",
+      "kind": "defines"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--exports-->symbol:examples/basic-python/src/utils.py#DEFAULT_TIMEOUT",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#DEFAULT_TIMEOUT",
+      "kind": "exports"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--exports-->symbol:examples/basic-python/src/utils.py#format_name",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#format_name",
+      "kind": "exports"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--exports-->symbol:examples/basic-python/src/utils.py#Formatter",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#Formatter",
+      "kind": "exports"
+    },
+    {
+      "id": "file:examples/basic-python/src/utils.py--exports-->symbol:examples/basic-python/src/utils.py#MAX_RETRIES",
+      "source": "file:examples/basic-python/src/utils.py",
+      "target": "symbol:examples/basic-python/src/utils.py#MAX_RETRIES",
+      "kind": "exports"
+    }
+  ],
+  "summary": {
+    "nodeCount": 12,
+    "edgeCount": 17,
+    "fileNodeCount": 2,
+    "symbolNodeCount": 10
+  }
+}

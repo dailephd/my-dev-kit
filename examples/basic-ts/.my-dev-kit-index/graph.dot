@@ -1,0 +1,45 @@
+digraph CodeGraph {
+  rankdir=LR;
+  "file:examples/basic-ts/src/index.ts" [label="examples/basic-ts/src/index.ts", shape="box"];
+  "file:examples/basic-ts/src/userService.ts" [label="examples/basic-ts/src/userService.ts", shape="box"];
+  "file:examples/basic-ts/src/userTypes.ts" [label="examples/basic-ts/src/userTypes.ts", shape="box"];
+  "symbol:examples/basic-ts/src/index.ts#describeUser" [label="describeUser", shape="ellipse"];
+  "symbol:examples/basic-ts/src/userService.ts#formatUser" [label="formatUser", shape="ellipse"];
+  "symbol:examples/basic-ts/src/userService.ts#roleLabel" [label="roleLabel", shape="ellipse"];
+  "symbol:examples/basic-ts/src/userTypes.ts#User" [label="User", shape="ellipse"];
+  "symbol:examples/basic-ts/src/userTypes.ts#UserRole" [label="UserRole", shape="ellipse"];
+  "file:examples/basic-ts/src/index.ts" -> "symbol:examples/basic-ts/src/index.ts#describeUser" [dir="both", arrowtail="dot", arrowhead="normal", style="solid"];
+  "file:examples/basic-ts/src/index.ts" -> "symbol:examples/basic-ts/src/index.ts#describeUser" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid"];
+  "file:examples/basic-ts/src/index.ts" -> "file:examples/basic-ts/src/userService.ts" [dir="both", arrowtail="dot", arrowhead="inv", style="solid"];
+  "file:examples/basic-ts/src/index.ts" -> "file:examples/basic-ts/src/userTypes.ts" [dir="both", arrowtail="dot", arrowhead="inv", style="solid"];
+  "file:examples/basic-ts/src/userService.ts" -> "symbol:examples/basic-ts/src/userService.ts#formatUser" [dir="both", arrowtail="dot", arrowhead="normal", style="solid"];
+  "file:examples/basic-ts/src/userService.ts" -> "symbol:examples/basic-ts/src/userService.ts#roleLabel" [dir="both", arrowtail="dot", arrowhead="normal", style="solid"];
+  "file:examples/basic-ts/src/userService.ts" -> "symbol:examples/basic-ts/src/userService.ts#formatUser" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid"];
+  "file:examples/basic-ts/src/userService.ts" -> "symbol:examples/basic-ts/src/userService.ts#roleLabel" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid"];
+  "file:examples/basic-ts/src/userService.ts" -> "file:examples/basic-ts/src/userTypes.ts" [dir="both", arrowtail="dot", arrowhead="inv", style="solid"];
+  "file:examples/basic-ts/src/userTypes.ts" -> "symbol:examples/basic-ts/src/userTypes.ts#User" [dir="both", arrowtail="dot", arrowhead="normal", style="solid"];
+  "file:examples/basic-ts/src/userTypes.ts" -> "symbol:examples/basic-ts/src/userTypes.ts#UserRole" [dir="both", arrowtail="dot", arrowhead="normal", style="solid"];
+  "file:examples/basic-ts/src/userTypes.ts" -> "symbol:examples/basic-ts/src/userTypes.ts#User" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid"];
+  "file:examples/basic-ts/src/userTypes.ts" -> "symbol:examples/basic-ts/src/userTypes.ts#UserRole" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid"];
+  subgraph cluster_legend {
+    label="Edge Legend"; style=dotted; color=gray;
+    "legend_defines_src" [label="defines (source)", shape=plaintext, fontsize=9];
+    "legend_defines_tgt" [label="defines (target)", shape=plaintext, fontsize=9];
+    "legend_defines_src" -> "legend_defines_tgt" [dir="both", arrowtail="dot", arrowhead="normal", style="solid", label="defines", fontsize=9];
+    "legend_imports_src" [label="imports (source)", shape=plaintext, fontsize=9];
+    "legend_imports_tgt" [label="imports (target)", shape=plaintext, fontsize=9];
+    "legend_imports_src" -> "legend_imports_tgt" [dir="both", arrowtail="dot", arrowhead="inv", style="solid", label="imports", fontsize=9];
+    "legend_exports_src" [label="exports (source)", shape=plaintext, fontsize=9];
+    "legend_exports_tgt" [label="exports (target)", shape=plaintext, fontsize=9];
+    "legend_exports_src" -> "legend_exports_tgt" [dir="both", arrowtail="dot", arrowhead="onormal", style="solid", label="exports", fontsize=9];
+    "legend_calls_src" [label="calls (source)", shape=plaintext, fontsize=9];
+    "legend_calls_tgt" [label="calls (target)", shape=plaintext, fontsize=9];
+    "legend_calls_src" -> "legend_calls_tgt" [dir="both", arrowtail="dot", arrowhead="normal", style="bold", label="calls", fontsize=9];
+    "legend_depends_on_src" [label="depends-on (source)", shape=plaintext, fontsize=9];
+    "legend_depends_on_tgt" [label="depends-on (target)", shape=plaintext, fontsize=9];
+    "legend_depends_on_src" -> "legend_depends_on_tgt" [dir="both", arrowtail="dot", arrowhead="inv", style="dashed", label="depends-on", fontsize=9];
+    "legend_related_to_src" [label="related-to (source)", shape=plaintext, fontsize=9];
+    "legend_related_to_tgt" [label="related-to (target)", shape=plaintext, fontsize=9];
+    "legend_related_to_src" -> "legend_related_to_tgt" [dir="both", arrowtail="odot", arrowhead="odot", style="dotted", label="related-to", fontsize=9];
+  }
+}

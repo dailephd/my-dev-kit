@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify (typecheck + test + build)
+        run: npm run verify
+
+      - name: Package contents check
+        run: npm pack --dry-run
+
+      - name: CLI help
+        run: node dist/cli.js --help
+
+      - name: CLI version
+        run: node dist/cli.js --version
+
+      - name: Index TypeScript example
+        run: node dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-ci --call-graph --json
+
+      - name: Search smoke check
+        run: node dist/cli.js search --index examples/basic-ts/.my-dev-kit-ci --query user --limit 5 --json
+
+      - name: View DOT smoke check
+        run: node dist/cli.js view --index examples/basic-ts/.my-dev-kit-ci --format dot --out examples/basic-ts/.my-dev-kit-ci/graph.dot --edge-style semantic --json
+
+      - name: Index Python example
+        run: node dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-ci --json
