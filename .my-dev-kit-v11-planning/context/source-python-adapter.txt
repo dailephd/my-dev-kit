@@ -1,0 +1,312 @@
+python extraction scripts part 1
+  1 | import { spawnSync } from 'node:child_process'
+  2 | import * as path from 'node:path'
+  3 | import type { LanguageAdapter, ExtractionResult, SourceFileInput } from '../types.js'
+  4 | import type { CallGraphEdge, SymbolDefinition } from '../../symbol-index/types.js'
+  5 | 
+  6 | // ---------------------------------------------------------------------------
+  7 | // Embedded Python scripts (avoids external file dependency in dist/)
+  8 | // ---------------------------------------------------------------------------
+  9 | 
+ 10 | const EXTRACT_SYMBOLS_PY = `
+ 11 | import sys, ast, json
+ 12 | 
+ 13 | def main():
+ 14 |     source = sys.stdin.read()
+ 15 |     file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
+ 16 |     try:
+ 17 |         tree = ast.parse(source, filename=file_path)
+ 18 |     except SyntaxError as e:
+ 19 |         sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
+ 20 |         return
+ 21 |     except Exception as e:
+ 22 |         sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
+ 23 |         return
+ 24 | 
+ 25 |     source_lines = source.splitlines()
+ 26 | 
+ 27 |     def get_sig(lineno):
+ 28 |         idx = lineno - 1
+ 29 |         return source_lines[idx].strip()[:120] if 0 <= idx < len(source_lines) else ""
+ 30 | 
+ 31 |     def decorator_names(dl):
+ 32 |         names = []
+ 33 |         for d in dl:
+ 34 |             if isinstance(d, ast.Name): names.append(d.id)
+ 35 |             elif isinstance(d, ast.Attribute): names.append(d.attr)
+ 36 |             elif isinstance(d, ast.Call):
+ 37 |                 func = d.func
+ 38 |                 if isinstance(func, ast.Name): names.append(func.id)
+ 39 |                 elif isinstance(func, ast.Attribute): names.append(func.attr)
+ 40 |         return names
+ 41 | 
+ 42 |     dunder_all = None
+ 43 |     for node in tree.body:
+ 44 |         if isinstance(node, ast.Assign):
+ 45 |             for t in node.targets:
+ 46 |                 if isinstance(t, ast.Name) and t.id == "__all__":
+ 47 |                     if isinstance(node.value, (ast.List, ast.Tuple)):
+ 48 |                         try:
+ 49 |                             dunder_all = [e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+ 50 |                         except Exception:
+ 51 |                             dunder_all = None
+ 52 | 
+ 53 |     def is_exported(name):
+ 54 |         if dunder_all is not None: return name in dunder_all
+ 55 |         return not name.startswith("_")
+ 56 | 
+ 57 |     def is_all_caps(name):
+ 58 |         alpha = [c for c in name if c.isalpha()]
+ 59 |         return len(alpha) > 0 and all(c.isupper() for c in alpha)
+ 60 | 
+ 61 |     def has_final(ann):
+ 62 |         if ann is None: return False
+ 63 |         if isinstance(ann, ast.Name) and ann.id == "Final": return True
+ 64 |         if isinstance(ann, ast.Subscript):
+ 65 |             v = ann.value
+ 66 |             if isinstance(v, ast.Name) and v.id == "Final": return True
+ 67 |             if isinstance(v, ast.Attribute) and v.attr == "Final": return True
+ 68 |         if isinstance(ann, ast.Attribute) and ann.attr == "Final": return True
+ 69 |         return False
+ 70 | 
+ 71 |     symbols = []
+ 72 |     for node in tree.body:
+ 73 |         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+ 74 |             name = node.name
+ 75 |             symbols.append({"name": name, "kind": "function", "line": node.lineno,
+ 76 |                 "end_line": getattr(node, "end_lineno", None),
+ 77 |                 "exported": is_exported(name), "signature": get_sig(node.lineno),
+ 78 |                 "decorators": decorator_names(node.decorator_list)})
+ 79 |         elif isinstance(node, ast.ClassDef):
+ 80 |             name = node.name
+ 81 |             symbols.append({"name": name, "kind": "class", "line": node.lineno,
+ 82 |                 "end_line": getattr(node, "end_lineno", None),
+ 83 |                 "exported": is_exported(name), "signature": get_sig(node.lineno),
+ 84 |                 "decorators": decorator_names(node.decorator_list)})
+ 85 |         elif isinstance(node, ast.Assign):
+ 86 |             for t in node.targets:
+ 87 |                 if isinstance(t, ast.Name) and is_all_caps(t.id):
+ 88 |                     name = t.id
+ 89 |                     symbols.append({"name": name, "kind": "const", "line": node.lineno,
+ 90 |                         "end_line": getattr(node, "end_lineno", None),
+ 91 |                         "exported": is_exported(name), "signature": get_sig(node.lineno), "decorators": []})
+ 92 |         elif isinstance(node, ast.AnnAssign):
+ 93 |             if isinstance(node.target, ast.Name):
+ 94 |                 name = node.target.id
+ 95 |                 if has_final(node.annotation) or is_all_caps(name):
+ 96 |                     symbols.append({"name": name, "kind": "const", "line": node.lineno,
+ 97 |                         "end_line": getattr(node, "end_lineno", None),
+ 98 |                         "exported": is_exported(name), "signature": get_sig(node.lineno), "decorators": []})
+ 99 |     sys.stdout.write(json.dumps({"symbols": symbols}))
+100 | 
+101 | main()
+102 | `
+103 | 
+104 | const EXTRACT_IMPORTS_PY = `
+105 | import sys, ast, json
+106 | 
+107 | def main():
+108 |     source = sys.stdin.read()
+109 |     file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
+110 |     try:
+111 |         tree = ast.parse(source, filename=file_path)
+112 |     except SyntaxError as e:
+113 |         sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
+114 |         return
+115 |     except Exception as e:
+116 |         sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
+117 |         return
+118 | 
+119 |     imports = []
+120 |     for node in ast.walk(tree):
+
+python extraction scripts part 2
+121 |         if isinstance(node, ast.Import):
+122 |             for alias in node.names:
+123 |                 entry = {"form": "import-module-alias" if alias.asname else "import-module",
+124 |                     "module": alias.name, "names": [], "level": 0, "line": node.lineno}
+125 |                 if alias.asname: entry["alias"] = alias.asname
+126 |                 imports.append(entry)
+127 |         elif isinstance(node, ast.ImportFrom):
+128 |             module = node.module or ""
+129 |             level = node.level or 0
+130 |             names = [a.name for a in node.names]
+131 |             single_alias = node.names[0].asname if len(node.names) == 1 and node.names[0].asname else None
+132 |             entry = {"form": "relative-from-import" if level > 0 else "from-import",
+133 |                 "module": module, "names": names, "level": level, "line": node.lineno}
+134 |             if single_alias: entry["alias"] = single_alias
+135 |             imports.append(entry)
+136 |     imports.sort(key=lambda x: x["line"])
+137 |     sys.stdout.write(json.dumps({"imports": imports}))
+138 | 
+139 | main()
+140 | `
+141 | 
+142 | const EXTRACT_CALLS_PY = `
+143 | import sys, ast, json
+144 | 
+145 | def main():
+146 |     source = sys.stdin.read()
+147 |     file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
+148 |     try:
+149 |         tree = ast.parse(source, filename=file_path)
+150 |     except SyntaxError as e:
+151 |         sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
+152 |         return
+153 |     except Exception as e:
+154 |         sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
+155 |         return
+156 | 
+157 |     imports = []
+158 |     definitions = []
+159 | 
+160 |     for node in tree.body:
+161 |         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+162 |             definitions.append({"name": node.name, "file": file_path, "line": node.lineno, "kind": "function"})
+163 |         elif isinstance(node, ast.ClassDef):
+164 |             definitions.append({"name": node.name, "file": file_path, "line": node.lineno, "kind": "class"})
+165 |             for child in node.body:
+166 |                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+167 |                     definitions.append({"name": node.name + "." + child.name, "file": file_path, "line": child.lineno, "kind": "method"})
+168 |         if isinstance(node, ast.Import):
+169 |             for alias in node.names:
+170 |                 imports.append({"form": "import", "module": alias.name, "name": alias.asname or alias.name.split(".")[0]})
+171 |         elif isinstance(node, ast.ImportFrom):
+172 |             module = node.module or ""
+173 |             for alias in node.names:
+174 |                 imports.append({"form": "from", "module": module, "level": node.level or 0, "imported": alias.name, "name": alias.asname or alias.name})
+175 | 
+176 |     def callee_name(expr, class_name):
+177 |         if isinstance(expr, ast.Name):
+178 |             return expr.id
+179 |         if isinstance(expr, ast.Attribute):
+180 |             parts = []
+181 |             cur = expr
+182 |             while isinstance(cur, ast.Attribute):
+183 |                 parts.append(cur.attr)
+184 |                 cur = cur.value
+185 |             if isinstance(cur, ast.Name):
+186 |                 if cur.id == "self" and class_name:
+187 |                     parts.append(class_name)
+188 |                 else:
+
+PythonAdapter class
+490 | export class PythonAdapter implements LanguageAdapter {
+491 |   readonly extensions = ['.py'] as const
+492 |   readonly supportsCallGraph = true
+493 | 
+494 |   extractFromSource(filePath: string, sourceText: string): ExtractionResult {
+495 |     const lineCount = sourceText.split('\n').length
+496 |     const warnings: string[] = []
+497 |     const symbols: SymbolDefinition[] = []
+498 |     const imports: string[] = []
+499 |     const exports: string[] = []
+500 | 
+501 |     const symResult = runPythonScript(EXTRACT_SYMBOLS_PY, filePath, sourceText)
+502 |     if (symResult.error) {
+503 |       warnings.push(`python-extraction: ${symResult.error}`)
+504 |     } else {
+505 |       const parsed = parseJsonOutput(symResult.stdout, filePath, 'symbols')
+506 |       if (parsed.warning) {
+507 |         warnings.push(parsed.warning)
+508 |       } else if (parsed.data) {
+509 |         const rawSymbols: PythonSymbolRaw[] = Array.isArray(parsed.data['symbols'])
+510 |           ? (parsed.data['symbols'] as PythonSymbolRaw[])
+511 |           : []
+512 |         for (const s of rawSymbols) {
+513 |           if (!s.name || !s.kind) continue
+514 |           if (s.exported) exports.push(s.name)
+515 |           symbols.push({
+516 |             name: s.name,
+517 |             kind: mapPythonKind(s.kind),
+518 |             location: { file: filePath, line: s.line },
+519 |             exported: s.exported,
+520 |             signature: s.signature,
+521 |           })
+522 |         }
+523 |       }
+524 |     }
+525 | 
+526 |     const impResult = runPythonScript(EXTRACT_IMPORTS_PY, filePath, sourceText)
+527 |     if (impResult.error) {
+528 |       warnings.push(`python-extraction: ${impResult.error}`)
+529 |     } else {
+530 |       const parsed = parseJsonOutput(impResult.stdout, filePath, 'imports')
+531 |       if (parsed.warning) {
+532 |         warnings.push(parsed.warning)
+533 |       } else if (parsed.data) {
+534 |         const rawImports: PythonImportRaw[] = Array.isArray(parsed.data['imports'])
+535 |           ? (parsed.data['imports'] as PythonImportRaw[])
+536 |           : []
+537 |         for (const imp of rawImports) {
+538 |           const spec = buildImportSpecifier(imp)
+539 |           if (spec) imports.push(spec)
+540 |         }
+541 |       }
+542 |     }
+543 | 
+544 |     return {
+545 |       language: 'python',
+546 |       lineCount,
+547 |       imports: dedup(imports),
+548 |       exports: dedup(exports),
+549 |       symbols,
+550 |       reExportSpecifiers: [],
+551 |       exportAllSpecifiers: [],
+552 |     }
+553 |   }
+554 | 
+555 |   resolveImportToFile(
+556 |     specifier: string,
+557 |     importingFile: string,
+558 |     knownFiles: readonly string[]
+559 |   ): string | null {
+560 |     const imp = specifierToPythonImport(specifier)
+561 |     return resolvePythonImportToFile(imp, importingFile, knownFiles)
+562 |   }
+563 | 
+564 |   extractCallGraphEdges(files: readonly SourceFileInput[]): CallGraphEdge[] {
+565 |     const extractions = new Map<string, PythonCallExtractionRaw>()
+566 |     const definitionsByName = new Map<string, PythonCallDefinitionRaw>()
+567 |     const knownFiles = files.map((f) => f.filePath)
+568 | 
+569 |     for (const file of files) {
+570 |       const result = runPythonScript(EXTRACT_CALLS_PY, file.filePath, file.sourceText)
+571 |       if (result.error) continue
+572 | 
+573 |       const parsed = parseJsonOutput(result.stdout, file.filePath, 'calls')
+574 |       if (!parsed.data || parsed.warning) continue
+575 | 
+576 |       const extraction: PythonCallExtractionRaw = {
+577 |         definitions: Array.isArray(parsed.data['definitions'])
+578 |           ? (parsed.data['definitions'] as PythonCallDefinitionRaw[])
+579 |           : [],
+580 |         imports: Array.isArray(parsed.data['imports'])
+581 |           ? (parsed.data['imports'] as PythonCallImportRaw[])
+582 |           : [],
+583 |         edges: Array.isArray(parsed.data['edges'])
+584 |           ? (parsed.data['edges'] as PythonCallEdgeRaw[])
+585 |           : [],
+586 |       }
+587 |       extractions.set(file.filePath, extraction)
+588 |       for (const definition of extraction.definitions) {
+589 |         if (!definitionsByName.has(definition.name)) {
+590 |           definitionsByName.set(definition.name, definition)
+591 |         }
+592 |         const shortName = definition.kind === 'method' ? null : definition.name.split('.').at(-1)
+593 |         if (shortName && !definitionsByName.has(shortName)) {
+594 |           definitionsByName.set(shortName, definition)
+595 |         }
+596 |       }
+597 |     }
+598 | 
+599 |     const edges: CallGraphEdge[] = []
+600 |     for (const [filePath, extraction] of extractions) {
+601 |       const importMap = buildPythonCallImportMap(extraction.imports, filePath, knownFiles)
+602 |       for (const rawEdge of extraction.edges) {
+603 |         edges.push({
+604 |           caller: rawEdge.caller,
+605 |           callee: {
+606 |             file: resolvePythonCalleeFile(rawEdge.calleeName, importMap, definitionsByName),
+607 |             name: rawEdge.calleeName,
+608 |           },

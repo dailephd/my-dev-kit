@@ -2,6 +2,7 @@
 
 import { Command } from 'commander'
 import { registerIndexCommand } from './commands/indexCommand.js'
+import { registerDataModelCommand } from './commands/dataModelCommand.js'
 import { registerLookupCommand } from './commands/lookupCommand.js'
 import { registerSearchCommand } from './commands/searchCommand.js'
 import { registerSliceCommand } from './commands/sliceCommand.js'
@@ -18,6 +19,7 @@ export function createProgram(): Command {
     .version(VERSION)
 
   registerIndexCommand(program)
+  registerDataModelCommand(program)
   registerViewCommand(program)
   registerLookupCommand(program)
   registerSourceCommand(program)

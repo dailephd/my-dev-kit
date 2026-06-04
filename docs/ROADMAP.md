@@ -16,7 +16,7 @@ The current release focuses on deterministic local artifacts:
 - DOT, SVG, and PNG graph views
 - deterministic keyword search over index artifacts
 
-Future releases improve precision, scale, language coverage, frontend workflows, data-model understanding, and retrieval quality.
+Future releases improve data-model understanding, frontend workflows, route and browser-state retrieval, source expansion, precision, scale, language coverage, and retrieval quality.
 
 ## Version 1.0.0
 
@@ -142,63 +142,91 @@ Planned improvements:
 
 ## Version 1.1.0
 
-Version 1.1.0 focuses on source retrieval expansion.
+Version 1.1.0 focuses on data-model graph extraction and model-to-view lineage.
 
-The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
+The goal is to add a separate graph layer for data entities, relationships, transformation steps, and view usage without mixing data-model relationships into the general code graph.
 
-### Source continuation
+### Data-model extraction
 
 Planned features:
 
-- continue retrieving a large symbol after the first bounded result
-- retrieve the next source window from a known line
-- make truncation recoverable without reading the whole file
+- entity extraction
+- field extraction
+- primary key extraction
+- foreign key extraction
+- one-to-one relationship extraction
+- one-to-many relationship extraction
+- many-to-one relationship extraction
+- many-to-many relationship extraction
+- calculated field or measure dependency extraction where practical
+- schema-to-code relationship mapping where practical
+- model-to-view relationship mapping where practical
+- model-field usage tracing across transformation functions, view models, and UI components
+- generated view-model detection when a function or component derives display-ready data from a canonical model
+- rendered field usage detection in JSX or HTML-like output where statically detectable
+
+### Model-to-view lineage
+
+Planned features:
+
+- trace which data models are used by which transformation or generation steps
+- trace which view models are derived from canonical data models
+- trace which components consume a model or view model
+- trace which JSX or HTML-like elements render specific model fields where statically detectable
+- distinguish canonical data models from generated view models and UI-only display structures
+- report the path from model field to view usage when enough static evidence exists
 
 Candidate command shapes:
 
-- `source --node <symbol-id> --continue`
-- `source --file <path> --symbol <name> --continue-from <line>`
+- `data-model --trace-view <model-or-entity>`
+- `data-model --field <entity.field> --trace-view`
+- `slice --data-model <entity> --include-view-usage`
+- `lookup --model-field <entity.field>`
 
-### Local context expansion
+### Supported sources
+
+Candidate extraction sources:
+
+- Prisma schemas
+- SQL migration files
+- Django models
+- SQLAlchemy models
+- TypeORM entities
+- Sequelize models
+- decorator-based TypeScript model classes
+- plain TypeScript, JavaScript, and Python model code when patterns are detectable
+
+### Artifacts
+
+Planned artifacts:
+
+- `data-model.json`
+- `data-model-graph.json`
+- `model-view-lineage.json`, if model-to-view tracing is emitted separately
+
+The data-model graph should remain separate from `code-graph.json`.
+
+The code graph describes code structure. The data-model graph describes data entities, fields, and relationships.
+
+Model-to-view lineage describes how canonical models, derived view models, transformation functions, components, and rendered fields relate to one another.
+
+### Graph views
 
 Planned features:
 
-- include imports for a retrieved symbol
-- include local type definitions used by a retrieved symbol
-- include local prop types used by a React component
-- include local constants used by a symbol
-- include local helper functions called by a symbol
-- include local helper components used by a component
-- include sibling source blocks when they are direct local dependencies
-
-Candidate command shapes:
-
-- `source --node <symbol-id> --include-imports`
-- `source --node <symbol-id> --include-local-types`
-- `source --node <symbol-id> --include-local-components`
-- `source --node <symbol-id> --include-props`
-- `source --node <symbol-id> --include-local-deps`
-- `source --node <symbol-id> --expand-to-local-dependencies`
-
-### Source bundle output
-
-Planned features:
-
-- bounded source bundles around one symbol
-- local dependency closure with a max-line cap
-- explanation for each included source block
-- deterministic ordering of included blocks
-- compact output suitable for coding-agent prompts
-
-Candidate command shape:
-
-- `source --node <symbol-id> --include-local-deps --max-lines <n>`
+- DOT output for data-model graph
+- SVG and PNG output for data-model graph
+- relationship labels for entity graphs
+- filtering by entity
+- filtering by relationship type
+- filtering by model-to-view relationship type
+- filtering by canonical model, view model, component, or rendered field
 
 ## Version 1.2.0
 
-Version 1.2.0 focuses on React, TSX, and frontend test indexing.
+Version 1.2.0 focuses on React, TSX, frontend test indexing, exact reference retrieval, and local React component-tree tracing.
 
-The goal is to make frontend work retrievable by the structures developers actually use: components, props, hooks, JSX branches, visible text, routes, test names, and locators.
+The goal is to make frontend work retrievable by the structures developers actually use: components, props, hooks, JSX branches, visible text, routes, test names, locators, repeated literals, render-flow regions, and local prop/event flows.
 
 ### TSX and React indexing
 
@@ -217,6 +245,7 @@ Planned features:
 - important UI string indexing
 - `data-testid` indexing
 - ARIA label indexing
+- local component-tree boundary indexing
 
 Possible node examples:
 
@@ -240,6 +269,52 @@ Planned relationship types:
 - button invokes handler
 - link points to target ID
 - JSX anchor points to route or section
+- tab value controls render branch
+- render helper returns child component
+- returned JSX passes props to child components
+- parent component passes callback props to local child components
+- local child component invokes callback props
+- event handler updates state used by sibling or child components
+- removed prop references are traceable across the local component tree
+
+### React render-flow region retrieval
+
+Planned features:
+
+- retrieve state hook regions
+- retrieve derived-state regions
+- retrieve handler regions
+- retrieve render helper functions
+- retrieve conditional render branches
+- retrieve returned JSX regions
+- retrieve props passed to child components
+- retrieve compact render-flow summaries for selected components
+
+Candidate command shapes:
+
+- `source --react-region <region> --file <path>`
+- `source --react-flow <component-name>`
+- `slice --node <component-node-id> --include-jsx-branches`
+
+### Intra-file prop and event-flow tracing
+
+Planned features:
+
+- retrieve a local React component tree as a connected edit bundle
+- trace parent component props
+- trace local child component props
+- trace callback props passed through local children
+- trace event handlers such as `onClick`, `onMouseEnter`, `onFocus`, and `onBlur`
+- trace state setters used by event handlers
+- trace helper functions used to compute props
+- trace all references to removed props to prevent orphaned references
+
+Candidate command shapes:
+
+- `trace-props --index <index-dir> --symbol <component-name>`
+- `trace-events --index <index-dir> --symbol <component-name>`
+- `source --index <index-dir> --symbol <component-name> --include-local-component-tree`
+- `slice --index <index-dir> --node <component-node> --include-prop-flow --include-event-handlers`
 
 ### Test-file indexing
 
@@ -263,7 +338,7 @@ Candidate command shapes:
 - `search --test-title <title>`
 - `search --test-id <id>`
 
-### Exact string and locator retrieval
+### Exact string, literal, and locator retrieval
 
 Planned searchable targets:
 
@@ -278,6 +353,28 @@ Planned searchable targets:
 - test titles
 - page titles
 - status labels
+- tab IDs
+- enum-like string literals
+- repeated UI values
+- browser storage keys
+
+Candidate command shapes:
+
+- `refs --literal <value>`
+- `refs --symbol <symbol-name>`
+- `source --contains <exact-string> --context <n>`
+
+### Multi-location reference tracing
+
+Planned features:
+
+- find all occurrences of a literal across an indexed project
+- find all occurrences of a literal inside one file or subsystem
+- find references to a symbol or enum-like value when statically detectable
+- group reference matches by file
+- return bounded context around each match
+- identify the nearest symbol, component, or React region when available
+- distinguish declaration sites from usage sites where practical
 
 ## Version 1.3.0
 
@@ -335,8 +432,8 @@ Planned features:
 - report whether rendering is conditional
 - report which state gates a UI branch
 - report which route reaches a component
-- report which user action reaches a component
-- report which test proves visibility
+- report which user action reaches it
+- report which test proves it is visible
 - flag components that are defined but not reachable
 
 Candidate command shapes:
@@ -348,58 +445,57 @@ Candidate command shapes:
 
 ## Version 1.4.0
 
-Version 1.4.0 focuses on data-model graph extraction.
+Version 1.4.0 focuses on source retrieval expansion.
 
-The goal is to add a separate graph layer for data entities and relationships without mixing data-model relationships into the general code graph.
+The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
 
-### Data-model extraction
-
-Planned features:
-
-- entity extraction
-- field extraction
-- primary key extraction
-- foreign key extraction
-- one-to-one relationship extraction
-- one-to-many relationship extraction
-- many-to-one relationship extraction
-- many-to-many relationship extraction
-- calculated field or measure dependency extraction where practical
-- schema-to-code relationship mapping where practical
-
-### Supported sources
-
-Candidate extraction sources:
-
-- Prisma schemas
-- SQL migration files
-- Django models
-- SQLAlchemy models
-- TypeORM entities
-- Sequelize models
-- decorator-based TypeScript model classes
-- plain TypeScript, JavaScript, and Python model code when patterns are detectable
-
-### Artifacts
-
-Planned artifacts:
-
-- `data-model.json`
-- `data-model-graph.json`
-
-The data-model graph should remain separate from `code-graph.json`.
-
-The code graph describes code structure. The data-model graph describes data entities, fields, and relationships.
-
-### Graph views
+### Source continuation
 
 Planned features:
 
-- DOT output for data-model graph
-- SVG and PNG output for data-model graph
-- relationship labels for entity graphs
-- filtering by entity
-- filtering by relationship type
+- continue retrieving a large symbol after the first bounded result
+- retrieve the next source window from a known line
+- make truncation recoverable without reading the whole file
+
+Candidate command shapes:
+
+- `source --node <symbol-id> --continue`
+- `source --file <path> --symbol <name> --continue-from <line>`
+
+### Local context expansion
+
+Planned features:
+
+- include imports for a retrieved symbol
+- include local type definitions used by a retrieved symbol
+- include local prop types used by a React component
+- include local constants used by a symbol
+- include local helper functions called by a symbol
+- include local helper components used by a component
+- include sibling source blocks when they are direct local dependencies
+
+Candidate command shapes:
+
+- `source --node <symbol-id> --include-imports`
+- `source --node <symbol-id> --include-local-types`
+- `source --node <symbol-id> --include-local-components`
+- `source --node <symbol-id> --include-props`
+- `source --node <symbol-id> --include-local-deps`
+- `source --node <symbol-id> --expand-to-local-dependencies`
+
+### Source bundle output
+
+Planned features:
+
+- bounded source bundles around one symbol
+- local dependency closure with a max-line cap
+- explanation for each included source block
+- deterministic ordering of included blocks
+- compact output suitable for coding-agent prompts
+
+Candidate command shape:
+
+- `source --node <symbol-id> --include-local-deps --max-lines <n>`
 
 ## Version 1.5.0
 
@@ -514,6 +610,13 @@ Planned benchmark task types:
 - modify a React component prop flow
 - retrieve a session-storage workflow
 - locate a hidden conditional render branch
+- trace a repeated literal across a file or subsystem
+- update a repeated tab value or enum-like string without reading the full file
+- retrieve React render-flow regions without reading the full component file
+- trace prop and event flow across a local React component tree
+- remove a prop across local React child components without leaving orphaned references
+- trace a data model field into a generated view model or rendered UI element
+- distinguish canonical data-model usage from view-model or UI-only usage
 - update a large TSX component without full-file retrieval
 - distinguish canonical schema from projection schema
 - retrieve data-model relationships for a schema-heavy project
@@ -528,6 +631,11 @@ Planned assertions:
 - absence of unrelated generic files in top ranks
 - source expansion correctness
 - source continuation correctness
+- exact string and reference tracing correctness
+- React render-flow retrieval correctness
+- intra-file prop and event-flow tracing correctness
+- model-to-view lineage correctness
+- canonical model versus view-model classification correctness
 - no unnecessary full-file reads
 - route, UI, and test coverage
 - data-model graph correctness where applicable
@@ -541,6 +649,12 @@ Planned metrics:
 - selected source slice count
 - selected graph node count
 - selected graph edge count
+- reference match count
+- React render-region retrieval coverage
+- local component-tree retrieval coverage
+- prop-flow and event-flow match count
+- model-to-view lineage edge count
+- rendered field usage count
 - full-file reads avoided
 - full-file reads allowed
 - full-file reads unjustified
@@ -651,9 +765,9 @@ Additional language support should be added through language adapters rather tha
 
 ## Version 2.0.0
 
-Version 2.0.0 is reserved for a larger artifact and plugin model.
+Version 2.0.0 focuses on a larger artifact and plugin model.
 
-The goal is to turn the v1 CLI into a more extensible retrieval platform while preserving the core graph-guided workflow.
+The goal is to expand the v1 CLI into a more extensible retrieval platform while preserving the core graph-guided workflow.
 
 ### Artifact schema v2
 
@@ -663,6 +777,7 @@ Candidate first-class node types:
 - symbol
 - local function
 - React component
+- local React component tree
 - hook
 - state variable
 - JSX branch
@@ -670,8 +785,17 @@ Candidate first-class node types:
 - test block
 - route
 - storage key
+- literal reference
+- enum or union value reference
+- React render region
+- prop flow
+- event handler flow
 - data entity
 - data field
+- view model
+- transformation step
+- rendered field
+- model-to-view lineage edge
 - artifact type
 - database model
 - projection type
@@ -698,18 +822,23 @@ Candidate command groups:
 - `slice`
 - `source`
 - `source-bundle`
+- `refs`
+- `trace-props`
+- `trace-events`
 - `route-map`
 - `ui-reachability`
 - `storage-trace`
 - `schema-classify`
 - `data-model`
+- `model-lineage`
+- `model-view-trace`
 - `graph-diff`
 
 ### Compatibility
 
-Version 2.0.0 should include a compatibility plan for v1 artifacts.
+Version 2.0.0 includes a compatibility plan for v1 artifacts.
 
-If artifact formats change, the release should provide one of the following:
+If artifact formats change, the release provides one of the following:
 
 - a migration command
 - a compatibility reader
@@ -725,6 +854,10 @@ The core product direction is:
 - compact structural artifacts instead of raw context dumps
 - graph-guided retrieval instead of full-file reads
 - bounded source context instead of broad source injection
+- model-to-view lineage instead of manual tracing from schemas to generated UI
+- literal and reference tracing instead of full-file string hunting
+- React render-flow retrieval instead of full-component reading
+- local React prop and event-flow tracing instead of full-file component-tree reading
 - explicit fallback reporting instead of hidden assumptions
 - conservative static analysis instead of overclaimed runtime understanding
 - framework-aware retrieval where it improves real development workflows

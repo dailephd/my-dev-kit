@@ -1,0 +1,80 @@
+loadLookupArtifacts
+17 | export function loadLookupArtifacts(indexDir: string): LookupArtifacts {
+18 |   const resolved = readIndexManifest(indexDir)
+19 |   return {
+20 |     resolved,
+21 |     codeGraph: readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph'),
+22 |   }
+23 | }
+24 | 
+25 | export function loadSourceArtifacts(options: {
+26 |   indexDir: string
+27 |   loadCodeGraph?: boolean
+28 |   loadSymbolIndex?: boolean
+29 | }): SourceArtifacts {
+30 |   const resolved = readIndexManifest(options.indexDir)
+31 |   return {
+32 |     resolved,
+33 |     codeGraph: options.loadCodeGraph
+34 |       ? readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph')
+35 |       : undefined,
+36 |     symbolIndex: options.loadSymbolIndex
+
+loadSourceArtifacts
+25 | export function loadSourceArtifacts(options: {
+26 |   indexDir: string
+27 |   loadCodeGraph?: boolean
+28 |   loadSymbolIndex?: boolean
+29 | }): SourceArtifacts {
+30 |   const resolved = readIndexManifest(options.indexDir)
+31 |   return {
+32 |     resolved,
+33 |     codeGraph: options.loadCodeGraph
+34 |       ? readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph')
+35 |       : undefined,
+36 |     symbolIndex: options.loadSymbolIndex
+37 |       ? readRequiredJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, 'symbol index')
+38 |       : undefined,
+39 |   }
+40 | }
+41 | 
+42 | function readRequiredJson<T>(filePath: string, label: string): T {
+43 |   if (!fs.existsSync(filePath)) throw new Error(`Missing required ${label} artifact: ${filePath}`)
+44 |   try {
+
+readIndexManifest
+17 | export function readIndexManifest(indexDirInput: string): ResolvedIndexManifest {
+18 |   const indexDir = path.resolve(indexDirInput)
+19 |   const manifestPath = path.join(indexDir, 'manifest.json')
+20 |   if (!fs.existsSync(manifestPath)) {
+21 |     throw new Error(`Missing index manifest: ${manifestPath}`)
+22 |   }
+23 | 
+24 |   const manifest = readJson<IndexManifest>(manifestPath)
+25 |   validateManifest(manifest)
+26 | 
+27 |   return {
+28 |     indexDir,
+29 |     manifestPath,
+30 |     manifest,
+31 |     artifactPaths: {
+32 |       symbolIndex: resolveArtifactPath(indexDir, manifest.artifacts.symbolIndex, 'symbolIndex'),
+33 |       codeGraph: resolveArtifactPath(indexDir, manifest.artifacts.codeGraph, 'codeGraph'),
+34 |       callGraph: manifest.artifacts.callGraph
+35 |         ? resolveArtifactPath(indexDir, manifest.artifacts.callGraph, 'callGraph')
+36 |         : null,
+
+writeIndexArtifacts
+15 | export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
+16 |   fs.mkdirSync(options.outputDir, { recursive: true })
+17 |   writeJson(path.join(options.outputDir, 'manifest.json'), options.manifest)
+18 |   writeJson(path.join(options.outputDir, 'symbol-index.json'), options.symbolIndex)
+19 |   writeJson(path.join(options.outputDir, 'code-graph.json'), options.codeGraph)
+20 |   if (options.callGraph) {
+21 |     writeJson(path.join(options.outputDir, 'call-graph.json'), options.callGraph)
+22 |   }
+23 | }
+24 | 
+25 | function writeJson(filePath: string, value: unknown): void {
+26 |   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+27 | }
