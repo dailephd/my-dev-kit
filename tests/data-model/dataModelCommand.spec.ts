@@ -47,6 +47,7 @@ describe('data-model command', () => {
     expect(commandHelp.stdout).toContain('--json')
     expect(commandHelp.stdout).toContain('--entity <name-or-id>')
     expect(commandHelp.stdout).toContain('--field <entity.field>')
+    expect(commandHelp.stdout).toContain('--trace-view [entity]')
   })
 
   it('fails clearly when --index is missing or both lookup flags are provided', () => {
