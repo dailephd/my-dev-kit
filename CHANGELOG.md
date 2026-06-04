@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 - YYYY-MM-DD
+## 1.1.0 - 2026-06-04
 
 Added data-model graph extraction and conservative model-to-view lineage.
 
