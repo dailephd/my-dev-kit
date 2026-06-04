@@ -1,12 +1,12 @@
 # my-dev-kit
 
-Local codebase graph indexing, keyword search, symbol lookup, source retrieval, graph slicing, and visualization for TypeScript, JavaScript, and Python projects.
+Local codebase graph indexing, bounded source retrieval, data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
 
 ## Overview
 
-my-dev-kit helps you navigate a local project by building a deterministic graph of files and symbols. You can search the graph, inspect a selected node, slice nearby relationships, and retrieve only the source excerpts needed for a task.
+my-dev-kit helps you navigate a local project by building deterministic artifacts for files, symbols, supported data models, and supported static view usage. You can search the code graph, inspect exact nodes, retrieve bounded source, generate data-model artifacts, inspect exact entities and fields, and trace supported static model-to-view paths.
 
-Everything runs locally. my-dev-kit does not call an LLM, make network requests, or edit source files.
+Everything runs locally. my-dev-kit does not call an LLM, make network requests, connect to a database, or edit source files.
 
 ## Installation
 
@@ -36,76 +36,25 @@ my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" -
 my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
 ```
 
-Use one or more `--src` flags for the source roots you want to index:
+Generate data-model artifacts from the existing index:
 
 ```sh
-my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
+my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
 ```
 
-For large monorepos, index targeted source folders instead of broad package roots. The indexer skips common generated, dependency, cache, and build directories by default, including `node_modules`, `.next`, `dist`, `build`, `coverage`, `playwright-report`, `test-results`, `output`, `out`, `.cache`, `.turbo`, `.vercel`, `.git`, `.pytest_cache`, `__pycache__`, `.venv`, and `venv`.
+Inspect an exact entity or field:
 
 ```sh
-my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
+my-dev-kit data-model --index .my-dev-kit --entity User --json
+my-dev-kit data-model --index .my-dev-kit --field User.email --json
 ```
 
-Use `--dry-run` to inspect what would be indexed without writing artifacts, `--progress` to print bounded progress diagnostics to stderr, and repeat `--exclude` for extra path/name exclusions:
+Trace supported static view usage:
 
 ```sh
-my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --dry-run --json
-my-dev-kit index --root . --src apps/web/app --src apps/web/lib --out .my-dev-kit-web --progress --json
+my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 ```
-
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for a step-by-step walkthrough.
-
-## Graph-Guided Symbol Retrieval for LLM workflows
-
-LLMs and coding agents work better with bounded, relevant context than with broad project dumps. my-dev-kit supports that workflow by preparing local codebase evidence you can paste into ChatGPT or provide to a coding agent.
-
-my-dev-kit does not call an LLM. It prepares deterministic local context; you decide what to share.
-
-Recommended flow:
-
-1. Index the project.
-2. Search for candidate files or symbols.
-3. Look up the strongest candidate node.
-4. Slice the graph around that node.
-5. Retrieve targeted source excerpts.
-6. Give only the selected search, lookup, slice, and source outputs to ChatGPT or your coding agent.
-
-```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit search --index .my-dev-kit --query "<topic>" --limit 20 --json
-my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
-my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
-my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
-```
-
-Compact prompt template:
-
-```text
-I am using my-dev-kit to provide bounded codebase context.
-
-Task:
-<describe the task>
-
-Search result:
-<paste selected search result>
-
-Selected node:
-<node-id>
-
-Lookup and graph slice:
-<paste selected lookup/slice output or concise summary>
-
-Source excerpts:
-<paste numbered source output with file paths>
-
-Instructions:
-Use only the provided context unless you say what additional my-dev-kit command I should run.
-Explain which provided evidence supports your answer.
-```
-
-For a fuller template and guidance on what to paste, see [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
 ## Commands
 
@@ -117,73 +66,110 @@ For a fuller template and guidance on what to paste, see [docs/WORKFLOWS.md](doc
 | `source` | Retrieve bounded source by line range, symbol, or node ID |
 | `slice` | Build a bounded subgraph around a focus node |
 | `view` | Render the code graph as DOT, SVG, or PNG |
+| `data-model` | Generate data-model artifacts, inspect exact entities or fields, and trace supported static view usage |
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
 
 ## Generated artifacts
 
-The `index` command writes these artifacts to the output directory:
+The `index` command writes:
 
 | Artifact | Contents |
 | --- | --- |
 | `manifest.json` | Project metadata, source roots, artifact paths, and summary counts |
 | `symbol-index.json` | Per-file symbol tables with locations, imports, and exports |
 | `code-graph.json` | Graph of file and symbol nodes connected by typed edges |
-| `call-graph.json` | Call graph, written only when `--call-graph` is requested |
+| `call-graph.json` | Optional static call graph written when `--call-graph` is requested |
 
-For normal LLM-assisted workflows, do not paste full `symbol-index.json` or `code-graph.json`. Use `search`, `lookup`, `slice`, and `source` to extract targeted context.
+The `data-model` command writes:
+
+| Artifact | Contents |
+| --- | --- |
+| `data-model.json` | Entities, fields, relationships, source refs, and warnings |
+| `data-model-graph.json` | Separate graph of data-model entity and field nodes |
+| `model-view-lineage.json` | Conservative static lineage between data-model fields and supported view usage, written in `trace-view` mode |
+
+`data-model-graph.json` and `model-view-lineage.json` are separate from `code-graph.json`.
+
+## Data-model extraction
+
+Version 1.1.0 adds a conservative TypeScript-first data-model layer on top of the existing index artifacts.
+
+Supported extraction patterns:
+
+- exported interfaces with property signatures
+- exported type aliases whose right side is an object literal type
+- exported classes with property declarations
+
+Supported inspection behavior:
+
+- exact entity lookup by name or stable ID
+- exact field lookup by `Entity.field`
+- conservative static `trace-view` output for supported same-project evidence
+
+Unsupported or ambiguous patterns are reported as warnings or omitted conservatively. The current release does not claim Prisma, SQL, Django, SQLAlchemy, TypeORM, or Sequelize support.
+
+## Conservative model-to-view lineage
+
+`trace-view` is a static evidence feature, not a runtime UI tracer.
+
+Supported lineage is intentionally narrow. It can connect supported data-model fields through:
+
+- direct transformation functions that return object literals from model field reads
+- direct view-model property assignments from known model fields
+- direct component prop assignments when field identity remains explicit
+- direct JSX rendering when field identity remains explicit
+
+It does not claim:
+
+- route-aware reachability
+- browser-state behavior
+- full React render-flow tracing
+- runtime rendering behavior
 
 ## Trying the bundled examples from a cloned repository
 
-The bundled examples are useful when you cloned this repository, are inspecting package contents, or want a small smoke-test project. They are not the main quickstart path for npm users.
+The bundled examples are useful when you cloned this repository, are inspecting package contents, or want a small smoke-test project.
 
-TypeScript example:
+TypeScript graph example:
 
 ```sh
 my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --call-graph --json
 my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "user" --limit 5 --json
 my-dev-kit lookup --index examples/basic-ts/.my-dev-kit --node symbol:src/index.ts#describeUser --depth 1 --json
-my-dev-kit source --index examples/basic-ts/.my-dev-kit --file src/index.ts --symbol describeUser --format numbered
 ```
 
-Python example:
+Data-model example:
 
 ```sh
-my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --call-graph --json
-my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
-my-dev-kit lookup --index examples/basic-python/.my-dev-kit --node file:src/main.py --depth 1 --json
-my-dev-kit source --index examples/basic-python/.my-dev-kit --file src/main.py --symbol greet --format numbered
+my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
+my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --out examples/basic-data-model-ts/.my-dev-kit --json
+my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
+my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
+my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
+my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --trace-view --json
 ```
 
 See [examples/README.md](examples/README.md) for more detail.
-
-## Graph visualization example
-
-```sh
-my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot --edge-style semantic
-my-dev-kit view --index .my-dev-kit --format svg --out .my-dev-kit/graph.svg
-my-dev-kit view --index .my-dev-kit --format svg --allow-dot-fallback --out .my-dev-kit/graph.dot
-```
-
-DOT output does not require Graphviz. SVG and PNG rendering require the Graphviz `dot` executable.
 
 ## Design boundaries
 
 my-dev-kit is a local, deterministic read-only CLI tool. It does not:
 
-- Make network requests or LLM calls
-- Edit or modify source files
-- Perform semantic or embedding-based search
-- Execute orchestration, agents, or external services
-
-Search is keyword-based. Result scores are deterministic ranking values, not probabilities or confidence scores.
+- make network requests or LLM calls
+- edit or modify source files
+- perform semantic or embedding-based search
+- execute user application code
+- connect to databases
+- claim runtime React or browser-state behavior
 
 ## Limitations
 
-- Symbol end lines are not recorded during indexing. Symbol source retrieval returns a capped preview from the symbol's start line with a warning. Use line-range mode with explicit `--start` and `--end` for exact bounds.
+- Symbol end lines are not recorded during indexing. Symbol source retrieval returns a capped preview from the symbol's start line with a warning. Use explicit line ranges for exact bounds.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
-- Python call-graph extraction uses `ast` and records high-confidence function and method call sites such as `foo()`, `self.foo()`, `module.foo()`, and `ClassName.method()`.
-- Python indexing requires `python` or `python3` on `PATH`. Python 3.8 or later is required. Python files are skipped with a warning if no interpreter is found.
+- Data-model extraction is conservative and currently focused on supported TypeScript patterns.
+- Lookup is exact only. There is no fuzzy entity or field lookup.
+- `trace-view` is conservative static analysis only. Unsupported dynamic or ambiguous patterns are warned or omitted.
 
 ## Development from source
 
@@ -204,9 +190,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.0.0 includes all six commands fully implemented and tested.
-
-Immediate next roadmap item: data-model graph extraction, a planned downstream layer that will interpret indexed code and schema files to identify entities, fields, keys, and relationships.
+Version 1.1.0 adds the first data-model and model-to-view lineage MVP on top of the existing code graph workflow. Future roadmap items still cover broader schema extractors, richer TSX and route-aware analysis, source expansion, graph rendering improvements, and scalability.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

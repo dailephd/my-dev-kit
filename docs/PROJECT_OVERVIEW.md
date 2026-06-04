@@ -2,28 +2,27 @@
 
 ## What this project is
 
-my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, and Python codebases, inspecting their structure, retrieving bounded source context, and visualizing code graphs.
+my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, and Python codebases, inspecting their structure, retrieving bounded source context, generating separate data-model artifacts, and tracing supported static model-to-view lineage.
 
 It runs offline and works through file-based JSON artifacts. It does not require a server, does not call external APIs, does not call language models, and does not modify source files.
 
-Version 1.0.0 focuses on a stable CLI foundation for structural codebase access.
-
 ## Purpose
 
-Large codebases are difficult to inspect manually and too expensive to paste into coding-agent or LLM workflows without filtering. A developer often needs a smaller set of facts:
+Large codebases are difficult to inspect manually and too expensive to paste into coding-agent workflows without filtering. Developers usually need a smaller set of facts:
 
 - where a file or symbol is located
 - what a file imports or exports
 - which symbols are defined in a file
 - how graph nodes relate to one another
 - which source excerpt is relevant to a task
-- what local graph neighborhood surrounds a selected node
+- which entities and fields exist in a supported model layer
+- where a supported model field is statically transformed or rendered
 
-my-dev-kit provides this structural view through deterministic local artifacts. The artifacts can be searched, inspected, sliced, rendered, and reused by humans or downstream tools.
+my-dev-kit provides this structural view through deterministic local artifacts that can be searched, inspected, sliced, rendered, and reused by humans or downstream tools.
 
 ## Current release scope
 
-Version 1.0.0 supports:
+Version 1.1.0 supports:
 
 - indexing TypeScript, JavaScript, and Python source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -34,11 +33,15 @@ Version 1.0.0 supports:
 - retrieving bounded source by line range, symbol name, or node ID
 - slicing a bounded graph neighborhood around a focus node
 - rendering the code graph as DOT, SVG, or PNG
-- using semantic, labeled, or minimal graph edge styles
+- generating `data-model.json` and `data-model-graph.json`
+- conservative TypeScript model extraction for supported static model patterns
+- exact entity and field inspection from generated data-model artifacts
+- generating `model-view-lineage.json`
+- conservative static model-to-view lineage tracing for supported TypeScript and TSX cases
 
 ## Public commands
 
-my-dev-kit provides six public commands.
+my-dev-kit provides seven public commands.
 
 | Command | Purpose |
 | --- | --- |
@@ -46,75 +49,109 @@ my-dev-kit provides six public commands.
 | `search` | Search indexed files, symbols, and edges by keyword |
 | `lookup` | Look up a graph node by exact node ID |
 | `source` | Retrieve bounded source by line range, symbol name, or node ID |
-| `slice` | Build a bounded subgraph neighborhood around a focus node |
+| `slice` | Build a bounded graph neighborhood around a focus node |
 | `view` | Render the code graph as DOT, SVG, or PNG |
+| `data-model` | Generate data-model artifacts, inspect exact entities or fields, and trace supported static view usage |
 
 ## Generated artifacts
 
-The `index` command writes artifacts into the selected output directory.
+The `index` command writes:
 
-Core artifacts:
+- `manifest.json`
+- `symbol-index.json`
+- `code-graph.json`
+- `call-graph.json`, when requested and available
 
-- `manifest.json` — project metadata, source roots, language information, artifact paths, warnings, errors, and summary counts
-- `symbol-index.json` — per-file symbol tables, imports, exports, dependencies, and symbol locations
-- `code-graph.json` — typed graph of file and symbol nodes connected by typed edges
+The `data-model` command writes:
 
-Optional artifact:
+- `data-model.json`
+- `data-model-graph.json`
+- `model-view-lineage.json`, in `trace-view` mode
 
-- `call-graph.json` — static call edges, written when `--call-graph` is requested and call graph data is available
+The recommended local artifact directory remains:
 
-The recommended local artifact directory is:
+```sh
+.my-dev-kit
+```
 
-    .my-dev-kit
+The downstream data-model and lineage artifacts are separate from `code-graph.json`.
 
 ## Typical user workflow
 
 Install the package globally:
 
-    npm install -g @dailephd/my-dev-kit
+```sh
+npm install -g @dailephd/my-dev-kit
+```
 
 Index a project:
 
-    my-dev-kit index --root . --src src --out .my-dev-kit --json
+```sh
+my-dev-kit index --root . --src src --out .my-dev-kit --json
+```
 
 Search to discover relevant node IDs:
 
-    my-dev-kit search --index .my-dev-kit --query "<term>" --limit 20 --json
+```sh
+my-dev-kit search --index .my-dev-kit --query "<term>" --limit 20 --json
+```
 
 Look up a selected node:
 
-    my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+```sh
+my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+```
 
 Build a graph slice around the selected node:
 
-    my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+```sh
+my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+```
 
 Retrieve source context:
 
-    my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --format numbered
+```sh
+my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --format numbered
+```
 
-Render the graph as DOT:
+Generate data-model artifacts:
 
-    my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+```sh
+my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+```
 
-For a full walkthrough, see QUICKSTART.md.
+Inspect a generated entity or field:
 
-For command flags, see COMMANDS.md.
+```sh
+my-dev-kit data-model --index .my-dev-kit --entity User --json
+my-dev-kit data-model --index .my-dev-kit --field User.email --json
+```
 
-For practical graph-guided workflows, see WORKFLOWS.md.
+Trace supported static view usage:
 
-## Graph-guided retrieval
+```sh
+my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
+```
 
-The recommended retrieval pattern is:
+## Conservative static analysis stance
 
-1. run `index`
-2. use `search` to find candidate files or symbols
-3. use `lookup` to inspect the strongest node
-4. use `slice` to inspect the local graph neighborhood
-5. use `source` to retrieve only the needed source excerpt
-6. use `view` when a graph visualization is useful
+The data-model and lineage layers build on the existing artifact model but remain deliberately narrow.
 
-This workflow is designed to avoid broad source-tree reading and large context dumps.
+Current v1.1.0 scope includes:
+
+- conservative TypeScript model extraction
+- conservative same-project static lineage where field identity remains explicit
+- warnings for unsupported or ambiguous patterns
+
+Current v1.1.0 does not claim:
+
+- full ORM or schema coverage
+- runtime database behavior
+- runtime React rendering behavior
+- route-aware reachability
+- browser-state tracing
+- full React render-flow tracing
 
 ## What my-dev-kit does not do
 
@@ -125,17 +162,10 @@ my-dev-kit does not provide:
 - code editing
 - source modification
 - autonomous agent execution
-- backend agent orchestration
-- PromptPack generation
-- evaluation workflows
-- milestone workflows
-- documentation generation workflows
 - semantic similarity search
 - embedding-based retrieval
 - package publishing automation
 - GitHub release automation
-
-Search is deterministic and keyword-based. It is not semantic search.
 
 ## Current limitations
 
@@ -143,35 +173,18 @@ Search is deterministic and keyword-based. It is not semantic search.
 - Symbol-mode source retrieval returns a bounded preview from the symbol start line and may include a capped-preview warning.
 - Use line-range retrieval when exact source bounds are required.
 - Call graph extraction is best-effort static syntactic analysis.
-- Dynamic dispatch, computed calls, runtime behavior, and generated runtime behavior may not be captured.
-- Python call graph extraction uses static `ast` parsing and does not execute user Python source.
-- Lookup requires exact node IDs.
-- Node IDs are obtained from `search` results or from `code-graph.json`.
-- Graph traversal depth is capped at 3 for `lookup` and `slice`.
-- Search is keyword-based and does not use embeddings or fuzzy matching.
-
-## Version 1.0.0 focus
-
-Version 1.0.0 is focused on the core local CLI workflow:
-
-- build index artifacts
-- inspect graph structure
-- search and retrieve bounded source context
-- render graph output
-- keep behavior deterministic and offline
-
-Future releases may add richer source retrieval, TSX and test-aware indexing, route-aware retrieval, data-model graph extraction, incremental indexing, graph diffing, and additional language support.
-
-For planned work, see ROADMAP.md.
+- Data-model extraction is conservative and currently limited to supported TypeScript model patterns.
+- Unsupported dynamic or ambiguous lineage patterns are warned or omitted.
+- Lookup requires exact node IDs, exact entity names or IDs, and exact `Entity.field` selectors.
 
 ## Documentation map
 
-- QUICKSTART.md — install, first use, and end-to-end examples
-- COMMANDS.md — full command and flag reference
-- GRAPH_SCHEMA.md — artifact formats, node IDs, edge kinds, and command output behavior
-- ARCHITECTURE.md — internal subsystem structure and design boundaries
-- WORKFLOWS.md — practical usage workflows and graph-guided retrieval
-- SECURITY.md — security model, path boundaries, subprocess behavior, and audit notes
-- DEVELOPMENT.md — source-repository setup, tests, build, and local package testing
-- RELEASE.md — manual npm release checklist
-- ROADMAP.md — current version status and planned improvements
+- `README.md` - install, quickstart, and release-level feature summary
+- `COMMANDS.md` - full command and flag reference
+- `GRAPH_SCHEMA.md` - artifact formats, node IDs, edge kinds, and downstream artifact structure
+- `ARCHITECTURE.md` - internal subsystem structure and design boundaries
+- `WORKFLOWS.md` - practical usage workflows and graph-guided retrieval
+- `SECURITY.md` - security model, path boundaries, subprocess behavior, and audit notes
+- `DEVELOPMENT.md` - source-repository setup, tests, build, and local package testing
+- `RELEASE.md` - manual npm release checklist
+- `ROADMAP.md` - implemented status and planned improvements

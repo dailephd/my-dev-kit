@@ -6,6 +6,11 @@ log/
 tmp/
 .tmp/
 .cache/
+.my-dev-kit/
+.my-dev-kit-*/
+**/.my-dev-kit/
+**/.my-dev-kit-*/
+.my-dev-kit-v11-planning/
 .my-dev-kit-v1/
 .my-dev-kit-v1-*/
 .my-dev-kit-ci/

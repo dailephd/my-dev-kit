@@ -2,62 +2,59 @@
 
 ## System goal
 
-my-dev-kit provides deterministic, offline code graph indexing and retrieval for TypeScript, JavaScript, and Python projects.
+my-dev-kit provides deterministic, offline code graph indexing, bounded source retrieval, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
 
-The system produces file-based JSON artifacts that can be inspected, searched, sliced, and reused by developers or coding agents. It does not run a server, maintain a runtime graph, call LLMs, call external APIs, or modify user source files.
-
-The core workflow is:
-
-    index a project
-    search or lookup graph nodes
-    slice the relevant graph neighborhood
-    retrieve bounded source context
-    optionally render the graph for inspection
+The system produces local JSON artifacts that can be inspected, searched, sliced, rendered, and reused by developers or coding agents. It does not run a server, call LLMs, call external APIs, execute user source code, or modify source files.
 
 ## High-level architecture
 
-    CLI entry: src/cli.ts
-      |
-      +-- index command   -> Indexing layer        -> manifest.json, symbol-index.json, code-graph.json, optional call-graph.json
-      +-- search command  -> Search layer          -> ranked keyword matches over index artifacts
-      +-- lookup command  -> Lookup layer          -> exact node lookup and bounded neighbor traversal
-      +-- source command  -> Source retrieval      -> bounded source slices
-      +-- slice command   -> Graph slicing layer   -> bounded graph-neighborhood artifacts
-      +-- view command    -> Graph view layer      -> DOT, SVG, or PNG graph output
+```text
+CLI entry: src/cli.ts
+  |
+  +-- index command       -> Indexing layer
+  |                        -> manifest.json, symbol-index.json, code-graph.json, optional call-graph.json
+  |
+  +-- search command      -> Search layer
+  +-- lookup command      -> Lookup layer
+  +-- source command      -> Source retrieval layer
+  +-- slice command       -> Graph slicing layer
+  +-- view command        -> Graph view layer
+  |
+  +-- data-model command  -> Data-model orchestration layer
+                           -> data-model.json
+                           -> data-model-graph.json
+                           -> model-view-lineage.json (trace-view mode)
+```
 
-The `index` command creates the artifact set. All other commands read from that artifact set.
+The `index` command remains the general source-structure indexer. Downstream data-model and lineage layers consume existing index artifacts instead of replacing the indexer.
 
 ## Artifact model
 
-The index command writes artifacts into the selected output directory.
+The system has three artifact layers:
 
-Core artifacts:
+### Index artifacts
 
 - `manifest.json`
 - `symbol-index.json`
 - `code-graph.json`
+- `call-graph.json`, optional
 
-Optional artifacts:
+These artifacts describe source files, symbols, edges, and optional static call relationships.
 
-- `call-graph.json`, written when `--call-graph` is requested and call graph data is available
+### Data-model artifacts
 
-Artifact flow:
+- `data-model.json`
+- `data-model-graph.json`
 
-    index --root <project> --src <src>
-      |
-      +-> manifest.json
-      +-> symbol-index.json
-      +-> code-graph.json
-      +-> call-graph.json, optional
+These artifacts describe entities, fields, relationships, evidence, and a separate data-model graph.
 
-    search / lookup / source / slice / view
-      |
-      +<- manifest.json
-      +<- symbol-index.json
-      +<- code-graph.json
-      +<- call-graph.json, when requested by a command or workflow
+### Lineage artifact
 
-The artifacts are local files. They can be committed, ignored, deleted, regenerated, inspected manually, or passed into other tools.
+- `model-view-lineage.json`
+
+This artifact describes conservative static relationships between data-model fields, transformations, view-model fields, component props, and rendered fields.
+
+The data-model and lineage artifacts remain separate from `code-graph.json`.
 
 ## CLI layer
 
@@ -76,15 +73,7 @@ Public commands:
 - `source`
 - `slice`
 - `view`
-
-Command files:
-
-- `indexCommand.ts`
-- `searchCommand.ts`
-- `lookupCommand.ts`
-- `sourceCommand.ts`
-- `sliceCommand.ts`
-- `viewCommand.ts`
+- `data-model`
 
 The CLI layer owns:
 
@@ -95,7 +84,7 @@ The CLI layer owns:
 - error presentation
 - process exit behavior
 
-The CLI layer does not own indexing, graph traversal, source retrieval, search scoring, or rendering logic.
+The CLI layer does not own indexing, extraction, builder logic, graph traversal, source retrieval, or lineage construction logic. Command files orchestrate subsystem calls and format bounded output.
 
 ## Indexing layer
 
@@ -120,29 +109,7 @@ Responsibilities:
 - optionally build the call graph
 - write index artifacts
 
-Source discovery is centralized in `discoverSourceFiles.ts`. Normal indexing, dry-run mode, default ignores, repeated excludes, and progress counters use the same discovery path before symbol extraction.
-
-The indexer skips common dependency, generated, build, and cache directories before reading files from those directories.
-
-Examples of skipped directories include:
-
-- `node_modules`
-- `.next`
-- `dist`
-- `build`
-- `coverage`
-- `playwright-report`
-- `test-results`
-- `.cache`
-- `.turbo`
-- `.vercel`
-- `.git`
-- `.pytest_cache`
-- `__pycache__`
-- `.venv`
-- `venv`
-
-The indexing layer validates source roots and supported languages before running extraction.
+Source discovery is centralized in `discoverSourceFiles.ts`. Indexing, dry-run mode, ignore handling, and progress reporting all use the same discovery path before extraction.
 
 ## Language adapter layer
 
@@ -150,7 +117,7 @@ Files:
 
 - `src/languages/`
 
-The language adapter layer owns language-specific extraction.
+The language adapter layer owns language-specific extraction for the indexer.
 
 Main files:
 
@@ -159,82 +126,12 @@ Main files:
 - `typescript/adapter.ts`
 - `python/adapter.ts`
 
-The `LanguageAdapter` interface defines the adapter contract:
+The default registry supports:
 
-- supported file extensions
-- whether the adapter supports call graph extraction
-- source extraction
-- optional call graph extraction
-- optional import resolution
+- TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`
+- Python for `.py`
 
-The default registry registers:
-
-- TypeScript adapter for `.ts`, `.tsx`, `.js`, and `.jsx`
-- Python adapter for `.py`
-
-The builder uses the registry to select the correct adapter per file. Language-specific logic stays inside adapters instead of being hardcoded throughout the indexing pipeline.
-
-## TypeScript and JavaScript adapter
-
-Files:
-
-- `src/languages/typescript/adapter.ts`
-
-The TypeScript adapter handles:
-
-- TypeScript files
-- TSX files
-- JavaScript files
-- JSX files
-
-It uses TypeScript compiler-based parsing for symbol extraction and conservative call graph extraction.
-
-Extracted structures include:
-
-- imports
-- exports
-- top-level symbols
-- symbol names
-- symbol kinds
-- symbol start lines
-- language metadata
-- static call relationships where supported
-
-The adapter is conservative. It does not attempt to fully resolve runtime dispatch, dynamic imports, generated code, or framework-specific behavior beyond what is statically available.
-
-## Python adapter
-
-Files:
-
-- `src/languages/python/adapter.ts`
-
-The Python adapter handles `.py` files.
-
-Python indexing requires Python 3.8 or later on `PATH` as `python` or `python3`.
-
-The adapter uses a Python subprocess with AST extraction scripts. It does not execute user source files.
-
-Extracted structures include:
-
-- top-level functions
-- async top-level functions
-- top-level classes
-- imports
-- `ALL_CAPS` constants
-- `Final`-annotated constants
-- `__all__` exports when defined as a plain list
-- conservative syntactic call edges for straightforward calls
-
-Python symbols are considered exported unless their names start with `_`, unless `__all__` provides a more specific export list.
-
-The Python call graph is static and conservative. It records direct syntactic calls such as:
-
-- `foo()`
-- `self.foo()`
-- `module.foo()`
-- `ClassName.method()`
-
-It does not execute Python code or infer dynamic runtime behavior.
+The indexer uses the registry to select the correct adapter per file. Language-specific parsing stays inside adapters instead of being duplicated throughout the pipeline.
 
 ## Symbol index layer
 
@@ -242,33 +139,19 @@ Files:
 
 - `src/symbol-index/`
 
-The symbol index layer builds per-file symbol tables.
+The symbol index layer builds per-file summaries used by source retrieval, search, and downstream extraction orchestration.
 
-For each indexed source file, it records:
+For each indexed file, it records:
 
 - relative file path
 - language
-- imported module paths
-- exported symbol names
-- dependency paths when resolvable
-- symbol records
+- imports
+- exports
+- internal dependencies when resolvable
+- extracted symbols
 - symbol names
 - symbol kinds
 - symbol start lines
-
-The symbol index is written to `symbol-index.json`.
-
-Consumers:
-
-- `source` uses the symbol index to resolve symbol-name retrieval.
-- `search` uses the symbol index to match symbol names, imports, exports, and dependency metadata.
-- downstream workflows can use the symbol index as a compact file summary.
-
-Current limitation:
-
-- Symbol records include start lines, but not full symbol end-line bounds.
-- Symbol retrieval may return a bounded preview from the symbol start line.
-- Exact retrieval should use line-range mode when precise bounds are required.
 
 ## Code graph layer
 
@@ -277,14 +160,14 @@ Files:
 - `src/graph/codeGraphTypes.ts`
 - `src/indexing/`
 
-The code graph is a typed directed graph.
+The code graph is a typed directed graph over file and symbol nodes.
 
-Node types include:
+Node kinds:
 
-- file nodes
-- symbol nodes
+- `file`
+- `symbol`
 
-Core edge kinds include:
+Core edge kinds:
 
 - `defines`
 - `imports`
@@ -293,357 +176,207 @@ Core edge kinds include:
 - `depends-on`
 - `related-to`
 
-Edge meanings:
+The code graph stays focused on static code structure. Data-model and lineage edges are not added to `code-graph.json`.
 
-- `defines` means a file defines a symbol.
-- `imports` means a file imports from another module or dependency.
-- `exports` means a file exports a symbol.
-- `calls` means a symbol calls another symbol when statically detected.
-- `depends-on` means a file or symbol depends on another node.
-- `related-to` means a general structural relationship that is useful but not represented by a narrower edge kind.
-
-The code graph is written to `code-graph.json`.
-
-Consumers:
-
-- `lookup`
-- `slice`
-- `view`
-- `search`
-
-The code graph describes code structure. It is not a runtime execution graph and does not claim complete semantic understanding of a program.
-
-## Call graph layer
-
-The call graph is optional and generated only when `--call-graph` is requested.
-
-Artifact:
-
-- `call-graph.json`
-
-The call graph stores conservative static call edges extracted from supported language adapters.
-
-The call graph is useful for:
-
-- finding direct call relationships
-- inspecting local call structure
-- expanding graph context around a symbol
-- supporting deeper retrieval workflows when call relationships are relevant
-
-Limitations:
-
-- dynamic dispatch is not fully resolved
-- runtime control flow is not modeled
-- generated runtime behavior is not inferred
-- unsupported call patterns are skipped rather than guessed
-
-## Search layer
+## Search, lookup, source, slice, and view layers
 
 Files:
 
 - `src/search/`
-
-The search layer performs deterministic keyword search over index artifacts.
-
-Search reads:
-
-- `manifest.json`
-- `symbol-index.json`
-- `code-graph.json`
-
-Search targets include:
-
-- file paths
-- file node IDs
-- symbol node IDs
-- symbol names
-- symbol kinds
-- imported module paths
-- exported symbol names
-- dependency paths
-- edge kinds
-- edge endpoints
-- neighboring node labels
-
-Search behavior:
-
-- local only
-- deterministic
-- keyword-based
-- field-weighted
-- no embeddings
-- no semantic similarity service
-- no LLM calls
-- no source-file modification
-
-Search scores are ranking integers. They are not probabilities or model confidence values.
-
-## Lookup layer
-
-Files:
-
-- `src/lookup/lookupNode.ts`
-
-The lookup layer resolves an exact graph node ID and returns bounded graph context around that node.
-
-Lookup supports:
-
-- exact node ID lookup
-- depth 0 through 3
-- incoming edge traversal
-- outgoing edge traversal
-- neighboring node collection
-
-Lookup is exact-match only. Partial or fuzzy node lookup belongs to `search`.
-
-Node ID examples:
-
-- `file:src/index.ts`
-- `symbol:src/index.ts#describeUser`
-
-## Source retrieval layer
-
-Files:
-
-- `src/lookup/getSourceSlice.ts`
-- `src/lookup/resolveSourceTarget.ts`
-- `src/lookup/sourceSliceTypes.ts`
-- `src/source/renderSourceOutput.ts`
-
-The source retrieval layer reads bounded source ranges from the indexed project.
-
-Supported retrieval modes:
-
-- file node retrieval
-- symbol node retrieval
-- file plus symbol-name retrieval
-- file plus explicit line range retrieval
-
-The source layer enforces:
-
-- project-root containment
-- path traversal protection
-- valid line ranges
-- max-line limits
-- output-format selection
-
-Output formats:
-
-- `json`
-- `plain`
-- `numbered`
-
-Source retrieval never modifies source files. It only reads source content and renders bounded output.
-
-## Graph slicing layer
-
-Files:
-
-- `src/graph/`
 - `src/lookup/`
-
-The graph slicing layer builds a bounded graph neighborhood around a focus node.
-
-Slice inputs:
-
-- index directory
-- focus node ID
-- traversal depth
-- traversal direction
-
-Supported directions:
-
-- `incoming`
-- `outgoing`
-- `both`
-
-Traversal depth is capped. The current public command supports depth 0 through 3.
-
-Slice output includes:
-
-- focus node
-- included nodes
-- included edges
-- summary counts
-
-Graph slicing reads graph artifacts only. It does not read source files and does not require Graphviz.
-
-The result is written as a graph-slice artifact.
-
-## Graph view layer
-
-Files:
-
+- `src/source/`
 - `src/graph/`
 
-The graph view layer converts `code-graph.json` into visual graph output.
+These layers consume index artifacts only.
 
-Main responsibilities:
+Responsibilities:
 
-- build DOT text
-- apply edge-style conventions
-- optionally invoke Graphviz
-- write DOT, SVG, or PNG output
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges
+- `lookup`: exact node lookup with bounded neighbor expansion
+- `source`: bounded read-only source retrieval with path containment
+- `slice`: bounded graph-neighborhood extraction
+- `view`: DOT, SVG, or PNG rendering of `code-graph.json`
 
-Main files:
+These commands preserve the v1.0.0 index workflow and do not depend on data-model or lineage artifacts.
 
-- `buildDotGraph.ts`
-- `edgeStyleConvention.ts`
-- `dotTypes.ts`
-- `renderGraphviz.ts`
-- `writeGraphView.ts`
-
-Supported output formats:
-
-- `dot`
-- `svg`
-- `png`
-
-Supported edge styles:
-
-- `semantic`
-- `labeled`
-- `minimal`
-
-Edge style behavior:
-
-- `semantic` uses DOT marker and line-style attributes per edge kind and emits a legend.
-- `labeled` emits inline edge labels.
-- `minimal` emits edges without labels or extra attributes.
-
-DOT output does not require Graphviz. SVG and PNG rendering require the Graphviz `dot` executable.
-
-Graphviz is invoked with `shell: false`, and DOT content is passed through stdin.
-
-## I/O and shared helpers
+## Data-model layer
 
 Files:
 
+- `src/data-model/types.ts`
+- `src/data-model/normalizedTypes.ts`
+- `src/data-model/buildDataModelArtifact.ts`
+- `src/data-model/buildDataModelGraph.ts`
+- `src/data-model/buildDataModelFromIndex.ts`
+- `src/data-model/readDataModelArtifacts.ts`
+- `src/data-model/writeDataModelArtifacts.ts`
+- `src/data-model/lookupDataModelNode.ts`
+- `src/data-model/dataModelArtifactPaths.ts`
+
+The data-model layer is additive. It consumes existing index artifacts and produces separate data-model artifacts.
+
+Responsibilities:
+
+- define final artifact contracts
+- define normalized extractor output contracts
+- build deterministic `data-model.json` artifacts
+- build deterministic `data-model-graph.json` artifacts
+- read and write data-model artifacts safely
+- provide exact entity and field lookup helpers
+- orchestrate extraction over indexed TypeScript or TSX source files
+
+The data-model layer does not:
+
+- modify `code-graph.json`
+- replace the indexer
+- expose fuzzy search
+- claim unsupported extractor families
+
+## Data-model extractor layer
+
+Files:
+
+- `src/data-model/extractors/`
+
+The extractor layer emits normalized records. It does not write final artifacts directly.
+
+Current v1.1.0 extractor scope:
+
+- exported interfaces with property signatures
+- exported type aliases whose right side is an object literal type
+- exported classes with property declarations
+
+Current extractor boundaries:
+
+- conservative and TypeScript-focused
+- no Prisma extraction
+- no SQL extraction
+- no Django extraction
+- no SQLAlchemy extraction
+- no TypeORM extraction
+- no Sequelize extraction
+- no broad cross-file relationship inference
+
+Unsupported or ambiguous patterns produce warnings instead of guessed relationships.
+
+## Data-model command integration
+
+Files:
+
+- `src/commands/dataModelCommand.ts`
+
+The `data-model` command is a thin orchestration layer over the data-model and lineage subsystems.
+
+Supported command modes:
+
+- generation mode
+- exact entity lookup mode
+- exact field lookup mode
+- entity `trace-view` mode
+- field `trace-view` mode
+
+Generation mode:
+
+- reads existing index artifacts
+- runs the extractor-to-builder path
+- writes `data-model.json`
+- writes `data-model-graph.json`
+
+Lookup mode:
+
+- reads existing `data-model` artifacts
+- performs exact entity or field lookup
+
+Trace mode:
+
+- rebuilds data-model artifacts from the index
+- builds conservative lineage in memory
+- writes `model-view-lineage.json`
+- returns bounded lineage output
+
+## Model-to-view lineage layer
+
+Files:
+
+- `src/lineage/types.ts`
+- `src/lineage/buildModelViewLineage.ts`
+- `src/lineage/readModelViewLineage.ts`
+- `src/lineage/writeModelViewLineage.ts`
+- `src/lineage/modelViewLineageArtifactPaths.ts`
+
+The lineage layer is separate from the data-model graph and the code graph.
+
+Responsibilities:
+
+- define lineage contracts
+- build conservative static lineage from data-model artifacts plus source evidence
+- read and write `model-view-lineage.json`
+- expose bounded lineage results through the `data-model` command
+
+Supported lineage concepts:
+
+- data entity
+- data field
+- transformation
+- view-model field
+- component
+- component prop
+- rendered field
+
+Supported lineage is intentionally narrow and evidence-backed. It does not claim runtime rendering, route reachability, browser-state behavior, or full React render-flow understanding.
+
+## Data-model and lineage I/O
+
+Files:
+
+- `src/data-model/dataModelArtifactPaths.ts`
+- `src/lineage/modelViewLineageArtifactPaths.ts`
 - `src/io/`
-- `src/version.ts`
 
-The shared I/O layer supports:
+The data-model and lineage I/O layers handle:
 
-- reading JSON artifacts
-- writing JSON artifacts
-- writing rendered output
-- validating paths
-- shared filesystem behavior
+- deterministic JSON writes
+- safe artifact path resolution
+- path containment inside the selected output directory
+- safe JSON reads with artifact kind validation
 
-`src/version.ts` stores the package version constant used by the CLI.
+They do not:
 
-## Test structure
-
-Tests are in `tests/`, organized by subsystem.
-
-Main test groups:
-
-- `tests/cli/`
-- `tests/index/`
-- `tests/lookup/`
-- `tests/view/`
-- `tests/search/`
-- `tests/security/`
-
-Security tests cover:
-
-- path traversal protection
-- malformed artifact handling
-- artifact path validation
-- DOT escaping
-- output path behavior
-- graph traversal limits
-- output-size limits
-
-Most integration tests invoke the built CLI through child processes against fixture projects in `examples/`. Unit tests operate directly on exported functions.
+- modify source files
+- require Graphviz
+- require network access
 
 ## Security boundaries
 
-my-dev-kit is designed as a local, offline CLI.
+my-dev-kit remains a local, offline CLI.
 
-Security boundaries:
+Security-relevant design rules:
 
 - no LLM calls
 - no external API calls
-- no server process
-- no runtime agent execution
+- no runtime code execution
 - no source-file modification
-- no shell-based Graphviz invocation
-- no execution of user Python source during Python indexing
 - source retrieval is read-only
-- graph traversal is bounded
-- source retrieval is bounded
-- artifact paths are validated
-- project-root containment is enforced for source retrieval
-- DOT node IDs, labels, and edge labels are escaped
-
-Important implementation constraints:
-
-- The CLI layer does not own retrieval or graph logic.
-- The graph and lookup layers do not own CLI parsing.
-- Source retrieval rejects paths outside `manifest.projectRoot`.
-- Artifact paths in `manifest.json` are validated to stay inside the index directory.
-- DOT generation escapes node IDs, labels, and edge labels.
-- Graphviz receives DOT through stdin and is invoked without shell expansion.
-- Graph traversal depth is capped for `lookup` and `slice`.
+- data-model extraction reads only indexed project files
+- lineage reads only indexed project files needed for conservative static evidence
+- artifact path containment is enforced for index, data-model, and lineage artifacts
+- Graphviz is only used by `view`
 
 ## Design boundaries
 
-my-dev-kit uses conservative static analysis.
+my-dev-kit uses conservative static analysis throughout.
 
 Current boundaries:
 
 - It does not execute user project code.
 - It does not infer complete runtime behavior.
-- It does not resolve all dynamic imports.
-- It does not fully resolve dynamic dispatch.
+- It does not provide route-aware tracing.
+- It does not provide browser-state tracing.
+- It does not provide React render-flow indexing.
+- It does not provide source continuation retrieval.
 - It does not perform semantic similarity search.
 - It does not use embeddings.
 - It does not call LLMs.
-- It does not provide an orchestrator.
-- It does not provide backend agent execution.
-- It does not provide evaluation workflows.
-- It does not publish packages automatically.
 - It does not create GitHub releases automatically.
 
-The graph schema is stable within one index run. Re-indexing may produce different node IDs if file paths or symbol names change.
-
-The `alpha-import/` directory in the source repository contains reference material. It is excluded from TypeScript compilation and is not part of the published package or runtime.
-
-## Extension points
-
-The architecture is intended to support additive downstream layers.
-
-Potential future layers include:
-
-- data-model graph extraction
-- richer React and TSX indexing
-- test-title and locator indexing
-- route-aware indexing
-- browser storage key tracing
-- source continuation retrieval
-- local dependency source bundles
-- incremental indexing
-- graph diffing
-- additional language adapters
-
-These features should build on the current artifact model instead of replacing the indexer or creating a parallel scanning pipeline.
-
-A future data-model extraction layer may consume `symbol-index.json` and `code-graph.json` to produce separate data-model artifacts. That feature is not implemented in version 1.0.0.
-
-## Practical summary
-
-my-dev-kit has a small layered architecture:
-
-- the CLI parses commands
-- the indexing layer writes artifacts
-- language adapters extract source structure
-- the symbol index stores compact per-file symbol data
-- the code graph stores file and symbol relationships
-- search ranks artifact matches
-- lookup traverses exact graph nodes
-- source retrieves bounded source content
-- slice extracts bounded graph neighborhoods
-- view renders the graph
-
-The main design rule is to keep indexing deterministic, artifacts inspectable, and retrieval bounded.
+The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.

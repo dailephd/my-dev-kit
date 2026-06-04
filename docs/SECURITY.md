@@ -1,91 +1,148 @@
 # Security
 
-This document describes the security model, boundaries, and audit findings for my-dev-kit.
+This document describes the security model, boundaries, and relevant safeguards for my-dev-kit.
 
 For command flags, see [COMMANDS.md](COMMANDS.md). For architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Security model
 
-my-dev-kit is a local, offline CLI tool. It reads source files and JSON artifact files from the local filesystem and writes output files. It does not:
+my-dev-kit is a local, offline CLI tool. It reads source files and JSON artifact files from the local filesystem and writes local output files. It does not:
 
-- Make network requests
-- Call external services or LLMs
-- Execute arbitrary code from indexed projects
-- Spawn shells or evaluate dynamic input as code
+- make network requests
+- call external services or LLMs
+- execute arbitrary code from indexed projects
+- connect to databases
+- spawn shells to interpret user input as code
+- modify indexed source files
 
-The attack surface is limited to:
+The main attack surface is:
 
-- Crafted JSON artifact files (`manifest.json`, `code-graph.json`, `symbol-index.json`) that could cause path traversal or trigger unsafe behavior during artifact loading
-- Malicious file paths embedded in artifacts that could read files outside the project root during source retrieval
-- DOT output injection through symbol names, node IDs, or edge labels
-- The Graphviz `dot` subprocess invocation (SVG/PNG rendering only)
+- crafted JSON artifact files such as `manifest.json`, `data-model.json`, `data-model-graph.json`, or `model-view-lineage.json`
+- malicious file paths embedded in artifacts that could try to escape the intended project or artifact directory
+- DOT output injection through graph labels and IDs
+- the Graphviz `dot` subprocess invocation for SVG or PNG rendering only
 
 ## Boundaries enforced
 
 ### Source retrieval path containment
 
-`getSourceSlice` enforces that all source file reads stay within `manifest.projectRoot`. The check uses `path.relative` and rejects any path whose relative form starts with `..` or is absolute.
+`source` enforces that source file reads stay within `manifest.projectRoot`. Paths that escape the indexed project root are rejected before file I/O occurs.
 
-Paths that escape the project root are rejected with a clear error before any file I/O occurs.
+### Index artifact path containment
 
-### Artifact path containment
+`readIndexManifest` resolves artifact paths recorded in `manifest.json` relative to the selected index directory and validates that each resolved path stays inside that directory. Crafted traversal values such as `../../outside.json` are rejected before the file is opened.
 
-`readIndexManifest` resolves artifact paths recorded in `manifest.json` (for `symbolIndex`, `codeGraph`, `callGraph`) relative to the index directory and validates that each resolved path stays within the index directory using `isInsideRoot`. A crafted manifest with paths like `../../../../etc/passwd` is rejected before the artifact file is opened.
+### Data-model artifact path containment
+
+`dataModelArtifactPaths.ts` resolves:
+
+- `data-model.json`
+- `data-model-graph.json`
+
+relative to the selected output or artifact directory and validates that the resolved paths stay inside that directory.
+
+The `data-model` reader and writer use these helpers for all data-model artifact I/O.
+
+### Model-view-lineage artifact path containment
+
+`modelViewLineageArtifactPaths.ts` resolves:
+
+- `model-view-lineage.json`
+
+relative to the selected output or artifact directory and validates that the resolved path stays inside that directory.
+
+The lineage reader and writer use this helper for all lineage artifact I/O.
+
+### Read-only source access
+
+my-dev-kit does not modify project source files.
+
+Source reads are used by:
+
+- `index`, for language-aware static extraction
+- `source`, for bounded source retrieval
+- `data-model`, for conservative TypeScript or TSX extraction from indexed files
+- `trace-view`, for conservative same-project lineage evidence
+
+These reads are bounded by the indexed project root or the selected artifact directory.
+
+### No runtime execution
+
+The tool uses static parsing and artifact processing. It does not execute indexed TypeScript, JavaScript, JSX, TSX, or Python application code.
+
+Python indexing uses a Python subprocess with static `ast` parsing and does not import or execute user modules.
+
+The data-model and lineage layers also use static analysis only. They do not execute user code, connect to databases, or evaluate runtime framework behavior.
 
 ### DOT output escaping
 
-`buildDotGraph` quotes all node IDs, node labels, edge source/target IDs, and edge labels through a single `quote()` function that escapes backslashes (`\` → `\\`), double-quotes (`"` → `\"`), and newlines (CR+LF/LF → `\n`). This prevents DOT syntax injection through symbol names, file paths, or user-provided edge labels in artifact data.
+The graph view layer quotes node IDs, labels, and edge labels before emitting DOT content. This prevents DOT syntax injection through artifact data.
 
 ### Graphviz subprocess isolation
 
-`renderGraphviz` invokes `dot` using `spawnSync` with `shell: false`. The DOT content is passed as stdin, not as a shell argument or temporary file. The format argument is pre-validated to be `'svg'` or `'png'` before the subprocess is launched. There is no shell interpolation.
+When SVG or PNG rendering is requested, Graphviz is invoked with `shell: false` and validated format arguments. DOT content is passed through stdin.
 
-### Python indexing subprocess isolation
+### Traversal and output limits
 
-Python indexing invokes `python` or `python3` with `shell: false` and passes embedded `ast` parsing scripts via `python -c`. Indexed Python source is provided on stdin and parsed statically. my-dev-kit does not import or execute user Python modules during symbol, import, or call-graph extraction.
+Bounded operations remain enforced:
 
-### Traversal limits
+- `lookup` depth: 0 through 3
+- `slice` depth: 0 through 3
+- `search` limit: 1 through 100
+- `source` line-range enforcement through `--max-lines`
 
-All graph traversal operations are bounded:
+These limits reduce runaway traversal and oversized output for local analysis flows.
 
-- Slice depth: 0 through 3 (`validateSliceInputs`)
-- Lookup depth: 0 through 3 (`validateDepth`)
-- Source line range: capped by `--max-lines` (default 160), enforced in `validateLineRange`
-- Search result limit: 1 through 100 (`parseLimit`)
+## Data-model and lineage security notes
 
-These limits prevent runaway traversal on large or pathologically-shaped graphs.
+The v1.1.0 data-model and lineage features keep the same security posture as the rest of the CLI:
 
-### Output path behavior
+- no source modification
+- no database connections
+- no network calls
+- no LLM calls
+- no Graphviz requirement for `data-model` or `trace-view`
+- no runtime React rendering claims
+- no runtime database behavior claims
 
-The `--out` flags in `source`, `view`, and `slice` commands accept user-specified output paths. These paths are resolved to absolute form and parent directories are created automatically. There is no traversal restriction on output destinations — users control where output is written. This is intentional for a local CLI tool.
+Warnings are used instead of broad inference when static evidence is incomplete.
 
-## User responsibilities when indexing private repositories
+## User responsibilities for private repositories
 
-my-dev-kit reads source files and writes index artifacts containing file paths, symbol names, and import data from the indexed project. When indexing a private repository:
+Index, data-model, and lineage artifacts can contain sensitive structural metadata such as:
 
-- Index artifacts (`manifest.json`, `symbol-index.json`, `code-graph.json`) contain structural metadata about the project. Treat them with the same access controls as the source code.
-- The `--out` directory should be placed inside the project root or another location that matches your project's access policy.
-- Do not publish index artifacts or include them in version control unless intentional.
+- relative file paths
+- symbol names
+- entity names
+- field names
+- component names
+- transformation names
+- static evidence paths and line references
 
-## Dependency security
+Treat these artifacts with the same access controls as the indexed source code.
 
-The production runtime has no npm dependencies beyond Node.js built-ins and the `commander` package for CLI argument parsing.
+When working with private repositories:
 
-The `esbuild` package used in the build and test infrastructure has a known moderate-severity advisory (GHSA-67mh-4wv8-2f99) affecting `esbuild ≤ 0.24.2` via `vite` and `vitest`. This affects development tooling only. The built `dist/cli.js` output does not include esbuild or vite at runtime.
-
-Run `npm audit` to see the current advisory status. Upgrading `vitest` to v4.x would resolve the esbuild advisory but may introduce breaking changes in the test suite.
+- keep artifact directories inside the project or another approved local workspace
+- avoid committing generated artifacts unless intentional
+- avoid publishing artifacts unless they are explicitly meant to be shared
 
 ## Security test coverage
 
-Security tests are in `tests/security/`:
+Security tests in `tests/security/` cover:
 
-| File | What it tests |
-| ---- | -------------- |
-| `pathTraversal.spec.ts` | `ensureInsideProjectRoot` and `isInsideRoot` reject `../` traversal patterns |
-| `malformedArtifacts.spec.ts` | `readIndexManifest` rejects missing, invalid, or traversal-exploiting manifests |
-| `dotEscaping.spec.ts` | `buildDotGraph` escapes quotes, backslashes, newlines, and angle brackets |
-| `outputPath.spec.ts` | Write helpers create parent directories and return normalized paths |
-| `graphTraversalLimits.spec.ts` | Slice depth, lookup depth, and source line range limits are enforced |
+- path traversal rejection
+- malformed artifact handling
+- DOT escaping
+- output path behavior
+- graph traversal limits
+
+The data-model and lineage suites also cover:
+
+- data-model artifact path containment
+- lineage artifact path containment
+- malformed data-model and lineage artifacts
+- conservative handling of unsupported static patterns
 
 ## Reporting
 
