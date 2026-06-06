@@ -1,4 +1,5 @@
 import type { Command } from 'commander'
+import { toForwardSlash } from '../io/pathUtils.js'
 import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { sliceGraph, summarizeSlice } from '../graph/sliceGraph.js'
 import type { GraphSlice, GraphSliceDirection } from '../graph/graphSliceTypes.js'
@@ -36,8 +37,8 @@ export function registerSliceCommand(program: Command): void {
         edges: core.edges,
         summary: summarizeSlice(core.nodes, core.edges),
         artifactPaths: {
-          manifest: `${options.index}/manifest.json`,
-          codeGraph: `${options.index}/${artifacts.resolved.manifest.artifacts.codeGraph}`,
+          manifest: toForwardSlash(artifacts.resolved.manifestPath),
+          codeGraph: toForwardSlash(artifacts.resolved.artifactPaths.codeGraph),
         },
         warnings: core.warnings,
       }

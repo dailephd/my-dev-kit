@@ -39,7 +39,7 @@ export function loadSourceArtifacts(options: {
   }
 }
 
-function readRequiredJson<T>(filePath: string, label: string): T {
+export function readRequiredJson<T>(filePath: string, label: string): T {
   if (!fs.existsSync(filePath)) throw new Error(`Missing required ${label} artifact: ${filePath}`)
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T

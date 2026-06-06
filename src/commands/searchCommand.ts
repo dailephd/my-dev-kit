@@ -1,7 +1,7 @@
 import type { Command } from 'commander'
-import * as fs from 'node:fs'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import { readIndexManifest } from '../indexing/readIndexManifest.js'
+import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
 import { searchIndex } from '../search/searchIndex.js'
 import type { SearchIndexResult } from '../search/searchTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -49,16 +49,6 @@ function parseLimit(value: string): number {
   if (parsed < 1) throw new Error('--limit must be a positive integer.')
   if (parsed > MAX_LIMIT) throw new Error(`--limit must be ${MAX_LIMIT} or less.`)
   return parsed
-}
-
-function readRequiredJson<T>(filePath: string, label: string): T {
-  if (!fs.existsSync(filePath)) throw new Error(`Missing required ${label} artifact: ${filePath}`)
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T
-  } catch (error) {
-    if (error instanceof SyntaxError) throw new Error(`Invalid JSON in ${filePath}: ${error.message}`)
-    throw new Error(`Failed to read ${filePath}: ${(error as Error).message}`)
-  }
 }
 
 function printTextResult(result: SearchIndexResult): void {

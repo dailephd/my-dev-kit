@@ -1,4 +1,5 @@
 import type { Command } from 'commander'
+import { toForwardSlash } from '../io/pathUtils.js'
 import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { lookupNode } from '../lookup/lookupNode.js'
 import { parseInteger } from './parseUtils.js'
@@ -19,8 +20,8 @@ export function registerLookupCommand(program: Command): void {
         indexDir: options.index,
         nodeId: options.node,
         depth: options.depth,
-        manifestPath: `${options.index}/manifest.json`,
-        codeGraphPath: `${options.index}/${artifacts.resolved.manifest.artifacts.codeGraph}`,
+        manifestPath: toForwardSlash(artifacts.resolved.manifestPath),
+        codeGraphPath: toForwardSlash(artifacts.resolved.artifactPaths.codeGraph),
       })
       if (options.json) {
         console.log(JSON.stringify(result, null, 2))

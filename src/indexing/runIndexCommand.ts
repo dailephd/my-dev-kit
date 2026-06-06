@@ -152,9 +152,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     mode: 'index',
     manifest,
     outputDir: toForwardSlash(outputDir),
-    symbolIndexPath: toForwardSlash(path.join(outputDir, 'symbol-index.json')),
-    codeGraphPath: toForwardSlash(path.join(outputDir, 'code-graph.json')),
-    callGraphPath: buildResult.callGraph ? toForwardSlash(path.join(outputDir, 'call-graph.json')) : null,
+    symbolIndexPath: toForwardSlash(path.join(outputDir, manifest.artifacts.symbolIndex)),
+    codeGraphPath: toForwardSlash(path.join(outputDir, manifest.artifacts.codeGraph)),
+    callGraphPath: manifest.artifacts.callGraph ? toForwardSlash(path.join(outputDir, manifest.artifacts.callGraph)) : null,
     managedArtifacts: {
       removed: refreshResult.removed,
     },
