@@ -44,6 +44,41 @@ describe('searchIndex', () => {
     expect(endpoint.results.some((item) => item.kind === 'edge' && item.matchReasons.some((reason) => reason.field === 'neighbor'))).toBe(true)
   })
 
+  it('finds semantic role matches and returns compact semantic metadata', () => {
+    const result = runSearch('data-entity')
+    const user = result.results.find((item) => item.id === 'symbol:src/types.ts#User')
+
+    expect(user?.semanticRoles?.[0]).toMatchObject({
+      role: 'data-entity',
+      subtype: 'canonical-type',
+    })
+    expect(user?.artifactRefs).toEqual([
+      {
+        artifact: 'data-model.json',
+        artifactKind: 'data-model',
+        id: 'entity:User',
+      },
+    ])
+    expect(user?.matchReasons.some((reason) => reason.field === 'semanticRole')).toBe(true)
+    expect(JSON.stringify(user)).not.toContain('"fields"')
+    expect(JSON.stringify(user)).not.toContain('"relationships"')
+  })
+
+  it('finds semantic subtype matches conservatively', () => {
+    const result = runSearch('canonical-type')
+    const user = result.results.find((item) => item.id === 'symbol:src/types.ts#User')
+
+    expect(user?.matchReasons.some((reason) => reason.field === 'semanticSubtype')).toBe(true)
+  })
+
+  it('finds semantic artifact reference matches without loading detailed artifacts', () => {
+    const result = runSearch('entity:User')
+    const user = result.results.find((item) => item.id === 'symbol:src/types.ts#User')
+
+    expect(user?.matchReasons.some((reason) => reason.field === 'semanticArtifactRef')).toBe(true)
+    expect(user?.artifactRefs?.[0]?.id).toBe('entity:User')
+  })
+
   it('applies deterministic ranking and limit', () => {
     const first = runSearch('user', 3).results.map((item) => item.id)
     const second = runSearch('user', 3).results.map((item) => item.id)
@@ -165,6 +200,36 @@ function fixtureSymbolIndex(): SymbolIndex {
             kind: 'interface',
             location: { file: 'src/types.ts', line: 1 },
             exported: true,
+            semanticRoles: [
+              {
+                role: 'data-entity',
+                subtype: 'canonical-type',
+                confidence: 'explicit',
+                source: 'typescript-model-analyzer',
+                artifactRefs: [
+                  {
+                    artifact: 'data-model.json',
+                    artifactKind: 'data-model',
+                    id: 'entity:User',
+                  },
+                ],
+                evidenceRefs: [
+                  {
+                    filePath: 'src/types.ts',
+                    symbolId: 'symbol:src/types.ts#User',
+                    line: 1,
+                    source: 'typescript-model-analyzer',
+                  },
+                ],
+              },
+            ],
+            artifactRefs: [
+              {
+                artifact: 'data-model.json',
+                artifactKind: 'data-model',
+                id: 'entity:User',
+              },
+            ],
           },
           {
             name: 'UserRole',
@@ -214,6 +279,36 @@ function fixtureCodeGraph(): CodeGraph {
         symbolKind: 'interface',
         line: 1,
         exported: true,
+        semanticRoles: [
+          {
+            role: 'data-entity',
+            subtype: 'canonical-type',
+            confidence: 'explicit',
+            source: 'typescript-model-analyzer',
+            artifactRefs: [
+              {
+                artifact: 'data-model.json',
+                artifactKind: 'data-model',
+                id: 'entity:User',
+              },
+            ],
+            evidenceRefs: [
+              {
+                filePath: 'src/types.ts',
+                symbolId: 'symbol:src/types.ts#User',
+                line: 1,
+                source: 'typescript-model-analyzer',
+              },
+            ],
+          },
+        ],
+        artifactRefs: [
+          {
+            artifact: 'data-model.json',
+            artifactKind: 'data-model',
+            id: 'entity:User',
+          },
+        ],
       },
       {
         id: 'symbol:src/types.ts#UserRole',

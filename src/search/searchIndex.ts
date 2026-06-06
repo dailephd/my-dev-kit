@@ -15,6 +15,10 @@ const WEIGHTS = {
   edgeKind: 3,
   nodeId: 4,
   neighbor: 2,
+  semanticRole: 7,
+  semanticSubtype: 6,
+  semanticSource: 2,
+  semanticArtifactRef: 3,
 } as const
 
 const EDGE_WEIGHTS = {
@@ -114,6 +118,7 @@ function nodeCandidate(node: CodeGraphNode): SearchCandidate {
   if (node.symbolName) fields.push(field('symbolName', node.symbolName, WEIGHTS.symbolName))
   if (node.symbolKind) fields.push(field('symbolKind', node.symbolKind, WEIGHTS.symbolKind))
   if (node.exported && node.symbolName) fields.push(field('export', node.symbolName, WEIGHTS.export))
+  fields.push(...semanticFields(node.semanticRoles, node.artifactRefs))
 
   return {
     item: {
@@ -122,6 +127,8 @@ function nodeCandidate(node: CodeGraphNode): SearchCandidate {
       label: node.label,
       path: node.path,
       nodeId: node.id,
+      semanticRoles: node.semanticRoles,
+      artifactRefs: node.artifactRefs,
     },
     fields,
   }
@@ -152,6 +159,7 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   ]
   if (symbol.exported) fields.push(field('export', symbol.name, WEIGHTS.export))
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
+  fields.push(...semanticFields(symbol.semanticRoles, symbol.artifactRefs))
 
   return {
     item: {
@@ -160,6 +168,8 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
       label: symbol.name,
       path: file.path,
       nodeId: symbolNodeId(file.path, symbol.name),
+      semanticRoles: symbol.semanticRoles,
+      artifactRefs: symbol.artifactRefs,
     },
     fields,
   }
@@ -212,6 +222,32 @@ function mergeCandidate(candidates: Map<string, SearchCandidate>, candidate: Sea
 
 function field(fieldName: SearchCandidateField['field'], text: string, weight: number): SearchCandidateField {
   return { field: fieldName, text, weight }
+}
+
+function semanticFields(
+  semanticRoles: CodeGraphNode['semanticRoles'] | SymbolDefinition['semanticRoles'],
+  artifactRefs: CodeGraphNode['artifactRefs'] | SymbolDefinition['artifactRefs'],
+): SearchCandidateField[] {
+  const fields: SearchCandidateField[] = []
+  for (const role of semanticRoles ?? []) {
+    fields.push(field('semanticRole', role.role, WEIGHTS.semanticRole))
+    if (role.subtype) fields.push(field('semanticSubtype', role.subtype, WEIGHTS.semanticSubtype))
+    if (role.source) fields.push(field('semanticSource', role.source, WEIGHTS.semanticSource))
+    fields.push(...artifactRefFields(role.artifactRefs))
+  }
+  fields.push(...artifactRefFields(artifactRefs))
+  return fields
+}
+
+function artifactRefFields(artifactRefs: CodeGraphNode['artifactRefs'] | SymbolDefinition['artifactRefs']): SearchCandidateField[] {
+  const fields: SearchCandidateField[] = []
+  for (const ref of artifactRefs ?? []) {
+    fields.push(field('semanticArtifactRef', ref.artifact, WEIGHTS.semanticArtifactRef))
+    if (ref.artifactKind) fields.push(field('semanticArtifactRef', ref.artifactKind, WEIGHTS.semanticArtifactRef))
+    fields.push(field('semanticArtifactRef', ref.id, WEIGHTS.semanticArtifactRef))
+    if (ref.path) fields.push(field('semanticArtifactRef', ref.path, WEIGHTS.semanticArtifactRef))
+  }
+  return fields
 }
 
 function validateArtifacts(symbolIndex: SymbolIndex, codeGraph: CodeGraph): void {

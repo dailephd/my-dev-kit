@@ -1,5 +1,6 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
+import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
 export type SearchResultKind = 'file' | 'symbol' | 'edge'
@@ -14,6 +15,10 @@ export type SearchMatchField =
   | 'edgeKind'
   | 'nodeId'
   | 'neighbor'
+  | 'semanticRole'
+  | 'semanticSubtype'
+  | 'semanticSource'
+  | 'semanticArtifactRef'
 
 export interface SearchMatchReason {
   field: SearchMatchField
@@ -35,6 +40,8 @@ export interface SearchResultItem {
     target: string
     kind: string
   }
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
 }
 
 export interface SearchIndexOptions {
