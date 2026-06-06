@@ -110,6 +110,11 @@ function fixtureResolved(): ResolvedIndexManifest {
       codeGraph: '/repo/.my-dev-kit-v1/code-graph.json',
       callGraph: null,
     },
+    semanticArtifactPaths: {
+      dataModel: null,
+      dataModelGraph: null,
+      modelViewLineage: null,
+    },
   }
 }
 

@@ -11,6 +11,8 @@ export interface IndexManifest {
     codeGraph: string
     callGraph: string | null
   }
+  semanticArtifacts?: IndexSemanticArtifacts
+  analyzers?: IndexAnalyzerStatus[]
   summary: {
     fileCount: number
     symbolCount: number
@@ -20,4 +22,36 @@ export interface IndexManifest {
   }
   warnings: string[]
   errors: string[]
+}
+
+export interface IndexSemanticArtifacts {
+  dataModel: string | null
+  dataModelGraph: string | null
+  modelViewLineage: string | null
+}
+
+export type IndexAnalyzerId =
+  | 'syntax'
+  | 'call-graph'
+  | 'data-model'
+  | 'model-view-lineage'
+  | (string & {})
+
+export type IndexAnalyzerStatusValue = 'not-run' | 'complete' | 'partial' | 'failed' | 'skipped'
+
+export interface IndexAnalyzerArtifactRef {
+  name: string
+  path: string
+  artifactKind?: string | null
+}
+
+export interface IndexAnalyzerStatus {
+  id: IndexAnalyzerId
+  status: IndexAnalyzerStatusValue
+  version?: string | null
+  schemaVersion?: string | null
+  artifacts?: IndexAnalyzerArtifactRef[]
+  warningCount: number
+  errorCount: number
+  summary?: Record<string, number | string | boolean | null>
 }

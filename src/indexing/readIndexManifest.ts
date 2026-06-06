@@ -12,6 +12,11 @@ export interface ResolvedIndexManifest {
     codeGraph: string
     callGraph: string | null
   }
+  semanticArtifactPaths: {
+    dataModel: string | null
+    dataModelGraph: string | null
+    modelViewLineage: string | null
+  }
 }
 
 export function readIndexManifest(indexDirInput: string): ResolvedIndexManifest {
@@ -34,6 +39,19 @@ export function readIndexManifest(indexDirInput: string): ResolvedIndexManifest 
       callGraph: manifest.artifacts.callGraph
         ? resolveArtifactPath(indexDir, manifest.artifacts.callGraph, 'callGraph')
         : null,
+    },
+    semanticArtifactPaths: {
+      dataModel: resolveOptionalArtifactPath(indexDir, manifest.semanticArtifacts?.dataModel, 'dataModel'),
+      dataModelGraph: resolveOptionalArtifactPath(
+        indexDir,
+        manifest.semanticArtifacts?.dataModelGraph,
+        'dataModelGraph'
+      ),
+      modelViewLineage: resolveOptionalArtifactPath(
+        indexDir,
+        manifest.semanticArtifacts?.modelViewLineage,
+        'modelViewLineage'
+      ),
     },
   }
 }
@@ -71,4 +89,9 @@ function resolveArtifactPath(indexDir: string, artifactPath: string, name: strin
     throw new Error(`Artifact path for "${name}" escapes the index directory: ${artifactPath}`)
   }
   return resolved
+}
+
+function resolveOptionalArtifactPath(indexDir: string, artifactPath: string | null | undefined, name: string): string | null {
+  if (!artifactPath) return null
+  return resolveArtifactPath(indexDir, artifactPath, name)
 }
