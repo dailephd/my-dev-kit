@@ -9,6 +9,8 @@
  * the orchestrator can load the main index without pulling in call-graph edges.
  */
 
+import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
+
 // ---------------------------------------------------------------------------
 // Shared primitives
 // ---------------------------------------------------------------------------
@@ -65,6 +67,8 @@ export interface SymbolDefinition {
    * characters. Useful as a compact signature for prompt assembly.
    */
   signature?: string
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
 }
 
 /**
@@ -179,6 +183,8 @@ export interface GraphSymbolRecord {
   exported: boolean
   /** 1-based line number of the declaration. */
   line: number
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
 }
 
 /**
@@ -251,4 +257,3 @@ export interface CallGraph {
   /** All call edges found in the scanned source roots. */
   edges: CallGraphEdge[]
 }
-

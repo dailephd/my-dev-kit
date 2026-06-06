@@ -13,6 +13,11 @@ import { writeIndexArtifacts } from './writeIndexManifest.js'
 import type { IndexManifest } from './manifestTypes.js'
 import { refreshIndexOutput, type RefreshIndexOutputResult } from './refreshIndexOutput.js'
 import { replaceAnalyzerStatuses, runSemanticAnalyzers } from './runSemanticAnalyzers.js'
+import {
+  applySemanticRolesToCodeGraph,
+  applySemanticRolesToSymbolIndex,
+  buildSemanticRolesFromDataModel,
+} from '../semantics/index.js'
 
 export interface RunIndexCommandOptions {
   root?: string
@@ -148,14 +153,21 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     callGraphPath,
     createdAt,
   })
+  const semanticMetadataBySymbolId = buildSemanticRolesFromDataModel({
+    dataModel: semanticResult.dataModelResult.dataModel,
+    dataModelPath: semanticResult.semanticArtifacts.dataModel ?? undefined,
+    dataModelGraphPath: semanticResult.semanticArtifacts.dataModelGraph ?? undefined,
+  })
+  const enrichedSymbolIndex = applySemanticRolesToSymbolIndex(buildResult.index, semanticMetadataBySymbolId)
+  const enrichedCodeGraph = applySemanticRolesToCodeGraph(codeGraph, semanticMetadataBySymbolId)
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
     languages,
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: buildResult.callGraph !== null,
-    symbolIndex: buildResult.index,
-    codeGraph,
+    symbolIndex: enrichedSymbolIndex,
+    codeGraph: enrichedCodeGraph,
     warnings,
     errors,
     createdAt,
@@ -172,8 +184,8 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   writeIndexArtifacts({
     outputDir,
     manifest,
-    symbolIndex: buildResult.index,
-    codeGraph,
+    symbolIndex: enrichedSymbolIndex,
+    codeGraph: enrichedCodeGraph,
     callGraph: buildResult.callGraph,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,

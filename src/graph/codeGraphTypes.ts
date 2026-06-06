@@ -1,3 +1,5 @@
+import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
+
 export const CODE_GRAPH_SCHEMA_VERSION = '1.0.0'
 
 export type CodeGraphNodeKind = 'file' | 'symbol'
@@ -14,6 +16,8 @@ export interface CodeGraphNode {
   language?: string
   line?: number
   exported?: boolean
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
 }
 
 export interface CodeGraphEdge {
