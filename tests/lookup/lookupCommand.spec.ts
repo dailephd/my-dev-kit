@@ -34,6 +34,41 @@ describe('lookup command', () => {
     expect(parsed.node.kind).toBe('symbol')
   })
 
+  it('returns compact semantic metadata for an enriched symbol node', () => {
+    const result = runCli(['lookup', '--index', outDir, '--node', 'symbol:src/userTypes.ts#User', '--json'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+
+    expect(parsed.node.kind).toBe('symbol')
+    expect(parsed.semanticRoles?.[0]).toMatchObject({
+      role: 'data-entity',
+      subtype: 'canonical-type',
+    })
+    expect(parsed.artifactRefs?.[0]).toMatchObject({
+      artifact: 'data-model.json',
+      artifactKind: 'data-model',
+      id: 'entity:User',
+    })
+    expect(parsed.evidenceRefs?.[0]).toMatchObject({
+      filePath: 'src/userTypes.ts',
+      symbolId: 'symbol:src/userTypes.ts#User',
+      line: 1,
+    })
+    expect(JSON.stringify(parsed)).not.toContain('"fields"')
+    expect(JSON.stringify(parsed)).not.toContain('"relationships"')
+  })
+
+  it('keeps file node lookup compatible when semantic metadata is absent', () => {
+    const result = runCli(['lookup', '--index', outDir, '--node', 'file:src/index.ts', '--json'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+
+    expect(parsed.node.kind).toBe('file')
+    expect(parsed.semanticRoles).toBeUndefined()
+    expect(parsed.artifactRefs).toBeUndefined()
+    expect(parsed.evidenceRefs).toBeUndefined()
+  })
+
   it('depth 0 returns only the node and no expanded neighbors', () => {
     const result = runCli(['lookup', '--index', outDir, '--node', 'file:src/index.ts', '--depth', '0', '--json'])
     expect(result.status).toBe(0)

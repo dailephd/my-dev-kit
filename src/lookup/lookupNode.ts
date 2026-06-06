@@ -1,4 +1,5 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
 
 export interface LookupNodeResult {
   status: 'found'
@@ -6,6 +7,9 @@ export interface LookupNodeResult {
   nodeId: string
   depth: number
   node: CodeGraphNode
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
+  evidenceRefs?: SemanticEvidenceRef[]
   incomingEdges: CodeGraphEdge[]
   outgoingEdges: CodeGraphEdge[]
   neighbors: CodeGraphNode[]
@@ -42,6 +46,9 @@ export function lookupNode(options: {
     nodeId: options.nodeId,
     depth: options.depth,
     node,
+    semanticRoles: emptyToUndefined(node.semanticRoles),
+    artifactRefs: emptyToUndefined(node.artifactRefs),
+    evidenceRefs: emptyToUndefined(collectEvidenceRefs(node.semanticRoles)),
     incomingEdges,
     outgoingEdges,
     neighbors,
@@ -51,6 +58,24 @@ export function lookupNode(options: {
     },
     warnings: [],
   }
+}
+
+function collectEvidenceRefs(semanticRoles: SemanticRole[] | undefined): SemanticEvidenceRef[] {
+  const refs: SemanticEvidenceRef[] = []
+  const seen = new Set<string>()
+  for (const role of semanticRoles ?? []) {
+    for (const ref of role.evidenceRefs ?? []) {
+      const key = JSON.stringify(ref)
+      if (seen.has(key)) continue
+      seen.add(key)
+      refs.push(ref)
+    }
+  }
+  return refs
+}
+
+function emptyToUndefined<T>(values: T[] | undefined): T[] | undefined {
+  return values && values.length > 0 ? values : undefined
 }
 
 export function validateDepth(depth: number): void {
