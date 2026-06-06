@@ -11,7 +11,40 @@ function graph(): CodeGraph {
       { id: 'a', kind: 'file', label: 'a' },
       { id: 'b', kind: 'file', label: 'b' },
       { id: 'c', kind: 'file', label: 'c' },
-      { id: 'd', kind: 'symbol', label: 'd' },
+      {
+        id: 'd',
+        kind: 'symbol',
+        label: 'd',
+        semanticRoles: [
+          {
+            role: 'data-entity',
+            subtype: 'canonical-type',
+            confidence: 'explicit',
+            source: 'typescript-model-analyzer',
+            artifactRefs: [
+              {
+                artifact: 'data-model.json',
+                artifactKind: 'data-model',
+                id: 'entity:D',
+              },
+            ],
+            evidenceRefs: [
+              {
+                filePath: 'src/d.ts',
+                symbolId: 'd',
+                line: 1,
+              },
+            ],
+          },
+        ],
+        artifactRefs: [
+          {
+            artifact: 'data-model.json',
+            artifactKind: 'data-model',
+            id: 'entity:D',
+          },
+        ],
+      },
     ],
     edges: [
       { id: 'a-b', source: 'a', target: 'b', kind: 'imports' },
@@ -54,6 +87,29 @@ describe('sliceGraph', () => {
   it('does not repeat duplicate edges', () => {
     const slice = sliceGraph({ graph: graph(), focusNodeId: 'b', depth: 1, direction: 'outgoing' })
     expect(slice.edges.filter((edge) => edge.id === 'b-d')).toHaveLength(1)
+  })
+
+  it('preserves compact semantic metadata on included symbol nodes', () => {
+    const slice = sliceGraph({ graph: graph(), focusNodeId: 'b', depth: 1, direction: 'outgoing' })
+    const semanticNode = slice.nodes.find((node) => node.id === 'd')
+
+    expect(semanticNode?.kind).toBe('symbol')
+    expect(semanticNode?.semanticRoles?.[0]).toMatchObject({
+      role: 'data-entity',
+      subtype: 'canonical-type',
+    })
+    expect(semanticNode?.artifactRefs?.[0]).toMatchObject({
+      artifact: 'data-model.json',
+      artifactKind: 'data-model',
+      id: 'entity:D',
+    })
+    expect(semanticNode?.semanticRoles?.[0]?.evidenceRefs?.[0]).toMatchObject({
+      filePath: 'src/d.ts',
+      symbolId: 'd',
+      line: 1,
+    })
+    expect(JSON.stringify(semanticNode)).not.toContain('"fields"')
+    expect(JSON.stringify(slice)).not.toContain('"relationships"')
   })
 
   it('fails clearly for missing focus node', () => {

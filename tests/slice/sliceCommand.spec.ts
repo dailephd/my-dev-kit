@@ -51,4 +51,24 @@ describe('slice command', () => {
     expect(parsed.summary.nodeCount).toBeGreaterThan(0)
     expect(parsed.artifactPaths.codeGraph).toContain('code-graph.json')
   })
+
+  it('preserves semantic metadata for enriched nodes in JSON output', () => {
+    const result = runCli(['slice', '--index', outDir, '--node', 'symbol:src/userTypes.ts#User', '--depth', '0', '--json'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    const node = parsed.nodes.find((candidate: { id: string }) => candidate.id === 'symbol:src/userTypes.ts#User')
+
+    expect(node.kind).toBe('symbol')
+    expect(node.semanticRoles?.[0]).toMatchObject({
+      role: 'data-entity',
+      subtype: 'canonical-type',
+    })
+    expect(node.artifactRefs?.[0]).toMatchObject({
+      artifact: 'data-model.json',
+      artifactKind: 'data-model',
+      id: 'entity:User',
+    })
+    expect(JSON.stringify(parsed)).not.toContain('"fields"')
+    expect(JSON.stringify(parsed)).not.toContain('"relationships"')
+  })
 })
