@@ -11,7 +11,7 @@ export function buildDotGraph(graph: CodeGraph, options: BuildDotGraphOptions = 
   const lines = ['digraph CodeGraph {', '  rankdir=LR;']
 
   for (const node of [...graph.nodes].sort(compareById)) {
-    lines.push(`  ${quote(node.id)} [label=${quote(nodeLabel(node))}, shape=${quote(nodeShape(node))}];`)
+    lines.push(`  ${quote(node.id)} [label=${quote(nodeLabel(node, mode))}, shape=${quote(nodeShape(node))}];`)
   }
 
   for (const edge of [...graph.edges].sort(compareById)) {
@@ -33,10 +33,22 @@ export function buildDotGraph(graph: CodeGraph, options: BuildDotGraphOptions = 
   return `${lines.join('\n')}\n`
 }
 
-function nodeLabel(node: CodeGraphNode): string {
+function nodeLabel(node: CodeGraphNode, mode: GraphEdgeStyleMode): string {
   if (node.kind === 'file') return node.path ?? node.label
-  if (node.kind === 'symbol') return node.symbolName ?? node.label
+  if (node.kind === 'symbol') {
+    const base = node.symbolName ?? node.label
+    if (mode === 'minimal') return base
+    const roles = compactSemanticRoles(node)
+    return roles ? `${base}\n[${roles}]` : base
+  }
   return node.label
+}
+
+function compactSemanticRoles(node: CodeGraphNode): string | null {
+  const roles = [...new Set((node.semanticRoles ?? []).map((role) => role.subtype ?? role.role))]
+    .filter(Boolean)
+    .slice(0, 2)
+  return roles.length > 0 ? roles.join(', ') : null
 }
 
 function nodeShape(node: CodeGraphNode): string {

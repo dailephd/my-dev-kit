@@ -40,6 +40,35 @@ function multiEdgeGraph(): CodeGraph {
   }
 }
 
+function semanticGraph(): CodeGraph {
+  return {
+    artifactKind: 'code-graph',
+    schemaVersion: '1.0.0',
+    createdAt: 'now',
+    nodes: [
+      { id: 'file:src/user.ts', kind: 'file', label: 'user.ts', path: 'src/user.ts' },
+      {
+        id: 'symbol:src/user.ts#User',
+        kind: 'symbol',
+        label: 'User',
+        symbolName: 'User',
+        semanticRoles: [
+          {
+            role: 'data-entity',
+            subtype: 'canonical-type',
+            confidence: 'explicit',
+            source: 'typescript-model-analyzer',
+          },
+        ],
+      },
+    ],
+    edges: [
+      { id: 'e1', source: 'file:src/user.ts', target: 'symbol:src/user.ts#User', kind: 'defines' },
+    ],
+    summary: { nodeCount: 2, edgeCount: 1, fileNodeCount: 1, symbolNodeCount: 1 },
+  }
+}
+
 describe('buildDotGraph - semantic mode (default)', () => {
   it('is deterministic', () => {
     expect(buildDotGraph(graph())).toBe(buildDotGraph(graph()))
@@ -113,6 +142,13 @@ describe('buildDotGraph - semantic mode (default)', () => {
     const dottedLine = lines.find(l => l.includes('style="dotted"') && l.includes('arrowtail="odot"') && !l.includes('legend'))
     expect(dottedLine).toBeDefined()
   })
+
+  it('adds concise semantic role labels to enriched symbol nodes', () => {
+    const dot = buildDotGraph(semanticGraph(), { edgeStyle: 'semantic' })
+    expect(dot).toContain('User\\n[canonical-type]')
+    expect(dot).not.toContain('entity:User')
+    expect(dot).not.toContain('data-model-graph')
+  })
 })
 
 describe('buildDotGraph - labeled mode', () => {
@@ -141,6 +177,11 @@ describe('buildDotGraph - minimal mode', () => {
   it('still emits the edge', () => {
     const dot = buildDotGraph(graph(), { edgeStyle: 'minimal' })
     expect(dot).toContain('"file:src/index.ts" ->')
+  })
+
+  it('keeps semantic role labels out of minimal mode', () => {
+    const dot = buildDotGraph(semanticGraph(), { edgeStyle: 'minimal' })
+    expect(dot).not.toContain('canonical-type')
   })
 })
 

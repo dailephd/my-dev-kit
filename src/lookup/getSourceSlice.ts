@@ -22,6 +22,9 @@ export function getSourceSlice(options: {
   maxLines: number
   mode: SourceSliceMode
   symbolName?: string | null
+  semanticRoles?: SourceSlice['semanticRoles']
+  artifactRefs?: SourceSlice['artifactRefs']
+  evidenceRefs?: SourceSlice['evidenceRefs']
   warnings?: string[]
 }): SourceSlice {
   validateLineRange(options.startLine, options.endLine, options.maxLines)
@@ -48,8 +51,15 @@ export function getSourceSlice(options: {
     endLine,
     lineCount: endLine - options.startLine + 1,
     content,
+    semanticRoles: emptyToUndefined(options.semanticRoles),
+    artifactRefs: emptyToUndefined(options.artifactRefs),
+    evidenceRefs: emptyToUndefined(options.evidenceRefs),
     warnings: options.warnings ?? [],
   }
+}
+
+function emptyToUndefined<T>(values: T[] | undefined): T[] | undefined {
+  return values && values.length > 0 ? values : undefined
 }
 
 export function validateLineRange(startLine: number, endLine: number, maxLines: number): void {

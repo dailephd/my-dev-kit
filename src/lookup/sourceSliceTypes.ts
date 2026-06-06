@@ -1,3 +1,5 @@
+import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
+
 export type SourceSliceMode = 'line-range' | 'symbol' | 'node'
 
 export interface SourceSlice {
@@ -11,6 +13,9 @@ export interface SourceSlice {
   endLine: number
   lineCount: number
   content: string
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
+  evidenceRefs?: SemanticEvidenceRef[]
   warnings: string[]
 }
 
@@ -20,5 +25,8 @@ export interface SourceTarget {
   symbolName?: string
   startLine?: number
   endLine?: number
+  semanticRoles?: SemanticRole[]
+  artifactRefs?: SemanticArtifactRef[]
+  evidenceRefs?: SemanticEvidenceRef[]
   warnings: string[]
 }

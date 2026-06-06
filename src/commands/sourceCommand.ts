@@ -59,6 +59,9 @@ export function registerSourceCommand(program: Command): void {
         maxLines: options.maxLines,
         mode,
         symbolName: target.symbolName,
+        semanticRoles: target.semanticRoles,
+        artifactRefs: target.artifactRefs,
+        evidenceRefs: target.evidenceRefs,
         warnings: target.warnings,
       })
 

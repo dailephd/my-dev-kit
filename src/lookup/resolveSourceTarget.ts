@@ -1,4 +1,5 @@
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import type { SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
 import type { SymbolIndex, SymbolDefinition } from '../symbol-index/types.js'
 import type { SourceTarget } from './sourceSliceTypes.js'
 
@@ -18,7 +19,15 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
     const filePath = node.path ?? parseSymbolNodeId(node.id).filePath
     const symbolName = node.symbolName ?? parseSymbolNodeId(node.id).symbolName
     if (!filePath || !symbolName) throw new Error(`Symbol node does not include retrievable source metadata: ${nodeId}`)
-    return { mode: 'symbol', filePath, symbolName, warnings: [] }
+    return {
+      mode: 'symbol',
+      filePath,
+      symbolName,
+      semanticRoles: node.semanticRoles,
+      artifactRefs: node.artifactRefs,
+      evidenceRefs: collectEvidenceRefs(node.semanticRoles),
+      warnings: [],
+    }
   }
   throw new Error('Node is not a source-retrievable file or symbol node.')
 }
@@ -39,8 +48,25 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
     symbolName: symbol.name,
     startLine: symbol.location.line,
     endLine,
+    semanticRoles: symbol.semanticRoles,
+    artifactRefs: symbol.artifactRefs,
+    evidenceRefs: collectEvidenceRefs(symbol.semanticRoles),
     warnings: ['Symbol location has a start line only; returning a small bounded preview from that line.'],
   }
+}
+
+function collectEvidenceRefs(semanticRoles: SemanticRole[] | undefined): SemanticEvidenceRef[] | undefined {
+  const refs: SemanticEvidenceRef[] = []
+  const seen = new Set<string>()
+  for (const role of semanticRoles ?? []) {
+    for (const ref of role.evidenceRefs ?? []) {
+      const key = JSON.stringify(ref)
+      if (seen.has(key)) continue
+      seen.add(key)
+      refs.push(ref)
+    }
+  }
+  return refs.length > 0 ? refs : undefined
 }
 
 function findNode(graph: CodeGraph, nodeId: string): CodeGraphNode {

@@ -34,6 +34,17 @@ describe('view command', () => {
     expect(readFileSync(dotOut, 'utf8')).toContain('cluster_legend')
   })
 
+  it('default semantic DOT includes concise semantic role labels for enriched nodes', () => {
+    const dotOut = join(outDir, 'semantic-labels.dot')
+    const result = runCli(['view', '--index', outDir, '--format', 'dot', '--out', dotOut])
+    expect(result.status).toBe(0)
+    const dotContent = readFileSync(dotOut, 'utf8')
+
+    expect(dotContent).toContain('User\\n[canonical-type]')
+    expect(dotContent).not.toContain('data-model-graph')
+    expect(dotContent).not.toContain('model-view-lineage')
+  })
+
   it('writes DOT to explicit --out path and prints valid JSON', () => {
     const dotOut = join(outDir, 'custom.dot')
     const result = runCli(['view', '--index', outDir, '--format', 'dot', '--out', dotOut, '--json'])
@@ -70,6 +81,7 @@ describe('view command', () => {
     expect(parsed.edgeStyle).toBe('minimal')
     const dotContent = readFileSync(dotOut, 'utf8')
     expect(dotContent).not.toContain('cluster_legend')
+    expect(dotContent).not.toContain('canonical-type')
     expect(dotContent).toContain('digraph CodeGraph')
   })
 
