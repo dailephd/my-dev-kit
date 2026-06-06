@@ -138,6 +138,8 @@ describe('data-model command', () => {
     const root = makeTempRepo()
     write(root, 'src/models.ts', 'export interface User { id: string }\n')
     const indexDir = await buildIndexFixture(root)
+    rmSync(join(indexDir, 'data-model.json'), { force: true })
+    rmSync(join(indexDir, 'data-model-graph.json'), { force: true })
 
     const missingArtifacts = runCli(['data-model', '--index', indexDir, '--entity', 'User', '--json'])
     expect(missingArtifacts.status).toBe(2)

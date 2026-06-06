@@ -44,18 +44,18 @@ afterEach(() => {
 })
 
 describe('manifest analyzer registry', () => {
-  it('records analyzer status without claiming semantic analyzers ran', () => {
+  it('records analyzer status without claiming lineage ran', () => {
     const root = createFixture()
     const indexDir = indexFixture(root)
     const manifest = readJson<IndexManifest>(join(indexDir, 'manifest.json'))
 
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'syntax')?.status).toBe('complete')
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'call-graph')?.status).toBe('not-run')
-    expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'data-model')?.status).toBe('not-run')
+    expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'data-model')?.status).toMatch(/complete|partial/)
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'model-view-lineage')?.status).toBe('not-run')
     expect(manifest.semanticArtifacts).toEqual({
-      dataModel: null,
-      dataModelGraph: null,
+      dataModel: 'data-model.json',
+      dataModelGraph: 'data-model-graph.json',
       modelViewLineage: null,
     })
   })
@@ -85,6 +85,14 @@ describe('manifest analyzer registry', () => {
   it('ignores stale semantic artifacts when manifest does not reference them', () => {
     const root = createFixture()
     const indexDir = indexFixture(root)
+    const manifestPath = join(indexDir, 'manifest.json')
+    const manifest = readJson<IndexManifest>(manifestPath)
+    manifest.semanticArtifacts = {
+      dataModel: null,
+      dataModelGraph: null,
+      modelViewLineage: null,
+    }
+    writeJson(manifestPath, manifest)
     writeFileSync(join(indexDir, 'data-model.json'), '{ stale data model', 'utf8')
     writeFileSync(join(indexDir, 'data-model-graph.json'), '{ stale data model graph', 'utf8')
     writeFileSync(join(indexDir, 'model-view-lineage.json'), '{ stale lineage', 'utf8')

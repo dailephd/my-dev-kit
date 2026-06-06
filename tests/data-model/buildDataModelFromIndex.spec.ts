@@ -46,8 +46,8 @@ describe('buildDataModelFromIndex', () => {
     expect(result.dataModelGraph.summary.fieldNodeCount).toBe(3)
     expect(result.dataModel.entities[0]?.sourceRefs[0]?.filePath).toBe('src/models.ts')
     expect(result.dataModel.relationships).toEqual([])
-    expect(existsSync(join(root, '.my-dev-kit-v1', 'data-model.json'))).toBe(false)
-    expect(existsSync(join(root, '.my-dev-kit-v1', 'data-model-graph.json'))).toBe(false)
+    expect(existsSync(join(root, '.my-dev-kit-v1', 'data-model.json'))).toBe(true)
+    expect(existsSync(join(root, '.my-dev-kit-v1', 'data-model-graph.json'))).toBe(true)
     expect(JSON.parse(readFileSync(join(root, '.my-dev-kit-v1', 'code-graph.json'), 'utf8')).artifactKind).toBe('code-graph')
   })
 

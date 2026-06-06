@@ -12,6 +12,7 @@ import {
 import { writeIndexArtifacts } from './writeIndexManifest.js'
 import type { IndexManifest } from './manifestTypes.js'
 import { refreshIndexOutput, type RefreshIndexOutputResult } from './refreshIndexOutput.js'
+import { replaceAnalyzerStatuses, runSemanticAnalyzers } from './runSemanticAnalyzers.js'
 
 export interface RunIndexCommandOptions {
   root?: string
@@ -34,6 +35,12 @@ export interface RunIndexCommandIndexResult {
   symbolIndexPath: string
   codeGraphPath: string
   callGraphPath: string | null
+  semanticArtifacts: {
+    dataModelPath: string | null
+    dataModelGraphPath: string | null
+    modelViewLineagePath: string | null
+  }
+  analyzers: IndexManifest['analyzers']
   managedArtifacts: {
     removed: string[]
   }
@@ -117,6 +124,30 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     symbolIndex: buildResult.index,
     callGraph: buildResult.callGraph,
   })
+  const createdAt = new Date().toISOString()
+  const baseManifest = buildIndexManifest({
+    projectRoot: toForwardSlash(projectRoot),
+    sourceRoots: normalizedSourceRoots,
+    languages,
+    callGraphEnabled: options.callGraph === true,
+    callGraphProduced: buildResult.callGraph !== null,
+    symbolIndex: buildResult.index,
+    codeGraph,
+    warnings,
+    errors,
+    createdAt,
+  })
+  const outputManifestPath = path.join(outputDir, 'manifest.json')
+  const callGraphPath = baseManifest.artifacts.callGraph ? path.join(outputDir, baseManifest.artifacts.callGraph) : null
+  const semanticResult = runSemanticAnalyzers({
+    outputDir,
+    manifestPath: outputManifestPath,
+    manifest: baseManifest,
+    symbolIndex: buildResult.index,
+    codeGraph,
+    callGraphPath,
+    createdAt,
+  })
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -127,6 +158,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     codeGraph,
     warnings,
     errors,
+    createdAt,
+    semanticArtifacts: semanticResult.semanticArtifacts,
+    analyzers: replaceAnalyzerStatuses(baseManifest.analyzers, semanticResult.analyzers),
   })
 
   progress?.({
@@ -141,6 +175,8 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     symbolIndex: buildResult.index,
     codeGraph,
     callGraph: buildResult.callGraph,
+    dataModel: semanticResult.dataModelResult.dataModel,
+    dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -155,6 +191,18 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     symbolIndexPath: toForwardSlash(path.join(outputDir, manifest.artifacts.symbolIndex)),
     codeGraphPath: toForwardSlash(path.join(outputDir, manifest.artifacts.codeGraph)),
     callGraphPath: manifest.artifacts.callGraph ? toForwardSlash(path.join(outputDir, manifest.artifacts.callGraph)) : null,
+    semanticArtifacts: {
+      dataModelPath: manifest.semanticArtifacts?.dataModel
+        ? toForwardSlash(path.join(outputDir, manifest.semanticArtifacts.dataModel))
+        : null,
+      dataModelGraphPath: manifest.semanticArtifacts?.dataModelGraph
+        ? toForwardSlash(path.join(outputDir, manifest.semanticArtifacts.dataModelGraph))
+        : null,
+      modelViewLineagePath: manifest.semanticArtifacts?.modelViewLineage
+        ? toForwardSlash(path.join(outputDir, manifest.semanticArtifacts.modelViewLineage))
+        : null,
+    },
+    analyzers: manifest.analyzers,
     managedArtifacts: {
       removed: refreshResult.removed,
     },

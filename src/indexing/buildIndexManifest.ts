@@ -14,13 +14,14 @@ export interface BuildIndexManifestOptions {
   errors: string[]
   semanticArtifacts?: Partial<IndexSemanticArtifacts>
   analyzers?: IndexAnalyzerStatus[]
+  createdAt?: string
 }
 
 export function buildIndexManifest(options: BuildIndexManifestOptions): IndexManifest {
   return {
     artifactKind: 'my-dev-kit-v1-manifest',
     version: '1.0.0',
-    createdAt: new Date().toISOString(),
+    createdAt: options.createdAt ?? new Date().toISOString(),
     projectRoot: options.projectRoot,
     sourceRoots: options.sourceRoots,
     languages: options.languages,
