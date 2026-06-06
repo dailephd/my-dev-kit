@@ -8,7 +8,7 @@ export function registerIndexCommand(program: Command): void {
     .option('--root <path>', 'project root', '.')
     .option('--src <path>', 'source root to index; may be repeated', collectValues, [])
     .option('--language <language>', 'source language: typescript, javascript, or python')
-    .option('--out <dir>', 'output directory', '.my-dev-kit-v1')
+    .option('--out <dir>', 'output directory', '.my-dev-kit')
     .option('--exclude <path-or-name>', 'directory name or relative path prefix to exclude; may be repeated', collectValues, [])
     .option('--dry-run', 'scan and report what would be indexed without writing artifacts')
     .option('--progress', 'print bounded progress diagnostics to stderr')

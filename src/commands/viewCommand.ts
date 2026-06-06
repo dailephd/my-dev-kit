@@ -10,7 +10,7 @@ export function registerViewCommand(program: Command): void {
   program
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
-    .option('--index <dir>', 'index artifact directory', '.my-dev-kit-v1')
+    .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')

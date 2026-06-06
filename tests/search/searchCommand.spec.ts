@@ -15,6 +15,7 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(outDir, { recursive: true, force: true })
+  rmSync(join(process.cwd(), 'examples/basic-ts/.my-dev-kit'), { recursive: true, force: true })
   rmSync(join(process.cwd(), 'examples/basic-ts/.my-dev-kit-v1'), { recursive: true, force: true })
 })
 
@@ -26,7 +27,7 @@ describe('search command', () => {
   })
 
   it('uses default --index when run from a fixture root', () => {
-    const index = runCli(['index', '--root', 'examples/basic-ts', '--src', 'src', '--out', '.my-dev-kit-v1'])
+    const index = runCli(['index', '--root', 'examples/basic-ts', '--src', 'src'])
     expect(index.status).toBe(0)
 
     const result = runCliFrom(join(process.cwd(), 'examples/basic-ts'), ['search', '--query', 'describeUser', '--json'])

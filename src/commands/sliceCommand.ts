@@ -9,7 +9,7 @@ export function registerSliceCommand(program: Command): void {
   program
     .command('slice')
     .description('Build a bounded graph neighborhood slice.')
-    .option('--index <dir>', 'index artifact directory', '.my-dev-kit-v1')
+    .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--node <node-id>', 'node id to slice around')
     .option('--depth <n>', 'slice depth', parseInteger, 1)
     .option('--direction <both|incoming|outgoing>', 'traversal direction', 'both')

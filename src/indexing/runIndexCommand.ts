@@ -11,6 +11,7 @@ import {
 } from './discoverSourceFiles.js'
 import { writeIndexArtifacts } from './writeIndexManifest.js'
 import type { IndexManifest } from './manifestTypes.js'
+import { refreshIndexOutput, type RefreshIndexOutputResult } from './refreshIndexOutput.js'
 
 export interface RunIndexCommandOptions {
   root?: string
@@ -33,6 +34,9 @@ export interface RunIndexCommandIndexResult {
   symbolIndexPath: string
   codeGraphPath: string
   callGraphPath: string | null
+  managedArtifacts: {
+    removed: string[]
+  }
 }
 
 export interface RunIndexCommandDryRunResult {
@@ -87,7 +91,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     }
   }
 
-  const outputDir = path.resolve(projectRoot, options.out ?? '.my-dev-kit-v1')
+  const outputDir = path.resolve(projectRoot, options.out ?? '.my-dev-kit')
   const progress = createProgressReporter(options.progress === true, commandStartTime)
 
   if (options.dryRun) {
@@ -130,6 +134,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     message: 'Final artifact writing started',
     elapsedMs: Date.now() - commandStartTime,
   })
+  const refreshResult: RefreshIndexOutputResult = refreshIndexOutput(outputDir)
   writeIndexArtifacts({
     outputDir,
     manifest,
@@ -150,6 +155,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     symbolIndexPath: toForwardSlash(path.join(outputDir, 'symbol-index.json')),
     codeGraphPath: toForwardSlash(path.join(outputDir, 'code-graph.json')),
     callGraphPath: buildResult.callGraph ? toForwardSlash(path.join(outputDir, 'call-graph.json')) : null,
+    managedArtifacts: {
+      removed: refreshResult.removed,
+    },
   }
 }
 

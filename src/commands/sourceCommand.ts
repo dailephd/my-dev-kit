@@ -14,7 +14,7 @@ export function registerSourceCommand(program: Command): void {
   program
     .command('source')
     .description('Retrieve bounded source from an indexed project.')
-    .option('--index <dir>', 'index artifact directory', '.my-dev-kit-v1')
+    .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--node <node-id>', 'node id to retrieve source for')
     .option('--file <path>', 'file path')
     .option('--start <n>', 'start line', parseInteger)

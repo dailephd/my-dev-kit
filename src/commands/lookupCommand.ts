@@ -7,7 +7,7 @@ export function registerLookupCommand(program: Command): void {
   program
     .command('lookup')
     .description('Look up an indexed graph node.')
-    .option('--index <dir>', 'index artifact directory', '.my-dev-kit-v1')
+    .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--node <node-id>', 'node id to look up')
     .option('--depth <n>', 'traversal depth', parseInteger, 1)
     .option('--json', 'print JSON output')

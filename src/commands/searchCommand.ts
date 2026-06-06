@@ -13,7 +13,7 @@ export function registerSearchCommand(program: Command): void {
   program
     .command('search')
     .description('Search indexed files, symbols, and graph edges.')
-    .option('--index <dir>', 'index artifact directory', '.my-dev-kit-v1')
+    .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--query <text>', 'search query')
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
