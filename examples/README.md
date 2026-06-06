@@ -23,7 +23,6 @@ my-dev-kit index --root examples/basic-python --src src --language python --out 
 my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
 
 my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --out examples/basic-data-model-ts/.my-dev-kit --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json

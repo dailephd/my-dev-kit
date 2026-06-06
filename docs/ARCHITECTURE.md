@@ -2,7 +2,7 @@
 
 ## System goal
 
-my-dev-kit provides deterministic, offline code graph indexing, bounded source retrieval, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
+my-dev-kit provides deterministic, offline code graph indexing, semantic enrichment, bounded source retrieval, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
 
 The system produces local JSON artifacts that can be inspected, searched, sliced, rendered, and reused by developers or coding agents. It does not run a server, call LLMs, call external APIs, execute user source code, or modify source files.
 
@@ -12,49 +12,75 @@ The system produces local JSON artifacts that can be inspected, searched, sliced
 CLI entry: src/cli.ts
   |
   +-- index command       -> Indexing layer
-  |                        -> manifest.json, symbol-index.json, code-graph.json, optional call-graph.json
+  |                        -> Symbol extraction, code graph, optional call graph
+  |                        -> Semantic analyzer layer
+  |                        -> manifest.json (artifact registry, analyzer registry)
+  |                        -> symbol-index.json (symbols with compact semanticRoles, artifactRefs)
+  |                        -> code-graph.json (nodes with compact semanticRoles, artifactRefs)
+  |                        -> call-graph.json (optional)
+  |                        -> data-model.json (when TypeScript model analyzer runs)
+  |                        -> data-model-graph.json (when TypeScript model analyzer runs)
   |
-  +-- search command      -> Search layer
-  +-- lookup command      -> Lookup layer
-  +-- source command      -> Source retrieval layer
-  +-- slice command       -> Graph slicing layer
-  +-- view command        -> Graph view layer
+  +-- search command      -> Searches structual and semantic fields in index artifacts
+  +-- lookup command      -> Exact node lookup, returns semantic metadata when present
+  +-- source command      -> Bounded source retrieval, propagates semantic metadata
+  +-- slice command       -> Graph slicing, preserves semantic metadata on nodes
+  +-- view command        -> Graph view layer (code-graph.json only)
   |
-  +-- data-model command  -> Data-model orchestration layer
+  +-- data-model command  -> Data-model inspection and regeneration layer
                            -> data-model.json
                            -> data-model-graph.json
                            -> model-view-lineage.json (trace-view mode)
 ```
 
-The `index` command remains the general source-structure indexer. Downstream data-model and lineage layers consume existing index artifacts instead of replacing the indexer.
+The `index` command is the primary entry point. It builds the structural index, runs semantic analyzers, enriches the index artifacts with compact semantic metadata, writes all produced artifacts, and updates `manifest.json` as the authoritative registry.
+
+Downstream data-model and lineage layers consume existing index artifacts instead of replacing the indexer. The `data-model` command is a focused inspection and regeneration command for those artifacts.
+
+## Index-first architecture
+
+`index` is the primary workflow command. Re-running it refreshes the artifact directory in place.
+
+The managed artifact model works as follows:
+
+1. `index` runs the full build: source discovery, language extraction, symbol index, code graph, optional call graph.
+2. `index` runs semantic analyzers on the build output.
+3. Semantic results are used to enrich the symbol index and code graph with compact role metadata.
+4. `index` writes all produced artifacts to the output directory.
+5. `index` removes artifacts from the previous run that were not produced in the current run.
+6. `index` writes `manifest.json` last, recording which artifacts are present and the status of each analyzer.
+
+`manifest.json` is always the authoritative registry. Consumers should read `manifest.json` to determine which artifacts are current rather than assuming fixed file names are always present.
 
 ## Artifact model
 
-The system has three artifact layers:
+The system has three artifact layers.
 
-### Index artifacts
+### Structural artifacts
 
-- `manifest.json`
-- `symbol-index.json`
-- `code-graph.json`
-- `call-graph.json`, optional
+- `manifest.json` — artifact registry, analyzer registry, project metadata
+- `symbol-index.json` — per-file symbol tables with compact semantic roles
+- `code-graph.json` — file and symbol graph with compact semantic roles on symbol nodes
+- `call-graph.json` — optional static call graph
 
-These artifacts describe source files, symbols, edges, and optional static call relationships.
+These artifacts describe source files, symbols, edges, and optional static call relationships. They carry compact semantic role metadata when analyzers produce it.
 
-### Data-model artifacts
+### Semantic artifacts
 
-- `data-model.json`
-- `data-model-graph.json`
+- `data-model.json` — entities, fields, relationships, evidence, and warnings
+- `data-model-graph.json` — derived semantic graph of data-model entities and fields
 
-These artifacts describe entities, fields, relationships, evidence, and a separate data-model graph.
+These artifacts carry detailed semantic records. They are separate from `code-graph.json` and use their own node and edge ID space.
+
+`data-model-graph.json` is a derived semantic graph, not a slice of `code-graph.json`. The code graph describes static source structure. The data-model graph describes data entities and fields extracted by the TypeScript model analyzer.
 
 ### Lineage artifact
 
-- `model-view-lineage.json`
+- `model-view-lineage.json` — conservative static relationships between data-model fields, transformations, view-model fields, component props, and rendered fields
 
-This artifact describes conservative static relationships between data-model fields, transformations, view-model fields, component props, and rendered fields.
+This artifact is built by `data-model --trace-view`. It is separate from both the code graph and the data-model graph.
 
-The data-model and lineage artifacts remain separate from `code-graph.json`.
+The bridge between structural and semantic artifacts is `artifactRefs` (links from compact symbol metadata to detailed artifact entries) and `evidenceRefs` (source location evidence attached to semantic roles).
 
 ## CLI layer
 
@@ -75,16 +101,7 @@ Public commands:
 - `view`
 - `data-model`
 
-The CLI layer owns:
-
-- command registration
-- option parsing
-- input validation
-- output-format selection
-- error presentation
-- process exit behavior
-
-The CLI layer does not own indexing, extraction, builder logic, graph traversal, source retrieval, or lineage construction logic. Command files orchestrate subsystem calls and format bounded output.
+The CLI layer owns command registration, option parsing, input validation, output-format selection, error presentation, and process exit behavior. It does not own indexing, extraction, builder logic, graph traversal, source retrieval, or lineage construction logic.
 
 ## Indexing layer
 
@@ -96,20 +113,55 @@ The indexing layer owns the full index run.
 
 Responsibilities:
 
-- resolve the project root
-- resolve source roots
+- resolve the project root and source roots
 - discover source files
-- apply default ignored directories
-- apply repeated `--exclude` rules
+- apply default ignored directories and `--exclude` rules
 - support `--dry-run`
 - support progress diagnostics
 - dispatch files to language adapters
 - assemble the symbol index
 - build the code graph
 - optionally build the call graph
+- run semantic analyzers
+- enrich the symbol index and code graph with semantic metadata
 - write index artifacts
+- refresh the artifact directory (remove stale artifacts)
+- write `manifest.json` as the final step
 
-Source discovery is centralized in `discoverSourceFiles.ts`. Indexing, dry-run mode, ignore handling, and progress reporting all use the same discovery path before extraction.
+## Semantic analyzer layer
+
+Files:
+
+- `src/indexing/runSemanticAnalyzers.ts`
+- `src/semantics/`
+
+The semantic analyzer layer runs after the base index build. Analyzers consume the symbol index, code graph, and optionally the call graph.
+
+Current analyzers:
+
+- `syntax` — baseline structural analysis
+- `call-graph` — static call graph, when `--call-graph` is requested
+- `data-model` — TypeScript model extraction, produces `data-model.json` and `data-model-graph.json`
+- `model-view-lineage` — conservative lineage, runs in `data-model --trace-view` mode
+
+Analyzer output feeds two paths:
+
+1. Compact role metadata (`semanticRoles`, `artifactRefs`) is embedded on symbols in `symbol-index.json` and on symbol nodes in `code-graph.json`.
+2. Detailed semantic artifacts (`data-model.json`, `data-model-graph.json`) are written to the output directory and registered in `manifest.json`.
+
+Analyzer status is recorded in `manifest.json` under the `analyzers` array.
+
+## Semantic types
+
+Files:
+
+- `src/semantics/semanticTypes.ts`
+
+The semantic schema defines the `SemanticRole`, `SemanticArtifactRef`, `SemanticEvidenceRef`, and related types used throughout the system.
+
+Defined role names include `data-entity`, `data-field`, `canonical-type`, `schema-model`, `database-model`, `artifact-type`, `projection-type`, `view-model`, `ui-only-state`, `persistence-adapter`, `route-handler`, `react-component`, `client-component`, `server-component`, `test-block`, `test-fixture`, `browser-storage-payload`, `storage-key`, `rendered-field`, and `unknown`.
+
+Currently produced by `typescript-model-analyzer`: `data-entity`, `data-field`.
 
 ## Language adapter layer
 
@@ -126,12 +178,7 @@ Main files:
 - `typescript/adapter.ts`
 - `python/adapter.ts`
 
-The default registry supports:
-
-- TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`
-- Python for `.py`
-
-The indexer uses the registry to select the correct adapter per file. Language-specific parsing stays inside adapters instead of being duplicated throughout the pipeline.
+The default registry supports TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`, and Python for `.py`.
 
 ## Symbol index layer
 
@@ -145,13 +192,9 @@ For each indexed file, it records:
 
 - relative file path
 - language
-- imports
-- exports
+- imports and exports
 - internal dependencies when resolvable
-- extracted symbols
-- symbol names
-- symbol kinds
-- symbol start lines
+- extracted symbols with names, kinds, start lines, and compact semantic roles when available
 
 ## Code graph layer
 
@@ -162,21 +205,11 @@ Files:
 
 The code graph is a typed directed graph over file and symbol nodes.
 
-Node kinds:
+Node kinds: `file`, `symbol`
 
-- `file`
-- `symbol`
+Core edge kinds: `defines`, `imports`, `exports`, `calls`, `depends-on`, `related-to`
 
-Core edge kinds:
-
-- `defines`
-- `imports`
-- `exports`
-- `calls`
-- `depends-on`
-- `related-to`
-
-The code graph stays focused on static code structure. Data-model and lineage edges are not added to `code-graph.json`.
+Symbol nodes carry compact `semanticRoles` and `artifactRefs` arrays when the TypeScript model analyzer has classified the corresponding symbol. The code graph stays focused on static code structure; data-model and lineage edges are not added to it.
 
 ## Search, lookup, source, slice, and view layers
 
@@ -187,17 +220,19 @@ Files:
 - `src/source/`
 - `src/graph/`
 
-These layers consume index artifacts only.
+These layers consume index artifacts.
 
 Responsibilities:
 
-- `search`: deterministic keyword ranking over indexed files, symbols, and edges
-- `lookup`: exact node lookup with bounded neighbor expansion
-- `source`: bounded read-only source retrieval with path containment
-- `slice`: bounded graph-neighborhood extraction
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role fields when present
+- `lookup`: exact node lookup with bounded neighbor expansion and semantic metadata in the result
+- `source`: bounded read-only source retrieval with path containment, semantic metadata propagated when present
+- `slice`: bounded graph-neighborhood extraction, semantic metadata preserved on nodes
 - `view`: DOT, SVG, or PNG rendering of `code-graph.json`
 
-These commands preserve the v1.0.0 index workflow and do not depend on data-model or lineage artifacts.
+Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` as weighted fields. Results include `semanticRoles` and `artifactRefs` on matched items when present.
+
+Lookup returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node when present.
 
 ## Data-model layer
 
@@ -225,12 +260,7 @@ Responsibilities:
 - provide exact entity and field lookup helpers
 - orchestrate extraction over indexed TypeScript or TSX source files
 
-The data-model layer does not:
-
-- modify `code-graph.json`
-- replace the indexer
-- expose fuzzy search
-- claim unsupported extractor families
+The data-model layer does not modify `code-graph.json`, replace the indexer, or expose fuzzy search.
 
 ## Data-model extractor layer
 
@@ -240,7 +270,7 @@ Files:
 
 The extractor layer emits normalized records. It does not write final artifacts directly.
 
-Current v1.1.0 extractor scope:
+Current extractor scope:
 
 - exported interfaces with property signatures
 - exported type aliases whose right side is an object literal type
@@ -249,12 +279,7 @@ Current v1.1.0 extractor scope:
 Current extractor boundaries:
 
 - conservative and TypeScript-focused
-- no Prisma extraction
-- no SQL extraction
-- no Django extraction
-- no SQLAlchemy extraction
-- no TypeORM extraction
-- no Sequelize extraction
+- no Prisma, SQL, Django, SQLAlchemy, TypeORM, or Sequelize extraction
 - no broad cross-file relationship inference
 
 Unsupported or ambiguous patterns produce warnings instead of guessed relationships.
@@ -269,30 +294,11 @@ The `data-model` command is a thin orchestration layer over the data-model and l
 
 Supported command modes:
 
-- generation mode
-- exact entity lookup mode
-- exact field lookup mode
-- entity `trace-view` mode
-- field `trace-view` mode
-
-Generation mode:
-
-- reads existing index artifacts
-- runs the extractor-to-builder path
-- writes `data-model.json`
-- writes `data-model-graph.json`
-
-Lookup mode:
-
-- reads existing `data-model` artifacts
-- performs exact entity or field lookup
-
-Trace mode:
-
-- rebuilds data-model artifacts from the index
-- builds conservative lineage in memory
-- writes `model-view-lineage.json`
-- returns bounded lineage output
+- generation mode: reads the index and regenerates data-model artifacts
+- exact entity lookup mode: reads existing data-model artifacts
+- exact field lookup mode: reads existing data-model artifacts
+- entity `trace-view` mode: rebuilds data-model artifacts and builds lineage
+- field `trace-view` mode: rebuilds data-model artifacts and builds lineage
 
 ## Model-to-view lineage layer
 
@@ -340,11 +346,7 @@ The data-model and lineage I/O layers handle:
 - path containment inside the selected output directory
 - safe JSON reads with artifact kind validation
 
-They do not:
-
-- modify source files
-- require Graphviz
-- require network access
+They do not modify source files, require Graphviz, or require network access.
 
 ## Security boundaries
 
@@ -357,8 +359,7 @@ Security-relevant design rules:
 - no runtime code execution
 - no source-file modification
 - source retrieval is read-only
-- data-model extraction reads only indexed project files
-- lineage reads only indexed project files needed for conservative static evidence
+- data-model and lineage extraction reads only indexed project files
 - artifact path containment is enforced for index, data-model, and lineage artifacts
 - Graphviz is only used by `view`
 
@@ -377,6 +378,11 @@ Current boundaries:
 - It does not perform semantic similarity search.
 - It does not use embeddings.
 - It does not call LLMs.
-- It does not create GitHub releases automatically.
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
+
+## Runtime and artifact-size considerations
+
+The main artifacts (`symbol-index.json`, `code-graph.json`) carry compact semantic metadata rather than full role detail. Compact metadata uses short arrays with role names, confidence, and artifact references. Full detail is in the separate semantic artifacts.
+
+This keeps the structural artifacts small enough for most project sizes while allowing detailed inspection through `data-model.json` and related artifacts. The `manifest.json` artifact registry allows consumers to load only what they need.

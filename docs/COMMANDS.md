@@ -41,7 +41,7 @@ my-dev-kit lookup --index .my-dev-kit --node "file:src/index.ts" --json
 my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
 my-dev-kit slice --index .my-dev-kit --node "file:src/index.ts" --depth 1 --json
 my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
-my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+my-dev-kit data-model --index .my-dev-kit --entity User --json
 ```
 
 Path rules:
@@ -51,7 +51,7 @@ Path rules:
 - `index` resolves `--src` paths relative to `--root`.
 - `index` resolves `--out` relative to `--root`.
 - Read commands use `--index` to point at the artifact directory created by `index`.
-- `data-model` reads index artifacts from `--index` and writes data-model artifacts to `--out` or back into `--index` when `--out` is omitted.
+- `data-model` reads index artifacts from `--index` and writes any additional data-model artifacts to `--out` or back into `--index` when `--out` is omitted.
 - Node IDs must be exact.
 - Use `search` to find node IDs before calling `lookup`, `source`, `slice`, or `view`.
 
@@ -61,9 +61,11 @@ Recommended artifact directory:
 .my-dev-kit
 ```
 
+Re-run `index` to refresh the artifact directory when source changes. The directory is refreshed in place; stale artifacts from previous runs are removed.
+
 ## index
 
-Index local source files and write graph artifacts.
+Index local source files, run semantic analyzers, and write index and semantic artifacts.
 
 Supported languages:
 
@@ -90,7 +92,7 @@ my-dev-kit index --root <project-root> --src <source-root> --out <artifact-dir>
 - `--root <path>`: project root. Source roots and output paths are resolved relative to this path.
 - `--src <path>`: source root to index, relative to `--root`. May be repeated. Required.
 - `--language <language>`: language hint. Supported values are `typescript`, `javascript`, and `python`. When omitted, language is inferred from file extensions.
-- `--out <dir>`: output directory for index artifacts, relative to `--root`.
+- `--out <dir>`: output directory for index artifacts, relative to `--root`. Defaults to `.my-dev-kit`.
 - `--exclude <path-or-name>`: directory name or relative path prefix to exclude. May be repeated. This is path/name based, not glob based.
 - `--dry-run`: scan and report what would be indexed without writing artifacts.
 - `--progress`: print bounded progress diagnostics to stderr.
@@ -123,17 +125,34 @@ Default ignored directory names include:
 
 The `--exclude` flag adds extra directory names or relative path prefixes.
 
+### Semantic analyzer behavior
+
+After indexing, `index` runs semantic analyzers. The TypeScript model analyzer currently runs on TypeScript and TSX source and produces `data-entity` and `data-field` semantic roles for exported interfaces, type aliases, and classes that qualify as data models.
+
+Compact `semanticRoles` and `artifactRefs` arrays are embedded on the relevant symbols in `symbol-index.json` and on the corresponding symbol nodes in `code-graph.json`. These link back to the detailed data-model artifacts through artifact references.
+
+Analyzer results and status are recorded in `manifest.json` under the `analyzers` array.
+
+### Managed artifact refresh
+
+Each `index` run refreshes the artifact directory. Artifacts from previous runs that are no longer produced are removed. `manifest.json` is always the authoritative registry for the current artifact set.
+
 ### Artifacts
 
 `index` writes the following files inside `--out`:
 
-- `manifest.json`
-- `symbol-index.json`
-- `code-graph.json`
+- `manifest.json` — artifact registry, analyzer registry, project metadata, and summary counts
+- `symbol-index.json` — per-file symbol tables with compact semantic roles where available
+- `code-graph.json` — file and symbol graph with compact semantic roles on symbol nodes where available
 
-When `--call-graph` is requested and call graph data is available, `index` also writes:
+When `--call-graph` is requested and call graph data is available:
 
 - `call-graph.json`
+
+When the TypeScript model analyzer produces data-model output:
+
+- `data-model.json`
+- `data-model-graph.json`
 
 ### Examples
 
@@ -147,7 +166,7 @@ my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next -
 
 ## search
 
-Search indexed files, symbols, and graph edges by keyword.
+Search indexed files, symbols, graph edges, and semantic roles by keyword.
 
 ### Usage
 
@@ -175,16 +194,30 @@ my-dev-kit search --index <artifact-dir> --query <text>
 - Search does not read arbitrary source files.
 - Search does not modify project files.
 
+### Semantic-aware matching
+
+When semantic metadata is present in the index, search includes `semanticRoles`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` fields as weighted search targets. Match reasons in the result reflect which fields contributed to the score, including semantic role matches.
+
+Result items include `semanticRoles` and `artifactRefs` when present on the matched node or symbol.
+
+### Match reason fields
+
+Result items include a `matchReasons` array. Each reason includes:
+
+- `field`: the indexed field that matched (e.g. `symbolName`, `semanticRole`, `path`)
+- `term`: the query term that matched
+
 ### Examples
 
 ```sh
 my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
 my-dev-kit search --index .my-dev-kit --query "formatUser" --json
+my-dev-kit search --index .my-dev-kit --query "data-entity User" --json
 ```
 
 ## lookup
 
-Look up a graph node by exact node ID.
+Look up a graph node by exact node ID, including semantic metadata.
 
 ### Usage
 
@@ -207,6 +240,10 @@ my-dev-kit lookup --index <artifact-dir> --node <node-id>
 - Lookup includes incoming edges, outgoing edges, and neighboring nodes.
 - Partial matching and fuzzy matching are not supported.
 - Use `search` first when the exact node ID is unknown.
+
+### Semantic metadata
+
+The lookup result includes `semanticRoles`, `artifactRefs`, and `evidenceRefs` when present on the focus node. These fields are drawn from the code graph and reflect the compact semantic metadata written by `index`.
 
 ### Node ID formats
 
@@ -250,6 +287,10 @@ Use one retrieval mode per command.
 - `--format <json|plain|numbered>`: output format.
 - `--out <path>`: write rendered output to a file.
 - `--json`: alias for `--format json`.
+
+### Behavior
+
+When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output and are not displayed in plain or numbered text output.
 
 ### Safety behavior
 
@@ -304,6 +345,10 @@ my-dev-kit slice --index <artifact-dir> --node <node-id>
 - `slice` does not read source files.
 - `slice` does not require Graphviz.
 
+### Semantic metadata
+
+Nodes in the slice include their `semanticRoles` and `artifactRefs` from `code-graph.json` when present. Semantic metadata is preserved in slice output.
+
 ## view
 
 Render `code-graph.json` as DOT, SVG, or PNG.
@@ -330,30 +375,36 @@ my-dev-kit view --index <artifact-dir> --format <dot|svg|png> --out <path>
 - PNG output requires the Graphviz `dot` executable.
 - If Graphviz is unavailable and `--allow-dot-fallback` is used, DOT is written instead of the requested SVG or PNG.
 
+### Scope
+
+`view` renders `code-graph.json` only. It does not render `data-model-graph.json` or `model-view-lineage.json`. Graph visualization for the data-model and lineage artifacts is planned for a future release.
+
 ## data-model
 
-Build or inspect data-model artifacts from an existing index.
+Inspect or regenerate data-model artifacts from an existing index.
 
-The `data-model` command consumes artifacts written by `index`. It does not replace `index`, modify source files, or alter `code-graph.json`.
+The `data-model` command is a focused inspection and regeneration command. It consumes artifacts written by `index`. It does not replace `index`, modify source files, or alter `code-graph.json`.
+
+When `index` runs, it already produces `data-model.json` and `data-model-graph.json` through the built-in semantic analyzers. Use `data-model` when you want to inspect specific entities or fields, run trace-view for an entity, or regenerate data-model artifacts with a different `--out` directory.
 
 ### Usage
 
-Generate data-model artifacts:
-
-```sh
-my-dev-kit data-model --index <artifact-dir> --out <artifact-dir> --json
-```
-
-Inspect an exact entity:
+Inspect an exact entity from existing data-model artifacts:
 
 ```sh
 my-dev-kit data-model --index <artifact-dir> --entity <name-or-id> --json
 ```
 
-Inspect an exact field:
+Inspect an exact field from existing data-model artifacts:
 
 ```sh
 my-dev-kit data-model --index <artifact-dir> --field <entity.field> --json
+```
+
+Regenerate data-model artifacts from the index:
+
+```sh
+my-dev-kit data-model --index <artifact-dir> --out <artifact-dir> --json
 ```
 
 Trace static model-to-view lineage for an entity:
@@ -379,7 +430,7 @@ my-dev-kit data-model --index <artifact-dir> --field <entity.field> --trace-view
 
 ### Generation mode
 
-Generation mode writes:
+Generation mode reads the index and writes:
 
 - `data-model.json`
 - `data-model-graph.json`
@@ -463,7 +514,7 @@ Field trace output includes:
 - `--field <entity.field> --trace-view` requires the bare `--trace-view` flag.
 - `--trace-view <entity>` requires an entity value when `--field` is not used.
 
-### Supported v1.1.0 extraction behavior
+### Supported extraction behavior
 
 The current extractor is conservative and TypeScript-focused. It supports:
 
@@ -475,7 +526,7 @@ The current extractor is conservative and TypeScript-focused. It supports:
 
 ### Known limitations
 
-- The v1.1.0 data-model extractor does not support Prisma, SQL, Django, SQLAlchemy, TypeORM, or Sequelize.
+- The data-model extractor does not support Prisma, SQL, Django, SQLAlchemy, TypeORM, or Sequelize.
 - Data-model artifacts are separate from `code-graph.json`.
 - The data-model graph is separate from the code graph and uses its own node and edge IDs.
 - Model-to-view lineage is static evidence only. It does not claim runtime rendering, route reachability, browser-state behavior, or full React render-flow understanding.
@@ -484,16 +535,10 @@ The current extractor is conservative and TypeScript-focused. It supports:
 
 ### Examples
 
-Generate data-model artifacts from an existing index:
+Inspect an entity after running `index`:
 
 ```sh
 my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
-```
-
-Inspect an entity:
-
-```sh
 my-dev-kit data-model --index .my-dev-kit --entity User --json
 ```
 
@@ -515,6 +560,12 @@ Trace a field into conservative static view usage:
 my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 ```
 
+Regenerate data-model artifacts explicitly:
+
+```sh
+my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+```
+
 ## Bundled examples
 
 The bundled examples are useful for smoke tests and learning the command flow.
@@ -524,7 +575,6 @@ my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
 my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
 
 my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --out examples/basic-data-model-ts/.my-dev-kit --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
@@ -538,9 +588,9 @@ Run `index` first or check the `--index` path.
 
 ### Missing data-model artifacts
 
-Lookup mode requires existing `data-model.json` and `data-model-graph.json`.
+`index` writes `data-model.json` and `data-model-graph.json` automatically when the TypeScript model analyzer finds qualifying source. If the files are missing, the source may not contain qualifying exported interfaces, type aliases, or classes, or the index was run without those source roots.
 
-Generate them first:
+To regenerate explicitly:
 
 ```sh
 my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json

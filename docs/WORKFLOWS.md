@@ -6,11 +6,13 @@ Practical usage workflows for my-dev-kit. For the full flag reference, see [COMM
 
 The recommended usage pattern:
 
-1. Index the project once, then re-run when source changes.
-2. Use `search` to discover relevant node IDs.
-3. Use `lookup` or `slice` to inspect graph relationships.
-4. Use `source` to retrieve specific code excerpts.
-5. Use `view` to render the full graph when a visual overview is needed.
+1. Run `index` into `.my-dev-kit`. Re-run `index` to refresh the artifact directory when source changes. Do not create a new index folder for every run unless you are deliberately taking a snapshot.
+2. Use `search` to discover relevant node IDs, including by semantic role when available.
+3. Use `lookup` to inspect exact nodes and their semantic metadata.
+4. Use `slice` to inspect graph neighborhoods while preserving semantic metadata on nodes.
+5. Use `source` to retrieve specific code excerpts.
+6. Use `data-model` for entity, field, and trace-view tasks when data-model artifacts are present.
+7. Use `view` to render the code graph as DOT, SVG, or PNG when a visual overview is needed.
 
 Do not start by reading the full graph or full source tree. Use `search` first to narrow the context.
 
@@ -24,7 +26,9 @@ Run `index` from the project root:
 my-dev-kit index --root . --src src --out .my-dev-kit --json
 ```
 
-The `--out` path is relative to `--root`. The above creates `.my-dev-kit/`.
+The `--out` path is relative to `--root`. The above creates or refreshes `.my-dev-kit/`.
+
+Re-run the same command to refresh the artifact directory when source changes. The directory is updated in place and stale artifacts are removed.
 
 Include a call graph:
 
@@ -131,7 +135,7 @@ my-dev-kit index --root . --src src --out .my-dev-kit --json
 my-dev-kit search --index .my-dev-kit --query "<relevant term>" --limit 20 --json
 ```
 
-Inspect `nodeId`, `kind`, and `matchReasons` in the results. Prefer symbol nodes when the target is a specific function, class, or type.
+Inspect `nodeId`, `kind`, and `matchReasons` in the results. Prefer symbol nodes when the target is a specific function, class, or type. When semantic metadata is present, result items include `semanticRoles` and `artifactRefs`, and match reasons may include `semanticRole` as a contributing field.
 
 **Step 3: Look up the strongest candidate**
 

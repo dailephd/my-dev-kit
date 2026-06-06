@@ -73,10 +73,14 @@ my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
 
 Generated artifacts inside `.my-dev-kit/`:
 
-- `manifest.json` - project metadata and summary counts
-- `symbol-index.json` - per-file symbol tables
-- `code-graph.json` - graph of file and symbol nodes
+- `manifest.json` - artifact registry, analyzer registry, and project metadata
+- `symbol-index.json` - per-file symbol tables with compact semantic roles per symbol
+- `code-graph.json` - graph of file and symbol nodes with compact semantic roles on symbol nodes
 - `call-graph.json` - call edges, when `--call-graph` was requested
+- `data-model.json` - data entities, fields, and relationships, when the TypeScript model analyzer finds qualifying source
+- `data-model-graph.json` - derived semantic graph of data-model entities, when the TypeScript model analyzer runs
+
+Re-run the same command to refresh the artifact directory when source changes.
 
 Split indexes can keep large workspaces easier to navigate:
 

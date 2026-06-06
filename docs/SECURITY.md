@@ -93,9 +93,9 @@ Bounded operations remain enforced:
 
 These limits reduce runaway traversal and oversized output for local analysis flows.
 
-## Data-model and lineage security notes
+## Semantic analyzer and data-model security notes
 
-The v1.1.0 data-model and lineage features keep the same security posture as the rest of the CLI:
+The v1.1.0 semantic integration, data-model, and lineage features keep the same security posture as the rest of the CLI:
 
 - no source modification
 - no database connections
@@ -104,6 +104,12 @@ The v1.1.0 data-model and lineage features keep the same security posture as the
 - no Graphviz requirement for `data-model` or `trace-view`
 - no runtime React rendering claims
 - no runtime database behavior claims
+
+The TypeScript model analyzer runs as part of the `index` command. It reads only indexed TypeScript and TSX source files within the bounds of the indexed project root. The same path containment rules that apply to `source` and `data-model` apply to analyzer source reads.
+
+Semantic artifact paths recorded in `manifest.json` under `semanticArtifacts` are resolved relative to the artifact directory and validated for path containment before use.
+
+Managed artifact refresh removes only files from within the artifact directory that were produced by a prior index run. It does not remove arbitrary files outside the artifact directory.
 
 Warnings are used instead of broad inference when static evidence is incomplete.
 

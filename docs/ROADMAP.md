@@ -142,85 +142,61 @@ Planned improvements:
 
 ## Version 1.1.0
 
-Version 1.1.0 focuses on data-model graph extraction and model-to-view lineage.
+Version 1.1.0 adds the first semantic integration layer on top of the existing code graph workflow.
 
-The goal is to add a separate graph layer for data entities, relationships, transformation steps, and view usage without mixing data-model relationships into the general code graph.
+### Implemented
 
-### Data-model extraction
+#### Index-first semantic architecture
 
-Planned features:
+- `index` now runs semantic analyzers as part of the index run
+- `manifest.json` is the authoritative artifact registry; it records all current artifact paths and analyzer status
+- Stale artifacts from previous runs are removed when `index` refreshes the artifact directory
+- Analyzer registry (`analyzers` array) in `manifest.json` records status, version, and artifact refs per analyzer
 
-- entity extraction
-- field extraction
-- primary key extraction
-- foreign key extraction
-- one-to-one relationship extraction
-- one-to-many relationship extraction
-- many-to-one relationship extraction
-- many-to-many relationship extraction
-- calculated field or measure dependency extraction where practical
-- schema-to-code relationship mapping where practical
-- model-to-view relationship mapping where practical
-- model-field usage tracing across transformation functions, view models, and UI components
-- generated view-model detection when a function or component derives display-ready data from a canonical model
-- rendered field usage detection in JSX or HTML-like output where statically detectable
+#### Semantic metadata contracts
 
-### Model-to-view lineage
+- `semanticRoles` and `artifactRefs` arrays on symbols in `symbol-index.json`
+- `semanticRoles` and `artifactRefs` arrays on symbol nodes in `code-graph.json`
+- `evidenceRefs` collected from semantic roles for use in lookup output
+- Semantic schema version `1.0.0` with defined role names
 
-Planned features:
+#### Data-model artifacts linked from index
 
-- trace which data models are used by which transformation or generation steps
-- trace which view models are derived from canonical data models
-- trace which components consume a model or view model
-- trace which JSX or HTML-like elements render specific model fields where statically detectable
-- distinguish canonical data models from generated view models and UI-only display structures
-- report the path from model field to view usage when enough static evidence exists
+- `data-model.json` and `data-model-graph.json` written by `index` when the TypeScript model analyzer produces output
+- Artifact paths recorded in `manifest.json` under `semanticArtifacts`
+- Compact `data-entity` and `data-field` roles embedded on qualifying symbols in index artifacts
 
-Candidate command shapes:
+#### Data-model extraction and inspection
 
-- `data-model --trace-view <model-or-entity>`
-- `data-model --field <entity.field> --trace-view`
-- `slice --data-model <entity> --include-view-usage`
-- `lookup --model-field <entity.field>`
+- Conservative TypeScript model extraction for exported interfaces, type aliases, and classes
+- Exact entity lookup by name or stable ID
+- Exact field lookup by `Entity.field`
+- `data-model.json`, `data-model-graph.json` as separate artifacts
+- `data-model` command for focused inspection and regeneration
 
-### Supported sources
+#### Conservative model-to-view lineage
 
-Candidate extraction sources:
+- `model-view-lineage.json` produced in `data-model --trace-view` mode
+- Conservative static lineage for supported transformation, view-model, component prop, and JSX rendering patterns
+- `trace-view` mode for entity and field-level lineage
 
-- Prisma schemas
-- SQL migration files
-- Django models
-- SQLAlchemy models
-- TypeORM entities
-- Sequelize models
-- decorator-based TypeScript model classes
-- plain TypeScript, JavaScript, and Python model code when patterns are detectable
+#### Semantic-aware commands
 
-### Artifacts
+- `search`: indexes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` fields; returns semantic metadata on matched items
+- `lookup`: returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node
+- `slice`: preserves `semanticRoles` and `artifactRefs` on nodes in the slice output
+- `source`: propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol target
 
-Planned artifacts:
+### Future work in this area
 
-- `data-model.json`
-- `data-model-graph.json`
-- `model-view-lineage.json`, if model-to-view tracing is emitted separately
-
-The data-model graph should remain separate from `code-graph.json`.
-
-The code graph describes code structure. The data-model graph describes data entities, fields, and relationships.
-
-Model-to-view lineage describes how canonical models, derived view models, transformation functions, components, and rendered fields relate to one another.
-
-### Graph views
-
-Planned features:
-
-- DOT output for data-model graph
-- SVG and PNG output for data-model graph
-- relationship labels for entity graphs
-- filtering by entity
-- filtering by relationship type
-- filtering by model-to-view relationship type
-- filtering by canonical model, view model, component, or rendered field
+- Broader semantic role coverage: `route-handler`, `react-component`, `view-model`, `ui-only-state`, and others
+- React and TSX semantic roles
+- Browser storage and route roles
+- Broader ORM and schema extractors (Prisma, SQL, TypeORM, Sequelize)
+- Source retrieval expansion for semantic targets
+- Graph visualization for data-model and lineage artifacts (DOT, SVG, PNG for `data-model-graph.json`)
+- Analyzer profiles and selective analyzer runs
+- Incremental indexing and scalability
 
 ## Version 1.2.0
 
