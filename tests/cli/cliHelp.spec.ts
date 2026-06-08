@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -18,6 +18,14 @@ function tsxCliPath(): string {
 describe('CLI help', () => {
   it('package CLI source exists', () => {
     expect(existsSync('src/cli.ts')).toBe(true)
+  })
+
+  it('--version reports package.json version', () => {
+    const result = runCli(['--version'])
+
+    expect(result.status).toBe(0)
+    const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }
+    expect(result.stdout.trim()).toBe(version)
   })
 
   it('top-level help lists registered commands', () => {

@@ -114,6 +114,46 @@ describe('index output refresh', () => {
     expect(parsed.managedArtifacts.removed).toContain('call-graph.json')
   })
 
+  it('removes injected stale optional managed artifacts and preserves non-managed user files', () => {
+    const root = createFixture()
+    const outDir = join(root, '.my-dev-kit')
+    mkdirSync(outDir, { recursive: true })
+
+    // Inject stale content for all optional managed artifacts before any index run
+    writeFileSync(join(outDir, 'call-graph.json'), '"stale-call-graph"')
+    writeFileSync(join(outDir, 'data-model.json'), '"stale-data-model"')
+    writeFileSync(join(outDir, 'data-model-graph.json'), '"stale-data-model-graph"')
+
+    // Non-managed user file must survive the refresh
+    writeFileSync(join(outDir, 'my-notes.txt'), 'user notes\n')
+
+    // Run index WITHOUT --call-graph so call-graph.json will not be re-produced
+    const result = runCli(['index', '--root', root, '--src', 'src', '--out', '.my-dev-kit', '--json'])
+
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+
+    // All three stale optional artifacts must appear in the removed list
+    expect(parsed.managedArtifacts.removed).toContain('call-graph.json')
+    expect(parsed.managedArtifacts.removed).toContain('data-model.json')
+    expect(parsed.managedArtifacts.removed).toContain('data-model-graph.json')
+
+    // call-graph.json must NOT be re-written (was not requested)
+    expect(existsSync(join(outDir, 'call-graph.json'))).toBe(false)
+
+    // data-model.json must be re-written with fresh valid content, not the injected stale string
+    const freshDataModel = readJson<unknown>(join(outDir, 'data-model.json'))
+    expect(typeof freshDataModel).toBe('object')
+    expect(freshDataModel).not.toBe('stale-data-model')
+
+    // Manifest must not reference call-graph since it was not requested
+    const manifest = readJson<{ artifacts: { callGraph: string | null } }>(join(outDir, 'manifest.json'))
+    expect(manifest.artifacts.callGraph).toBeNull()
+
+    // Non-managed user file must be preserved unchanged
+    expect(readFileSync(join(outDir, 'my-notes.txt'), 'utf8')).toBe('user notes\n')
+  })
+
   it('does not write or clean artifacts in dry-run mode', () => {
     const root = createFixture()
     const outDir = join(root, 'dry-run-out')

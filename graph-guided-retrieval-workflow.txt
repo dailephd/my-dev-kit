@@ -1,0 +1,256 @@
+Graph-guided retrieval workflow
+
+Use the generated index artifacts and CLI outputs as the primary context source.
+
+This workflow is for pre-release work from inside the my-dev-kit project folder.
+
+Use local project commands:
+
+npm run build
+node dist/cli.js <command>
+
+Do not switch this workflow to npm package commands until the release is published.
+
+Artifact directory rule
+
+Use one stable artifact directory for normal work:
+
+.my-dev-kit
+
+Re-run index to refresh the current project state.
+
+Do not create a new index folder for every run unless the task explicitly needs a separate audit, comparison, or snapshot.
+
+manifest.json is the source of truth for which artifacts are current.
+
+Do not trust stale artifact files just because they exist on disk.
+
+Workflow principle
+
+Do not start by reading whole source files.
+Do not guess file responsibilities from the repo tree alone.
+Do not open broad directories or unrelated files.
+
+Use this order:
+
+1. Use search to narrow candidate nodes.
+2. Use lookup on candidate node IDs.
+3. Use slice around the strongest node.
+4. Use source on exact symbol IDs when possible.
+5. Use line-range source only as fallback.
+6. Use data-model inspection only when the task involves entities, fields, model semantics, or model-to-view lineage.
+
+Step 0: Build the local CLI
+
+Run from inside the my-dev-kit project folder:
+
+npm run build
+
+Step 1: Index or refresh the target repo
+
+Use the same stable output directory for normal work:
+
+node dist/cli.js index --root <target-repo-root> --src <source-root> --out <target-repo-root>/.my-dev-kit --call-graph --json
+
+With multiple source roots:
+
+node dist/cli.js index --root <target-repo-root> --src <source-root-1> --src <source-root-2> --out <target-repo-root>/.my-dev-kit --call-graph --json
+
+Use a custom output directory only for a specific reason, such as a separate subproject index, test index, audit index, or comparison run.
+
+Commands
+
+Start with task-specific searches:
+
+node dist/cli.js search --index <index-dir> --query "<task-specific query 1>" --limit 20 --json
+
+node dist/cli.js search --index <index-dir> --query "<task-specific query 2>" --limit 20 --json
+
+node dist/cli.js search --index <index-dir> --query "<task-specific query 3>" --limit 20 --json
+
+Use semantic role terms when relevant and implemented:
+
+node dist/cli.js search --index <index-dir> --query "data-entity" --limit 20 --json
+
+node dist/cli.js search --index <index-dir> --query "view-model" --limit 20 --json
+
+node dist/cli.js search --index <index-dir> --query "semanticRoles" --limit 20 --json
+
+Select candidate nodes using these rules:
+
+- Prefer kind=symbol over kind=file when the task targets a function, class, type, command handler, or exported constant.
+- Prefer results whose path is inside the likely subsystem.
+- Prefer matchReasons on symbolName, path, export, nodeId, label, semanticRoles, or artifactRefs.
+- Deprioritize results that only match imports or generic edge endpoints.
+- Reject unrelated subsystem paths unless lookup proves relevance.
+- Use semanticRoles as supporting evidence, not as a replacement for lookup/source verification.
+
+For each selected candidate, run:
+
+node dist/cli.js lookup --index <index-dir> --node "<selected-node-id>" --depth 1 --json
+
+Use lookup to inspect:
+
+- defining file
+- symbol metadata
+- neighboring graph nodes
+- imports/exports/dependencies
+- semanticRoles, when present
+- artifactRefs, when present
+- evidenceRefs, when present
+
+Choose the strongest focus node based on:
+
+- direct relevance to the requested change
+- symbol-level specificity
+- subsystem path match
+- useful incoming and outgoing relationships
+- test or type relationships revealed by lookup
+- semantic role relevance when present
+
+Then build a bounded graph slice:
+
+node dist/cli.js slice --index <index-dir> --node "<strongest-node-id>" --depth 2 --direction both --out <index-dir>/<task-name>-slice.json --json
+
+Slice guidance:
+
+- depth 0: only the focus node
+- depth 1: immediate relationships
+- depth 2: usually best for implementation planning
+- depth 3: use only when the subsystem is still unclear
+
+Semantic note:
+
+- slice should preserve semanticRoles and artifactRefs when present.
+- do not assume slice traverses data-model-graph.json or model-view-lineage.json unless that behavior is explicitly implemented.
+
+Retrieve source using symbol-level retrieval first:
+
+node dist/cli.js source --index <index-dir> --node "<selected-symbol-node-id>" --max-lines 160 --json
+
+If symbol-node retrieval is unavailable, use file plus symbol:
+
+node dist/cli.js source --index <index-dir> --file "<selected-file-path>" --symbol "<selected-symbol-name>" --max-lines 160 --json
+
+Use line-range retrieval only as a fallback when:
+
+- the needed context is not represented as a symbol
+- the symbol range is incomplete
+- surrounding imports or type declarations are required
+- tests are organized in non-symbol blocks
+- documentation must be updated and the relevant section cannot be retrieved by symbol
+- semantic evidence references point to surrounding source that is not represented as a symbol
+
+Fallback form:
+
+node dist/cli.js source --index <index-dir> --file "<selected-file-path>" --start <start-line> --end <end-line> --max-lines <cap> --json
+
+Do not retrieve from line 1 to the end unless the whole small file is directly relevant.
+
+Data-model inspection
+
+Use this only when the task involves data entities, fields, data-model extraction, or model-to-view lineage.
+
+Generate or refresh semantic artifacts if the current index command does not already generate them:
+
+node dist/cli.js data-model --index <index-dir> --out <index-dir> --json
+
+Inspect a data-model entity:
+
+node dist/cli.js data-model --index <index-dir> --entity "<entity-name>" --json
+
+Inspect a field:
+
+node dist/cli.js data-model --index <index-dir> --field "<entity.field>" --json
+
+Trace an entity to view usage, when implemented:
+
+node dist/cli.js data-model --index <index-dir> --trace-view "<entity-name>" --json
+
+Trace a field to view usage, when implemented:
+
+node dist/cli.js data-model --index <index-dir> --field "<entity.field>" --trace-view --json
+
+Do not use data-model inspection as a replacement for search, lookup, slice, or source. Use it when the task specifically involves model semantics or lineage.
+
+Optional graph view
+
+View the code graph (default):
+
+node dist/cli.js view --index <index-dir> --format dot --out <index-dir>/graph.dot --edge-style semantic --json
+
+node dist/cli.js view --index <index-dir> --format svg --out <index-dir>/graph.svg --edge-style semantic --allow-dot-fallback --json
+
+View the data-model graph:
+
+node dist/cli.js view --index <index-dir> --graph data-model --format dot --out <index-dir>/data-model-graph.dot --json
+
+node dist/cli.js view --index <index-dir> --graph data-model --format svg --out <index-dir>/data-model-graph.svg --allow-dot-fallback --json
+
+View the model-view-lineage graph (requires model-view-lineage.json in index):
+
+node dist/cli.js view --index <index-dir> --graph model-view-lineage --format dot --out <index-dir>/lineage-graph.dot --json
+
+node dist/cli.js view --index <index-dir> --graph model-view-lineage --format svg --out <index-dir>/lineage-graph.svg --allow-dot-fallback --json
+
+View command flags:
+- --index <dir>: index artifact directory
+- --graph <code|data-model|model-view-lineage>: graph artifact to render (default: code)
+- --format <dot|svg|png>: output format
+- --out <path>: output file
+- --edge-style <semantic|labeled|minimal>: edge visualization style
+- --allow-dot-fallback: write DOT if SVG/PNG rendering cannot run
+- --json: print machine-readable result
+
+Reporting requirements
+
+In the final summary, include:
+
+Index artifacts used:
+- <index-dir>
+- whether the index was refreshed or reused
+- whether manifest.json referenced semantic artifacts
+
+Search queries run:
+- <query>
+- why it was used
+
+Candidate nodes selected:
+- <node-id>
+- why it was selected
+
+Source symbols retrieved:
+- <symbol node id>
+- reason it was retrieved
+
+Line-range fallback retrieval used:
+- <file path>
+- <line range>
+- reason symbol-level retrieval was insufficient
+
+Full files read beyond retrieved source:
+- <file path>
+- reason it was necessary
+- what missing context it provided
+
+Semantic artifacts inspected:
+- <artifact or data-model command>
+- reason it was relevant
+
+If no line-range fallback or full-file read was used, explicitly say none.
+
+If no semantic artifacts were inspected, explicitly say none.
+
+Architecture guardrail
+
+Before creating new files, identify the existing extension point.
+
+Ask:
+
+- What subsystem already owns this behavior?
+- Is there a registry, adapter, command handler, renderer, builder, analyzer, or shared type to extend?
+- Would a new file create a second parallel architecture?
+- Can this be implemented by extending the existing abstraction instead?
+- Does this belong in structural artifacts, compact semantic metadata, or detailed semantic artifacts?
+
+Do not create a new module for a feature until you prove there is no existing extension point.
