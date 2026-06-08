@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
+import type { GraphArtifactSelection } from '../graph/adaptGraphArtifact.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import { readIndexManifest, type ResolvedIndexManifest } from './readIndexManifest.js'
 
@@ -12,6 +13,13 @@ export interface SourceArtifacts {
   resolved: ResolvedIndexManifest
   codeGraph?: CodeGraph
   symbolIndex?: SymbolIndex
+}
+
+export interface ViewGraphArtifact {
+  resolved: ResolvedIndexManifest
+  graph: GraphArtifactSelection
+  artifactPath: string
+  artifact: unknown
 }
 
 export function loadLookupArtifacts(indexDir: string): LookupArtifacts {
@@ -39,6 +47,17 @@ export function loadSourceArtifacts(options: {
   }
 }
 
+export function loadViewGraphArtifact(indexDir: string, graph: GraphArtifactSelection): ViewGraphArtifact {
+  const resolved = readIndexManifest(indexDir)
+  const artifactPath = resolveViewGraphArtifactPath(resolved, graph)
+  return {
+    resolved,
+    graph,
+    artifactPath,
+    artifact: readRequiredJson<unknown>(artifactPath, viewGraphLabel(graph)),
+  }
+}
+
 export function readRequiredJson<T>(filePath: string, label: string): T {
   if (!fs.existsSync(filePath)) throw new Error(`Missing required ${label} artifact: ${filePath}`)
   try {
@@ -47,4 +66,28 @@ export function readRequiredJson<T>(filePath: string, label: string): T {
     if (error instanceof SyntaxError) throw new Error(`Invalid JSON in ${filePath}: ${error.message}`)
     throw new Error(`Failed to read ${filePath}: ${(error as Error).message}`)
   }
+}
+
+function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: GraphArtifactSelection): string {
+  if (graph === 'code') return resolved.artifactPaths.codeGraph
+  if (graph === 'data-model') {
+    if (!resolved.semanticArtifactPaths.dataModelGraph) {
+      throw new Error(
+        'Missing dataModelGraph artifact in manifest. Run `data-model --index <dir> --out <dir>` or refresh the index before rendering --graph data-model.'
+      )
+    }
+    return resolved.semanticArtifactPaths.dataModelGraph
+  }
+  if (!resolved.semanticArtifactPaths.modelViewLineage) {
+    throw new Error(
+      'Missing modelViewLineage artifact in manifest. Run `data-model --index <dir> --trace-view <entity>` before rendering --graph model-view-lineage.'
+    )
+  }
+  return resolved.semanticArtifactPaths.modelViewLineage
+}
+
+function viewGraphLabel(graph: GraphArtifactSelection): string {
+  if (graph === 'code') return 'code graph'
+  if (graph === 'data-model') return 'data-model graph'
+  return 'model-view-lineage graph'
 }

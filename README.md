@@ -34,6 +34,7 @@ my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
 my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
 my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
 my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
 ```
 
 Re-run `index` to refresh artifacts when source changes:
@@ -67,7 +68,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 | `lookup` | Look up a graph node by exact node ID, including semantic metadata |
 | `source` | Retrieve bounded source by line range, symbol, or node ID |
 | `slice` | Build a bounded subgraph around a focus node, preserving semantic metadata |
-| `view` | Render the code graph as DOT, SVG, or PNG |
+| `view` | Render the code graph, data-model graph, or model-view-lineage graph as DOT, SVG, or PNG |
 | `data-model` | Inspect exact entities or fields, or regenerate data-model artifacts and trace supported static view usage |
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
@@ -88,6 +89,8 @@ The `index` command writes:
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
 Compact semantic roles on symbol-index symbols and code-graph nodes link back to the detailed artifacts through `artifactRefs`. The `data-model.json` and `data-model-graph.json` artifacts remain separate from `code-graph.json`.
+
+`view` renders `code-graph.json` by default. Use `--graph data-model` to render `data-model-graph.json`, or `--graph model-view-lineage` after `data-model --trace-view` has produced lineage. The graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
 
 ## Semantic integration
 
@@ -158,6 +161,8 @@ my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity 
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
 my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --trace-view --json
+my-dev-kit view --index examples/basic-data-model-ts/.my-dev-kit --graph data-model --format dot --out examples/basic-data-model-ts/.my-dev-kit/data-model.dot
+my-dev-kit view --index examples/basic-data-model-ts/.my-dev-kit --graph model-view-lineage --format dot --out examples/basic-data-model-ts/.my-dev-kit/lineage.dot
 ```
 
 See [examples/README.md](examples/README.md) for more detail.

@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import {
   buildDataModelFromIndex,
@@ -11,10 +12,14 @@ import {
 import { toForwardSlash } from '../io/pathUtils.js'
 import {
   buildModelViewLineage,
+  MODEL_VIEW_LINEAGE_ARTIFACT_FILENAME,
+  MODEL_VIEW_LINEAGE_ARTIFACT_KIND,
+  MODEL_VIEW_LINEAGE_SCHEMA_VERSION,
   writeModelViewLineage,
   type ModelViewLineageArtifact,
   type ModelViewLineageWarning,
 } from '../lineage/index.js'
+import type { IndexManifest } from '../indexing/manifestTypes.js'
 
 interface DataModelCommandOptions {
   index?: string
@@ -216,6 +221,7 @@ function runTraceMode(options: DataModelCommandOptions):
     outputDir: outDir,
     lineage: lineageResult.artifact,
   })
+  updateManifestWithLineageArtifact(outDir, lineageResult.artifact)
 
   if (options.field) {
     const fieldLookup = lookupDataModelField(buildResult.dataModel, options.field)
@@ -262,6 +268,45 @@ function runTraceMode(options: DataModelCommandOptions):
     lineage: filtered,
     warnings: filtered.warnings,
   }
+}
+
+function updateManifestWithLineageArtifact(outDir: string, lineage: ModelViewLineageArtifact): void {
+  const manifestPath = path.join(outDir, 'manifest.json')
+  if (!fs.existsSync(manifestPath)) return
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as IndexManifest
+  manifest.semanticArtifacts = {
+    dataModel: manifest.semanticArtifacts?.dataModel ?? 'data-model.json',
+    dataModelGraph: manifest.semanticArtifacts?.dataModelGraph ?? 'data-model-graph.json',
+    modelViewLineage: MODEL_VIEW_LINEAGE_ARTIFACT_FILENAME,
+  }
+  const warningCount = lineage.summary.warningCount
+  const analyzer = {
+    id: 'model-view-lineage' as const,
+    status: warningCount > 0 ? 'partial' as const : 'complete' as const,
+    version: MODEL_VIEW_LINEAGE_SCHEMA_VERSION,
+    schemaVersion: lineage.schemaVersion,
+    artifacts: [
+      {
+        name: 'modelViewLineage',
+        path: MODEL_VIEW_LINEAGE_ARTIFACT_FILENAME,
+        artifactKind: MODEL_VIEW_LINEAGE_ARTIFACT_KIND,
+      },
+    ],
+    warningCount,
+    errorCount: 0,
+    summary: {
+      nodeCount: lineage.summary.nodeCount,
+      edgeCount: lineage.summary.edgeCount,
+      evidenceCount: lineage.summary.evidenceCount,
+      warningCount: lineage.summary.warningCount,
+    },
+  }
+  const analyzers = manifest.analyzers ?? []
+  const nextAnalyzers = analyzers.filter((entry) => entry.id !== 'model-view-lineage')
+  nextAnalyzers.push(analyzer)
+  manifest.analyzers = nextAnalyzers
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }
 
 function printGenerationSummary(result: ReturnType<typeof runGenerationMode>): void {

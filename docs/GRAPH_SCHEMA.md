@@ -47,6 +47,15 @@ index
 
 data-model --trace-view
   -> model-view-lineage.json
+
+view --graph code
+  -> renders code-graph.json
+
+view --graph data-model
+  -> renders data-model-graph.json
+
+view --graph model-view-lineage
+  -> renders model-view-lineage.json
 ```
 
 `manifest.json` is the authoritative registry for the current artifact set. Artifacts from previous runs that are no longer produced are removed when `index` refreshes the directory.
@@ -63,7 +72,7 @@ The lineage layer (`model-view-lineage.json`) carries conservative static relati
 
 The bridge between layers is artifact references (`artifactRefs`) and evidence references (`evidenceRefs`). Compact metadata on structural artifacts links to detailed records in semantic artifacts.
 
-`data-model-graph.json` is a derived semantic graph, not a slice of `code-graph.json`. The code graph describes static source structure. The data-model graph describes data entities and fields. The model-view-lineage artifact describes static usage and flow paths.
+`data-model-graph.json` is a derived semantic graph, not a slice of `code-graph.json`. The code graph describes static source structure. The data-model graph describes data entities and fields. The model-view-lineage artifact describes static usage and flow paths. The `view` command can render each graph artifact independently with `--graph code`, `--graph data-model`, or `--graph model-view-lineage`.
 
 ## Versioned artifact kinds
 
@@ -727,4 +736,5 @@ ID stability depends on path and symbol name stability. Renaming a file or symbo
 - Data-model extraction is conservative and currently focused on supported TypeScript patterns.
 - Unsupported or ambiguous data-model and lineage patterns produce warnings or are omitted conservatively.
 - Search remains keyword-based. No fuzzy or embedding-based search is available.
-- Graph visualization for `data-model-graph.json` and `model-view-lineage.json` is not yet available in the `view` command.
+- `view --graph data-model` renders `data-model-graph.json` when it is referenced by `manifest.json`.
+- `view --graph model-view-lineage` renders `model-view-lineage.json` when trace-view has produced and registered it in `manifest.json`.

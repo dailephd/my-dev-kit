@@ -41,6 +41,7 @@ my-dev-kit lookup --index .my-dev-kit --node "file:src/index.ts" --json
 my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
 my-dev-kit slice --index .my-dev-kit --node "file:src/index.ts" --depth 1 --json
 my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
 my-dev-kit data-model --index .my-dev-kit --entity User --json
 ```
 
@@ -351,22 +352,37 @@ Nodes in the slice include their `semanticRoles` and `artifactRefs` from `code-g
 
 ## view
 
-Render `code-graph.json` as DOT, SVG, or PNG.
+Render graph artifacts as DOT, SVG, or PNG. By default, `view` renders `code-graph.json`.
 
 ### Usage
 
 ```sh
-my-dev-kit view --index <artifact-dir> --format <dot|svg|png> --out <path>
+my-dev-kit view --index <artifact-dir> --graph <code|data-model|model-view-lineage> --format <dot|svg|png> --out <path>
 ```
 
 ### Flags
 
 - `--index <dir>`: index artifact directory.
+- `--graph <code|data-model|model-view-lineage>`: graph artifact to render. Defaults to `code`.
 - `--format <dot|svg|png>`: output format.
 - `--out <path>`: output path.
 - `--edge-style <semantic|labeled|minimal>`: edge visualization style.
 - `--allow-dot-fallback`: for SVG or PNG requests, write DOT instead of failing when Graphviz is unavailable.
 - `--json`: print JSON result to stdout.
+
+### Graph selection
+
+Supported graph values:
+
+- `code`: renders the manifest-referenced `code-graph.json`.
+- `data-model`: renders the manifest-referenced `data-model-graph.json`.
+- `model-view-lineage`: renders the manifest-referenced `model-view-lineage.json`.
+
+`--graph` is optional. The default is `code`, so existing commands continue to render `code-graph.json`.
+
+The data-model and lineage graph modes require `manifest.json` to reference the corresponding artifact. `view` does not scan the directory for stale files. If `data-model-graph.json` or `model-view-lineage.json` exists but is not registered in `manifest.json`, `view` fails clearly instead of guessing.
+
+`data-model-graph.json` is normally registered by `index` or by `data-model --index <dir> --out <dir>`. `model-view-lineage.json` is registered when `data-model --trace-view` writes lineage into the index artifact directory.
 
 ### Graphviz behavior
 
@@ -375,9 +391,29 @@ my-dev-kit view --index <artifact-dir> --format <dot|svg|png> --out <path>
 - PNG output requires the Graphviz `dot` executable.
 - If Graphviz is unavailable and `--allow-dot-fallback` is used, DOT is written instead of the requested SVG or PNG.
 
-### Scope
+### Examples
 
-`view` renders `code-graph.json` only. It does not render `data-model-graph.json` or `model-view-lineage.json`. Graph visualization for the data-model and lineage artifacts is planned for a future release.
+Render the default code graph:
+
+```sh
+my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/code.dot --json
+my-dev-kit view --index .my-dev-kit --graph code --format dot --out .my-dev-kit/code.dot --json
+```
+
+Render the data-model graph:
+
+```sh
+my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot --json
+my-dev-kit view --index .my-dev-kit --graph data-model --format svg --out .my-dev-kit/data-model.svg --allow-dot-fallback --json
+```
+
+Render model-to-view lineage:
+
+```sh
+my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format dot --out .my-dev-kit/lineage.dot --json
+my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format svg --out .my-dev-kit/lineage.svg --allow-dot-fallback --json
+```
 
 ## data-model
 

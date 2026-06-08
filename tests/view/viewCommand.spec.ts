@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, readFileSync, renameSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -6,15 +6,34 @@ import { isGraphvizAvailable } from '../../src/graph/renderGraphviz.js'
 import { runCli } from '../lookup/testCli.js'
 
 let outDir = ''
+let semanticOutDir = ''
 
 beforeAll(() => {
   outDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-view-'))
   const result = runCli(['index', '--root', 'examples/basic-ts', '--src', 'src', '--out', outDir])
   expect(result.status).toBe(0)
+
+  semanticOutDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-view-semantic-'))
+  const semanticIndex = runCli([
+    'index',
+    '--root',
+    'examples/basic-data-model-ts',
+    '--src',
+    'src',
+    '--out',
+    semanticOutDir,
+    '--json',
+  ])
+  expect(semanticIndex.status).toBe(0)
+  const generate = runCli(['data-model', '--index', semanticOutDir, '--out', semanticOutDir, '--json'])
+  expect(generate.status).toBe(0)
+  const trace = runCli(['data-model', '--index', semanticOutDir, '--out', semanticOutDir, '--trace-view', 'User', '--json'])
+  expect(trace.status).toBe(0)
 })
 
 afterAll(() => {
   rmSync(outDir, { recursive: true, force: true })
+  rmSync(semanticOutDir, { recursive: true, force: true })
 })
 
 describe('view command', () => {
@@ -51,6 +70,75 @@ describe('view command', () => {
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout).outputPath).toContain('custom.dot')
     expect(readFileSync(dotOut, 'utf8')).toContain('digraph CodeGraph')
+  })
+
+  it('--graph code renders code graph explicitly', () => {
+    const dotOut = join(outDir, 'code-explicit.dot')
+    const result = runCli(['view', '--index', outDir, '--graph', 'code', '--format', 'dot', '--out', dotOut, '--json'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.graph).toBe('code')
+    expect(parsed.artifactPath).toContain('code-graph.json')
+    expect(parsed.nodeCount).toBeGreaterThan(0)
+    expect(readFileSync(dotOut, 'utf8')).toContain('digraph CodeGraph')
+  })
+
+  it('--graph data-model renders data-model-graph.json as DOT', () => {
+    const dotOut = join(semanticOutDir, 'data-model.dot')
+    const result = runCli([
+      'view',
+      '--index',
+      semanticOutDir,
+      '--graph',
+      'data-model',
+      '--format',
+      'dot',
+      '--out',
+      dotOut,
+      '--edge-style',
+      'labeled',
+      '--json',
+    ])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.graph).toBe('data-model')
+    expect(parsed.artifactPath).toContain('data-model-graph.json')
+    expect(parsed.nodeCount).toBeGreaterThan(0)
+    expect(parsed.edgeCount).toBeGreaterThan(0)
+    const dotContent = readFileSync(dotOut, 'utf8')
+    expect(dotContent).toContain('digraph DataModelGraph')
+    expect(dotContent).toContain('User')
+    expect(dotContent).toContain('User.email')
+    expect(dotContent).toContain('has-field')
+  })
+
+  it('--graph model-view-lineage renders model-view-lineage.json as DOT', () => {
+    const dotOut = join(semanticOutDir, 'lineage.dot')
+    const result = runCli([
+      'view',
+      '--index',
+      semanticOutDir,
+      '--graph',
+      'model-view-lineage',
+      '--format',
+      'dot',
+      '--out',
+      dotOut,
+      '--edge-style',
+      'labeled',
+      '--json',
+    ])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.graph).toBe('model-view-lineage')
+    expect(parsed.artifactPath).toContain('model-view-lineage.json')
+    expect(parsed.nodeCount).toBeGreaterThan(0)
+    expect(parsed.edgeCount).toBeGreaterThan(0)
+    const dotContent = readFileSync(dotOut, 'utf8')
+    expect(dotContent).toContain('digraph ModelViewLineage')
+    expect(dotContent).toContain('User.email')
+    expect(dotContent).toContain('buildUserViewModel')
+    expect(dotContent).toContain('creates-view-model')
   })
 
   it('--edge-style semantic works and sets edgeStyle in JSON', () => {
@@ -91,6 +179,12 @@ describe('view command', () => {
     expect(result.stderr).toContain('edge-style')
   })
 
+  it('invalid --graph fails clearly', () => {
+    const result = runCli(['view', '--index', outDir, '--graph', 'data-model-view'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('--graph')
+  })
+
   it('fails clearly for missing manifest', () => {
     const missing = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-view-missing-'))
     try {
@@ -112,6 +206,48 @@ describe('view command', () => {
       expect(result.stderr).toContain('Missing required code graph artifact')
     } finally {
       renameSync(hidden, codeGraph)
+    }
+  })
+
+  it('fails clearly when manifest does not reference data-model-graph.json even if a stale file exists', () => {
+    const staleDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-view-stale-data-model-'))
+    try {
+      const manifest = JSON.parse(readFileSync(join(semanticOutDir, 'manifest.json'), 'utf8'))
+      manifest.semanticArtifacts = {
+        ...manifest.semanticArtifacts,
+        dataModelGraph: null,
+      }
+      writeFileSync(join(staleDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8')
+      writeFileSync(join(staleDir, 'code-graph.json'), readFileSync(join(semanticOutDir, 'code-graph.json')), 'utf8')
+      writeFileSync(join(staleDir, 'symbol-index.json'), readFileSync(join(semanticOutDir, 'symbol-index.json')), 'utf8')
+      writeFileSync(join(staleDir, 'data-model-graph.json'), '{"artifactKind":"my-dev-kit-v1-data-model-graph","nodes":[],"edges":[]}', 'utf8')
+
+      const result = runCli(['view', '--index', staleDir, '--graph', 'data-model', '--format', 'dot'])
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('Missing dataModelGraph artifact in manifest')
+    } finally {
+      rmSync(staleDir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails clearly when manifest does not reference model-view-lineage.json even if a stale file exists', () => {
+    const staleDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-view-stale-lineage-'))
+    try {
+      const manifest = JSON.parse(readFileSync(join(semanticOutDir, 'manifest.json'), 'utf8'))
+      manifest.semanticArtifacts = {
+        ...manifest.semanticArtifacts,
+        modelViewLineage: null,
+      }
+      writeFileSync(join(staleDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8')
+      writeFileSync(join(staleDir, 'code-graph.json'), readFileSync(join(semanticOutDir, 'code-graph.json')), 'utf8')
+      writeFileSync(join(staleDir, 'symbol-index.json'), readFileSync(join(semanticOutDir, 'symbol-index.json')), 'utf8')
+      writeFileSync(join(staleDir, 'model-view-lineage.json'), '{"artifactKind":"my-dev-kit-v1-model-view-lineage","nodes":[],"edges":[]}', 'utf8')
+
+      const result = runCli(['view', '--index', staleDir, '--graph', 'model-view-lineage', '--format', 'dot'])
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('Missing modelViewLineage artifact in manifest')
+    } finally {
+      rmSync(staleDir, { recursive: true, force: true })
     }
   })
 
@@ -145,5 +281,49 @@ describe('view command', () => {
     expect(fallback.status).toBe(0)
     expect(JSON.parse(fallback.stdout).dotFallbackUsed).toBe(true)
     expect(readFileSync(fallbackOut, 'utf8')).toContain('digraph CodeGraph')
+  })
+
+  it('handles data-model SVG rendering or DOT fallback', () => {
+    const graphOut = join(semanticOutDir, 'data-model.svg')
+    const result = runCli([
+      'view',
+      '--index',
+      semanticOutDir,
+      '--graph',
+      'data-model',
+      '--format',
+      'svg',
+      '--out',
+      graphOut,
+      '--allow-dot-fallback',
+      '--json',
+    ])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.graph).toBe('data-model')
+    expect(parsed.actualFormat === 'svg' || parsed.dotFallbackUsed).toBe(true)
+    expect(existsSync(parsed.outputPath)).toBe(true)
+  })
+
+  it('handles lineage SVG rendering or DOT fallback', () => {
+    const graphOut = join(semanticOutDir, 'lineage.svg')
+    const result = runCli([
+      'view',
+      '--index',
+      semanticOutDir,
+      '--graph',
+      'model-view-lineage',
+      '--format',
+      'svg',
+      '--out',
+      graphOut,
+      '--allow-dot-fallback',
+      '--json',
+    ])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.graph).toBe('model-view-lineage')
+    expect(parsed.actualFormat === 'svg' || parsed.dotFallbackUsed).toBe(true)
+    expect(existsSync(parsed.outputPath)).toBe(true)
   })
 })

@@ -16,6 +16,7 @@ Added index-first semantic integration, manifest as authoritative artifact regis
 - Added semantic metadata propagation in `source` output: `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol target included in JSON output
 - Added the `data-model` command for focused inspection and regeneration of data-model artifacts, exact entity lookup, exact field lookup, and conservative static `trace-view`
 - Added `model-view-lineage.json` for conservative static lineage evidence in `trace-view` mode
+- Added `view --graph <code|data-model|model-view-lineage>` for rendering code, data-model, and model-to-view lineage graph artifacts through the existing DOT/SVG/PNG Graphviz pipeline
 - Added conservative TypeScript model extraction for exported interfaces, exported object-literal type aliases, and exported classes with property declarations
 - Added exact entity lookup by name or stable ID and exact field lookup by `Entity.field`
 - Added warnings for unsupported or ambiguous extraction and lineage patterns instead of guessed relationships

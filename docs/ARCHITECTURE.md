@@ -25,7 +25,7 @@ CLI entry: src/cli.ts
   +-- lookup command      -> Exact node lookup, returns semantic metadata when present
   +-- source command      -> Bounded source retrieval, propagates semantic metadata
   +-- slice command       -> Graph slicing, preserves semantic metadata on nodes
-  +-- view command        -> Graph view layer (code-graph.json only)
+  +-- view command        -> Graph view layer (code/data-model/lineage graph artifacts)
   |
   +-- data-model command  -> Data-model inspection and regeneration layer
                            -> data-model.json
@@ -228,7 +228,16 @@ Responsibilities:
 - `lookup`: exact node lookup with bounded neighbor expansion and semantic metadata in the result
 - `source`: bounded read-only source retrieval with path containment, semantic metadata propagated when present
 - `slice`: bounded graph-neighborhood extraction, semantic metadata preserved on nodes
-- `view`: DOT, SVG, or PNG rendering of `code-graph.json`
+- `view`: DOT, SVG, or PNG rendering of `code-graph.json`, `data-model-graph.json`, or `model-view-lineage.json`
+
+The view layer uses a small renderable graph adapter layer:
+
+- code graph artifact -> renderable graph model
+- data-model graph artifact -> renderable graph model
+- model-view-lineage artifact -> renderable graph model
+- shared DOT/SVG/PNG renderer consumes the renderable graph model
+
+`data-model-graph.json` is not merged into `code-graph.json`. `model-view-lineage.json` is not merged into `code-graph.json`. Each graph artifact keeps its own node and edge ID space, and `view --graph` selects which manifest-referenced artifact to render.
 
 Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` as weighted fields. Results include `semanticRoles` and `artifactRefs` on matched items when present.
 

@@ -1,16 +1,26 @@
 import type { Command } from 'commander'
 import * as path from 'node:path'
-import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
-import { buildDotGraph } from '../graph/buildDotGraph.js'
+import {
+  adaptCodeGraph,
+  adaptDataModelGraph,
+  adaptModelViewLineageGraph,
+  type GraphArtifactSelection,
+} from '../graph/adaptGraphArtifact.js'
+import type { CodeGraph } from '../graph/codeGraphTypes.js'
+import { buildRenderableDotGraph } from '../graph/buildRenderableDotGraph.js'
+import type { DataModelGraphArtifact } from '../data-model/dataModelGraphTypes.js'
+import type { ModelViewLineageArtifact } from '../lineage/types.js'
 import { isGraphvizAvailable, renderGraphviz } from '../graph/renderGraphviz.js'
 import { writeGraphView } from '../graph/writeGraphView.js'
 import type { GraphEdgeStyleMode, GraphViewFormat, GraphViewResult } from '../graph/dotTypes.js'
+import { loadViewGraphArtifact } from '../indexing/loadIndexArtifacts.js'
 
 export function registerViewCommand(program: Command): void {
   program
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
+    .option('--graph <code|data-model|model-view-lineage>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -19,8 +29,10 @@ export function registerViewCommand(program: Command): void {
     .action((options: ViewCommandOptions) => {
       const requestedFormat = parseFormat(options.format)
       const edgeStyle = parseEdgeStyle(options.edgeStyle)
-      const artifacts = loadLookupArtifacts(options.index)
-      const dotText = buildDotGraph(artifacts.codeGraph, { edgeStyle })
+      const graphSelection = parseGraph(options.graph)
+      const graphArtifact = loadViewGraphArtifact(options.index, graphSelection)
+      const renderableGraph = adaptSelectedGraph(graphSelection, graphArtifact.artifact)
+      const dotText = buildRenderableDotGraph(renderableGraph, { edgeStyle })
       const warnings: string[] = []
       let actualFormat: GraphViewFormat = requestedFormat
       let graphvizUsed = false
@@ -48,13 +60,17 @@ export function registerViewCommand(program: Command): void {
       const result: GraphViewResult = {
         status: 'ok',
         indexDir: options.index,
+        graph: graphSelection,
         requestedFormat,
+        format: actualFormat,
         actualFormat,
         outputPath: writtenPath,
-        nodeCount: artifacts.codeGraph.nodes.length,
-        edgeCount: artifacts.codeGraph.edges.length,
+        artifactPath: graphArtifact.artifactPath,
+        nodeCount: renderableGraph.nodes.length,
+        edgeCount: renderableGraph.edges.length,
         graphvizUsed,
         dotFallbackUsed,
+        fallbackStatus: dotFallbackUsed ? 'dot-fallback' : 'none',
         edgeStyle,
         warnings,
       }
@@ -69,11 +85,25 @@ export function registerViewCommand(program: Command): void {
 
 interface ViewCommandOptions {
   index: string
+  graph: string
   format: string
   out?: string
   edgeStyle: string
   allowDotFallback?: boolean
   json?: boolean
+}
+
+function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
+  if (graph === 'code') return adaptCodeGraph(artifact as CodeGraph)
+  if (graph === 'data-model') return adaptDataModelGraph(artifact as DataModelGraphArtifact)
+  return adaptModelViewLineageGraph(artifact as ModelViewLineageArtifact)
+}
+
+function parseGraph(value: string): GraphArtifactSelection {
+  if (value === 'code' || value === 'data-model' || value === 'model-view-lineage') return value
+  throw new Error(
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage.`
+  )
 }
 
 function parseFormat(format: string): GraphViewFormat {

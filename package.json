@@ -1,6 +1,6 @@
 {
   "name": "@dailephd/my-dev-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Local codebase graph, indexing, slicing, source retrieval, search, and Graphviz visualization CLI.",
   "type": "module",
   "bin": {
