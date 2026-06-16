@@ -214,14 +214,23 @@ my-dev-kit source --index examples/basic-python/.my-dev-kit --file src/main.py -
 Inside your own project:
 
 ```sh
+# macOS / Linux
 rm -rf .my-dev-kit
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force .my-dev-kit
 ```
 
 For bundled examples in a cloned repository:
 
 ```sh
+# macOS / Linux
 rm -rf examples/basic-ts/.my-dev-kit
 rm -rf examples/basic-python/.my-dev-kit
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force examples/basic-ts/.my-dev-kit
+Remove-Item -Recurse -Force examples/basic-python/.my-dev-kit
 ```
 
 ## Next steps

@@ -166,8 +166,13 @@ Expected Python artifacts:
 
 Remove local release-test artifacts after inspection.
 
+    # macOS / Linux
     rm -rf examples/basic-ts/.my-dev-kit-release
     rm -rf examples/basic-python/.my-dev-kit-release
+
+    # Windows (PowerShell)
+    Remove-Item -Recurse -Force examples/basic-ts/.my-dev-kit-release
+    Remove-Item -Recurse -Force examples/basic-python/.my-dev-kit-release
 
 Uninstall the global tarball test package.
 

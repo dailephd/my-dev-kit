@@ -4,26 +4,28 @@ on:
   push:
     branches:
       - main
+      - 'release/**'
   pull_request:
 
 jobs:
   validate:
-    name: Validate (${{ matrix.os }})
+    name: Validate (${{ matrix.os }}, Node ${{ matrix.node-version }})
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
       fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20.x, 22.x]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ matrix.node-version }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -31,16 +33,16 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Run tests
+      - name: Test
         run: npm run test
 
       - name: Build
         run: npm run build
 
-      - name: Verify (typecheck + test + build)
+      - name: Verify
         run: npm run verify
 
-      - name: Package contents check
+      - name: Package dry run
         run: npm pack --dry-run
 
       - name: CLI help
@@ -49,14 +51,19 @@ jobs:
       - name: CLI version
         run: node dist/cli.js --version
 
-      - name: Index TypeScript example
+      - name: Smoke - index TypeScript example
         run: node dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-ci --call-graph --json
 
-      - name: Search smoke check
+      - name: Smoke - search TypeScript example
         run: node dist/cli.js search --index examples/basic-ts/.my-dev-kit-ci --query user --limit 5 --json
 
-      - name: View DOT smoke check
+      - name: Smoke - view TypeScript example (DOT)
         run: node dist/cli.js view --index examples/basic-ts/.my-dev-kit-ci --format dot --out examples/basic-ts/.my-dev-kit-ci/graph.dot --edge-style semantic --json
 
-      - name: Index Python example
+      - name: Smoke - index Python example
         run: node dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-ci --json
+
+      - name: Clean up CI smoke artifacts
+        run: |
+          node -e "require('fs').rmSync('examples/basic-ts/.my-dev-kit-ci', { recursive: true, force: true })"
+          node -e "require('fs').rmSync('examples/basic-python/.my-dev-kit-ci', { recursive: true, force: true })"
