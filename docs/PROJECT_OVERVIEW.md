@@ -185,6 +185,17 @@ my-dev-kit does not provide:
 - Lookup requires exact node IDs, exact entity names or IDs, and exact `Entity.field` selectors.
 - Graph visualization for `data-model-graph.json` and `model-view-lineage.json` is not yet available.
 
+## Support the project
+
+my-dev-kit is independently developed and maintained by dailephd / dailephd LLC.
+
+If the project helps your work, you can optionally support continued development through:
+
+- GitHub Sponsors: https://github.com/sponsors/dailephd
+- PayPal: https://paypal.me/daile88
+
+Support is appreciated, but not required. The project remains usable under its published license.
+
 ## Documentation map
 
 - `README.md` - install, quickstart, and release-level feature summary

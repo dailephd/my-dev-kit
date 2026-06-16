@@ -33,6 +33,23 @@ CLI entry: src/cli.ts
                            -> model-view-lineage.json (trace-view mode)
 ```
 
+```mermaid
+flowchart TD
+  A[index] --> B[Source discovery]
+  B --> C[Symbol extraction]
+  C --> D[Code graph]
+  C --> E[Optional call graph]
+  D --> F[Semantic analyzers]
+  F --> G[Enrich symbol-index.json]
+  F --> H[Enrich code-graph.json]
+  F --> I[data-model.json]
+  F --> J[data-model-graph.json]
+  G --> K[manifest.json]
+  H --> K
+  I --> K
+  J --> K
+```
+
 The `index` command is the primary entry point. It builds the structural index, runs semantic analyzers, enriches the index artifacts with compact semantic metadata, writes all produced artifacts, and updates `manifest.json` as the authoritative registry.
 
 Downstream data-model and lineage layers consume existing index artifacts instead of replacing the indexer. The `data-model` command is a focused inspection and regeneration command for those artifacts.

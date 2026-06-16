@@ -172,34 +172,20 @@ If Graphviz is not installed, use DOT output directly or fall back automatically
 my-dev-kit view --index .my-dev-kit --format svg --allow-dot-fallback --out .my-dev-kit/graph.dot
 ```
 
-## Use the output with ChatGPT or a coding agent
+## Use the output with an LLM or downstream tool
 
-my-dev-kit does not call ChatGPT or any coding agent. It prepares bounded local context that you can paste into an LLM conversation or provide to a downstream tool.
+my-dev-kit does not call any LLM or external service. It prepares bounded local context that you can provide to an LLM conversation, a coding assistant, or any downstream tool.
 
-Paste only the selected outputs that support the task:
+Provide only the selected outputs that are relevant to the task:
 
-- Selected `search` result or a concise summary of the best matches
+- Selected `search` results or a concise summary of the strongest matches
 - Selected `lookup` result
 - Selected `slice` result or a concise graph summary
 - Numbered `source` excerpts with file paths and symbol names
 
-Do not paste full `symbol-index.json` or `code-graph.json` unless specifically needed. They are index artifacts, not the normal context format for LLM-assisted work.
+The full `symbol-index.json` and `code-graph.json` artifacts are index files intended for inspection and downstream tooling, not for direct inclusion in LLM context.
 
-Short prompt:
-
-```text
-I am using my-dev-kit to provide bounded codebase context.
-
-Task:
-<describe the task>
-
-Selected search, lookup, slice, and source outputs:
-<paste targeted my-dev-kit output>
-
-Use only this context unless you say which additional my-dev-kit command I should run.
-```
-
-For the fuller reusable template, see [Workflow 5 in WORKFLOWS.md](WORKFLOWS.md#workflow-5-use-my-dev-kit-with-chatgpt-or-a-coding-agent).
+For a complete workflow example including a reusable context template, see [Workflow 5 in WORKFLOWS.md](WORKFLOWS.md#workflow-5-use-my-dev-kit-output-with-an-llm-or-downstream-tool).
 
 ## Bundled examples for cloned repositories
 

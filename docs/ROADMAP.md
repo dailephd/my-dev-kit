@@ -4,7 +4,7 @@
 
 `my-dev-kit` is a CLI-first development context kit for indexing codebases, building graph artifacts, searching project structure, slicing relevant neighborhoods, and retrieving bounded source context for LLM-assisted development.
 
-The product goal is simple: help developers and coding agents understand large projects without dumping whole files, broad folders, or unfiltered documentation into a prompt.
+The product goal is simple: help developers understand large projects without reading whole files, broad folders, or unfiltered documentation — and to support downstream tools and LLM-assisted workflows with deterministic, bounded local artifacts.
 
 The current release focuses on deterministic local artifacts:
 
@@ -475,9 +475,9 @@ Candidate command shape:
 
 ## Version 1.5.0
 
-Version 1.5.0 focuses on schema and layer classification.
+Version 1.5.0 focuses on schema and layer classification and prepares the context-report foundation that the future orchestration layer will use.
 
-The goal is to help developers and coding agents avoid editing the wrong layer.
+The goal is to help developers avoid editing the wrong layer by classifying symbols, types, and files by their role in the project. The classifications, edit/avoid/readiness categories, and risk labels produced here form the schema that the v1.6 orchestrator will use to assemble task-specific context capsules.
 
 ### Symbol and type classification
 
@@ -525,11 +525,21 @@ Planned categories:
 - `requires-test-validation`
 - `requires-browser-validation`
 
-## Version 1.6.0
+## Version 1.6.0: Orchestrator / Graph-Guided Planner Packets
 
-Version 1.6.0 focuses on graph-guided planner packets and retrieval quality.
+Version 1.6.0 introduces the orchestration layer that turns search, lookup, slice, source, semantic artifacts, and source bundles into compact task-specific context capsules and retrieval audit records.
 
-The goal is to make graph locality directly affect what context is retained for a coding task.
+The goal is to make graph locality directly affect what context is retained for a coding task. The orchestrator selects, prunes, and packages retrieval results into bounded planner packets that downstream tools and developers can use without reading broad unrelated context.
+
+```mermaid
+flowchart TD
+  A[search] --> E[Orchestrator]
+  B[lookup] --> E
+  C[slice] --> E
+  D[source] --> E
+  E --> F[Context capsule / Planner packet]
+  F --> G[Retrieval audit record]
+```
 
 ### Graph-focused retrieval
 
@@ -571,9 +581,9 @@ Planned features:
 
 ## Version 1.7.0
 
-Version 1.7.0 focuses on retrieval-quality regression benchmarks.
+Version 1.7.0 focuses on retrieval-quality regression benchmarks for validating the orchestrator and planner packets introduced in v1.6.
 
-The goal is to make bounded-context quality testable.
+The goal is to make bounded-context quality testable and to confirm that the orchestrator selects the right context for representative coding tasks.
 
 ### Benchmark coverage
 

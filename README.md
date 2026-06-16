@@ -37,6 +37,23 @@ my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
 my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
 ```
 
+```mermaid
+flowchart TD
+  A[index] --> B[manifest.json]
+  B --> C[symbol-index.json]
+  B --> D[code-graph.json]
+  B --> E[data-model.json]
+  B --> F[data-model-graph.json]
+  C --> G[search]
+  D --> G
+  G --> H[lookup]
+  G --> I[slice]
+  G --> J[source]
+  D --> K[view]
+  E --> K
+  F --> K
+```
+
 Re-run `index` to refresh artifacts when source changes:
 
 ```sh
@@ -209,6 +226,17 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 Version 1.1.0 adds the first semantic integration layer: semantic roles on index artifacts, manifest as authoritative artifact registry, analyzer registry and status, data-model and model-to-view lineage artifacts linked from the index, and semantic-aware search, lookup, slice, and source. Future roadmap items cover broader semantic role coverage, React and route-aware analysis, source expansion, graph rendering improvements, and scalability.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
+
+## Support the project
+
+my-dev-kit is independently developed and maintained by dailephd / dailephd LLC.
+
+If the project helps your work, you can optionally support continued development through:
+
+- GitHub Sponsors: https://github.com/sponsors/dailephd
+- PayPal: https://paypal.me/daile88
+
+Support is appreciated, but not required. The project remains usable under its published license.
 
 ## Bug reports
 

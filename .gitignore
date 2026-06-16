@@ -8,8 +8,12 @@ tmp/
 .cache/
 .my-dev-kit/
 .my-dev-kit-*/
+.my-dev-kit-context/
+.my-dev-kit-context-*/
 **/.my-dev-kit/
 **/.my-dev-kit-*/
+**/.my-dev-kit-smoke*/
+**/.my-dev-kit-compare/
 .my-dev-kit-v11-planning/
 .my-dev-kit-v1/
 .my-dev-kit-v1-*/

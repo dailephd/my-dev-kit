@@ -201,11 +201,20 @@ Use `--format dot` for automated checks. Reserve SVG or PNG for interactive revi
 
 ---
 
-## Workflow 5: Use my-dev-kit with ChatGPT or a coding agent
+## Workflow 5: Use my-dev-kit output with an LLM or downstream tool
 
-LLMs perform better when given bounded, relevant context instead of whole files or broad project dumps. my-dev-kit helps collect that context deterministically from your local project.
+LLM-assisted development works best when the model receives bounded, relevant context rather than whole files or broad project dumps. my-dev-kit helps collect that context deterministically from your local project.
 
-my-dev-kit does not call LLMs, does not edit files, and does not act as an autonomous agent. It prepares local bounded context for you or for downstream tools.
+my-dev-kit does not call any LLM or external service, does not edit files, and does not act as an autonomous agent. It produces local bounded artifacts that you can provide to an LLM conversation, a coding assistant, or any downstream tool.
+
+```mermaid
+flowchart TD
+  A[index] --> B[search]
+  B --> C[lookup]
+  C --> D[slice]
+  D --> E[source]
+  E --> F[Provide selected outputs to LLM or tool]
+```
 
 **Command sequence**
 
@@ -217,68 +226,24 @@ my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction bo
 my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
 ```
 
-**What to paste into the LLM**
+**Recommended outputs to provide**
 
-- Selected search output or a concise summary of the strongest matches
+- Selected search results or a concise summary of the strongest matches
 - Selected lookup output
 - Selected graph slice or a concise summary of nearby nodes and edges
-- Numbered source excerpts
-- File paths, symbol names, and node IDs used to retrieve the context
+- Numbered source excerpts with file paths and symbol names
 
-**What not to paste**
+**What to omit**
 
 - The entire source tree
-- Full `symbol-index.json`
-- Full `code-graph.json`
+- Full `symbol-index.json` or `code-graph.json`
 - Broad unrelated files
-- Generated artifacts that are not relevant to the current task
-
-**Reusable prompt template**
-
-```text
-I am using my-dev-kit to provide bounded codebase context.
-
-Task:
-<describe the coding, debugging, documentation, or refactoring task>
-
-Repository context:
-Project root: <project root>
-Index directory: .my-dev-kit
-Source roots indexed: <source roots>
-
-Graph-guided retrieval:
-Search query used:
-<query>
-
-Search results:
-<paste selected search JSON or summarized result>
-
-Selected node:
-<node-id>
-Reason selected:
-<why this node is the strongest candidate>
-
-Lookup result:
-<paste lookup result or concise summary>
-
-Graph slice:
-<paste slice result or concise summary>
-
-Source excerpts:
-<paste numbered source output with file paths>
-
-Instructions:
-Use only the provided context unless you explicitly say what additional file, symbol, or graph node is needed.
-Do not assume unrelated files were inspected.
-If the context is insufficient, ask for the next my-dev-kit search, lookup, slice, or source command to run.
-Prefer targeted changes grounded in the retrieved source.
-Explain which provided evidence supports your answer.
-```
+- Generated artifacts not relevant to the current task
 
 **When to rerun commands**
 
 - Re-run `index` after source changes so graph artifacts match the current project.
-- Use better query terms if `search` results are weak. Try symbol names, feature terms, error text, file names, or imported module names.
+- Refine the `search` query if results are weak. Try symbol names, feature terms, error text, file names, or imported module names.
 - Use `lookup --depth 1` first. Increase depth only when the immediate graph neighborhood is insufficient.
 - Use `slice --depth 1` or `slice --depth 2` depending on context size.
 - Use line-range source retrieval when symbol retrieval is too broad or incomplete.

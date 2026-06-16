@@ -244,6 +244,9 @@ Release automation can be added later if the project needs it. If automation is 
 
 ## Package metadata notes
 
-No official funding or donation URL is configured for this release.
+Support and donation links are available at:
 
-Do not add package.json funding metadata until an official support or donation page exists.
+- GitHub Sponsors: https://github.com/sponsors/dailephd
+- PayPal: https://paypal.me/daile88
+
+These are listed in `README.md` under the Support section. No `funding` field is currently configured in `package.json`; that can be added in a future release if desired.
