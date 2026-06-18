@@ -17,17 +17,17 @@ For internal design, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Installation
 
-Install the package globally:
+Use without installing globally:
+
+```sh
+npx @dailephd/my-dev-kit --help
+npx @dailephd/my-dev-kit --version
+```
+
+Or install globally:
 
 ```sh
 npm install -g @dailephd/my-dev-kit
-```
-
-Confirm the CLI is available:
-
-```sh
-my-dev-kit --help
-my-dev-kit --version
 ```
 
 ## Path conventions
@@ -35,14 +35,14 @@ my-dev-kit --version
 Most workflows follow this pattern:
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit search --index .my-dev-kit --query "service" --json
-my-dev-kit lookup --index .my-dev-kit --node "file:src/index.ts" --json
-my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
-my-dev-kit slice --index .my-dev-kit --node "file:src/index.ts" --depth 1 --json
-my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
-my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
-my-dev-kit data-model --index .my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "service" --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "file:src/index.ts" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "file:src/index.ts" --depth 1 --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --entity User --json
 ```
 
 Path rules:
@@ -85,7 +85,7 @@ Supported source extensions:
 ### Usage
 
 ```sh
-my-dev-kit index --root <project-root> --src <source-root> --out <artifact-dir>
+npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <artifact-dir>
 ```
 
 ### Flags
@@ -128,9 +128,17 @@ The `--exclude` flag adds extra directory names or relative path prefixes.
 
 ### Semantic analyzer behavior
 
-After indexing, `index` runs semantic analyzers. The TypeScript model analyzer currently runs on TypeScript and TSX source and produces `data-entity` and `data-field` semantic roles for exported interfaces, type aliases, and classes that qualify as data models.
+After indexing, `index` runs semantic analyzers. The TypeScript model analyzer runs on TypeScript and TSX source and produces `data-entity` and `data-field` semantic roles for exported interfaces, type aliases, and classes that qualify as data models.
 
-Compact `semanticRoles` and `artifactRefs` arrays are embedded on the relevant symbols in `symbol-index.json` and on the corresponding symbol nodes in `code-graph.json`. These link back to the detailed data-model artifacts through artifact references.
+The frontend analyzer runs on `.tsx` and `.jsx` source files and test files (`.test.tsx`, `.spec.tsx`, `.test.ts`, `.spec.ts`) to produce the frontend semantic artifact. It extracts:
+
+- Exported React components (function and arrow-function forms)
+- Local (non-exported) React components
+- Prop type interfaces and type aliases
+- Hook blocks (`useState`, `useEffect`, and others)
+- Event handlers and inline handlers
+- JSX return regions
+- Frontend test blocks (`describe`, `test`, `it`), setup/teardown hooks, locators, route strings, and UI strings
 
 Analyzer results and status are recorded in `manifest.json` under the `analyzers` array.
 
@@ -155,14 +163,18 @@ When the TypeScript model analyzer produces data-model output:
 - `data-model.json`
 - `data-model-graph.json`
 
+When the frontend analyzer processes TSX/JSX or test files:
+
+- `frontend-semantic.json`
+
 ### Examples
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
-my-dev-kit index --root . --src src --language python --out .my-dev-kit --json
-my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
-my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --dry-run --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --dry-run --json
 ```
 
 ## search
@@ -172,7 +184,7 @@ Search indexed files, symbols, graph edges, and semantic roles by keyword.
 ### Usage
 
 ```sh
-my-dev-kit search --index <artifact-dir> --query <text>
+npx @dailephd/my-dev-kit search --index <artifact-dir> --query <text>
 ```
 
 ### Flags
@@ -211,9 +223,9 @@ Result items include a `matchReasons` array. Each reason includes:
 ### Examples
 
 ```sh
-my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
-my-dev-kit search --index .my-dev-kit --query "formatUser" --json
-my-dev-kit search --index .my-dev-kit --query "data-entity User" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "formatUser" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "data-entity User" --json
 ```
 
 ## lookup
@@ -223,7 +235,7 @@ Look up a graph node by exact node ID, including semantic metadata.
 ### Usage
 
 ```sh
-my-dev-kit lookup --index <artifact-dir> --node <node-id>
+npx @dailephd/my-dev-kit lookup --index <artifact-dir> --node <node-id>
 ```
 
 ### Flags
@@ -266,12 +278,26 @@ Retrieve bounded source content from an indexed project.
 
 ### Usage
 
-`source` supports three retrieval modes:
+`source` supports multiple retrieval modes:
 
 ```sh
-my-dev-kit source --index <artifact-dir> --node <node-id>
-my-dev-kit source --index <artifact-dir> --file <path> --start <n> --end <n>
-my-dev-kit source --index <artifact-dir> --file <path> --symbol <name>
+# Line range retrieval
+npx @dailephd/my-dev-kit source --index <artifact-dir> --file <path> --start <n> --end <n>
+
+# Symbol retrieval
+npx @dailephd/my-dev-kit source --index <artifact-dir> --file <path> --symbol <name>
+
+# Node ID retrieval
+npx @dailephd/my-dev-kit source --index <artifact-dir> --node <node-id>
+
+# Exact string search across all indexed files
+npx @dailephd/my-dev-kit source --index <artifact-dir> --contains <string>
+
+# React region retrieval by region name
+npx @dailephd/my-dev-kit source --index <artifact-dir> --react-region <region> --file <path>
+
+# Local component-tree retrieval
+npx @dailephd/my-dev-kit source --index <artifact-dir> --symbol <component-name> --file <path> --include-local-component-tree
 ```
 
 Use one retrieval mode per command.
@@ -284,14 +310,58 @@ Use one retrieval mode per command.
 - `--start <n>`: start line for line-range retrieval.
 - `--end <n>`: end line for line-range retrieval.
 - `--symbol <name>`: symbol name to retrieve from the selected file.
+- `--contains <string>`: exact string to search for across all indexed source files.
+- `--context <n>`: number of context lines around each `--contains` match. Default: 3. Max: 20.
+- `--path <prefix>`: path prefix filter for `--contains` (e.g. `src/components`). May not contain `..`.
+- `--react-region <region>`: React region name to retrieve. Resolves a component, local component, JSX region, hook, or prop type by name from the frontend semantic artifact. Requires `--file`.
+- `--include-local-component-tree`: retrieve the named component and its local child components as a connected source bundle. Requires `--symbol`.
+- `--prop <name>`: filter local component-tree retrieval to show the named prop. Requires `--include-local-component-tree`.
 - `--max-lines <n>`: maximum number of lines to return.
 - `--format <json|plain|numbered>`: output format.
 - `--out <path>`: write rendered output to a file.
 - `--json`: alias for `--format json`.
 
-### Behavior
+### --contains behavior
 
-When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output and are not displayed in plain or numbered text output.
+`--contains` searches for an exact string match across all indexed source files (from `symbol-index.json`). Each match includes:
+
+- `filePath`: the file containing the match
+- `line` and `column`: the exact match location
+- `context`: surrounding lines (controlled by `--context`)
+- `classification`: whether the match appears to be a `declaration-like`, `usage-like`, or `unknown` context, based on static heuristics
+- `frontendContext`: optional frontend value context when the string appears as a frontend-indexed literal
+
+Multiple occurrences of the same string across files are all reported. `--path` narrows results to files whose path starts with the given prefix.
+
+`--contains` cannot be combined with `--file`, `--symbol`, `--node`, `--start`, `--end`, or `--react-region`.
+
+### --react-region behavior
+
+`--react-region` looks up a named React region from the frontend semantic artifact and retrieves its source slice. Resolution priority:
+
+1. component (exported)
+2. local-component
+3. jsx-region
+4. hook
+5. prop-type
+
+Matching is case-insensitive; exact case is preferred over case-insensitive. When the region is not found, the error lists available region names in the file.
+
+JSON output includes a `reactRegion` block with `matchedKind`, `matchedId`, and `matchedName`.
+
+`--react-region` requires `--file`. It cannot be combined with `--contains`, `--symbol`, `--node`, `--start`, or `--end`.
+
+### --include-local-component-tree behavior
+
+`--include-local-component-tree` retrieves the named component (`--symbol`) and its local child components as connected source blocks, using statically extracted prop and event flow relationships from the frontend semantic artifact.
+
+This is static analysis only. It does not trace runtime rendering, route reachability, or browser-state behavior.
+
+Requires `--symbol` and `--file`. Cannot be combined with `--contains` or `--react-region`.
+
+### Semantic metadata propagation
+
+When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output.
 
 ### Safety behavior
 
@@ -312,9 +382,29 @@ The current index records symbol start lines but not complete symbol end lines. 
 ### Examples
 
 ```sh
-my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
-my-dev-kit source --index .my-dev-kit --file src/index.ts --symbol describeUser --format numbered
-my-dev-kit source --index .my-dev-kit --node "file:src/index.ts" --format json
+# Line range
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/index.ts --start 1 --end 40 --format numbered
+
+# Symbol
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/index.ts --symbol describeUser --format numbered
+
+# Node ID
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "file:src/index.ts" --format json
+
+# Exact string search
+npx @dailephd/my-dev-kit source --index .my-dev-kit --contains "workspace-editor-empty-state" --context 5 --format numbered
+
+# Exact string with path filter
+npx @dailephd/my-dev-kit source --index .my-dev-kit --contains "structured-content" --path src/components --context 3 --format json
+
+# React region
+npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
+
+# Local component tree
+npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --format numbered
+
+# Local component tree with prop filter
+npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --prop onSuccess --format numbered
 ```
 
 ## slice
@@ -324,7 +414,7 @@ Build a bounded graph neighborhood around a focus node.
 ### Usage
 
 ```sh
-my-dev-kit slice --index <artifact-dir> --node <node-id>
+npx @dailephd/my-dev-kit slice --index <artifact-dir> --node <node-id>
 ```
 
 ### Flags
@@ -357,13 +447,13 @@ Render graph artifacts as DOT, SVG, or PNG. By default, `view` renders `code-gra
 ### Usage
 
 ```sh
-my-dev-kit view --index <artifact-dir> --graph <code|data-model|model-view-lineage> --format <dot|svg|png> --out <path>
+npx @dailephd/my-dev-kit view --index <artifact-dir> --graph <selection> --format <dot|svg|png> --out <path>
 ```
 
 ### Flags
 
 - `--index <dir>`: index artifact directory.
-- `--graph <code|data-model|model-view-lineage>`: graph artifact to render. Defaults to `code`.
+- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test>`: graph artifact to render. Defaults to `code`.
 - `--format <dot|svg|png>`: output format.
 - `--out <path>`: output path.
 - `--edge-style <semantic|labeled|minimal>`: edge visualization style.
@@ -372,17 +462,21 @@ my-dev-kit view --index <artifact-dir> --graph <code|data-model|model-view-linea
 
 ### Graph selection
 
-Supported graph values:
+Supported `--graph` values:
 
 - `code`: renders the manifest-referenced `code-graph.json`.
 - `data-model`: renders the manifest-referenced `data-model-graph.json`.
 - `model-view-lineage`: renders the manifest-referenced `model-view-lineage.json`.
+- `react-component`: renders a static React component graph from `frontend-semantic.json`. Nodes: file (box), exported component (box), local component (ellipse), prop type (diamond). Edges: `contains`, `renders`, `uses-props`.
+- `react-flow`: renders all frontend flow facts from `frontend-semantic.json`. Nodes: component, local-component, hook, handler, JSX region, flow-fact. Edges: all extracted flow relationship kinds.
+- `react-prop-event-flow`: renders only prop and event flow relationships from `frontend-semantic.json`. Same node types as `react-flow`, filtered to `react-passes-prop`, `react-fires-event`, `react-handles-event`, and `react-receives-prop` relationship kinds.
+- `frontend-test`: renders frontend test structure from `frontend-semantic.json`. Only test files (`isTestFile=true`). Nodes: test-file (box), describe (box), test/it (ellipse), setup/teardown (oval), locator (diamond), route-string (oval).
 
-`--graph` is optional. The default is `code`, so existing commands continue to render `code-graph.json`.
+`--graph` is optional. The default is `code`.
 
-The data-model and lineage graph modes require `manifest.json` to reference the corresponding artifact. `view` does not scan the directory for stale files. If `data-model-graph.json` or `model-view-lineage.json` exists but is not registered in `manifest.json`, `view` fails clearly instead of guessing.
+The data-model and lineage graph modes require `manifest.json` to reference the corresponding artifact. The four frontend graph modes (`react-component`, `react-flow`, `react-prop-event-flow`, `frontend-test`) require `manifest.json` to reference `frontendSemantic`. `view` does not scan the directory for stale files.
 
-`data-model-graph.json` is normally registered by `index` or by `data-model --index <dir> --out <dir>`. `model-view-lineage.json` is registered when `data-model --trace-view` writes lineage into the index artifact directory.
+Frontend graphs are separate from the code graph. They are rendered from `frontend-semantic.json` at command time and are not merged into `code-graph.json`, `data-model-graph.json`, or `model-view-lineage.json`.
 
 ### Graphviz behavior
 
@@ -396,24 +490,34 @@ The data-model and lineage graph modes require `manifest.json` to reference the 
 Render the default code graph:
 
 ```sh
-my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/code.dot --json
-my-dev-kit view --index .my-dev-kit --graph code --format dot --out .my-dev-kit/code.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/code.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph code --format dot --out .my-dev-kit/code.dot --json
 ```
 
 Render the data-model graph:
 
 ```sh
-my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot --json
-my-dev-kit view --index .my-dev-kit --graph data-model --format svg --out .my-dev-kit/data-model.svg --allow-dot-fallback --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph data-model --format svg --out .my-dev-kit/data-model.svg --allow-dot-fallback --json
 ```
 
 Render model-to-view lineage:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --trace-view User --json
-my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format dot --out .my-dev-kit/lineage.dot --json
-my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format svg --out .my-dev-kit/lineage.svg --allow-dot-fallback --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format dot --out .my-dev-kit/lineage.dot --json
 ```
+
+Render frontend graphs (requires TSX/JSX files in the index):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-component --format dot --out .my-dev-kit/react-component.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-flow --format dot --out .my-dev-kit/react-flow.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-prop-event-flow --format dot --out .my-dev-kit/react-prop-event-flow.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph frontend-test --format dot --out .my-dev-kit/frontend-test.dot --json
+```
+
+All four frontend graph views render static artifact-backed graphs. They do not claim runtime React behavior, route reachability, or browser-state behavior.
 
 ## data-model
 
@@ -428,31 +532,31 @@ When `index` runs, it already produces `data-model.json` and `data-model-graph.j
 Inspect an exact entity from existing data-model artifacts:
 
 ```sh
-my-dev-kit data-model --index <artifact-dir> --entity <name-or-id> --json
+npx @dailephd/my-dev-kit data-model --index <artifact-dir> --entity <name-or-id> --json
 ```
 
 Inspect an exact field from existing data-model artifacts:
 
 ```sh
-my-dev-kit data-model --index <artifact-dir> --field <entity.field> --json
+npx @dailephd/my-dev-kit data-model --index <artifact-dir> --field <entity.field> --json
 ```
 
 Regenerate data-model artifacts from the index:
 
 ```sh
-my-dev-kit data-model --index <artifact-dir> --out <artifact-dir> --json
+npx @dailephd/my-dev-kit data-model --index <artifact-dir> --out <artifact-dir> --json
 ```
 
 Trace static model-to-view lineage for an entity:
 
 ```sh
-my-dev-kit data-model --index <artifact-dir> --trace-view <entity> --json
+npx @dailephd/my-dev-kit data-model --index <artifact-dir> --trace-view <entity> --json
 ```
 
 Trace static model-to-view lineage for an exact field:
 
 ```sh
-my-dev-kit data-model --index <artifact-dir> --field <entity.field> --trace-view --json
+npx @dailephd/my-dev-kit data-model --index <artifact-dir> --field <entity.field> --trace-view --json
 ```
 
 ### Flags
@@ -512,35 +616,6 @@ Trace mode writes:
 
 - `model-view-lineage.json`
 
-Entity trace output includes:
-
-- `status`
-- `mode`
-- `indexDir`
-- `outDir`
-- `modelViewLineagePath`
-- `entity`
-- `lineageNodeCount`
-- `lineageEdgeCount`
-- `warningCount`
-- `lineage`
-- `warnings`
-
-Field trace output includes:
-
-- `status`
-- `mode`
-- `indexDir`
-- `outDir`
-- `modelViewLineagePath`
-- `entity`
-- `field`
-- `lineageNodeCount`
-- `lineageEdgeCount`
-- `warningCount`
-- `lineage`
-- `warnings`
-
 ### Mode rules
 
 - `--index` is always required.
@@ -574,32 +649,32 @@ The current extractor is conservative and TypeScript-focused. It supports:
 Inspect an entity after running `index`:
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit data-model --index .my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --entity User --json
 ```
 
 Inspect a field:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --field User.email --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --json
 ```
 
 Trace an entity into conservative static view usage:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --trace-view User --json
 ```
 
 Trace a field into conservative static view usage:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 ```
 
 Regenerate data-model artifacts explicitly:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
 ```
 
 ## Bundled examples
@@ -607,13 +682,17 @@ my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
 The bundled examples are useful for smoke tests and learning the command flow.
 
 ```sh
-my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
-my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
+npx @dailephd/my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
 
-my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
+
+npx @dailephd/my-dev-kit index --root examples/basic-react-tsx --src src --out examples/basic-react-tsx/.my-dev-kit --json
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --contains "workspace-editor-empty-state" --context 5 --format numbered
+npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
 ## Troubleshooting
@@ -629,8 +708,16 @@ Run `index` first or check the `--index` path.
 To regenerate explicitly:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
 ```
+
+### Missing frontend-semantic artifact
+
+`index` writes `frontend-semantic.json` automatically when the frontend analyzer finds `.tsx`, `.jsx`, or test files. If the artifact is missing, either no qualifying files were found or the source root was not indexed.
+
+### --react-region region not found
+
+When `--react-region` fails with "region not found," the error output lists available region names for the given `--file`. Use one of the listed names.
 
 ### Unknown node ID
 
@@ -642,4 +729,4 @@ Use `search` to find valid node IDs.
 
 ### Graphviz not found
 
-DOT output does not require Graphviz. `data-model` generation and trace-view mode do not require Graphviz.
+DOT output does not require Graphviz. `data-model` generation and trace-view mode do not require Graphviz. Frontend graph views in DOT format do not require Graphviz.

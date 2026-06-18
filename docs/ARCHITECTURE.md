@@ -2,7 +2,7 @@
 
 ## System goal
 
-my-dev-kit provides deterministic, offline code graph indexing, semantic enrichment, bounded source retrieval, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
+my-dev-kit provides deterministic, offline code graph indexing, semantic enrichment, bounded source retrieval, React/TSX and frontend-test indexing, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
 
 The system produces local JSON artifacts that can be inspected, searched, sliced, rendered, and reused by developers or coding agents. It does not run a server, call LLMs, call external APIs, execute user source code, or modify source files.
 
@@ -20,12 +20,15 @@ CLI entry: src/cli.ts
   |                        -> call-graph.json (optional)
   |                        -> data-model.json (when TypeScript model analyzer runs)
   |                        -> data-model-graph.json (when TypeScript model analyzer runs)
+  |                        -> frontend-semantic.json (when frontend analyzer runs on TSX/JSX files)
   |
-  +-- search command      -> Searches structual and semantic fields in index artifacts
+  +-- search command      -> Searches structural and semantic fields in index artifacts
   +-- lookup command      -> Exact node lookup, returns semantic metadata when present
-  +-- source command      -> Bounded source retrieval, propagates semantic metadata
+  +-- source command      -> Bounded source retrieval, propagates semantic metadata;
+  |                          exact string search (--contains), React region retrieval (--react-region),
+  |                          local component-tree retrieval (--include-local-component-tree)
   +-- slice command       -> Graph slicing, preserves semantic metadata on nodes
-  +-- view command        -> Graph view layer (code/data-model/lineage graph artifacts)
+  +-- view command        -> Graph view layer (code/data-model/lineage/frontend-semantic graph artifacts)
   |
   +-- data-model command  -> Data-model inspection and regeneration layer
                            -> data-model.json
@@ -44,15 +47,17 @@ flowchart TD
   F --> H[Enrich code-graph.json]
   F --> I[data-model.json]
   F --> J[data-model-graph.json]
+  F --> N[frontend-semantic.json]
   G --> K[manifest.json]
   H --> K
   I --> K
   J --> K
+  N --> K
 ```
 
 The `index` command is the primary entry point. It builds the structural index, runs semantic analyzers, enriches the index artifacts with compact semantic metadata, writes all produced artifacts, and updates `manifest.json` as the authoritative registry.
 
-Downstream data-model and lineage layers consume existing index artifacts instead of replacing the indexer. The `data-model` command is a focused inspection and regeneration command for those artifacts.
+Downstream data-model, lineage, and frontend semantic layers consume existing index artifacts instead of replacing the indexer. The `data-model` command is a focused inspection and regeneration command for data-model artifacts. Frontend semantic facts are consumed by `source` (exact match, React region, local component-tree) and `view --graph react-*` or `view --graph frontend-test`.
 
 ## Index-first architecture
 
@@ -71,7 +76,7 @@ The managed artifact model works as follows:
 
 ## Artifact model
 
-The system has three artifact layers.
+The system has four artifact layers.
 
 ### Structural artifacts
 
@@ -96,6 +101,20 @@ These artifacts carry detailed semantic records. They are separate from `code-gr
 - `model-view-lineage.json` — conservative static relationships between data-model fields, transformations, view-model fields, component props, and rendered fields
 
 This artifact is built by `data-model --trace-view`. It is separate from both the code graph and the data-model graph.
+
+### Frontend semantic artifact
+
+- `frontend-semantic.json` — React component facts, local component facts, prop type facts, hook blocks, event handlers, JSX regions, test blocks, locators, route strings, UI strings, and statically extracted flow relationships between them
+
+This artifact is built by the frontend analyzer during `index` when `.tsx`, `.jsx`, or test files are found. It is separate from `code-graph.json`, `data-model.json`, and `model-view-lineage.json`.
+
+The frontend semantic artifact is consumed by:
+- `source --contains` (exact string search, uses symbol-index.json but enriches results with frontend context)
+- `source --react-region` (React region lookup by name)
+- `source --include-local-component-tree` (local component-tree retrieval using flow relationships)
+- `view --graph react-component`, `view --graph react-flow`, `view --graph react-prop-event-flow`, `view --graph frontend-test` (static graph rendering)
+
+Frontend facts are not embedded into `code-graph.json` or `symbol-index.json`. The code graph remains focused on static source structure. Frontend facts live in their own artifact and are accessed through dedicated `source` flags or `view --graph` choices.
 
 The bridge between structural and semantic artifacts is `artifactRefs` (links from compact symbol metadata to detailed artifact entries) and `evidenceRefs` (source location evidence attached to semantic roles).
 
@@ -160,6 +179,7 @@ Current analyzers:
 - `call-graph` — static call graph, when `--call-graph` is requested
 - `data-model` — TypeScript model extraction, produces `data-model.json` and `data-model-graph.json`
 - `model-view-lineage` — conservative lineage, runs in `data-model --trace-view` mode
+- `frontend` — React/TSX and frontend-test extraction, produces `frontend-semantic.json`
 
 Analyzer output feeds two paths:
 
@@ -252,13 +272,67 @@ The view layer uses a small renderable graph adapter layer:
 - code graph artifact -> renderable graph model
 - data-model graph artifact -> renderable graph model
 - model-view-lineage artifact -> renderable graph model
+- frontend-semantic artifact -> renderable graph model (react-component, react-flow, react-prop-event-flow, frontend-test views)
 - shared DOT/SVG/PNG renderer consumes the renderable graph model
 
-`data-model-graph.json` is not merged into `code-graph.json`. `model-view-lineage.json` is not merged into `code-graph.json`. Each graph artifact keeps its own node and edge ID space, and `view --graph` selects which manifest-referenced artifact to render.
+`data-model-graph.json` is not merged into `code-graph.json`. `model-view-lineage.json` is not merged into `code-graph.json`. `frontend-semantic.json` is not merged into any other graph artifact. Each graph artifact keeps its own node and edge ID space, and `view --graph` selects which manifest-referenced artifact to render.
+
+The four frontend graph views (`react-component`, `react-flow`, `react-prop-event-flow`, `frontend-test`) are all derived from the same `frontend-semantic.json` artifact at render time. They differ in which facts and relationships they include. They do not claim runtime React behavior, route reachability, or browser-state behavior.
 
 Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` as weighted fields. Results include `semanticRoles` and `artifactRefs` on matched items when present.
 
 Lookup returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node when present.
+
+## Frontend analyzer layer
+
+Files:
+
+- `src/frontend/`
+- `src/indexing/runSemanticAnalyzers.ts` (integration)
+
+The frontend analyzer layer runs after the base index build, alongside the data-model analyzer. It processes `.tsx`, `.jsx`, `.test.tsx`, `.spec.tsx`, `.test.ts`, and `.spec.ts` files.
+
+The frontend analyzer extracts:
+
+- Exported React components (function and arrow-function forms)
+- Local (non-exported) React components used within the file
+- Prop type interfaces and type aliases
+- Hook blocks (`useState`, `useEffect`, and others) with source locations
+- Event handlers (named and inline) with source locations
+- JSX return regions with source locations
+- Frontend test blocks (`describe`, `test`, `it`) with titles and source locations
+- Setup/teardown hooks (`beforeEach`, `afterEach`) with source locations
+- Locators (visible text, test ID, ARIA, locator chains) with source locations
+- Route-like strings with source locations
+- Statically extracted flow relationships between components, hooks, handlers, and props
+
+Extraction output is written to `frontend-semantic.json` and registered in `manifest.json` under `semanticArtifactPaths.frontendSemantic`.
+
+### Static analysis boundary
+
+The frontend analyzer is conservative static extraction from source text. It does not:
+
+- execute the application or render components
+- trace runtime React rendering behavior
+- resolve dynamic component registrations or computed JSX
+- claim route reachability or browser-state behavior
+- resolve prop values that depend on runtime state
+
+All extracted facts are evidence of what the static analyzer found in the source file. Unsupported or ambiguous patterns are recorded as warnings or omitted.
+
+### Artifact separation
+
+`frontend-semantic.json` is separate from:
+
+- `code-graph.json` — code graph describes static source structure; frontend facts are not merged into it
+- `data-model.json` / `data-model-graph.json` — data-model artifacts describe data entities; frontend component facts are not data-model entities
+- `model-view-lineage.json` — lineage artifacts describe model-to-view relationships; frontend flow relationships are a separate concern
+
+Each artifact layer has its own node and edge ID space. This separation is intentional: it keeps the structural artifacts small and allows consumers to load only what they need.
+
+### Future boundary
+
+Route-aware retrieval (v1.3), browser-state tracing (v1.3), and UI reachability analysis (v1.3) are not part of the current frontend analyzer. The current analyzer extracts static structure from source files only.
 
 ## Data-model layer
 
@@ -397,13 +471,15 @@ Current boundaries:
 
 - It does not execute user project code.
 - It does not infer complete runtime behavior.
-- It does not provide route-aware tracing.
-- It does not provide browser-state tracing.
-- It does not provide React render-flow indexing.
-- It does not provide source continuation retrieval.
+- It does not provide route-aware tracing (planned for v1.3).
+- It does not provide browser-state tracing (planned for v1.3).
+- It does not provide UI reachability analysis (planned for v1.3).
+- It does not provide source continuation retrieval (planned for v1.4).
 - It does not perform semantic similarity search.
 - It does not use embeddings.
 - It does not call LLMs.
+
+React/TSX facts extracted by the frontend analyzer are conservative static evidence. They describe what was found in the source file, not what the application renders at runtime. Frontend flow relationships are extracted from static prop and event patterns in the source; they do not claim completeness or runtime accuracy.
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
 

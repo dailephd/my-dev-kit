@@ -200,157 +200,63 @@ Version 1.1.0 adds the first semantic integration layer on top of the existing c
 
 ## Version 1.2.0
 
-Version 1.2.0 focuses on React, TSX, frontend test indexing, exact reference retrieval, and local React component-tree tracing.
+Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.
 
-The goal is to make frontend work retrievable by the structures developers actually use: components, props, hooks, JSX branches, visible text, routes, test names, locators, repeated literals, render-flow regions, and local prop/event flows.
+### Implemented
 
-### TSX and React indexing
+#### TSX and React indexing
 
-Planned features:
-
-- exported component indexing
+- exported component indexing (function and arrow-function forms)
 - local component indexing
 - prop type indexing
-- local type indexing
-- hook block indexing
-- `useState` declaration indexing
-- `useEffect` block indexing
-- callback and event-handler indexing
-- JSX branch indexing
-- JSX section indexing
-- important UI string indexing
-- `data-testid` indexing
-- ARIA label indexing
-- local component-tree boundary indexing
+- hook block indexing (`useState`, `useEffect`, and others)
+- event-handler indexing (named and inline)
+- JSX region indexing
+- frontend semantic artifact (`frontend-semantic.json`) written and registered in `manifest.json`
 
-Possible node examples:
+#### Frontend-test indexing
 
-- `component:apps/web/app/evidence-seed/page.tsx#EvidenceSeedPage`
-- `handler:apps/web/app/evidence-seed/page.tsx#EvidenceSeedPage.handleRunIngestion`
-- `state:apps/web/app/evidence-seed/page.tsx#evidenceRecordsVisible`
-- `jsx:apps/web/app/evidence-seed/page.tsx#stage-3-evidence`
-- `ui-string:apps/web/app/evidence-seed/page.tsx#Continue-to-evidence-review`
+- `describe`, `test`, and `it` block indexing with titles
+- `beforeEach` and `afterEach` setup/teardown indexing
+- locator indexing (visible text, test ID, ARIA, locator chains)
+- route-like string indexing
+- test helper indexing
 
-### React relationship extraction
+#### Exact string and repeated literal retrieval
 
-Planned relationship types:
+- `source --contains <string>` — exact string search across all indexed source files
+- `source --context <n>` — context lines around each match
+- `source --path <prefix>` — path prefix filter for `--contains`
+- match classification (`declaration-like`, `usage-like`, `unknown`) based on static heuristics
+- frontend value context enrichment when the string is a frontend-indexed literal
 
-- component renders component
-- component passes prop
-- prop references handler
-- handler sets state
-- handler reads state
-- state controls JSX branch
-- effect restores state
-- button invokes handler
-- link points to target ID
-- JSX anchor points to route or section
-- tab value controls render branch
-- render helper returns child component
-- returned JSX passes props to child components
-- parent component passes callback props to local child components
-- local child component invokes callback props
-- event handler updates state used by sibling or child components
-- removed prop references are traceable across the local component tree
+#### React region retrieval
 
-### React render-flow region retrieval
+- `source --react-region <region> --file <path>` — retrieve a named React component, hook, handler, JSX region, or prop type by name
+- case-insensitive region name matching with priority ordering
+- JSON output includes `reactRegion` metadata block
 
-Planned features:
+#### Local component-tree prop/event-flow retrieval
 
-- retrieve state hook regions
-- retrieve derived-state regions
-- retrieve handler regions
-- retrieve render helper functions
-- retrieve conditional render branches
-- retrieve returned JSX regions
-- retrieve props passed to child components
-- retrieve compact render-flow summaries for selected components
+- statically extracted flow relationships: `react-passes-prop`, `react-fires-event`, `react-handles-event`, `react-receives-prop`, `react-renders-local-component`, `react-handler-sets-state`, `react-handler-reads-state`
+- `source --symbol <component> --file <path> --include-local-component-tree` — retrieve component and its local children as connected source blocks
+- `source --prop <name>` — filter to a specific prop name
 
-Candidate command shapes:
+#### Frontend graph views
 
-- `source --react-region <region> --file <path>`
-- `source --react-flow <component-name>`
-- `slice --node <component-node-id> --include-jsx-branches`
+- `view --graph react-component` — static React component structure graph (file, component, local-component, prop-type nodes)
+- `view --graph react-flow` — all frontend flow facts and relationships
+- `view --graph react-prop-event-flow` — filtered to prop and event flow relationships only
+- `view --graph frontend-test` — frontend test structure (test files, describe/test/it blocks, locators, route strings)
 
-### Intra-file prop and event-flow tracing
+All four views are backed by `frontend-semantic.json` and render static artifact-backed graphs. They do not claim runtime React behavior, route reachability, or browser-state behavior.
 
-Planned features:
+### Future work for this area
 
-- retrieve a local React component tree as a connected edit bundle
-- trace parent component props
-- trace local child component props
-- trace callback props passed through local children
-- trace event handlers such as `onClick`, `onMouseEnter`, `onFocus`, and `onBlur`
-- trace state setters used by event handlers
-- trace helper functions used to compute props
-- trace all references to removed props to prevent orphaned references
-
-Candidate command shapes:
-
-- `trace-props --index <index-dir> --symbol <component-name>`
-- `trace-events --index <index-dir> --symbol <component-name>`
-- `source --index <index-dir> --symbol <component-name> --include-local-component-tree`
-- `slice --index <index-dir> --node <component-node> --include-prop-flow --include-event-handlers`
-
-### Test-file indexing
-
-Planned features:
-
-- `describe` block indexing
-- `test` block indexing
-- `it` block indexing
-- `beforeEach` and `afterEach` indexing
-- local test helper indexing
-- Playwright route string indexing
-- locator chain indexing
-- visible text indexing
-- test ID indexing
-
-Candidate command shapes:
-
-- `source --test-title <title>`
-- `source --contains <exact-string>`
-- `source --route <route>`
-- `search --test-title <title>`
-- `search --test-id <id>`
-
-### Exact string, literal, and locator retrieval
-
-Planned searchable targets:
-
-- visible text
-- route paths
-- `data-testid` values
-- ARIA labels
-- placeholders
-- button names
-- link names
-- locator expressions
-- test titles
-- page titles
-- status labels
-- tab IDs
-- enum-like string literals
-- repeated UI values
-- browser storage keys
-
-Candidate command shapes:
-
-- `refs --literal <value>`
-- `refs --symbol <symbol-name>`
-- `source --contains <exact-string> --context <n>`
-
-### Multi-location reference tracing
-
-Planned features:
-
-- find all occurrences of a literal across an indexed project
-- find all occurrences of a literal inside one file or subsystem
-- find references to a symbol or enum-like value when statically detectable
-- group reference matches by file
-- return bounded context around each match
-- identify the nearest symbol, component, or React region when available
-- distinguish declaration sites from usage sites where practical
+- Route-aware retrieval is planned for v1.3
+- Browser-state tracing is planned for v1.3
+- UI reachability analysis is planned for v1.3
+- Source continuation and expansion are planned for v1.4
 
 ## Version 1.3.0
 

@@ -1,24 +1,26 @@
 # my-dev-kit
 
-Local codebase graph indexing, semantic enrichment, bounded source retrieval, data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
+Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
 
 ## Overview
 
-my-dev-kit helps you navigate a local project by building deterministic artifacts for files, symbols, and supported data models, and by enriching those artifacts with compact semantic role metadata. You can search the code graph including semantic roles, inspect exact nodes with semantic context, retrieve bounded source, generate data-model artifacts, inspect exact entities and fields, and trace supported static model-to-view paths.
+my-dev-kit helps you navigate a local project by building deterministic artifacts for files, symbols, frontend structures, and supported data models, and by enriching those artifacts with compact semantic role metadata. You can search the code graph including semantic roles, inspect exact nodes with semantic context, retrieve bounded source, search for exact strings and repeated literals, retrieve React component regions, trace local prop and event flows, generate data-model artifacts, inspect exact entities and fields, and trace supported static model-to-view paths.
 
 Everything runs locally. my-dev-kit does not call an LLM, make network requests, connect to a database, or edit source files.
 
 ## Installation
 
+Use without installing globally:
+
 ```sh
-npm install -g @dailephd/my-dev-kit
+npx @dailephd/my-dev-kit --help
+npx @dailephd/my-dev-kit --version
 ```
 
-Confirm:
+Or install globally:
 
 ```sh
-my-dev-kit --help
-my-dev-kit --version
+npm install -g @dailephd/my-dev-kit
 ```
 
 ## Quickstart
@@ -28,13 +30,12 @@ Run the CLI inside your own project:
 ```sh
 cd <your-project>
 
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
-my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
-my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
-my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
-my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
-my-dev-kit view --index .my-dev-kit --graph data-model --format dot --out .my-dev-kit/data-model.dot
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
 ```
 
 ```mermaid
@@ -44,36 +45,39 @@ flowchart TD
   B --> D[code-graph.json]
   B --> E[data-model.json]
   B --> F[data-model-graph.json]
-  C --> G[search]
-  D --> G
-  G --> H[lookup]
-  G --> I[slice]
-  G --> J[source]
-  D --> K[view]
-  E --> K
-  F --> K
+  B --> G[frontend-semantic.json]
+  C --> H[search]
+  D --> H
+  G --> H
+  H --> I[lookup]
+  H --> J[slice]
+  H --> K[source]
+  D --> L[view --graph code]
+  E --> L
+  F --> L
+  G --> M[view --graph react-*\nview --graph frontend-test]
 ```
 
 Re-run `index` to refresh artifacts when source changes:
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 ```
 
 `index` refreshes the artifact directory in place. The normal artifact directory is `.my-dev-kit`. Custom `--out` paths remain supported.
 
-Inspect data-model entities and fields from the generated artifacts:
+Inspect data-model entities and fields:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --entity User --json
-my-dev-kit data-model --index .my-dev-kit --field User.email --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --json
 ```
 
 Trace supported static view usage:
 
 ```sh
-my-dev-kit data-model --index .my-dev-kit --trace-view User --json
-my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 ```
 
 ## Commands
@@ -83,9 +87,9 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 | `index` | Scan source roots, run semantic analyzers, and write index and semantic artifacts |
 | `search` | Search indexed files, symbols, edges, and semantic roles by keyword |
 | `lookup` | Look up a graph node by exact node ID, including semantic metadata |
-| `source` | Retrieve bounded source by line range, symbol, or node ID |
+| `source` | Retrieve bounded source by line range, symbol, node ID, exact string, or React region |
 | `slice` | Build a bounded subgraph around a focus node, preserving semantic metadata |
-| `view` | Render the code graph, data-model graph, or model-view-lineage graph as DOT, SVG, or PNG |
+| `view` | Render the code graph, data-model graph, lineage graph, or frontend semantic graphs as DOT, SVG, or PNG |
 | `data-model` | Inspect exact entities or fields, or regenerate data-model artifacts and trace supported static view usage |
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
@@ -102,25 +106,151 @@ The `index` command writes:
 | `call-graph.json` | Optional static call graph written when `--call-graph` is requested |
 | `data-model.json` | Data entities, fields, relationships, source refs, and warnings, written when the TypeScript model analyzer runs |
 | `data-model-graph.json` | Separate graph of data-model entity and field nodes, written when the TypeScript model analyzer runs |
+| `frontend-semantic.json` | Frontend semantic artifact: React components, local components, prop types, hooks, handlers, JSX regions, test blocks, locators, UI strings, and flow relationships, written when the frontend analyzer runs on TSX/JSX files |
 
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
-Compact semantic roles on symbol-index symbols and code-graph nodes link back to the detailed artifacts through `artifactRefs`. The `data-model.json` and `data-model-graph.json` artifacts remain separate from `code-graph.json`.
+Compact semantic roles on symbol-index symbols and code-graph nodes link back to the detailed artifacts through `artifactRefs`. The data-model and frontend semantic artifacts remain separate from `code-graph.json`.
 
-`view` renders `code-graph.json` by default. Use `--graph data-model` to render `data-model-graph.json`, or `--graph model-view-lineage` after `data-model --trace-view` has produced lineage. The graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
+`view` renders `code-graph.json` by default. Use `--graph data-model` or `--graph model-view-lineage` for data-model graphs. Use `--graph react-component`, `--graph react-flow`, `--graph react-prop-event-flow`, or `--graph frontend-test` for frontend semantic graphs. Graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
 
 ## Semantic integration
 
-Version 1.1.0 adds semantic role metadata on top of the existing index artifacts.
+### v1.1 data-model semantic roles
 
-The `index` command runs semantic analyzers as part of the index run. The TypeScript model analyzer currently produces:
+The TypeScript model analyzer produces:
 
 - `data-entity` roles on exported interfaces, type aliases, and classes that are classified as data models
 - `data-field` roles on their properties
 
-These compact roles are embedded in `symbol-index.json` and `code-graph.json` using `semanticRoles` and `artifactRefs` arrays on each symbol or node. `search`, `lookup`, `slice`, and `source` are all semantic-aware: they index, return, preserve, or propagate these fields when present.
+These compact roles are embedded in `symbol-index.json` and `code-graph.json` using `semanticRoles` and `artifactRefs` arrays on each symbol or node. `search`, `lookup`, `slice`, and `source` are all semantic-aware.
 
-Additional semantic roles are defined in the schema (`route-handler`, `react-component`, `view-model`, and others) but are not yet produced by current analyzers. See [docs/ROADMAP.md](docs/ROADMAP.md) for the planned expansion.
+### v1.2 frontend semantic roles
+
+The frontend analyzer runs on `.tsx` and `.jsx` files and produces a separate `frontend-semantic.json` artifact containing:
+
+- Exported React components with source locations
+- Local (non-exported) React components with source locations
+- Prop type interfaces with source locations
+- Hook blocks (useState, useEffect, and others) with source locations
+- Event handlers with source locations
+- JSX regions with source locations
+- Frontend test blocks (describe, test, it), setup hooks, locators, route strings, and UI strings when test files are indexed
+
+Frontend facts are not embedded into `code-graph.json` or `data-model.json`. They remain in `frontend-semantic.json` and are accessed through `source --react-region`, `source --include-local-component-tree`, and `view --graph react-*` or `view --graph frontend-test`.
+
+## React/TSX indexing
+
+When `index` encounters `.tsx` or `.jsx` files, the frontend analyzer extracts:
+
+- Exported React components (function and arrow-function forms)
+- Local (non-exported) React components used within the file
+- Prop type interfaces and type aliases
+- `useState` and `useEffect` hook blocks
+- Event handlers and inline handlers
+- JSX return regions
+- Render helper local functions
+- Important UI strings (`data-testid`, `aria-label`)
+
+Results are written to `frontend-semantic.json` and registered in `manifest.json`.
+
+Example:
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+```
+
+The `manifest.json` will include a `frontendSemantic` artifact path when TSX/JSX files are indexed.
+
+## Frontend-test indexing
+
+When `index` encounters test files (`.test.tsx`, `.spec.tsx`, `.test.ts`, `.spec.ts`), the frontend analyzer additionally extracts:
+
+- `describe` blocks with their titles
+- `test` and `it` blocks with their titles
+- `beforeEach` and `afterEach` setup/teardown hooks
+- Local test helper functions
+- Locator expressions (visible text, test IDs, ARIA roles, locator chains)
+- Route-like strings
+- Repeated UI string literals across test files
+
+Test facts are included in `frontend-semantic.json` alongside component facts.
+
+## Exact source retrieval
+
+Search for an exact string across all indexed source files:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --contains "workspace-editor-empty-state" --context 5 --format numbered
+```
+
+Filter by path prefix:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --contains "structured-content" --path src/components --context 3 --format json
+```
+
+Each match result includes:
+- file path and line/column
+- surrounding context lines
+- match classification (`declaration-like`, `usage-like`, or `unknown`)
+- frontend value context when the string appears in frontend facts
+
+Multiple occurrences of the same literal across files are all reported.
+
+## React region retrieval
+
+Retrieve a named React region (component, hook, handler, JSX region, or prop type) by name:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
+```
+
+The `--react-region` flag resolves the named region from the frontend semantic artifact and returns its source slice. JSON output includes a `reactRegion` metadata block with the matched kind, ID, and name.
+
+## Local component-tree prop/event-flow retrieval
+
+Retrieve a component and its local child components as a connected source bundle:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --format numbered
+```
+
+Filter to a specific prop name:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --prop onSuccess --format numbered
+```
+
+This feature uses statically extracted prop and event flow relationships between the parent component and its local child components. It is static analysis only — it does not trace runtime rendering behavior, route reachability, or browser-state behavior.
+
+## Frontend graph views
+
+Render a static React component graph (components, local components, prop types, and their structural relationships):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-component --format dot --out .my-dev-kit/react-component.dot
+```
+
+Render all frontend flow facts (hooks, handlers, JSX regions, and flow relationships):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-flow --format dot --out .my-dev-kit/react-flow.dot
+```
+
+Render only prop and event flow relationships:
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-prop-event-flow --format dot --out .my-dev-kit/react-prop-event-flow.dot
+```
+
+Render frontend test structure (test files, describe blocks, test/it blocks, setup hooks, locators, route strings):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph frontend-test --format dot --out .my-dev-kit/frontend-test.dot
+```
+
+DOT output does not require Graphviz. All four graph views are backed by the same `frontend-semantic.json` artifact and are rendered at command time from static extracted facts. They do not claim runtime rendering behavior, route reachability, or browser-state behavior.
 
 ## Data-model extraction
 
@@ -165,21 +295,27 @@ The bundled examples are useful when you cloned this repository, are inspecting 
 TypeScript graph example:
 
 ```sh
-my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --call-graph --json
-my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "user" --limit 5 --json
-my-dev-kit lookup --index examples/basic-ts/.my-dev-kit --node symbol:src/index.ts#describeUser --depth 1 --json
+npx @dailephd/my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --call-graph --json
+npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "user" --limit 5 --json
+npx @dailephd/my-dev-kit lookup --index examples/basic-ts/.my-dev-kit --node symbol:src/index.ts#describeUser --depth 1 --json
 ```
 
 Data-model example:
 
 ```sh
-my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
-my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --trace-view --json
-my-dev-kit view --index examples/basic-data-model-ts/.my-dev-kit --graph data-model --format dot --out examples/basic-data-model-ts/.my-dev-kit/data-model.dot
-my-dev-kit view --index examples/basic-data-model-ts/.my-dev-kit --graph model-view-lineage --format dot --out examples/basic-data-model-ts/.my-dev-kit/lineage.dot
+npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
+npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit view --index examples/basic-data-model-ts/.my-dev-kit --graph data-model --format dot --out examples/basic-data-model-ts/.my-dev-kit/data-model.dot
+```
+
+React/TSX example:
+
+```sh
+npx @dailephd/my-dev-kit index --root examples/basic-react-tsx --src src --out examples/basic-react-tsx/.my-dev-kit --json
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --contains "workspace-editor-empty-state" --context 5 --format numbered
+npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
 See [examples/README.md](examples/README.md) for more detail.
@@ -194,15 +330,21 @@ my-dev-kit is a local, deterministic read-only CLI tool. It does not:
 - execute user application code
 - connect to databases
 - claim runtime React or browser-state behavior
+- claim route-aware reachability analysis
+- claim UI visibility analysis
+
+All React/TSX and frontend-test analysis is conservative static extraction from source text. The frontend semantic artifact records what the static analyzer found in the source; it does not prove what the application renders at runtime.
 
 ## Limitations
 
 - Symbol end lines are not recorded during indexing. Symbol source retrieval returns a capped preview from the symbol's start line with a warning. Use explicit line ranges for exact bounds.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
 - Data-model extraction is conservative and currently focused on supported TypeScript patterns.
-- Semantic roles currently produced: `data-entity` and `data-field` from the TypeScript model analyzer. Other defined roles are planned for future releases.
-- Lookup is exact only. There is no fuzzy entity or field lookup.
+- Frontend semantic extraction is conservative. Dynamic component registrations, runtime-composed JSX, and computed prop names may not be extracted or may be partially extracted with warnings.
+- Semantic roles currently produced: `data-entity` and `data-field` from the TypeScript model analyzer. Frontend facts are in `frontend-semantic.json`, not embedded as `semanticRoles` in the code graph.
+- Lookup is exact only. There is no fuzzy entity, field, or component lookup.
 - `trace-view` is conservative static analysis only. Unsupported dynamic or ambiguous patterns are warned or omitted.
+- Route-aware retrieval, browser-state tracing, and UI reachability analysis are planned for future releases.
 
 ## Development from source
 
@@ -223,7 +365,9 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.1.0 adds the first semantic integration layer: semantic roles on index artifacts, manifest as authoritative artifact registry, analyzer registry and status, data-model and model-to-view lineage artifacts linked from the index, and semantic-aware search, lookup, slice, and source. Future roadmap items cover broader semantic role coverage, React and route-aware analysis, source expansion, graph rendering improvements, and scalability.
+Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.
+
+Future roadmap items cover route-aware retrieval (v1.3), source continuation and expansion (v1.4), schema and layer classification (v1.5), graph-guided planner packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

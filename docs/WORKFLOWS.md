@@ -1,4 +1,4 @@
-# Workflows
+﻿# Workflows
 
 Practical usage workflows for my-dev-kit. For the full flag reference, see [COMMANDS.md](COMMANDS.md). For artifact and schema details, see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md).
 
@@ -23,7 +23,7 @@ Do not start by reading the full graph or full source tree. Use `search` first t
 Run `index` from the project root:
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 ```
 
 The `--out` path is relative to `--root`. The above creates or refreshes `.my-dev-kit/`.
@@ -33,41 +33,41 @@ Re-run the same command to refresh the artifact directory when source changes. T
 Include a call graph:
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
 ```
 
 Index multiple source roots:
 
 ```sh
-my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
 ```
 
 For large monorepos, avoid indexing broad roots that contain application output, dependency folders, caches, or generated artifacts. Target the source folders that matter for the current workflow:
 
 ```sh
-my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
 ```
 
-my-dev-kit skips common generated, dependency, cache, and build directories by default, including `node_modules`, `.next`, `dist`, `build`, `coverage`, `playwright-report`, `test-results`, `output`, `out`, `.cache`, `.turbo`, `.vercel`, `.git`, `.pytest_cache`, `__pycache__`, `.venv`, and `venv`. Add project-specific exclusions with repeated `--exclude` values:
+npx @dailephd/my-dev-kit skips common generated, dependency, cache, and build directories by default, including `node_modules`, `.next`, `dist`, `build`, `coverage`, `playwright-report`, `test-results`, `output`, `out`, `.cache`, `.turbo`, `.vercel`, `.git`, `.pytest_cache`, `__pycache__`, `.venv`, and `venv`. Add project-specific exclusions with repeated `--exclude` values:
 
 ```sh
-my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --exclude apps/web/generated --json
+npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --exclude apps/web/generated --json
 ```
 
 Use `--dry-run` before indexing a large tree, and add `--progress` when you want phase and count diagnostics. Progress is written to stderr and does not corrupt JSON stdout.
 
 ```sh
-my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --dry-run --json
-my-dev-kit index --root . --src apps/web/app --src apps/web/lib --out .my-dev-kit-web --progress --json
+npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --dry-run --json
+npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --out .my-dev-kit-web --progress --json
 ```
 
 Split indexes can keep focused workflows faster and easier to inspect:
 
 ```sh
-my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
-my-dev-kit index --root . --src apps/web/tests --src apps/web/e2e --out .my-dev-kit-web-tests --exclude playwright-report --exclude test-results --json
-my-dev-kit index --root . --src apps/nlp-service/src --language python --out .my-dev-kit-nlp --call-graph --json
-my-dev-kit index --root . --src scripts --out .my-dev-kit-scripts --json
+npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src apps/web/tests --src apps/web/e2e --out .my-dev-kit-web-tests --exclude playwright-report --exclude test-results --json
+npx @dailephd/my-dev-kit index --root . --src apps/nlp-service/src --language python --out .my-dev-kit-nlp --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src scripts --out .my-dev-kit-scripts --json
 ```
 
 ---
@@ -79,37 +79,37 @@ Python indexing requires `python` or `python3` on `PATH` with Python 3.8 or late
 **Step 1: Index the Python source root**
 
 ```sh
-my-dev-kit index --root . --src src --language python --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-dev-kit --json
 ```
 
 Include a static call graph when call edges are useful:
 
 ```sh
-my-dev-kit index --root . --src src --language python --out .my-dev-kit --call-graph --json
+npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-dev-kit --call-graph --json
 ```
 
 **Step 2: Search for Python symbols**
 
 ```sh
-my-dev-kit search --index .my-dev-kit --query "greet" --limit 20 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "greet" --limit 20 --json
 ```
 
 **Step 3: Look up a Python node**
 
 ```sh
-my-dev-kit lookup --index .my-dev-kit --node file:src/main.py --depth 1 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node file:src/main.py --depth 1 --json
 ```
 
 **Step 4: Retrieve Python source**
 
 ```sh
-my-dev-kit source --index .my-dev-kit --file src/main.py --symbol greet --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/main.py --symbol greet --format numbered
 ```
 
 Use line-range retrieval for exact bounds:
 
 ```sh
-my-dev-kit source --index .my-dev-kit --file src/main.py --start 1 --end 40 --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/main.py --start 1 --end 40 --format numbered
 ```
 
 **Python notes:**
@@ -126,13 +126,13 @@ Graph-Guided Symbol Retrieval is the recommended approach when navigating an unf
 **Step 1: Index the project**
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 ```
 
 **Step 2: Search to narrow candidates**
 
 ```sh
-my-dev-kit search --index .my-dev-kit --query "<relevant term>" --limit 20 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<relevant term>" --limit 20 --json
 ```
 
 Inspect `nodeId`, `kind`, and `matchReasons` in the results. Prefer symbol nodes when the target is a specific function, class, or type. When semantic metadata is present, result items include `semanticRoles` and `artifactRefs`, and match reasons may include `semanticRole` as a contributing field.
@@ -140,7 +140,7 @@ Inspect `nodeId`, `kind`, and `matchReasons` in the results. Prefer symbol nodes
 **Step 3: Look up the strongest candidate**
 
 ```sh
-my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
 ```
 
 Review incoming edges, outgoing edges, and neighbors to understand the node's relationships. Repeat for adjacent nodes as needed.
@@ -148,7 +148,7 @@ Review incoming edges, outgoing edges, and neighbors to understand the node's re
 **Step 4: Slice around the focus node**
 
 ```sh
-my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
 ```
 
 The slice provides a bounded subgraph view that is easier to reason about than the full graph.
@@ -158,13 +158,13 @@ The slice provides a bounded subgraph view that is easier to reason about than t
 Use symbol-mode retrieval when possible:
 
 ```sh
-my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
 ```
 
 Use line-range retrieval when symbol-mode is too broad or incomplete:
 
 ```sh
-my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --format numbered
 ```
 
 **What to avoid:**
@@ -180,21 +180,21 @@ my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --fo
 DOT output does not require Graphviz:
 
 ```sh
-my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
-my-dev-kit view --index .my-dev-kit --format dot --edge-style labeled --out .my-dev-kit/graph.labeled.dot
-my-dev-kit view --index .my-dev-kit --format dot --edge-style minimal --out .my-dev-kit/graph.minimal.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --edge-style labeled --out .my-dev-kit/graph.labeled.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --edge-style minimal --out .my-dev-kit/graph.minimal.dot
 ```
 
 SVG output requires Graphviz:
 
 ```sh
-my-dev-kit view --index .my-dev-kit --format svg --out .my-dev-kit/graph.svg
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format svg --out .my-dev-kit/graph.svg
 ```
 
 Fall back to DOT if Graphviz is unavailable:
 
 ```sh
-my-dev-kit view --index .my-dev-kit --format svg --allow-dot-fallback --out .my-dev-kit/graph.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format svg --allow-dot-fallback --out .my-dev-kit/graph.dot
 ```
 
 Use `--format dot` for automated checks. Reserve SVG or PNG for interactive review.
@@ -205,7 +205,7 @@ Use `--format dot` for automated checks. Reserve SVG or PNG for interactive revi
 
 LLM-assisted development works best when the model receives bounded, relevant context rather than whole files or broad project dumps. my-dev-kit helps collect that context deterministically from your local project.
 
-my-dev-kit does not call any LLM or external service, does not edit files, and does not act as an autonomous agent. It produces local bounded artifacts that you can provide to an LLM conversation, a coding assistant, or any downstream tool.
+npx @dailephd/my-dev-kit does not call any LLM or external service, does not edit files, and does not act as an autonomous agent. It produces local bounded artifacts that you can provide to an LLM conversation, a coding assistant, or any downstream tool.
 
 ```mermaid
 flowchart TD
@@ -219,11 +219,11 @@ flowchart TD
 **Command sequence**
 
 ```sh
-my-dev-kit index --root . --src src --out .my-dev-kit --json
-my-dev-kit search --index .my-dev-kit --query "<topic>" --limit 20 --json
-my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
-my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
-my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<topic>" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
 ```
 
 **Recommended outputs to provide**
@@ -255,11 +255,11 @@ my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" -
 The examples are for cloned repositories, documentation writers, and package smoke tests. Normal npm users should run my-dev-kit inside their own project.
 
 ```sh
-my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
-my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
+npx @dailephd/my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
 
-my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --json
-my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
+npx @dailephd/my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
 ```
 
 ---
