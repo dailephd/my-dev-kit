@@ -44,9 +44,9 @@ Check the following files at minimum:
 - README.md
 - QUICKSTART.md
 - CHANGELOG.md
-- doc/COMMANDS.md
-- doc/ROADMAP.md
-- doc/PROJECT_OVERVIEW.md
+- docs/COMMANDS.md
+- docs/ROADMAP.md
+- docs/PROJECT_OVERVIEW.md
 - examples/README.md, if present
 
 Documentation should use:
@@ -103,7 +103,7 @@ Expected package contents:
 - README.md
 - LICENSE
 - CHANGELOG.md
-- doc/ files intended for public package documentation
+- docs/ files intended for public package documentation
 - examples intended for public users
 - package.json
 
@@ -141,17 +141,17 @@ The version command should print 1.2.0.
 
 Run TypeScript indexing against the packaged examples.
 
-    my-dev-kit index --root examples/basic-ts --src src --out examples/basic-ts/.my-dev-kit-release --call-graph --json
+    my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
     my-dev-kit search --index examples/basic-ts/.my-dev-kit-release --query service --limit 5 --json
     my-dev-kit view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
 
 Run Python indexing if the package includes the Python example.
 
-    my-dev-kit index --root examples/basic-python --src src --language python --out examples/basic-python/.my-dev-kit-release --json
+    my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit-release --json
 
 Run React/TSX indexing and frontend retrieval.
 
-    my-dev-kit index --root examples/basic-react-tsx --src src --out examples/basic-react-tsx/.my-dev-kit-release --json
+    my-dev-kit index --root examples/basic-react-tsx --src src --out .my-dev-kit-release --json
     my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit-release --contains "workspace-editor-empty-state" --context 3 --format numbered
     my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit-release --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
     my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-component.dot

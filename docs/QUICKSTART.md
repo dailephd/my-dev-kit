@@ -246,7 +246,7 @@ npx @dailephd/my-dev-kit search --index examples/basic-python/.my-dev-kit --quer
 React/TSX example:
 
 ```sh
-npx @dailephd/my-dev-kit index --root examples/basic-react-tsx --src src --out examples/basic-react-tsx/.my-dev-kit --json
+npx @dailephd/my-dev-kit index --root examples/basic-react-tsx --src src --out .my-dev-kit --json
 npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --contains "workspace-editor-empty-state" --context 5 --format numbered
 npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot

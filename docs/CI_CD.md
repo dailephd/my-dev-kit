@@ -17,7 +17,10 @@ The workflow runs on:
 - pushes to `main`
 - pull requests
 
-The workflow uses Node.js 20 LTS.
+The workflow uses a Node.js matrix:
+
+- 20.x
+- 22.x
 
 ## Platform support
 
