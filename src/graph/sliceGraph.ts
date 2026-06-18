@@ -6,6 +6,7 @@ export function sliceGraph(options: {
   focusNodeId: string
   depth: number
   direction: GraphSliceDirection
+  includeEdgeKinds?: Set<string>
 }): GraphSliceCore {
   validateSliceInputs(options.depth, options.direction)
   const nodeMap = new Map(options.graph.nodes.map((node) => [node.id, node]))
@@ -26,6 +27,26 @@ export function sliceGraph(options: {
       }
     }
     frontier = next
+  }
+
+  if (options.includeEdgeKinds && options.includeEdgeKinds.size > 0) {
+    let flowFrontier = new Set(includedNodeIds)
+    const flowDepth = Math.max(3, options.depth)
+    for (let level = 0; level < flowDepth; level++) {
+      const next = new Set<string>()
+      for (const current of flowFrontier) {
+        for (const edge of options.graph.edges) {
+          if (!options.includeEdgeKinds.has(edge.kind)) continue
+          for (const adjacent of adjacentNodes(edge, current, options.direction)) {
+            if (includedNodeIds.has(adjacent)) continue
+            includedNodeIds.add(adjacent)
+            next.add(adjacent)
+          }
+        }
+      }
+      flowFrontier = next
+      if (flowFrontier.size === 0) break
+    }
   }
 
   const nodes = [...includedNodeIds]

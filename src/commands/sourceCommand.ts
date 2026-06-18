@@ -20,6 +20,10 @@ import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRe
 import { parseInteger } from './parseUtils.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
+import {
+  buildLocalComponentTreeSource,
+  renderLocalComponentTreeSource,
+} from '../source/localComponentTreeSource.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -31,6 +35,8 @@ export function registerSourceCommand(program: Command): void {
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
     .option('--symbol <name>', 'symbol name')
+    .option('--include-local-component-tree', 'include a bounded local React component-tree source bundle for --symbol')
+    .option('--prop <name>', 'highlight a prop name inside --include-local-component-tree output')
     .option('--contains <string>', 'exact string to search for across indexed source files')
     .option('--react-region <region>', 'React region name (component, hook, JSX region, or prop type) to retrieve')
     .option(
@@ -55,6 +61,11 @@ export function registerSourceCommand(program: Command): void {
 
       if (mode === 'react-region') {
         handleReactRegion(options, format)
+        return
+      }
+
+      if (mode === 'local-component-tree') {
+        handleLocalComponentTree(options, format)
         return
       }
 
@@ -248,6 +259,32 @@ function handleReactRegion(options: SourceCommandOptions, format: SourceOutputFo
   process.stdout.write(rendered)
 }
 
+function handleLocalComponentTree(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadSymbolIndex: false,
+  })
+  const frontendArtifact = loadOptionalFrontendArtifact(artifacts.resolved)
+  const result = buildLocalComponentTreeSource({
+    indexDir: options.index,
+    projectRoot: artifacts.resolved.manifest.projectRoot,
+    frontendArtifact,
+    symbol: options.symbol!,
+    filePath: options.file,
+    maxLines: options.maxLines,
+    propName: options.prop,
+  })
+
+  const resolvedFormat: SourceOutputFormat = format ?? 'numbered'
+  const rendered = renderLocalComponentTreeSource(result, resolvedFormat)
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote local component-tree source to ${writtenPath}`)
+    return
+  }
+  process.stdout.write(rendered)
+}
+
 function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
   const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
   if (!artifactPath) return null
@@ -266,6 +303,8 @@ interface SourceCommandOptions {
   start?: number
   end?: number
   symbol?: string
+  includeLocalComponentTree?: boolean
+  prop?: string
   contains?: string
   context: number
   path?: string
@@ -285,12 +324,26 @@ function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | unde
   return undefined
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' {
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' {
   const hasContains = options.contains !== undefined
   const hasReactRegion = options.reactRegion !== undefined
+  const hasLocalComponentTree = options.includeLocalComponentTree === true
   const hasNode = options.node !== undefined
   const hasSymbol = options.symbol !== undefined
   const hasStartEnd = options.start !== undefined || options.end !== undefined
+
+  if (!hasLocalComponentTree && options.prop !== undefined) {
+    throw new Error('--prop is only valid with --include-local-component-tree.')
+  }
+
+  if (hasLocalComponentTree) {
+    if (!hasSymbol) throw new Error('--include-local-component-tree requires --symbol <component>.')
+    if (hasContains) throw new Error('--include-local-component-tree cannot be combined with --contains.')
+    if (hasReactRegion) throw new Error('--include-local-component-tree cannot be combined with --react-region.')
+    if (hasNode) throw new Error('--include-local-component-tree cannot be combined with --node.')
+    if (hasStartEnd) throw new Error('--include-local-component-tree cannot be combined with --start or --end.')
+    return 'local-component-tree'
+  }
 
   if (hasReactRegion && hasContains) throw new Error('--react-region cannot be combined with --contains.')
   if (hasReactRegion && hasNode) throw new Error('--react-region cannot be combined with --node.')
