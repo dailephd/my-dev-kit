@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.1.0 supports:
+Version 1.2.0 supports:
 
 - indexing TypeScript, JavaScript, and Python source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -144,14 +144,18 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current v1.1.0 scope:
+Current v1.2.0 scope:
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
 - conservative same-project static lineage where field identity remains explicit
+- React/TSX frontend analysis producing `frontend-semantic.json` with components, hooks, handlers, JSX regions, and UI strings
+- exact source string retrieval with context, classification, and repeated literal reporting
+- React region and local component-tree prop/event-flow retrieval
+- frontend semantic graph views: react-component, react-flow, react-prop-event-flow, frontend-test
 - warnings for unsupported or ambiguous patterns
 
-Current v1.1.0 does not claim:
+Current v1.2.0 does not claim:
 
 - full ORM or schema coverage
 - runtime database behavior

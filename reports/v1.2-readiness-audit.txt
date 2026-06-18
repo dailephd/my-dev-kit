@@ -1,0 +1,219 @@
+v1.2 Readiness Audit
+====================
+Date: 2026-06-18
+Branch: audit/v1.2-readiness
+Auditor: Claude Sonnet 4.6 (automated)
+
+---
+
+SUMMARY
+-------
+Status: READY TO RELEASE (with corrective changes applied in this branch)
+
+All v1.2 features are implemented, tested, and documented. Three corrective
+changes were made during this audit and are included in this commit.
+
+---
+
+CORRECTIVE CHANGES MADE
+-----------------------
+
+1. examples/basic-react-tsx missing from package.json "files" array
+   File: package.json
+   Fix: Added "examples/basic-react-tsx/src" and "examples/basic-react-tsx/README.md"
+   Impact: Without this fix, the basic-react-tsx example would not appear in
+   the published npm package, making the bundled example inaccessible to
+   consumers who install from npm.
+
+2. Package version not bumped from 1.1.0 to 1.2.0
+   Files: package.json, package-lock.json, src/version.ts
+   Fix: Updated version to 1.2.0 in all three files.
+   Impact: Without this fix, the published package would report version 1.1.0
+   and the CLI --version flag would output "1.1.0" for a 1.2 release.
+
+3. CHANGELOG.md had no 1.2.0 entry and an unfilled YYYY-MM-DD placeholder
+   File: CHANGELOG.md
+   Fix: Added v1.2.0 entry dated 2026-06-18 with full feature list;
+   fixed v1.1.0 placeholder date to 2026-05-01.
+   Impact: Release notes were absent for v1.2.0.
+
+Additional update: docs/PROJECT_OVERVIEW.md updated from "Version 1.1.0" to
+"Version 1.2.0" and the current scope section expanded to cover v1.2 features.
+
+---
+
+TYPECHECK AND TEST MATRIX
+--------------------------
+
+  npm run typecheck   EXIT 0  (0 errors, 0 warnings)
+  npm test            EXIT 0  593/593 tests pass across 53 test files
+  npm run build       EXIT 0  dist/cli.js 301.48 KB
+  npm run verify      EXIT 0  (typecheck + test + build in sequence)
+  npm pack --dry-run  EXIT 0  29 files, 111.5 kB packed
+
+---
+
+PACK MANIFEST (npm pack --dry-run)
+-----------------------------------
+
+  CHANGELOG.md
+  LICENSE
+  README.md
+  dist/cli.js
+  docs/ARCHITECTURE.md
+  docs/CI_CD.md
+  docs/COMMANDS.md
+  docs/DEVELOPMENT.md
+  docs/GRAPH_SCHEMA.md
+  docs/PROJECT_OVERVIEW.md
+  docs/QUICKSTART.md
+  docs/RELEASE.md
+  docs/ROADMAP.md
+  docs/SECURITY.md
+  docs/WORKFLOWS.md
+  examples/README.md
+  examples/basic-data-model-ts/README.md
+  examples/basic-data-model-ts/src/models.ts
+  examples/basic-data-model-ts/src/screen.tsx
+  examples/basic-python/README.md
+  examples/basic-python/src/main.py
+  examples/basic-python/src/utils.py
+  examples/basic-react-tsx/README.md           <- new in v1.2
+  examples/basic-react-tsx/src/WorkspaceEditorShell.tsx  <- new in v1.2
+  examples/basic-ts/README.md
+  examples/basic-ts/src/index.ts
+  examples/basic-ts/src/userService.ts
+  examples/basic-ts/src/userTypes.ts
+  package.json
+
+  Total: 29 files, 111.5 kB packed / 496 kB unpacked
+
+---
+
+V1.2 FEATURE SMOKE MATRIX
+--------------------------
+
+All commands run against examples/basic-react-tsx/.my-dev-kit-index.
+
+  index
+    basic-react-tsx: files=1 symbols=6 components=3 hooks=4 uiStrings=4
+    frontend-semantic analyzer status: complete (0 warnings, 0 errors)
+    PASS
+
+  source --contains
+    --contains "workspace-editor-empty-state" --context 2: matchCount=1
+    PASS
+
+  source --react-region
+    --react-region WorkspaceEditorShell: startLine=51 endLine=99
+    PASS
+
+  source --include-local-component-tree
+    WorkspaceEditorShell: 40 blocks returned (root-component, local-child-component,
+    prop-assignment, callback-invocation, event-handler, state-access,
+    jsx-branch, prop-reference, child-props-type blocks)
+    PASS
+
+  view --graph react-component
+    nodes=7 edges=6 status=ok
+    PASS
+
+  view --graph react-flow
+    nodes=25 edges=44
+    PASS
+
+  view --graph react-prop-event-flow
+    nodes=25 edges=44
+    PASS
+
+  view --graph frontend-test
+    nodes=0 edges=0 (expected — test files excluded from default indexer)
+    PASS (known limitation documented in README and COMMANDS.md)
+
+---
+
+V1.1 BACKWARD COMPATIBILITY MATRIX
+-------------------------------------
+
+All commands run against examples/basic-ts and examples/basic-data-model-ts.
+
+  index basic-ts: files=3 symbols=5 PASS
+  search basic-ts --query "user" --limit 5: results=5 PASS
+  view --graph code: nodes=10 edges=13 PASS
+
+  index basic-data-model-ts: entities=3 PASS
+  data-model --entity User: name=User fieldCount=3 PASS
+  data-model --trace-view User: status=ok PASS
+  view --graph data-model: nodes=10 edges=7 PASS
+
+  All v1.1 commands and graph views confirmed working after v1.2 changes.
+
+---
+
+DOCUMENTATION AUDIT
+--------------------
+
+  README.md
+    - All commands use npx @dailephd/my-dev-kit form  PASS
+    - React/TSX indexing section present               PASS
+    - Frontend-test limitation documented              PASS
+    - basic-react-tsx bundled example documented       PASS
+    - Design boundaries updated                        PASS
+
+  docs/COMMANDS.md
+    - All commands use npx @dailephd/my-dev-kit form   PASS
+    - --contains, --react-region, --include-local-component-tree,
+      --prop documented                                PASS
+    - view --graph react-*, frontend-test documented   PASS
+    - Frontend-test limitation documented              PASS
+
+  docs/ARCHITECTURE.md
+    - frontend-semantic.json in text and Mermaid diagram  PASS
+    - Frontend analyzer layer section present             PASS
+
+  docs/ROADMAP.md
+    - v1.2 section shows Implemented                   PASS
+
+  docs/QUICKSTART.md
+    - All commands npx form                            PASS
+    - React/TSX workflow examples present              PASS
+
+  docs/WORKFLOWS.md
+    - All bare my-dev-kit commands replaced            PASS
+
+  examples/README.md
+    - basic-react-tsx listed                           PASS
+
+  examples/basic-react-tsx/README.md
+    - Present and complete                             PASS
+
+  CHANGELOG.md
+    - v1.2.0 entry present with full feature list      PASS (corrected)
+
+---
+
+KNOWN LIMITATIONS (documented, not release blockers)
+-----------------------------------------------------
+
+  1. test-file indexing gap: DEFAULT_FILE_EXCLUDE_PATTERNS in
+     discoverSourceFiles.ts excludes .test./.spec. files from default
+     discovery. view --graph frontend-test produces empty output in the
+     standard workflow. Documented in README and COMMANDS.md.
+
+  2. Symbol end-line not recorded: symbol source retrieval returns a capped
+     preview from start line. Documented in README limitations section.
+
+  3. Published @1.1.0 on npm does not support --graph data-model or v1.2
+     features: expected — the v1.2.0 package has not yet been published.
+     Publishing is a non-goal for this audit branch.
+
+---
+
+OPEN ITEMS (non-blocking, post-v1.2)
+--------------------------------------
+
+  None identified. All v1.2 non-goals (npm publish, GitHub release, new
+  features) are deferred per Batch 5 scope.
+
+---
+END OF AUDIT

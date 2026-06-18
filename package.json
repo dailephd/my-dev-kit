@@ -1,7 +1,7 @@
 {
   "name": "@dailephd/my-dev-kit",
-  "version": "1.1.0",
-  "description": "Local codebase graph, indexing, slicing, source retrieval, search, and Graphviz visualization CLI.",
+  "version": "1.2.0",
+  "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static lineage for TypeScript, JavaScript, and Python projects.",
   "type": "module",
   "bin": {
     "my-dev-kit": "dist/cli.js"
@@ -28,7 +28,9 @@
     "examples/basic-ts/src",
     "examples/basic-ts/README.md",
     "examples/basic-python/src",
-    "examples/basic-python/README.md"
+    "examples/basic-python/README.md",
+    "examples/basic-react-tsx/src",
+    "examples/basic-react-tsx/README.md"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",

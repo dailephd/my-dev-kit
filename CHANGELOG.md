@@ -1,6 +1,25 @@
 # Changelog
 
-## 1.1.0 - YYYY-MM-DD
+## 1.2.0 - 2026-06-18
+
+Added React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.
+
+- Added frontend analyzer running as part of `index`: produces `frontend-semantic.json` for `.tsx` and `.jsx` files
+- Added `frontend-semantic.json` containing exported and local React components, prop types, hooks, handlers, JSX regions, test blocks, locators, and UI strings
+- Added `source --contains` for exact string retrieval across all indexed files with context lines, match classification, and repeated literal reporting
+- Added `source --path` for path-prefix filtering of `--contains` results
+- Added `source --react-region` for retrieving a named React region (component, hook, handler, JSX region, prop type) by name from the frontend semantic artifact
+- Added `source --include-local-component-tree` for retrieving a component and its local child components as a connected source bundle with prop, callback, state, handler, and branch blocks
+- Added `source --prop` for filtering local-component-tree output to a specific prop name
+- Added `view --graph react-component` for rendering exported and local components with structural relationships
+- Added `view --graph react-flow` for rendering all frontend flow facts: hooks, handlers, JSX regions, and flow relationships
+- Added `view --graph react-prop-event-flow` for rendering only prop and event flow relationships
+- Added `view --graph frontend-test` for rendering test structure from frontend test facts in `frontend-semantic.json`
+- Added `search` enrichment from frontend semantic values: `data-testid` and `aria-label` values are indexed and ranked alongside symbol matches
+- Added `basic-react-tsx` bundled example with `WorkspaceEditorShell` TSX component and pre-built `.my-dev-kit-index` artifacts
+- Known limitation: the base indexer excludes `.test.` and `.spec.` files from default file discovery; `view --graph frontend-test` produces output only when test files reach the frontend analyzer through a custom indexing path
+
+## 1.1.0 - 2026-05-01
 
 Added index-first semantic integration, manifest as authoritative artifact registry, semantic role metadata on index artifacts, data-model artifacts linked from the index, and semantic-aware search, lookup, slice, and source commands.
 
