@@ -2,12 +2,14 @@ import type {
   FrontendSemanticArtifact,
   FrontendFileResult,
   ReactFlowRelationshipKind,
+  TestBlockCandidate,
+  LocatorCandidate,
 } from '../frontend/frontendTypes.js'
 import { FRONTEND_SEMANTIC_ARTIFACT_KIND } from '../frontend/frontendTypes.js'
 import type { RenderableGraph, RenderableGraphEdge, RenderableGraphNode } from './renderableGraphTypes.js'
 
 // Graphs derived from the frontend semantic artifact, not a separate graph file.
-export type FrontendGraphSelection = 'react-component' | 'react-flow'
+export type FrontendGraphSelection = 'react-component' | 'react-flow' | 'react-prop-event-flow' | 'frontend-test'
 
 /** Max nodes before omitting lower-priority entries. */
 const MAX_NODES = 300
@@ -275,4 +277,177 @@ function byFilePath(a: FrontendFileResult, b: FrontendFileResult): number {
 
 function compareById<T extends { id: string }>(a: T, b: T): number {
   return a.id.localeCompare(b.id)
+}
+
+// ---------------------------------------------------------------------------
+// react-prop-event-flow graph
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a static prop/event-flow graph from the frontend semantic artifact.
+ * Focuses on parent→child prop passing, callback flow, and handler→state edges.
+ * Nodes: components (box), local components (ellipse), prop/state facts (oval).
+ * Edges: from ReactFlowRelationship kinds focused on prop/event/state flow.
+ */
+export function adaptReactPropEventFlowGraph(artifact: FrontendSemanticArtifact): RenderableGraph {
+  validateFrontendArtifact(artifact)
+
+  const PROP_EVENT_KINDS: Set<ReactFlowRelationshipKind> = new Set([
+    'react-renders-local-component',
+    'react-passes-prop',
+    'react-passes-callback-prop',
+    'react-callback-invoked-by-child',
+    'react-event-uses-handler',
+    'react-handler-reads-state',
+    'react-handler-sets-state',
+    'react-state-controls-jsx-branch',
+    'react-helper-computes-prop',
+    'react-prop-reference',
+  ])
+
+  const nodes: RenderableGraphNode[] = []
+  const edges: RenderableGraphEdge[] = []
+  const nodeIds = new Set<string>()
+  const edgeIds = new Set<string>()
+
+  function addNode(node: RenderableGraphNode): void {
+    if (nodeIds.has(node.id) || nodes.length >= MAX_NODES) return
+    nodes.push(node)
+    nodeIds.add(node.id)
+  }
+
+  function addEdge(edge: RenderableGraphEdge): void {
+    if (edgeIds.has(edge.id)) return
+    edges.push(edge)
+    edgeIds.add(edge.id)
+  }
+
+  for (const file of [...artifact.files].sort(byFilePath)) {
+    const propEventRels = (file.relationships ?? []).filter((r) => PROP_EVENT_KINDS.has(r.kind))
+    if (propEventRels.length === 0 && file.components.length === 0) continue
+
+    const idMap = buildFlowIdMap(file, nodeIds, addNode)
+
+    for (const rel of propEventRels) {
+      const srcNodeId = idMap.get(rel.sourceId)
+      const tgtNodeId = rel.targetId ? idMap.get(rel.targetId) : undefined
+      if (!srcNodeId || !tgtNodeId) continue
+      const label = flowEdgeLabel(rel.kind, rel.propName)
+      addEdge({ id: rel.id, source: srcNodeId, target: tgtNodeId, kind: rel.kind, label })
+    }
+  }
+
+  return {
+    id: 'react-prop-event-flow',
+    label: 'ReactPropEventFlow',
+    nodes: [...nodes].sort(compareById),
+    edges: [...edges].sort(compareById),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// frontend-test graph
+// ---------------------------------------------------------------------------
+
+/** Graph safety limit for test blocks. */
+const MAX_TEST_BLOCKS = 200
+
+/**
+ * Builds a static frontend test structure graph from the frontend semantic artifact.
+ * Nodes: test file (box), describe (box), test/it (ellipse), setup (oval),
+ *        locator (diamond), route string (oval).
+ * Edges: file→describe, describe→test, describe→setup, test→locator,
+ *        test→route.
+ */
+export function adaptFrontendTestGraph(artifact: FrontendSemanticArtifact): RenderableGraph {
+  validateFrontendArtifact(artifact)
+
+  const nodes: RenderableGraphNode[] = []
+  const edges: RenderableGraphEdge[] = []
+  const nodeIds = new Set<string>()
+  const edgeIds = new Set<string>()
+  let testBlockCount = 0
+
+  function addNode(node: RenderableGraphNode): void {
+    if (nodeIds.has(node.id)) return
+    nodes.push(node)
+    nodeIds.add(node.id)
+  }
+
+  function addEdge(edge: RenderableGraphEdge): void {
+    if (edgeIds.has(edge.id)) return
+    edges.push(edge)
+    edgeIds.add(edge.id)
+  }
+
+  for (const file of [...artifact.files].sort(byFilePath)) {
+    if (!file.isTestFile || file.testBlocks.length === 0) continue
+
+    const fileId = `test-file:${file.filePath}`
+    addNode({ id: fileId, kind: 'test-file', label: shortFilePath(file.filePath), shape: 'box' })
+
+    const blockById = new Map<string, TestBlockCandidate>()
+    for (const block of file.testBlocks) {
+      blockById.set(block.id, block)
+    }
+
+    for (const block of [...file.testBlocks].sort((a, b) => a.id.localeCompare(b.id))) {
+      if (testBlockCount >= MAX_TEST_BLOCKS) break
+      testBlockCount++
+
+      const blockId = `test-block:${block.id}`
+      const blockLabel = testBlockLabel(block)
+      const blockShape = testBlockShape(block.kind)
+      addNode({ id: blockId, kind: block.kind, label: blockLabel, shape: blockShape })
+
+      const parentNodeId = block.parentId ? `test-block:${block.parentId}` : fileId
+      const edgeId = `edge:${parentNodeId}→${blockId}`
+      const edgeKind = block.parentId ? 'contains' : 'file-contains'
+      addEdge({ id: edgeId, source: parentNodeId, target: blockId, kind: edgeKind, label: edgeKind })
+    }
+
+    // Locator nodes — grouped under each test block
+    for (const locator of [...file.locators].sort((a, b) => a.id.localeCompare(b.id))) {
+      if (!locator.value) continue
+      const locId = `locator:${locator.id}`
+      const locLabel = truncate(`${locator.kind}:${locator.value}`)
+      addNode({ id: locId, kind: 'locator', label: locLabel, shape: 'diamond' })
+
+      const ownerNodeId = locator.testBlockId ? `test-block:${locator.testBlockId}` : fileId
+      if (nodeIds.has(ownerNodeId)) {
+        addEdge({ id: `loc-edge:${locator.id}`, source: ownerNodeId, target: locId, kind: 'uses-locator', label: 'uses-locator' })
+      }
+    }
+
+    // Route strings — shown as lightweight oval nodes attached to their test block
+    for (const route of [...file.routeStrings].sort((a, b) => a.id.localeCompare(b.id))) {
+      const routeId = `route:${route.id}`
+      addNode({ id: routeId, kind: 'route-string', label: truncate(route.value), shape: 'oval' })
+
+      const ownerNodeId = route.testBlockId ? `test-block:${route.testBlockId}` : fileId
+      if (nodeIds.has(ownerNodeId)) {
+        addEdge({ id: `route-edge:${route.id}`, source: ownerNodeId, target: routeId, kind: 'mentions-route', label: 'mentions-route' })
+      }
+    }
+  }
+
+  return {
+    id: 'frontend-test',
+    label: 'FrontendTestGraph',
+    nodes: [...nodes].sort(compareById),
+    edges: [...edges].sort(compareById),
+  }
+}
+
+function testBlockLabel(block: TestBlockCandidate): string {
+  const kind = block.kind
+  const title = block.title ? truncate(block.title) : kind
+  const mod = block.modifier ? `.${block.modifier}` : ''
+  return `${kind}${mod}: ${title}`
+}
+
+function testBlockShape(kind: TestBlockCandidate['kind']): string {
+  if (kind === 'describe') return 'box'
+  if (kind === 'test' || kind === 'it') return 'ellipse'
+  return 'oval'
 }

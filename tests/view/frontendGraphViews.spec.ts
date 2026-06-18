@@ -6,7 +6,7 @@ import { adaptReactComponentGraph, adaptReactFlowGraph, validateFrontendArtifact
 import { buildRenderableDotGraph } from '../../src/graph/buildRenderableDotGraph.js'
 import { isGraphvizAvailable } from '../../src/graph/renderGraphviz.js'
 import { runCli } from '../lookup/testCli.js'
-import type { FrontendSemanticArtifact } from '../../src/frontend/frontendTypes.js'
+import type { FrontendFileResult, FrontendSemanticArtifact, ReactFlowRelationship } from '../../src/frontend/frontendTypes.js'
 
 const tempDirs: string[] = []
 
@@ -248,14 +248,14 @@ function makeMinimalArtifact(overrides: Partial<FrontendSemanticArtifact> = {}):
     schemaVersion: '1.0.0',
     createdAt: '2026-01-01T00:00:00.000Z',
     files: [],
-    summary: { fileCount: 0, jsxFileCount: 0, testFileCount: 0, componentCount: 0, hookCount: 0, testBlockCount: 0, uiStringCount: 0, locatorCount: 0, warningCount: 0, errorCount: 0 },
+    summary: { fileCount: 0, jsxFileCount: 0, testFileCount: 0, componentCount: 0, hookCount: 0, testBlockCount: 0, uiStringCount: 0, relationshipCount: 0, locatorCount: 0, warningCount: 0, errorCount: 0 },
     warnings: [],
     ...overrides,
   }
 }
 
-function makeFile(filePath: string, overrides: Partial<typeof emptyFile> = {}) {
-  const emptyFile = {
+function makeFile(filePath: string, overrides: Partial<FrontendFileResult> = {}): FrontendFileResult {
+  const emptyFile: FrontendFileResult = {
     filePath,
     hasJsx: true,
     isTestFile: false,
@@ -308,6 +308,21 @@ function makeHook(id: string, hookName: string, stateVarName?: string) {
   }
 }
 
+const DUMMY_REF = { filePath: 'src/Test.tsx', line: 1, endLine: 1 }
+
+function makeRel(id: string, kind: ReactFlowRelationship['kind'], sourceId: string, targetId: string, propName?: string): ReactFlowRelationship {
+  return {
+    id, kind,
+    filePath: 'src/Test.tsx',
+    ownerComponentId: sourceId,
+    sourceId, targetId,
+    propName: propName ?? null,
+    valueSummary: null,
+    sourceRef: DUMMY_REF,
+    warnings: [],
+  }
+}
+
 describe('adaptReactComponentGraph — unit', () => {
   it('empty artifact produces empty graph', () => {
     const g = adaptReactComponentGraph(makeMinimalArtifact())
@@ -356,18 +371,7 @@ describe('adaptReactComponentGraph — unit', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-1', 'Parent')],
         localComponents: [makeLocalComponent('local-1', 'Child')],
-        relationships: [{
-          id: 'rel-1',
-          kind: 'react-renders-local-component',
-          filePath: 'src/A.tsx',
-          ownerComponentId: 'comp-1',
-          sourceId: 'comp-1',
-          targetId: 'local-1',
-          propName: null,
-          valueSummary: null,
-          sourceRef: null,
-          metadata: null,
-        }],
+        relationships: [makeRel('rel-1', 'react-renders-local-component', 'comp-1', 'local-1')],
       })],
     })
     const g = adaptReactComponentGraph(artifact)
@@ -487,18 +491,7 @@ describe('adaptReactFlowGraph — unit', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-1', 'Counter')],
         hooks: [makeHook('hook-1', 'useState', 'count')],
-        relationships: [{
-          id: 'rel-owns-hook',
-          kind: 'react-handler-reads-state',
-          filePath: 'src/A.tsx',
-          ownerComponentId: 'comp-1',
-          sourceId: 'comp-1',
-          targetId: 'hook-1',
-          propName: null,
-          valueSummary: null,
-          sourceRef: null,
-          metadata: null,
-        }],
+        relationships: [makeRel('rel-owns-hook', 'react-handler-reads-state', 'comp-1', 'hook-1')],
       })],
     })
     const g = adaptReactFlowGraph(artifact)
@@ -514,18 +507,7 @@ describe('adaptReactFlowGraph — unit', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-1', 'Form')],
         hooks: [makeHook('hook-1', 'useState', 'value')],
-        relationships: [{
-          id: 'rel-1',
-          kind: 'react-handler-sets-state',
-          filePath: 'src/A.tsx',
-          ownerComponentId: 'comp-1',
-          sourceId: 'comp-1',
-          targetId: 'hook-1',
-          propName: null,
-          valueSummary: null,
-          sourceRef: null,
-          metadata: null,
-        }],
+        relationships: [makeRel('rel-1', 'react-handler-sets-state', 'comp-1', 'hook-1')],
       })],
     })
     const g = adaptReactFlowGraph(artifact)
@@ -539,18 +521,7 @@ describe('adaptReactFlowGraph — unit', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('parent-1', 'Parent')],
         localComponents: [makeLocalComponent('child-1', 'Child')],
-        relationships: [{
-          id: 'rel-prop',
-          kind: 'react-passes-prop',
-          filePath: 'src/A.tsx',
-          ownerComponentId: 'parent-1',
-          sourceId: 'parent-1',
-          targetId: 'child-1',
-          propName: 'title',
-          valueSummary: null,
-          sourceRef: null,
-          metadata: null,
-        }],
+        relationships: [makeRel('rel-prop', 'react-passes-prop', 'parent-1', 'child-1', 'title')],
       })],
     })
     const g = adaptReactFlowGraph(artifact)
@@ -559,18 +530,7 @@ describe('adaptReactFlowGraph — unit', () => {
   })
 
   it('duplicate relationship IDs produce only one edge', () => {
-    const rel = {
-      id: 'dup-rel',
-      kind: 'react-renders-local-component' as const,
-      filePath: 'src/A.tsx',
-      ownerComponentId: 'comp-1',
-      sourceId: 'comp-1',
-      targetId: 'local-1',
-      propName: null,
-      valueSummary: null,
-      sourceRef: null,
-      metadata: null,
-    }
+    const rel = makeRel('dup-rel', 'react-renders-local-component', 'comp-1', 'local-1')
     const artifact = makeMinimalArtifact({
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-1', 'Parent')],
@@ -588,18 +548,7 @@ describe('adaptReactFlowGraph — unit', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-1', 'Form')],
         hooks: [makeHook('hook-1', 'useState', 'val')],
-        relationships: [{
-          id: 'rel-1',
-          kind: 'react-handler-reads-state',
-          filePath: 'src/A.tsx',
-          ownerComponentId: 'comp-1',
-          sourceId: 'comp-1',
-          targetId: 'hook-1',
-          propName: null,
-          valueSummary: null,
-          sourceRef: null,
-          metadata: null,
-        }],
+        relationships: [makeRel('rel-1', 'react-handler-reads-state', 'comp-1', 'hook-1')],
       })],
     })
     const g1 = adaptReactFlowGraph(artifact)
@@ -638,30 +587,8 @@ describe('adversarial: edge cases', () => {
       files: [makeFile('src/A.tsx', {
         components: [makeComponent('comp-a', 'CompA'), makeComponent('comp-b', 'CompB')],
         relationships: [
-          {
-            id: 'rel-ab',
-            kind: 'react-renders-local-component',
-            filePath: 'src/A.tsx',
-            ownerComponentId: 'comp-a',
-            sourceId: 'comp-a',
-            targetId: 'comp-b',
-            propName: null,
-            valueSummary: null,
-            sourceRef: null,
-            metadata: null,
-          },
-          {
-            id: 'rel-ba',
-            kind: 'react-renders-local-component',
-            filePath: 'src/A.tsx',
-            ownerComponentId: 'comp-b',
-            sourceId: 'comp-b',
-            targetId: 'comp-a',
-            propName: null,
-            valueSummary: null,
-            sourceRef: null,
-            metadata: null,
-          },
+          makeRel('rel-ab', 'react-renders-local-component', 'comp-a', 'comp-b'),
+          makeRel('rel-ba', 'react-renders-local-component', 'comp-b', 'comp-a'),
         ],
         localComponents: [],
       })],

@@ -9,6 +9,8 @@ import {
 import {
   adaptReactComponentGraph,
   adaptReactFlowGraph,
+  adaptReactPropEventFlowGraph,
+  adaptFrontendTestGraph,
 } from '../graph/adaptFrontendGraphs.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import { buildRenderableDotGraph } from '../graph/buildRenderableDotGraph.js'
@@ -25,7 +27,7 @@ export function registerViewCommand(program: Command): void {
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
-    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow>', 'graph artifact to render', 'code')
+    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -103,7 +105,9 @@ function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
   if (graph === 'data-model') return adaptDataModelGraph(artifact as DataModelGraphArtifact)
   if (graph === 'model-view-lineage') return adaptModelViewLineageGraph(artifact as ModelViewLineageArtifact)
   if (graph === 'react-component') return adaptReactComponentGraph(artifact as FrontendSemanticArtifact)
-  return adaptReactFlowGraph(artifact as FrontendSemanticArtifact)
+  if (graph === 'react-flow') return adaptReactFlowGraph(artifact as FrontendSemanticArtifact)
+  if (graph === 'react-prop-event-flow') return adaptReactPropEventFlowGraph(artifact as FrontendSemanticArtifact)
+  return adaptFrontendTestGraph(artifact as FrontendSemanticArtifact)
 }
 
 function parseGraph(value: string): GraphArtifactSelection {
@@ -112,10 +116,12 @@ function parseGraph(value: string): GraphArtifactSelection {
     value === 'data-model' ||
     value === 'model-view-lineage' ||
     value === 'react-component' ||
-    value === 'react-flow'
+    value === 'react-flow' ||
+    value === 'react-prop-event-flow' ||
+    value === 'frontend-test'
   ) return value
   throw new Error(
-    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow.`
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test.`
   )
 }
 
