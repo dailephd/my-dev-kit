@@ -14,6 +14,7 @@ import {
   DEFAULT_CONTEXT_LINES,
   MAX_CONTEXT_LINES,
 } from '../source/findExactMatches.js'
+import { toForwardSlash } from '../io/pathUtils.js'
 import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { parseInteger } from './parseUtils.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
@@ -36,6 +37,7 @@ export function registerSourceCommand(program: Command): void {
       parseInteger,
       DEFAULT_CONTEXT_LINES
     )
+    .option('--path <prefix>', 'path prefix filter for --contains (e.g. "src/components")')
     .option('--max-lines <n>', 'maximum returned lines', parseInteger, 160)
     .option('--format <json|plain|numbered>', 'output format')
     .option('--out <path>', 'write output to file')
@@ -127,6 +129,15 @@ function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFor
     throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
   }
 
+  // Validate optional --path filter
+  let pathFilter: string | undefined
+  if (options.path !== undefined) {
+    if (options.path.includes('..')) {
+      throw new Error('--path must not contain ".." path components.')
+    }
+    pathFilter = toForwardSlash(options.path)
+  }
+
   const artifacts = loadSourceArtifacts({
     indexDir: options.index,
     loadSymbolIndex: true,
@@ -140,6 +151,7 @@ function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFor
     projectRoot: artifacts.resolved.manifest.projectRoot,
     symbolIndex: artifacts.symbolIndex!,
     frontendArtifact,
+    pathFilter,
   })
 
   const resolvedFormat: SourceOutputFormat = format ?? 'numbered'
@@ -174,6 +186,7 @@ interface SourceCommandOptions {
   symbol?: string
   contains?: string
   context: number
+  path?: string
   maxLines: number
   format?: string
   out?: string
@@ -199,6 +212,7 @@ function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'sym
   if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
   if (hasContains && hasStartEnd) throw new Error('--contains cannot be combined with --start or --end.')
   if (hasContains && options.file !== undefined) throw new Error('--contains cannot be combined with --file. Use --contains alone to search all indexed files.')
+  if (!hasContains && options.path !== undefined) throw new Error('--path is only valid when combined with --contains.')
   if (hasContains) return 'exact-match'
 
   const hasRange = options.file !== undefined || hasStartEnd

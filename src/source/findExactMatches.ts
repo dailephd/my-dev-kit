@@ -16,6 +16,9 @@ export type ExactMatchKind =
 
 export type SemanticSource = 'semantic' | 'raw'
 
+/** Conservative static classification of a match location. */
+export type MatchClassification = 'declaration-like' | 'usage-like' | 'unknown'
+
 export interface NearestOwner {
   kind: 'component' | 'test-block' | 'symbol'
   name: string
@@ -33,6 +36,8 @@ export interface ExactMatchWindow {
   content: string
   matchKind: ExactMatchKind
   semanticSource: SemanticSource
+  /** Conservative static classification of the match location. */
+  classification: MatchClassification
   nearestOwner?: NearestOwner
   warnings: string[]
 }
@@ -51,6 +56,7 @@ export interface ExactMatchResult {
   warnings: string[]
   truncated: boolean
   limit: number
+  pathFilter?: string
 }
 
 export const DEFAULT_CONTEXT_LINES = 3
@@ -71,8 +77,9 @@ export function findExactMatches(options: {
   projectRoot: string
   symbolIndex: SymbolIndex
   frontendArtifact: FrontendSemanticArtifact | null
+  pathFilter?: string
 }): ExactMatchResult {
-  const { value, projectRoot, symbolIndex, frontendArtifact } = options
+  const { value, projectRoot, symbolIndex, frontendArtifact, pathFilter } = options
   const contextLines = Math.min(Math.max(0, options.contextLines), MAX_CONTEXT_LINES)
 
   const globalSemanticMap = frontendArtifact
@@ -91,6 +98,7 @@ export function findExactMatches(options: {
     }
 
     const forwardPath = toForwardSlash(file.path)
+    if (pathFilter && !forwardPath.startsWith(pathFilter)) continue
     const absPath = nodePath.resolve(projectRoot, file.path)
 
     let rawContent: string
@@ -126,6 +134,7 @@ export function findExactMatches(options: {
     warnings,
     truncated,
     limit: MAX_TOTAL_MATCHES,
+    pathFilter: pathFilter ?? undefined,
   }
 }
 
@@ -233,6 +242,7 @@ function scanLinesForValue(
         content,
         matchKind,
         semanticSource,
+        classification: classifyMatch(line, column),
         nearestOwner: semanticEntry?.nearestOwner,
         warnings: [],
       })
@@ -242,4 +252,32 @@ function scanLinesForValue(
   }
 
   return matches
+}
+
+/**
+ * Conservative static classification of a match by its line context.
+ * Checks text immediately before the match start (1-based column).
+ */
+export function classifyMatch(line: string, column: number): MatchClassification {
+  const before = line.slice(0, column - 1)
+  const trimmedRaw = before.trimEnd()
+  // Strip the opening quote so patterns match the operator/keyword that precedes the literal
+  const trimmed = /['"]$/.test(trimmedRaw) ? trimmedRaw.slice(0, -1).trimEnd() : trimmedRaw
+
+  // Usage-like: comparison operators (===, !==, ==, !=)
+  if (/[!=]==?\s*$/.test(trimmed)) return 'usage-like'
+
+  // Usage-like: function call or array/spread argument
+  if (/[,(]\s*$/.test(trimmed)) return 'usage-like'
+
+  // Declaration-like: const/let/var/type keyword assignment
+  if (/\b(const|let|var|type)\b.*=\s*$/.test(trimmed)) return 'declaration-like'
+
+  // Usage-like: JSX attribute (attrName= without declaration keywords)
+  if (/[a-zA-Z0-9_-]=\s*$/.test(trimmed)) return 'usage-like'
+
+  // Declaration-like: object property value (key: '...' pattern)
+  if (/:\s*$/.test(trimmed)) return 'declaration-like'
+
+  return 'unknown'
 }

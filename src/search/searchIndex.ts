@@ -1,4 +1,5 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
 import { normalizeSearchQuery, rankSearchResults } from './rankSearchResults.js'
 import type { SearchCandidate, SearchCandidateField, SearchIndexInput, SearchIndexResult } from './searchTypes.js'
@@ -19,6 +20,7 @@ const WEIGHTS = {
   semanticSubtype: 6,
   semanticSource: 2,
   semanticArtifactRef: 3,
+  frontendValue: 14,
 } as const
 
 const EDGE_WEIGHTS = {
@@ -32,7 +34,7 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
   if (normalizedTerms.length === 0) throw new Error('Search query must include at least one non-empty term.')
 
   const limit = input.limit ?? DEFAULT_LIMIT
-  const candidates = buildCandidates(input.symbolIndex, input.codeGraph)
+  const candidates = buildCandidates(input.symbolIndex, input.codeGraph, input.frontendArtifact ?? null)
   const results = rankSearchResults({
     candidates,
     query: input.query,
@@ -71,7 +73,7 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
   }
 }
 
-function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph): SearchCandidate[] {
+function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph, frontendArtifact: FrontendSemanticArtifact | null): SearchCandidate[] {
   const candidates = new Map<string, SearchCandidate>()
   const nodesById = new Map(codeGraph.nodes.map((node) => [node.id, node]))
 
@@ -106,7 +108,52 @@ function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph): Search
     mergeCandidate(candidates, edgeCandidate(edge, nodesById))
   }
 
+  // Enrich with frontend semantic facts when available
+  if (frontendArtifact) {
+    for (const c of frontendFileCandidates(frontendArtifact)) {
+      mergeCandidate(candidates, c)
+    }
+  }
+
   return [...candidates.values()].sort((a, b) => a.item.kind.localeCompare(b.item.kind) || a.item.id.localeCompare(b.item.id))
+}
+
+function frontendFileCandidates(artifact: FrontendSemanticArtifact): SearchCandidate[] {
+  const result: SearchCandidate[] = []
+  for (const fileResult of artifact.files) {
+    const frontendFields = buildFrontendValueFields(fileResult)
+    if (frontendFields.length === 0) continue
+    result.push({
+      item: {
+        kind: 'file',
+        id: fileNodeId(fileResult.filePath),
+        label: fileResult.filePath,
+        path: fileResult.filePath,
+        nodeId: fileNodeId(fileResult.filePath),
+      },
+      fields: frontendFields,
+    })
+  }
+  return result
+}
+
+function buildFrontendValueFields(fileResult: FrontendFileResult): SearchCandidateField[] {
+  const fields: SearchCandidateField[] = []
+  const seen = new Set<string>()
+
+  function addValue(value: string | null | undefined): void {
+    if (!value || seen.has(value)) return
+    seen.add(value)
+    fields.push(field('frontendValue', value, WEIGHTS.frontendValue))
+  }
+
+  for (const ui of fileResult.uiStrings) addValue(ui.value)
+  for (const block of fileResult.testBlocks) addValue(block.title)
+  for (const loc of fileResult.locators) addValue(loc.value)
+  for (const route of fileResult.routeStrings) addValue(route.value)
+  for (const comp of fileResult.components) addValue(comp.name)
+
+  return fields
 }
 
 function nodeCandidate(node: CodeGraphNode): SearchCandidate {

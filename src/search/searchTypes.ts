@@ -1,4 +1,5 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -19,6 +20,7 @@ export type SearchMatchField =
   | 'semanticSubtype'
   | 'semanticSource'
   | 'semanticArtifactRef'
+  | 'frontendValue'
 
 export interface SearchMatchReason {
   field: SearchMatchField
@@ -54,6 +56,8 @@ export interface SearchIndexInput extends SearchIndexOptions {
   resolved: ResolvedIndexManifest
   symbolIndex: SymbolIndex
   codeGraph: CodeGraph
+  /** Optional frontend semantic artifact for enriching search with UI strings, test IDs, etc. */
+  frontendArtifact?: FrontendSemanticArtifact | null
 }
 
 export interface SearchIndexSummary {

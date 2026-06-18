@@ -1,6 +1,8 @@
+import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
-import { readIndexManifest } from '../indexing/readIndexManifest.js'
+import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
+import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
 import { searchIndex } from '../search/searchIndex.js'
 import type { SearchIndexResult } from '../search/searchTypes.js'
@@ -24,6 +26,7 @@ export function registerSearchCommand(program: Command): void {
         resolved,
         symbolIndex: readRequiredJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, 'symbol index'),
         codeGraph: readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph'),
+        frontendArtifact: loadOptionalFrontendArtifact(resolved),
         query: options.query,
         limit: options.limit,
       })
@@ -49,6 +52,17 @@ function parseLimit(value: string): number {
   if (parsed < 1) throw new Error('--limit must be a positive integer.')
   if (parsed > MAX_LIMIT) throw new Error(`--limit must be ${MAX_LIMIT} or less.`)
   return parsed
+}
+
+function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
+  const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
+  if (!artifactPath) return null
+  try {
+    if (!fs.existsSync(artifactPath)) return null
+    return JSON.parse(fs.readFileSync(artifactPath, 'utf8')) as FrontendSemanticArtifact
+  } catch {
+    return null
+  }
 }
 
 function printTextResult(result: SearchIndexResult): void {
