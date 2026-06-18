@@ -1,0 +1,1255 @@
+{
+  "artifactKind": "code-graph",
+  "schemaVersion": "1.0.0",
+  "createdAt": "2026-06-18T11:06:30.174Z",
+  "nodes": [
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx",
+      "kind": "file",
+      "label": "WorkspaceEditorShell.tsx",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "language": "typescript"
+    },
+    {
+      "id": "frontend:handler:src/WorkspaceEditorShell.tsx#18",
+      "kind": "frontend-fact",
+      "label": "onChange",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 94,
+      "frontendFactKind": "event-handler",
+      "frontendId": "handler:src/WorkspaceEditorShell.tsx#18",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 94,
+        "endLine": 94,
+        "column": 11
+      }
+    },
+    {
+      "id": "frontend:handler:src/WorkspaceEditorShell.tsx#19",
+      "kind": "frontend-fact",
+      "label": "handleChange",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 64,
+      "frontendFactKind": "event-handler",
+      "frontendId": "handler:src/WorkspaceEditorShell.tsx#19",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 64,
+        "endLine": 67,
+        "column": 9
+      }
+    },
+    {
+      "id": "frontend:handler:src/WorkspaceEditorShell.tsx#20",
+      "kind": "frontend-fact",
+      "label": "handleSave",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 69,
+      "frontendFactKind": "event-handler",
+      "frontendId": "handler:src/WorkspaceEditorShell.tsx#20",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 69,
+        "endLine": 72,
+        "column": 9
+      }
+    },
+    {
+      "id": "frontend:handler:src/WorkspaceEditorShell.tsx#21",
+      "kind": "frontend-fact",
+      "label": "handleDiscard",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 74,
+      "frontendFactKind": "event-handler",
+      "frontendId": "handler:src/WorkspaceEditorShell.tsx#21",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 74,
+        "endLine": 78,
+        "column": 9
+      }
+    },
+    {
+      "id": "frontend:handler:src/WorkspaceEditorShell.tsx#22",
+      "kind": "frontend-fact",
+      "label": "handleAddBlock",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 80,
+      "frontendFactKind": "event-handler",
+      "frontendId": "handler:src/WorkspaceEditorShell.tsx#22",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 80,
+        "endLine": 82,
+        "column": 9
+      }
+    },
+    {
+      "id": "frontend:hook:src/WorkspaceEditorShell.tsx#10",
+      "kind": "frontend-fact",
+      "label": "useEffect",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 60,
+      "frontendFactKind": "react-hook",
+      "frontendId": "hook:src/WorkspaceEditorShell.tsx#10",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 60,
+        "endLine": 62,
+        "column": 3
+      }
+    },
+    {
+      "id": "frontend:hook:src/WorkspaceEditorShell.tsx#7",
+      "kind": "frontend-fact",
+      "label": "useState:content",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 56,
+      "frontendFactKind": "react-hook",
+      "frontendId": "hook:src/WorkspaceEditorShell.tsx#7",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 56,
+        "endLine": 56,
+        "column": 33
+      }
+    },
+    {
+      "id": "frontend:hook:src/WorkspaceEditorShell.tsx#8",
+      "kind": "frontend-fact",
+      "label": "useState:isDirty",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 57,
+      "frontendFactKind": "react-hook",
+      "frontendId": "hook:src/WorkspaceEditorShell.tsx#8",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 57,
+        "endLine": 57,
+        "column": 33
+      }
+    },
+    {
+      "id": "frontend:hook:src/WorkspaceEditorShell.tsx#9",
+      "kind": "frontend-fact",
+      "label": "useState:isEmpty",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 58,
+      "frontendFactKind": "react-hook",
+      "frontendId": "hook:src/WorkspaceEditorShell.tsx#9",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 58,
+        "endLine": 58,
+        "column": 33
+      }
+    },
+    {
+      "id": "frontend:jsxregion:src/WorkspaceEditorShell.tsx#11",
+      "kind": "frontend-fact",
+      "label": "return",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 84,
+      "frontendFactKind": "jsx-region",
+      "frontendId": "jsxregion:src/WorkspaceEditorShell.tsx#11",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 84,
+        "endLine": 98,
+        "column": 3
+      }
+    },
+    {
+      "id": "frontend:jsxregion:src/WorkspaceEditorShell.tsx#14",
+      "kind": "frontend-fact",
+      "label": "ternary-branch:isEmpty",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 87,
+      "frontendFactKind": "jsx-region",
+      "frontendId": "jsxregion:src/WorkspaceEditorShell.tsx#14",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 87,
+        "endLine": 89,
+        "column": 18
+      }
+    },
+    {
+      "id": "frontend:jsxregion:src/WorkspaceEditorShell.tsx#15",
+      "kind": "frontend-fact",
+      "label": "ternary-branch:!(isEmpty)",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 89,
+      "frontendFactKind": "jsx-region",
+      "frontendId": "jsxregion:src/WorkspaceEditorShell.tsx#15",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 89,
+        "endLine": 96,
+        "column": 11
+      }
+    },
+    {
+      "id": "frontend:proptype:src/WorkspaceEditorShell.tsx#1",
+      "kind": "frontend-fact",
+      "label": "WorkspaceEditorShellProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 3,
+      "frontendFactKind": "prop-type",
+      "frontendId": "proptype:src/WorkspaceEditorShell.tsx#1",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 3,
+        "endLine": 7,
+        "column": 1
+      }
+    },
+    {
+      "id": "frontend:proptype:src/WorkspaceEditorShell.tsx#2",
+      "kind": "frontend-fact",
+      "label": "ToolbarProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 9,
+      "frontendFactKind": "prop-type",
+      "frontendId": "proptype:src/WorkspaceEditorShell.tsx#2",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 9,
+        "endLine": 13,
+        "column": 1
+      }
+    },
+    {
+      "id": "frontend:proptype:src/WorkspaceEditorShell.tsx#4",
+      "kind": "frontend-fact",
+      "label": "EmptyStateProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "line": 35,
+      "frontendFactKind": "prop-type",
+      "frontendId": "proptype:src/WorkspaceEditorShell.tsx#4",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 35,
+        "endLine": 37,
+        "column": 1
+      }
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "kind": "symbol",
+      "label": "EmptyState",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "EmptyState",
+      "symbolKind": "const",
+      "line": 39,
+      "exported": false
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#EmptyStateProps",
+      "kind": "symbol",
+      "label": "EmptyStateProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "EmptyStateProps",
+      "symbolKind": "type",
+      "line": 35,
+      "exported": false
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "kind": "symbol",
+      "label": "Toolbar",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "Toolbar",
+      "symbolKind": "const",
+      "line": 15,
+      "exported": false
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#ToolbarProps",
+      "kind": "symbol",
+      "label": "ToolbarProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "ToolbarProps",
+      "symbolKind": "type",
+      "line": 9,
+      "exported": false
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "kind": "symbol",
+      "label": "WorkspaceEditorShell",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "WorkspaceEditorShell",
+      "symbolKind": "function",
+      "line": 51,
+      "exported": true
+    },
+    {
+      "id": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShellProps",
+      "kind": "symbol",
+      "label": "WorkspaceEditorShellProps",
+      "path": "src/WorkspaceEditorShell.tsx",
+      "symbolName": "WorkspaceEditorShellProps",
+      "symbolKind": "interface",
+      "line": 3,
+      "exported": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#EmptyStateProps",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#EmptyStateProps",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#ToolbarProps",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#ToolbarProps",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--defines-->symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShellProps",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShellProps",
+      "kind": "defines"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--exports-->symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "kind": "exports"
+    },
+    {
+      "id": "file:src/WorkspaceEditorShell.tsx--exports-->symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShellProps",
+      "source": "file:src/WorkspaceEditorShell.tsx",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShellProps",
+      "kind": "exports"
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-callback-invoked-by-child",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 54
+      },
+      "metadata": {
+        "invocationKind": "pass-through-candidate",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-callback-invoked-by-child",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 34
+      },
+      "metadata": {
+        "invocationKind": "pass-through-candidate",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-callback-invoked-by-child",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 88,
+        "endLine": 88,
+        "column": 21
+      },
+      "metadata": {
+        "invocationKind": "pass-through-candidate",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "propName": "onAdd",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|77|5",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard",
+      "kind": "react-callback-invoked-by-child",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 77,
+        "endLine": 77,
+        "column": 5
+      },
+      "metadata": {
+        "invocationKind": "direct-call",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|77|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|70|5",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onSave",
+      "kind": "react-callback-invoked-by-child",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 70,
+        "endLine": 70,
+        "column": 5
+      },
+      "metadata": {
+        "invocationKind": "direct-call",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-callback-invoked-by-child|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|70|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-event-uses-handler|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#18||94|11",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:handler:src/WorkspaceEditorShell.tsx#18",
+      "kind": "react-event-uses-handler",
+      "label": "react-event-uses-handler",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 94,
+        "endLine": 94,
+        "column": 11
+      },
+      "metadata": {
+        "eventAttr": "onChange",
+        "handlerKind": "inline",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-event-uses-handler|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#18||94|11",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-reads-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#20|hook:src/WorkspaceEditorShell.tsx#7||70|12",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#20",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#7",
+      "kind": "react-handler-reads-state",
+      "label": "react-handler-reads-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 70,
+        "endLine": 70,
+        "column": 12
+      },
+      "metadata": {
+        "stateVarName": "content",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-reads-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#20|hook:src/WorkspaceEditorShell.tsx#7||70|12",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-reads-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#22|hook:src/WorkspaceEditorShell.tsx#7||81|18",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#22",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#7",
+      "kind": "react-handler-reads-state",
+      "label": "react-handler-reads-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 81,
+        "endLine": 81,
+        "column": 18
+      },
+      "metadata": {
+        "stateVarName": "content",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-reads-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#22|hook:src/WorkspaceEditorShell.tsx#7||81|18",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#19|hook:src/WorkspaceEditorShell.tsx#7||65|5",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#19",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#7",
+      "kind": "react-handler-sets-state",
+      "label": "react-handler-sets-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 65,
+        "endLine": 65,
+        "column": 5
+      },
+      "metadata": {
+        "setterName": "setContent",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#19|hook:src/WorkspaceEditorShell.tsx#7||65|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#19|hook:src/WorkspaceEditorShell.tsx#8||66|5",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#19",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#8",
+      "kind": "react-handler-sets-state",
+      "label": "react-handler-sets-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 66,
+        "endLine": 66,
+        "column": 5
+      },
+      "metadata": {
+        "setterName": "setIsDirty",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#19|hook:src/WorkspaceEditorShell.tsx#8||66|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#20|hook:src/WorkspaceEditorShell.tsx#8||71|5",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#20",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#8",
+      "kind": "react-handler-sets-state",
+      "label": "react-handler-sets-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 71,
+        "endLine": 71,
+        "column": 5
+      },
+      "metadata": {
+        "setterName": "setIsDirty",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#20|hook:src/WorkspaceEditorShell.tsx#8||71|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#21|hook:src/WorkspaceEditorShell.tsx#7||75|5",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#21",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#7",
+      "kind": "react-handler-sets-state",
+      "label": "react-handler-sets-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 75,
+        "endLine": 75,
+        "column": 5
+      },
+      "metadata": {
+        "setterName": "setContent",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#21|hook:src/WorkspaceEditorShell.tsx#7||75|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#21|hook:src/WorkspaceEditorShell.tsx#8||76|5",
+      "source": "frontend:handler:src/WorkspaceEditorShell.tsx#21",
+      "target": "frontend:hook:src/WorkspaceEditorShell.tsx#8",
+      "kind": "react-handler-sets-state",
+      "label": "react-handler-sets-state",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 76,
+        "endLine": 76,
+        "column": 5
+      },
+      "metadata": {
+        "setterName": "setIsDirty",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-handler-sets-state|component:src/WorkspaceEditorShell.tsx#6|handler:src/WorkspaceEditorShell.tsx#21|hook:src/WorkspaceEditorShell.tsx#8||76|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-passes-callback-prop",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 54
+      },
+      "metadata": {
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "childName": "Toolbar",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": "handleDiscard"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-passes-callback-prop",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 34
+      },
+      "metadata": {
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "childName": "Toolbar",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": "handleSave"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-passes-callback-prop",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 88,
+        "endLine": 88,
+        "column": 21
+      },
+      "metadata": {
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "childName": "EmptyState",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-callback-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onAdd",
+        "valueSummary": "handleAddBlock"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|86|16",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:isDirty",
+      "kind": "react-passes-prop",
+      "label": "isDirty",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 16
+      },
+      "metadata": {
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "childName": "Toolbar",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-passes-prop|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|86|16",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "isDirty",
+        "valueSummary": "isDirty"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|15|20",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:isDirty",
+      "kind": "react-prop-reference",
+      "label": "isDirty",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 15,
+        "endLine": 15,
+        "column": 20
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|15|20",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "isDirty",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|15|37",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 15,
+        "endLine": 15,
+        "column": 37
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|15|37",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 54
+      },
+      "metadata": {
+        "referenceKind": "callback-pass-through",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|15|29",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 15,
+        "endLine": 15,
+        "column": 29
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|15|29",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 34
+      },
+      "metadata": {
+        "referenceKind": "callback-pass-through",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|10|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#2",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:isDirty",
+      "kind": "react-prop-reference",
+      "label": "isDirty",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 10,
+        "endLine": 10,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "ToolbarProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|10|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "isDirty",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|12|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#2",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 12,
+        "endLine": 12,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "ToolbarProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|12|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|11|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#2",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 11,
+        "endLine": 11,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "ToolbarProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#3|proptype:src/WorkspaceEditorShell.tsx#2|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|11|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|39|23",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-prop-reference",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 39,
+        "endLine": 39,
+        "column": 23
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|39|23",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "propName": "onAdd",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-prop-reference",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 88,
+        "endLine": 88,
+        "column": 21
+      },
+      "metadata": {
+        "referenceKind": "callback-pass-through",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "propName": "onAdd",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|proptype:src/WorkspaceEditorShell.tsx#4|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|36|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#4",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-prop-reference",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 36,
+        "endLine": 36,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "EmptyStateProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#5|proptype:src/WorkspaceEditorShell.tsx#4|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|36|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "propName": "onAdd",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|86|16",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:isDirty",
+      "kind": "react-prop-reference",
+      "label": "isDirty",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 16
+      },
+      "metadata": {
+        "referenceKind": "parent-jsx-prop",
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:isDirty|isDirty|86|16",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "isDirty",
+        "valueSummary": "isDirty"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 54
+      },
+      "metadata": {
+        "referenceKind": "parent-jsx-prop",
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onDiscard|onDiscard|86|54",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": "handleDiscard"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#3:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 34
+      },
+      "metadata": {
+        "referenceKind": "parent-jsx-prop",
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#3",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3:prop:onSave|onSave|86|34",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": "handleSave"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#5:prop:onAdd",
+      "kind": "react-prop-reference",
+      "label": "onAdd",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 88,
+        "endLine": 88,
+        "column": 21
+      },
+      "metadata": {
+        "referenceKind": "parent-jsx-prop",
+        "childComponentId": "component:src/WorkspaceEditorShell.tsx#5",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5:prop:onAdd|onAdd|88|21",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onAdd",
+        "valueSummary": "handleAddBlock"
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:initialContent|initialContent|52|3",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:initialContent",
+      "kind": "react-prop-reference",
+      "label": "initialContent",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 52,
+        "endLine": 52,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:initialContent|initialContent|52|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "initialContent",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|54|3",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 54,
+        "endLine": 54,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|54|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|77|5",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 77,
+        "endLine": 77,
+        "column": 5
+      },
+      "metadata": {
+        "referenceKind": "callback-invocation",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|77|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|53|3",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 53,
+        "endLine": 53,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "destructured-prop",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|53|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|70|5",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 70,
+        "endLine": 70,
+        "column": 5
+      },
+      "metadata": {
+        "referenceKind": "callback-invocation",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|70|5",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:initialContent|initialContent|4|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#1",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:initialContent",
+      "kind": "react-prop-reference",
+      "label": "initialContent",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 4,
+        "endLine": 4,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "WorkspaceEditorShellProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:initialContent|initialContent|4|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "initialContent",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|6|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#1",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard",
+      "kind": "react-prop-reference",
+      "label": "onDiscard",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 6,
+        "endLine": 6,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "WorkspaceEditorShellProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:onDiscard|onDiscard|6|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onDiscard",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|5|3",
+      "source": "frontend:proptype:src/WorkspaceEditorShell.tsx#1",
+      "target": "frontend:component:src/WorkspaceEditorShell.tsx#6:prop:onSave",
+      "kind": "react-prop-reference",
+      "label": "onSave",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 5,
+        "endLine": 5,
+        "column": 3
+      },
+      "metadata": {
+        "referenceKind": "prop-type-member",
+        "propTypeName": "WorkspaceEditorShellProps",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-prop-reference|component:src/WorkspaceEditorShell.tsx#6|proptype:src/WorkspaceEditorShell.tsx#1|component:src/WorkspaceEditorShell.tsx#6:prop:onSave|onSave|5|3",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": "onSave",
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-renders-local-component|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3||86|7",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#Toolbar",
+      "kind": "react-renders-local-component",
+      "label": "react-renders-local-component",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 86,
+        "endLine": 86,
+        "column": 7
+      },
+      "metadata": {
+        "parentName": "WorkspaceEditorShell",
+        "childName": "Toolbar",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-renders-local-component|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#3||86|7",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-renders-local-component|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5||88|9",
+      "source": "symbol:src/WorkspaceEditorShell.tsx#WorkspaceEditorShell",
+      "target": "symbol:src/WorkspaceEditorShell.tsx#EmptyState",
+      "kind": "react-renders-local-component",
+      "label": "react-renders-local-component",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 88,
+        "endLine": 88,
+        "column": 9
+      },
+      "metadata": {
+        "parentName": "WorkspaceEditorShell",
+        "childName": "EmptyState",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-renders-local-component|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#6|component:src/WorkspaceEditorShell.tsx#5||88|9",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-state-controls-jsx-branch|component:src/WorkspaceEditorShell.tsx#6|hook:src/WorkspaceEditorShell.tsx#9|jsxregion:src/WorkspaceEditorShell.tsx#14||87|18",
+      "source": "frontend:hook:src/WorkspaceEditorShell.tsx#9",
+      "target": "frontend:jsxregion:src/WorkspaceEditorShell.tsx#14",
+      "kind": "react-state-controls-jsx-branch",
+      "label": "react-state-controls-jsx-branch",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 87,
+        "endLine": 89,
+        "column": 18
+      },
+      "metadata": {
+        "stateVarName": "isEmpty",
+        "conditionText": "isEmpty",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-state-controls-jsx-branch|component:src/WorkspaceEditorShell.tsx#6|hook:src/WorkspaceEditorShell.tsx#9|jsxregion:src/WorkspaceEditorShell.tsx#14||87|18",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    },
+    {
+      "id": "react-flow:src/WorkspaceEditorShell.tsx#react-state-controls-jsx-branch|component:src/WorkspaceEditorShell.tsx#6|hook:src/WorkspaceEditorShell.tsx#9|jsxregion:src/WorkspaceEditorShell.tsx#15||89|11",
+      "source": "frontend:hook:src/WorkspaceEditorShell.tsx#9",
+      "target": "frontend:jsxregion:src/WorkspaceEditorShell.tsx#15",
+      "kind": "react-state-controls-jsx-branch",
+      "label": "react-state-controls-jsx-branch",
+      "sourceRef": {
+        "filePath": "src/WorkspaceEditorShell.tsx",
+        "line": 89,
+        "endLine": 96,
+        "column": 11
+      },
+      "metadata": {
+        "stateVarName": "isEmpty",
+        "conditionText": "!(isEmpty)",
+        "frontendRelationshipId": "react-flow:src/WorkspaceEditorShell.tsx#react-state-controls-jsx-branch|component:src/WorkspaceEditorShell.tsx#6|hook:src/WorkspaceEditorShell.tsx#9|jsxregion:src/WorkspaceEditorShell.tsx#15||89|11",
+        "ownerComponentId": "component:src/WorkspaceEditorShell.tsx#6",
+        "propName": null,
+        "valueSummary": null
+      }
+    }
+  ],
+  "summary": {
+    "nodeCount": 22,
+    "edgeCount": 52,
+    "fileNodeCount": 1,
+    "symbolNodeCount": 6
+  }
+}

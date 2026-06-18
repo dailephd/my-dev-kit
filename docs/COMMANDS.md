@@ -130,7 +130,7 @@ The `--exclude` flag adds extra directory names or relative path prefixes.
 
 After indexing, `index` runs semantic analyzers. The TypeScript model analyzer runs on TypeScript and TSX source and produces `data-entity` and `data-field` semantic roles for exported interfaces, type aliases, and classes that qualify as data models.
 
-The frontend analyzer runs on `.tsx` and `.jsx` source files and test files (`.test.tsx`, `.spec.tsx`, `.test.ts`, `.spec.ts`) to produce the frontend semantic artifact. It extracts:
+The frontend analyzer runs on `.tsx` and `.jsx` source files to produce the frontend semantic artifact. It extracts:
 
 - Exported React components (function and arrow-function forms)
 - Local (non-exported) React components
@@ -138,7 +138,9 @@ The frontend analyzer runs on `.tsx` and `.jsx` source files and test files (`.t
 - Hook blocks (`useState`, `useEffect`, and others)
 - Event handlers and inline handlers
 - JSX return regions
-- Frontend test blocks (`describe`, `test`, `it`), setup/teardown hooks, locators, route strings, and UI strings
+- UI strings (`data-testid`, `aria-label`)
+
+The frontend analyzer also detects files that match test file patterns (`.test.`, `.spec.`, `__tests__`) and extracts test facts (describe/test/it blocks, setup/teardown, locators, route strings) when those files are in the symbol index. **Note:** The base indexer excludes files matching `.test.` and `.spec.` from default file discovery. Test facts in `frontend-semantic.json` are only present when test files reach the symbol index through a source root that the indexer processes.
 
 Analyzer results and status are recorded in `manifest.json` under the `analyzers` array.
 
@@ -163,7 +165,7 @@ When the TypeScript model analyzer produces data-model output:
 - `data-model.json`
 - `data-model-graph.json`
 
-When the frontend analyzer processes TSX/JSX or test files:
+When the frontend analyzer processes TSX/JSX files:
 
 - `frontend-semantic.json`
 
