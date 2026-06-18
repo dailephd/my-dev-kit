@@ -78,6 +78,7 @@ function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph, fronten
   const nodesById = new Map(codeGraph.nodes.map((node) => [node.id, node]))
 
   for (const node of codeGraph.nodes) {
+    if (!isSearchableNode(node)) continue
     mergeCandidate(candidates, nodeCandidate(node))
   }
 
@@ -156,7 +157,11 @@ function buildFrontendValueFields(fileResult: FrontendFileResult): SearchCandida
   return fields
 }
 
-function nodeCandidate(node: CodeGraphNode): SearchCandidate {
+function isSearchableNode(node: CodeGraphNode): node is CodeGraphNode & { kind: 'file' | 'symbol' } {
+  return node.kind === 'file' || node.kind === 'symbol'
+}
+
+function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): SearchCandidate {
   const fields: SearchCandidateField[] = [
     field('nodeId', node.id, WEIGHTS.nodeId),
     field('label', node.label, WEIGHTS.label),

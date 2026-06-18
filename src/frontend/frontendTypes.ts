@@ -61,10 +61,18 @@ export interface PropTypeCandidate {
   id: string
   name: string
   kind: 'interface' | 'type-alias' | 'unknown'
+  members?: PropMemberCandidate[]
   /** Component IDs that reference this prop type. */
   usedByComponentIds: string[]
   sourceRef: FrontendSourceRef
   warnings: FrontendWarning[]
+}
+
+export interface PropMemberCandidate {
+  name: string
+  optional: boolean
+  typeText?: string | null
+  sourceRef: FrontendSourceRef
 }
 
 /** A React hook or state call within a component. */
@@ -166,6 +174,32 @@ export interface RouteStringCandidate {
   sourceRef: FrontendSourceRef
 }
 
+export type ReactFlowRelationshipKind =
+  | 'react-renders-local-component'
+  | 'react-passes-prop'
+  | 'react-passes-callback-prop'
+  | 'react-callback-invoked-by-child'
+  | 'react-event-uses-handler'
+  | 'react-handler-reads-state'
+  | 'react-handler-sets-state'
+  | 'react-state-controls-jsx-branch'
+  | 'react-helper-computes-prop'
+  | 'react-prop-reference'
+
+export interface ReactFlowRelationship {
+  id: string
+  kind: ReactFlowRelationshipKind
+  filePath: string
+  ownerComponentId?: string | null
+  sourceId: string
+  targetId?: string | null
+  propName?: string | null
+  valueSummary?: string | null
+  sourceRef: FrontendSourceRef
+  metadata?: Record<string, string | number | boolean | null>
+  warnings: FrontendWarning[]
+}
+
 /** Per-file frontend semantic facts extracted from one source file. */
 export interface FrontendFileResult {
   filePath: string
@@ -182,6 +216,7 @@ export interface FrontendFileResult {
   jsxRegions: JsxRegionCandidate[]
   eventHandlers: EventHandlerCandidate[]
   uiStrings: UiStringCandidate[]
+  relationships: ReactFlowRelationship[]
   testBlocks: TestBlockCandidate[]
   locators: LocatorCandidate[]
   routeStrings: RouteStringCandidate[]
@@ -206,6 +241,7 @@ export interface FrontendSemanticSummary {
   hookCount: number
   testBlockCount: number
   uiStringCount: number
+  relationshipCount: number
   locatorCount: number
   warningCount: number
   errorCount: number

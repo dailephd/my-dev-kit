@@ -15,6 +15,7 @@ export {
   type ReactComponentCandidate,
   type LocalComponentCandidate,
   type PropTypeCandidate,
+  type PropMemberCandidate,
   type HookCandidate,
   type JsxRegionCandidate,
   type EventHandlerCandidate,
@@ -22,4 +23,6 @@ export {
   type TestBlockCandidate,
   type LocatorCandidate,
   type RouteStringCandidate,
+  type ReactFlowRelationship,
+  type ReactFlowRelationshipKind,
 } from './frontendTypes.js'

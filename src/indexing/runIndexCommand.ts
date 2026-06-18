@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
+import { addFrontendRelationshipsToCodeGraph } from '../graph/addFrontendRelationshipsToCodeGraph.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { buildIndex, type BuildIndexProgressEvent } from '../symbol-index/builder.js'
 import { buildIndexManifest } from './buildIndexManifest.js'
@@ -161,7 +162,8 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     dataModelGraphPath: semanticResult.semanticArtifacts.dataModelGraph ?? undefined,
   })
   const enrichedSymbolIndex = applySemanticRolesToSymbolIndex(buildResult.index, semanticMetadataBySymbolId)
-  const enrichedCodeGraph = applySemanticRolesToCodeGraph(codeGraph, semanticMetadataBySymbolId)
+  const frontendFlowCodeGraph = addFrontendRelationshipsToCodeGraph(codeGraph, semanticResult.frontendResult.artifact)
+  const enrichedCodeGraph = applySemanticRolesToCodeGraph(frontendFlowCodeGraph, semanticMetadataBySymbolId)
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,

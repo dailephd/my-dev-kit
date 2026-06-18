@@ -19,6 +19,7 @@ import {
   type LocatorCandidate,
   type RouteStringCandidate,
   type FrontendSourceRef,
+  type ReactFlowRelationship,
 } from './frontendTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
@@ -73,6 +74,7 @@ export function runFrontendAnalyzer(options: RunFrontendAnalyzerOptions): RunFro
         jsxRegions: [],
         eventHandlers: [],
         uiStrings: [],
+        relationships: [],
         testBlocks: [],
         locators: [],
         routeStrings: [],
@@ -122,6 +124,7 @@ function analyzeFile(filePath: string, sourceText: string): FrontendFileResult {
     jsxRegions: [],
     eventHandlers: [],
     uiStrings: [],
+    relationships: [],
     testBlocks: [],
     locators: [],
     routeStrings: [],
@@ -166,6 +169,7 @@ function analyzeFile(filePath: string, sourceText: string): FrontendFileResult {
     jsxRegions: extractor.jsxRegions,
     eventHandlers: extractor.eventHandlers,
     uiStrings: extractor.uiStrings,
+    relationships: extractor.relationships,
     testBlocks: extractor.testBlocks,
     locators: extractor.locators,
     routeStrings: extractor.routeStrings,
@@ -193,6 +197,7 @@ function buildSummary(files: FrontendFileResult[], warningCount: number, errorCo
   let hookCount = 0
   let testBlockCount = 0
   let uiStringCount = 0
+  let relationshipCount = 0
   let locatorCount = 0
   let jsxFileCount = 0
   let testFileCount = 0
@@ -204,6 +209,7 @@ function buildSummary(files: FrontendFileResult[], warningCount: number, errorCo
     hookCount += file.hooks.length
     testBlockCount += file.testBlocks.length
     uiStringCount += file.uiStrings.length
+    relationshipCount += file.relationships.length
     locatorCount += file.locators.length
   }
 
@@ -215,6 +221,7 @@ function buildSummary(files: FrontendFileResult[], warningCount: number, errorCo
     hookCount,
     testBlockCount,
     uiStringCount,
+    relationshipCount,
     locatorCount,
     warningCount,
     errorCount,
@@ -269,6 +276,7 @@ class FrontendExtractor {
   readonly jsxRegions: JsxRegionCandidate[] = []
   readonly eventHandlers: EventHandlerCandidate[] = []
   readonly uiStrings: UiStringCandidate[] = []
+  readonly relationships: ReactFlowRelationship[] = []
   readonly testBlocks: TestBlockCandidate[] = []
   readonly locators: LocatorCandidate[] = []
   readonly routeStrings: RouteStringCandidate[] = []
@@ -279,6 +287,7 @@ class FrontendExtractor {
   private componentById = new Map<string, ReactComponentCandidate>()
   /** Map from interface/type-alias name to prop type candidate */
   private propTypeByName = new Map<string, PropTypeCandidate>()
+  private componentBodyById = new Map<string, ts.Node>()
 
   constructor(
     private readonly filePath: string,
@@ -306,6 +315,9 @@ class FrontendExtractor {
         }
       }
     }
+
+    // Pass 4: derive conservative local React prop/event-flow relationships.
+    this.extractReactFlowRelationships()
   }
 
   private extractTestBlocks(): void {
@@ -513,6 +525,7 @@ class FrontendExtractor {
     }
     this.components.push(candidate)
     this.componentById.set(id, candidate)
+    this.componentBodyById.set(id, functionBody)
 
     // Extract hooks, JSX regions, event handlers, UI strings within this component
     this.extractFromComponentBody(functionBody, id)
@@ -549,12 +562,35 @@ class FrontendExtractor {
       id,
       name,
       kind,
+      members: this.extractPropMembers(node),
       usedByComponentIds: [],
       sourceRef: this.sourceRef(node),
       warnings: [],
     }
     this.propTypes.push(candidate)
     this.propTypeByName.set(name, candidate)
+  }
+
+  private extractPropMembers(node: ts.Node): PropTypeCandidate['members'] {
+    const members: PropTypeCandidate['members'] = []
+    const visitMember = (member: ts.TypeElement): void => {
+      if (!ts.isPropertySignature(member) || !member.name) return
+      const name = propertyNameText(member.name)
+      if (!name) return
+      members.push({
+        name,
+        optional: !!member.questionToken,
+        typeText: member.type ? this.extractBoundedText(member.type) : null,
+        sourceRef: this.sourceRef(member),
+      })
+    }
+
+    if (ts.isInterfaceDeclaration(node)) {
+      for (const member of node.members) visitMember(member)
+    } else if (ts.isTypeAliasDeclaration(node) && ts.isTypeLiteralNode(node.type)) {
+      for (const member of node.type.members) visitMember(member)
+    }
+    return members
   }
 
   private extractFromComponentBody(functionBody: ts.Node, componentId: string): void {
@@ -867,6 +903,7 @@ class FrontendExtractor {
             sourceRef: self.sourceRef(node),
             warnings: [],
           })
+          self.componentBodyById.set(id, node)
           return
         }
       }
@@ -887,6 +924,7 @@ class FrontendExtractor {
             sourceRef: self.sourceRef(node),
             warnings: [],
           })
+          self.componentBodyById.set(id, init)
           return
         }
       }
@@ -903,6 +941,354 @@ class FrontendExtractor {
         ts.forEachChild(body, (child) => visitForLocalComponents(child, 1))
       }
     }
+  }
+
+  private extractReactFlowRelationships(): void {
+    const allComponents = [
+      ...this.components.map((component) => ({
+        id: component.id,
+        name: component.name,
+        propTypeName: component.propTypeName ?? null,
+        sourceRef: component.sourceRef,
+      })),
+      ...this.localComponents.map((component) => ({
+        id: component.id,
+        name: component.name,
+        propTypeName: null,
+        sourceRef: component.sourceRef,
+      })),
+    ]
+    const componentsByName = new Map(allComponents.map((component) => [component.name, component]))
+    const componentsById = new Map(allComponents.map((component) => [component.id, component]))
+    const callbackPropsByComponent = new Map<string, Set<string>>()
+
+    for (const component of allComponents) {
+      const body = this.componentBodyById.get(component.id)
+      if (!body) continue
+
+      this.visitComponentJsx(body, (jsx) => {
+        const tagName = jsxTagName(jsx.tagName)
+        if (!tagName || tagName === component.name) return
+        const child = componentsByName.get(tagName)
+        if (!child) return
+
+        this.addRelationship({
+          kind: 'react-renders-local-component',
+          ownerComponentId: component.id,
+          sourceId: component.id,
+          targetId: child.id,
+          sourceRef: this.sourceRef(jsx),
+          metadata: { parentName: component.name, childName: child.name },
+        })
+
+        for (const prop of extractJsxProps(jsx, this.sourceFile)) {
+          const targetId = `${child.id}:prop:${prop.name}`
+          this.addRelationship({
+            kind: prop.callback ? 'react-passes-callback-prop' : 'react-passes-prop',
+            ownerComponentId: component.id,
+            sourceId: component.id,
+            targetId,
+            propName: prop.name,
+            valueSummary: prop.valueSummary,
+            sourceRef: this.sourceRef(prop.node),
+            metadata: { childComponentId: child.id, childName: child.name },
+          })
+          this.addRelationship({
+            kind: 'react-prop-reference',
+            ownerComponentId: component.id,
+            sourceId: component.id,
+            targetId,
+            propName: prop.name,
+            valueSummary: prop.valueSummary,
+            sourceRef: this.sourceRef(prop.node),
+            metadata: { referenceKind: 'parent-jsx-prop', childComponentId: child.id },
+          })
+          if (prop.callback) {
+            const set = callbackPropsByComponent.get(child.id) ?? new Set<string>()
+            set.add(prop.name)
+            callbackPropsByComponent.set(child.id, set)
+          }
+          if (prop.helperName) {
+            this.addRelationship({
+              kind: 'react-helper-computes-prop',
+              ownerComponentId: component.id,
+              sourceId: `${component.id}:helper:${prop.helperName}`,
+              targetId,
+              propName: prop.name,
+              valueSummary: prop.valueSummary,
+              sourceRef: this.sourceRef(prop.node),
+              metadata: { helperName: prop.helperName },
+            })
+          }
+        }
+
+        for (const spread of extractClearObjectSpreadProps(jsx, this.sourceFile)) {
+          const targetId = `${child.id}:prop:${spread.name}`
+          this.addRelationship({
+            kind: spread.callback ? 'react-passes-callback-prop' : 'react-passes-prop',
+            ownerComponentId: component.id,
+            sourceId: component.id,
+            targetId,
+            propName: spread.name,
+            valueSummary: spread.valueSummary,
+            sourceRef: this.sourceRef(spread.node),
+            metadata: { childComponentId: child.id, childName: child.name, spread: true },
+          })
+          if (spread.callback) {
+            const set = callbackPropsByComponent.get(child.id) ?? new Set<string>()
+            set.add(spread.name)
+            callbackPropsByComponent.set(child.id, set)
+          }
+        }
+
+        for (const prop of extractJsxProps(jsx, this.sourceFile)) {
+          if (!prop.callback || !componentsById.has(child.id)) continue
+          this.addRelationship({
+            kind: 'react-callback-invoked-by-child',
+            ownerComponentId: child.id,
+            sourceId: child.id,
+            targetId: `${child.id}:prop:${prop.name}`,
+            propName: prop.name,
+            sourceRef: this.sourceRef(prop.node),
+            metadata: { invocationKind: 'pass-through-candidate' },
+          })
+          this.addRelationship({
+            kind: 'react-prop-reference',
+            ownerComponentId: child.id,
+            sourceId: child.id,
+            targetId: `${child.id}:prop:${prop.name}`,
+            propName: prop.name,
+            sourceRef: this.sourceRef(prop.node),
+            metadata: { referenceKind: 'callback-pass-through' },
+          })
+        }
+      })
+    }
+
+    for (const component of allComponents) {
+      const body = this.componentBodyById.get(component.id)
+      if (!body) continue
+      this.extractPropReferences(component.id, body, callbackPropsByComponent.get(component.id) ?? new Set<string>())
+      this.extractEventAndStateRelationships(component.id, body)
+
+      const componentInfo = componentsById.get(component.id)
+      if (componentInfo?.propTypeName) {
+        const propType = this.propTypeByName.get(componentInfo.propTypeName)
+        if (!propType) continue
+        for (const member of propType?.members ?? []) {
+          this.addRelationship({
+            kind: 'react-prop-reference',
+            ownerComponentId: component.id,
+            sourceId: propType.id,
+            targetId: `${component.id}:prop:${member.name}`,
+            propName: member.name,
+            sourceRef: member.sourceRef,
+            metadata: { referenceKind: 'prop-type-member', propTypeName: propType.name },
+          })
+        }
+      }
+    }
+  }
+
+  private visitComponentJsx(body: ts.Node, visitor: (node: ts.JsxOpeningLikeElement) => void): void {
+    function visit(node: ts.Node): void {
+      if (isNestedLocalComponentNode(node)) return
+      if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) visitor(node)
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(body, visit)
+  }
+
+  private extractPropReferences(componentId: string, body: ts.Node, callbackProps: Set<string>): void {
+    const destructuredProps = new Set<string>()
+    const propsParamNames = new Set<string>()
+    const params = functionParams(body)
+    const firstParam = params[0]
+    if (firstParam) {
+      if (ts.isObjectBindingPattern(firstParam.name)) {
+        for (const element of firstParam.name.elements) {
+          const propName = bindingElementPropName(element)
+          if (!propName) continue
+          destructuredProps.add(propName)
+          this.addRelationship({
+            kind: 'react-prop-reference',
+            ownerComponentId: componentId,
+            sourceId: componentId,
+            targetId: `${componentId}:prop:${propName}`,
+            propName,
+            sourceRef: this.sourceRef(element),
+            metadata: { referenceKind: 'destructured-prop' },
+          })
+        }
+      } else if (ts.isIdentifier(firstParam.name)) {
+        propsParamNames.add(firstParam.name.text)
+      }
+    }
+
+    const self = this
+    function visit(node: ts.Node): void {
+      if (isNestedLocalComponentNode(node)) return
+      if (ts.isCallExpression(node)) {
+        const propName = callbackInvocationName(node.expression, propsParamNames, destructuredProps)
+        if (propName && (callbackProps.has(propName) || /^on[A-Z]/.test(propName))) {
+          self.addRelationship({
+            kind: 'react-callback-invoked-by-child',
+            ownerComponentId: componentId,
+            sourceId: componentId,
+            targetId: `${componentId}:prop:${propName}`,
+            propName,
+            sourceRef: self.sourceRef(node),
+            metadata: { invocationKind: 'direct-call' },
+          })
+          self.addRelationship({
+            kind: 'react-prop-reference',
+            ownerComponentId: componentId,
+            sourceId: componentId,
+            targetId: `${componentId}:prop:${propName}`,
+            propName,
+            sourceRef: self.sourceRef(node),
+            metadata: { referenceKind: 'callback-invocation' },
+          })
+        }
+      }
+      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && propsParamNames.has(node.expression.text)) {
+        const propName = node.name.text
+        self.addRelationship({
+          kind: 'react-prop-reference',
+          ownerComponentId: componentId,
+          sourceId: componentId,
+          targetId: `${componentId}:prop:${propName}`,
+          propName,
+          sourceRef: self.sourceRef(node),
+          metadata: { referenceKind: 'props-member' },
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(body, visit)
+  }
+
+  private extractEventAndStateRelationships(componentId: string, body: ts.Node): void {
+    const stateHooks = this.hooks.filter((hook) => hook.componentId === componentId && hook.kind === 'useState')
+    const stateNames = new Set(stateHooks.map((hook) => hook.stateVarName).filter((name): name is string => !!name))
+    const setterNames = new Set(stateHooks.map((hook) => hook.setterName).filter((name): name is string => !!name))
+    const hookByState = new Map(stateHooks.map((hook) => [hook.stateVarName, hook]))
+    const hookBySetter = new Map(stateHooks.map((hook) => [hook.setterName, hook]))
+    const handlerByName = new Map(this.eventHandlers.filter((handler) => handler.componentId === componentId && handler.name).map((handler) => [handler.name as string, handler]))
+
+    for (const eventHandler of this.eventHandlers.filter((handler) => handler.componentId === componentId && handler.eventAttr)) {
+      if (eventHandler.name && handlerByName.has(eventHandler.name)) {
+        this.addRelationship({
+          kind: 'react-event-uses-handler',
+          ownerComponentId: componentId,
+          sourceId: eventHandler.id,
+          targetId: handlerByName.get(eventHandler.name)?.id,
+          sourceRef: eventHandler.sourceRef,
+          metadata: { eventAttr: eventHandler.eventAttr ?? null, handlerName: eventHandler.name },
+        })
+      } else if (eventHandler.kind === 'inline') {
+        this.addRelationship({
+          kind: 'react-event-uses-handler',
+          ownerComponentId: componentId,
+          sourceId: componentId,
+          targetId: eventHandler.id,
+          sourceRef: eventHandler.sourceRef,
+          metadata: { eventAttr: eventHandler.eventAttr ?? null, handlerKind: 'inline' },
+        })
+      }
+    }
+
+    const self = this
+    function visit(node: ts.Node): void {
+      if (isNestedLocalComponentNode(node)) return
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && handlerByName.has(node.name.text) && node.initializer) {
+        self.analyzeHandlerBody(componentId, handlerByName.get(node.name.text)?.id ?? node.name.text, node.initializer, stateNames, setterNames, hookByState, hookBySetter)
+      }
+      if (ts.isFunctionDeclaration(node) && node.name && handlerByName.has(node.name.text)) {
+        self.analyzeHandlerBody(componentId, handlerByName.get(node.name.text)?.id ?? node.name.text, node, stateNames, setterNames, hookByState, hookBySetter)
+      }
+      if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) && JSX_EVENT_ATTRS.has(node.name.text) && node.initializer && ts.isJsxExpression(node.initializer)) {
+        const expr = node.initializer.expression
+        if (expr && (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr))) {
+          const inlineHandler = self.eventHandlers.find((handler) => handler.componentId === componentId && handler.kind === 'inline' && handler.sourceRef.line === self.sourceRef(node).line)
+          self.analyzeHandlerBody(componentId, inlineHandler?.id ?? componentId, expr, stateNames, setterNames, hookByState, hookBySetter)
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(body, visit)
+
+    for (const region of this.jsxRegions.filter((region) => region.componentId === componentId && region.conditionText)) {
+      for (const stateName of stateNames) {
+        if (!textContainsIdentifier(region.conditionText ?? '', stateName)) continue
+        const hook = hookByState.get(stateName)
+        this.addRelationship({
+          kind: 'react-state-controls-jsx-branch',
+          ownerComponentId: componentId,
+          sourceId: hook?.id ?? `${componentId}:state:${stateName}`,
+          targetId: region.id,
+          sourceRef: region.sourceRef,
+          metadata: { stateVarName: stateName, conditionText: region.conditionText ?? null },
+        })
+      }
+    }
+  }
+
+  private analyzeHandlerBody(
+    componentId: string,
+    handlerId: string,
+    body: ts.Node,
+    stateNames: Set<string>,
+    setterNames: Set<string>,
+    hookByState: Map<string | null | undefined, HookCandidate>,
+    hookBySetter: Map<string | null | undefined, HookCandidate>
+  ): void {
+    const self = this
+    function visit(node: ts.Node): void {
+      if (ts.isIdentifier(node) && stateNames.has(node.text) && !isPropertyAccessName(node)) {
+        const hook = hookByState.get(node.text)
+        self.addRelationship({
+          kind: 'react-handler-reads-state',
+          ownerComponentId: componentId,
+          sourceId: handlerId,
+          targetId: hook?.id ?? `${componentId}:state:${node.text}`,
+          sourceRef: self.sourceRef(node),
+          metadata: { stateVarName: node.text },
+        })
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && setterNames.has(node.expression.text)) {
+        const hook = hookBySetter.get(node.expression.text)
+        self.addRelationship({
+          kind: 'react-handler-sets-state',
+          ownerComponentId: componentId,
+          sourceId: handlerId,
+          targetId: hook?.id ?? `${componentId}:setter:${node.expression.text}`,
+          sourceRef: self.sourceRef(node),
+          metadata: { setterName: node.expression.text },
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(body, visit)
+  }
+
+  private addRelationship(input: Omit<ReactFlowRelationship, 'id' | 'filePath' | 'warnings'>): void {
+    const key = [
+      input.kind,
+      input.ownerComponentId ?? '',
+      input.sourceId,
+      input.targetId ?? '',
+      input.propName ?? '',
+      input.sourceRef.line,
+      input.sourceRef.column ?? '',
+    ].join('|')
+    if (this.relationships.some((relationship) => relationship.id.endsWith(`#${key}`))) return
+    this.relationships.push({
+      id: `react-flow:${this.filePath}#${key}`,
+      filePath: this.filePath,
+      warnings: [],
+      ...input,
+    })
   }
 
   nextId(prefix: string): string {
@@ -945,6 +1331,131 @@ function isNestedFunctionLike(node: ts.Node): boolean {
     ts.isArrowFunction(node) ||
     ts.isMethodDeclaration(node)
   )
+}
+
+function isNestedLocalComponentNode(node: ts.Node): boolean {
+  if (ts.isFunctionDeclaration(node) && node.name) return isPascalCase(node.name.text) && nodeContainsJsx(node)
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+    return isPascalCase(node.name.text) &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer)) &&
+      nodeContainsJsx(node.initializer)
+  }
+  return false
+}
+
+function propertyNameText(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text
+  return null
+}
+
+function jsxTagName(name: ts.JsxTagNameExpression): string | null {
+  if (ts.isIdentifier(name) && isPascalCase(name.text)) return name.text
+  return null
+}
+
+interface ExtractedJsxProp {
+  name: string
+  callback: boolean
+  valueSummary: string | null
+  helperName?: string | null
+  node: ts.Node
+}
+
+function extractJsxProps(node: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): ExtractedJsxProp[] {
+  const props: ExtractedJsxProp[] = []
+  for (const property of node.attributes.properties) {
+    if (!ts.isJsxAttribute(property) || !ts.isIdentifier(property.name)) continue
+    const name = property.name.text
+    const initializer = property.initializer
+    const expression = initializer && ts.isJsxExpression(initializer) ? initializer.expression ?? null : null
+    props.push({
+      name,
+      callback: isCallbackProp(name, expression),
+      valueSummary: summarizeJsxValue(initializer, sourceFile),
+      helperName: expression && ts.isCallExpression(expression) && ts.isIdentifier(expression.expression) ? expression.expression.text : null,
+      node: property,
+    })
+  }
+  return props
+}
+
+function extractClearObjectSpreadProps(node: ts.JsxOpeningLikeElement, sourceFile: ts.SourceFile): ExtractedJsxProp[] {
+  const props: ExtractedJsxProp[] = []
+  for (const property of node.attributes.properties) {
+    if (!ts.isJsxSpreadAttribute(property) || !ts.isObjectLiteralExpression(property.expression)) continue
+    for (const objectProp of property.expression.properties) {
+      if (!ts.isPropertyAssignment(objectProp)) continue
+      const name = propertyNameText(objectProp.name)
+      if (!name) continue
+      props.push({
+        name,
+        callback: isCallbackProp(name, objectProp.initializer),
+        valueSummary: boundedNodeText(objectProp.initializer, sourceFile),
+        node: objectProp,
+      })
+    }
+  }
+  return props
+}
+
+function summarizeJsxValue(value: ts.JsxAttributeValue | undefined, sourceFile: ts.SourceFile): string | null {
+  if (!value) return 'true'
+  if (ts.isStringLiteral(value)) return value.text.length <= 80 ? JSON.stringify(value.text) : null
+  if (ts.isJsxExpression(value) && value.expression) return boundedNodeText(value.expression, sourceFile)
+  return null
+}
+
+function boundedNodeText(node: ts.Node, sourceFile: ts.SourceFile): string | null {
+  const text = node.getText(sourceFile)
+  return text.length <= 100 ? text : null
+}
+
+function isCallbackProp(name: string, expression: ts.Expression | null): boolean {
+  if (/^on[A-Z]/.test(name)) return true
+  if (!expression) return false
+  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) return true
+  if (ts.isIdentifier(expression)) return /^(handle|on)[A-Z]/.test(expression.text) || /Handler$/.test(expression.text)
+  if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression)) {
+    return /^(handle|on)[A-Z]/.test(expression.expression.text) || /Handler$/.test(expression.expression.text)
+  }
+  return false
+}
+
+function functionParams(node: ts.Node): ts.NodeArray<ts.ParameterDeclaration> | [] {
+  if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) return node.parameters
+  if (ts.isVariableDeclaration(node) && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+    return node.initializer.parameters
+  }
+  return []
+}
+
+function bindingElementPropName(element: ts.BindingElement): string | null {
+  if (element.propertyName) return propertyNameText(element.propertyName)
+  if (ts.isIdentifier(element.name)) return element.name.text
+  return null
+}
+
+function callbackInvocationName(expression: ts.Expression, propsParamNames: Set<string>, destructuredProps: Set<string>): string | null {
+  if (ts.isIdentifier(expression) && destructuredProps.has(expression.text)) return expression.text
+  if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression) && propsParamNames.has(expression.expression.text)) {
+    return expression.name.text
+  }
+  if (ts.isPropertyAccessChain(expression) && ts.isIdentifier(expression.expression) && propsParamNames.has(expression.expression.text)) {
+    return expression.name.text
+  }
+  return null
+}
+
+function isPropertyAccessName(node: ts.Identifier): boolean {
+  return ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+}
+
+function textContainsIdentifier(text: string, name: string): boolean {
+  return new RegExp(`(^|[^A-Za-z0-9_$])${escapeRegExp(name)}([^A-Za-z0-9_$]|$)`).test(text)
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function extractJsxAttrStringValue(value: ts.JsxAttributeValue): string | null {
