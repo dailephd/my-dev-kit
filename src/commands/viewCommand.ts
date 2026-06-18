@@ -6,10 +6,15 @@ import {
   adaptModelViewLineageGraph,
   type GraphArtifactSelection,
 } from '../graph/adaptGraphArtifact.js'
+import {
+  adaptReactComponentGraph,
+  adaptReactFlowGraph,
+} from '../graph/adaptFrontendGraphs.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import { buildRenderableDotGraph } from '../graph/buildRenderableDotGraph.js'
 import type { DataModelGraphArtifact } from '../data-model/dataModelGraphTypes.js'
 import type { ModelViewLineageArtifact } from '../lineage/types.js'
+import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import { isGraphvizAvailable, renderGraphviz } from '../graph/renderGraphviz.js'
 import { writeGraphView } from '../graph/writeGraphView.js'
 import type { GraphEdgeStyleMode, GraphViewFormat, GraphViewResult } from '../graph/dotTypes.js'
@@ -20,7 +25,7 @@ export function registerViewCommand(program: Command): void {
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
-    .option('--graph <code|data-model|model-view-lineage>', 'graph artifact to render', 'code')
+    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -96,13 +101,21 @@ interface ViewCommandOptions {
 function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
   if (graph === 'code') return adaptCodeGraph(artifact as CodeGraph)
   if (graph === 'data-model') return adaptDataModelGraph(artifact as DataModelGraphArtifact)
-  return adaptModelViewLineageGraph(artifact as ModelViewLineageArtifact)
+  if (graph === 'model-view-lineage') return adaptModelViewLineageGraph(artifact as ModelViewLineageArtifact)
+  if (graph === 'react-component') return adaptReactComponentGraph(artifact as FrontendSemanticArtifact)
+  return adaptReactFlowGraph(artifact as FrontendSemanticArtifact)
 }
 
 function parseGraph(value: string): GraphArtifactSelection {
-  if (value === 'code' || value === 'data-model' || value === 'model-view-lineage') return value
+  if (
+    value === 'code' ||
+    value === 'data-model' ||
+    value === 'model-view-lineage' ||
+    value === 'react-component' ||
+    value === 'react-flow'
+  ) return value
   throw new Error(
-    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage.`
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow.`
   )
 }
 

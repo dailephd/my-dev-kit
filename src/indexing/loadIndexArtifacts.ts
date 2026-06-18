@@ -78,16 +78,27 @@ function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: Gr
     }
     return resolved.semanticArtifactPaths.dataModelGraph
   }
-  if (!resolved.semanticArtifactPaths.modelViewLineage) {
+  if (graph === 'model-view-lineage') {
+    if (!resolved.semanticArtifactPaths.modelViewLineage) {
+      throw new Error(
+        'Missing modelViewLineage artifact in manifest. Run `data-model --index <dir> --trace-view <entity>` before rendering --graph model-view-lineage.'
+      )
+    }
+    return resolved.semanticArtifactPaths.modelViewLineage
+  }
+  // react-component and react-flow: derived from frontendSemantic artifact
+  if (!resolved.semanticArtifactPaths.frontendSemantic) {
     throw new Error(
-      'Missing modelViewLineage artifact in manifest. Run `data-model --index <dir> --trace-view <entity>` before rendering --graph model-view-lineage.'
+      `Missing frontendSemantic artifact in manifest for --graph ${graph}. ` +
+      'Run `npx @dailephd/my-dev-kit index` on a project with TSX/JSX files to produce the frontend-semantic.json artifact.'
     )
   }
-  return resolved.semanticArtifactPaths.modelViewLineage
+  return resolved.semanticArtifactPaths.frontendSemantic
 }
 
 function viewGraphLabel(graph: GraphArtifactSelection): string {
   if (graph === 'code') return 'code graph'
   if (graph === 'data-model') return 'data-model graph'
-  return 'model-view-lineage graph'
+  if (graph === 'model-view-lineage') return 'model-view-lineage graph'
+  return 'frontend semantic'
 }

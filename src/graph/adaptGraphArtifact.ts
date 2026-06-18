@@ -5,7 +5,7 @@ import { MODEL_VIEW_LINEAGE_ARTIFACT_KIND } from '../lineage/types.js'
 import type { CodeGraph, CodeGraphNode } from './codeGraphTypes.js'
 import type { RenderableGraph } from './renderableGraphTypes.js'
 
-export type GraphArtifactSelection = 'code' | 'data-model' | 'model-view-lineage'
+export type GraphArtifactSelection = 'code' | 'data-model' | 'model-view-lineage' | 'react-component' | 'react-flow'
 
 export function adaptCodeGraph(graph: CodeGraph): RenderableGraph {
   if (!graph || typeof graph !== 'object') throw new Error('Invalid code-graph.json: expected an object.')
