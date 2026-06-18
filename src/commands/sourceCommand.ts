@@ -1,3 +1,4 @@
+import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import { loadSourceArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { getSourceSlice } from '../lookup/getSourceSlice.js'
@@ -8,7 +9,15 @@ import {
   writeSourceOutput,
   type SourceOutputFormat,
 } from '../source/renderSourceOutput.js'
+import {
+  findExactMatches,
+  DEFAULT_CONTEXT_LINES,
+  MAX_CONTEXT_LINES,
+} from '../source/findExactMatches.js'
+import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { parseInteger } from './parseUtils.js'
+import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
+import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -20,6 +29,13 @@ export function registerSourceCommand(program: Command): void {
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
     .option('--symbol <name>', 'symbol name')
+    .option('--contains <string>', 'exact string to search for across indexed source files')
+    .option(
+      '--context <n>',
+      `context lines around each match for --contains (default: ${DEFAULT_CONTEXT_LINES}, max: ${MAX_CONTEXT_LINES})`,
+      parseInteger,
+      DEFAULT_CONTEXT_LINES
+    )
     .option('--max-lines <n>', 'maximum returned lines', parseInteger, 160)
     .option('--format <json|plain|numbered>', 'output format')
     .option('--out <path>', 'write output to file')
@@ -27,6 +43,12 @@ export function registerSourceCommand(program: Command): void {
     .action((options: SourceCommandOptions) => {
       const format = resolveFormat(options)
       const mode = selectMode(options)
+
+      if (mode === 'exact-match') {
+        handleExactMatch(options, format)
+        return
+      }
+
       const artifacts = loadSourceArtifacts({
         indexDir: options.index,
         loadCodeGraph: mode === 'node',
@@ -94,6 +116,55 @@ export function registerSourceCommand(program: Command): void {
     })
 }
 
+function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const value = options.contains!
+  if (!value || value.length === 0) {
+    throw new Error('--contains value must be a non-empty string.')
+  }
+
+  const contextLines = options.context
+  if (contextLines < 0) {
+    throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
+  }
+
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadSymbolIndex: true,
+  })
+
+  const frontendArtifact = loadOptionalFrontendArtifact(artifacts.resolved)
+
+  const matchResult = findExactMatches({
+    value,
+    contextLines,
+    projectRoot: artifacts.resolved.manifest.projectRoot,
+    symbolIndex: artifacts.symbolIndex!,
+    frontendArtifact,
+  })
+
+  const resolvedFormat: SourceOutputFormat = format ?? 'numbered'
+  const rendered = renderExactMatchResult(matchResult, resolvedFormat)
+
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote source matches to ${writtenPath}`)
+    return
+  }
+
+  process.stdout.write(rendered)
+}
+
+function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
+  const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
+  if (!artifactPath) return null
+  try {
+    if (!fs.existsSync(artifactPath)) return null
+    return JSON.parse(fs.readFileSync(artifactPath, 'utf8')) as FrontendSemanticArtifact
+  } catch {
+    return null
+  }
+}
+
 interface SourceCommandOptions {
   index: string
   node?: string
@@ -101,6 +172,8 @@ interface SourceCommandOptions {
   start?: number
   end?: number
   symbol?: string
+  contains?: string
+  context: number
   maxLines: number
   format?: string
   out?: string
@@ -116,16 +189,25 @@ function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | unde
   return undefined
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' {
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' {
+  const hasContains = options.contains !== undefined
   const hasNode = options.node !== undefined
-  const hasRange = options.file !== undefined || options.start !== undefined || options.end !== undefined
   const hasSymbol = options.symbol !== undefined
+  const hasStartEnd = options.start !== undefined || options.end !== undefined
+
+  if (hasContains && hasNode) throw new Error('--contains cannot be combined with --node.')
+  if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
+  if (hasContains && hasStartEnd) throw new Error('--contains cannot be combined with --start or --end.')
+  if (hasContains && options.file !== undefined) throw new Error('--contains cannot be combined with --file. Use --contains alone to search all indexed files.')
+  if (hasContains) return 'exact-match'
+
+  const hasRange = options.file !== undefined || hasStartEnd
   if (hasNode && (hasRange || hasSymbol)) throw new Error('Use only one source mode: --node, --file with --start/--end, or --file with --symbol.')
   if (!hasNode && !hasRange && !hasSymbol) throw new Error('Provide one source mode: --node, --file with --start/--end, or --file with --symbol.')
   if (hasNode) return 'node'
   if (hasSymbol) {
     if (!options.file) throw new Error('Symbol mode requires --file <path> and --symbol <name>.')
-    if (options.start !== undefined || options.end !== undefined) throw new Error('Do not mix --symbol with --start/--end.')
+    if (hasStartEnd) throw new Error('Do not mix --symbol with --start/--end.')
     return 'symbol'
   }
   if (!options.file) throw new Error('Line range mode requires --file <path>.')
