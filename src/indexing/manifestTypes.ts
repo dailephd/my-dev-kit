@@ -28,6 +28,7 @@ export interface IndexSemanticArtifacts {
   dataModel: string | null
   dataModelGraph: string | null
   modelViewLineage: string | null
+  frontendSemantic: string | null
 }
 
 export type IndexAnalyzerId =
@@ -35,6 +36,7 @@ export type IndexAnalyzerId =
   | 'call-graph'
   | 'data-model'
   | 'model-view-lineage'
+  | 'frontend-semantic'
   | (string & {})
 
 export type IndexAnalyzerStatusValue = 'not-run' | 'complete' | 'partial' | 'failed' | 'skipped'

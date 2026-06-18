@@ -64,12 +64,12 @@ describe('index semantic artifacts', () => {
     expect(result.status).toBe(0)
     const indexDir = join(root, '.my-dev-kit')
     const output = JSON.parse(result.stdout) as {
-      semanticArtifacts: { dataModelPath: string | null; dataModelGraphPath: string | null; modelViewLineagePath: string | null }
+      semanticArtifacts: { dataModelPath: string | null; dataModelGraphPath: string | null; modelViewLineagePath: string | null; frontendSemanticPath: string | null }
       analyzers: IndexManifest['analyzers']
     }
     const manifest = readJson<IndexManifest>(join(indexDir, 'manifest.json'))
 
-    expect(manifest.semanticArtifacts).toEqual({
+    expect(manifest.semanticArtifacts).toMatchObject({
       dataModel: 'data-model.json',
       dataModelGraph: 'data-model-graph.json',
       modelViewLineage: null,

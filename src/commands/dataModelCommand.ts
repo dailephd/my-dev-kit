@@ -279,6 +279,7 @@ function updateManifestWithLineageArtifact(outDir: string, lineage: ModelViewLin
     dataModel: manifest.semanticArtifacts?.dataModel ?? 'data-model.json',
     dataModelGraph: manifest.semanticArtifacts?.dataModelGraph ?? 'data-model-graph.json',
     modelViewLineage: MODEL_VIEW_LINEAGE_ARTIFACT_FILENAME,
+    frontendSemantic: manifest.semanticArtifacts?.frontendSemantic ?? null,
   }
   const warningCount = lineage.summary.warningCount
   const analyzer = {

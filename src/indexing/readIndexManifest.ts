@@ -16,6 +16,7 @@ export interface ResolvedIndexManifest {
     dataModel: string | null
     dataModelGraph: string | null
     modelViewLineage: string | null
+    frontendSemantic: string | null
   }
 }
 
@@ -51,6 +52,11 @@ export function readIndexManifest(indexDirInput: string): ResolvedIndexManifest 
         indexDir,
         manifest.semanticArtifacts?.modelViewLineage,
         'modelViewLineage'
+      ),
+      frontendSemantic: resolveOptionalArtifactPath(
+        indexDir,
+        manifest.semanticArtifacts?.frontendSemantic,
+        'frontendSemantic'
       ),
     },
   }

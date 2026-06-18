@@ -4,12 +4,14 @@ import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { CallGraph, SymbolIndex } from '../symbol-index/types.js'
 import type { DataModelGraphArtifact } from '../data-model/dataModelGraphTypes.js'
 import type { DataModelArtifact } from '../data-model/types.js'
+import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import {
   CALL_GRAPH_FILENAME,
   CODE_GRAPH_FILENAME,
   DATA_MODEL_FILENAME,
   DATA_MODEL_GRAPH_FILENAME,
+  FRONTEND_SEMANTIC_FILENAME,
   INDEX_MANIFEST_FILENAME,
   SYMBOL_INDEX_FILENAME,
 } from './managedArtifacts.js'
@@ -22,6 +24,7 @@ export interface WriteIndexArtifactsOptions {
   callGraph: CallGraph | null
   dataModel?: DataModelArtifact | null
   dataModelGraph?: DataModelGraphArtifact | null
+  frontendSemantic?: FrontendSemanticArtifact | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
@@ -37,6 +40,9 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
   }
   if (options.dataModelGraph) {
     writeJson(path.join(options.outputDir, DATA_MODEL_GRAPH_FILENAME), options.dataModelGraph)
+  }
+  if (options.frontendSemantic && options.frontendSemantic.summary.fileCount > 0) {
+    writeJson(path.join(options.outputDir, FRONTEND_SEMANTIC_FILENAME), options.frontendSemantic)
   }
 }
 

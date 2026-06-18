@@ -4,6 +4,7 @@ export const CODE_GRAPH_FILENAME = 'code-graph.json'
 export const CALL_GRAPH_FILENAME = 'call-graph.json'
 export const DATA_MODEL_FILENAME = 'data-model.json'
 export const DATA_MODEL_GRAPH_FILENAME = 'data-model-graph.json'
+export const FRONTEND_SEMANTIC_FILENAME = 'frontend-semantic.json'
 
 export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
   INDEX_MANIFEST_FILENAME,
@@ -15,6 +16,7 @@ export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
   CALL_GRAPH_FILENAME,
   DATA_MODEL_FILENAME,
   DATA_MODEL_GRAPH_FILENAME,
+  FRONTEND_SEMANTIC_FILENAME,
 ] as const
 
 export const MANAGED_INDEX_ARTIFACT_FILENAMES = [

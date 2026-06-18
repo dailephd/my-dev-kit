@@ -6,6 +6,12 @@ import {
   DATA_MODEL_SCHEMA_VERSION,
   type BuildDataModelFromIndexResult,
 } from '../data-model/index.js'
+import {
+  runFrontendAnalyzer,
+  FRONTEND_SEMANTIC_ARTIFACT_KIND,
+  FRONTEND_SEMANTIC_SCHEMA_VERSION,
+  type RunFrontendAnalyzerResult,
+} from '../frontend/index.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { IndexAnalyzerStatus, IndexManifest, IndexSemanticArtifacts } from './manifestTypes.js'
@@ -19,10 +25,12 @@ export interface RunSemanticAnalyzersOptions {
   codeGraph: CodeGraph
   callGraphPath: string | null
   createdAt: string
+  repoRoot: string
 }
 
 export interface RunSemanticAnalyzersResult {
   dataModelResult: BuildDataModelFromIndexResult
+  frontendResult: RunFrontendAnalyzerResult
   semanticArtifacts: IndexSemanticArtifacts
   analyzers: IndexAnalyzerStatus[]
 }
@@ -42,6 +50,7 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
         dataModel: null,
         dataModelGraph: null,
         modelViewLineage: null,
+        frontendSemantic: null,
       },
     },
     symbolIndex: options.symbolIndex,
@@ -51,20 +60,37 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
     artifacts,
     createdAt: options.createdAt,
   })
-  const warningCount =
+  const dmWarningCount =
     dataModelResult.dataModel.summary.warningCount + dataModelResult.dataModelGraph.summary.warningCount
+
+  const frontendResult = runFrontendAnalyzer({
+    symbolIndex: options.symbolIndex,
+    repoRoot: options.manifest.projectRoot,
+    createdAt: options.createdAt,
+  })
+
+  const frontendStatus =
+    frontendResult.errorCount > 0
+      ? 'partial'
+      : frontendResult.warningCount > 0
+        ? 'partial'
+        : frontendResult.artifact.summary.fileCount === 0
+          ? 'complete'
+          : 'complete'
 
   return {
     dataModelResult,
+    frontendResult,
     semanticArtifacts: {
       dataModel: 'data-model.json',
       dataModelGraph: 'data-model-graph.json',
       modelViewLineage: null,
+      frontendSemantic: frontendResult.artifact.summary.fileCount > 0 ? 'frontend-semantic.json' : null,
     },
     analyzers: [
       {
         id: 'data-model',
-        status: warningCount > 0 ? 'partial' : 'complete',
+        status: dmWarningCount > 0 ? 'partial' : 'complete',
         version: DATA_MODEL_SCHEMA_VERSION,
         schemaVersion: dataModelResult.dataModel.schemaVersion,
         artifacts: [
@@ -79,7 +105,7 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
             artifactKind: DATA_MODEL_GRAPH_ARTIFACT_KIND,
           },
         ],
-        warningCount,
+        warningCount: dmWarningCount,
         errorCount: 0,
         summary: {
           entityCount: dataModelResult.dataModel.summary.entityCount,
@@ -95,6 +121,28 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
         artifacts: [],
         warningCount: 0,
         errorCount: 0,
+      },
+      {
+        id: 'frontend-semantic',
+        status: frontendStatus,
+        version: FRONTEND_SEMANTIC_SCHEMA_VERSION,
+        schemaVersion: FRONTEND_SEMANTIC_SCHEMA_VERSION,
+        artifacts:
+          frontendResult.artifact.summary.fileCount > 0
+            ? [{ name: 'frontendSemantic', path: 'frontend-semantic.json', artifactKind: FRONTEND_SEMANTIC_ARTIFACT_KIND }]
+            : [],
+        warningCount: frontendResult.warningCount,
+        errorCount: frontendResult.errorCount,
+        summary: {
+          fileCount: frontendResult.artifact.summary.fileCount,
+          jsxFileCount: frontendResult.artifact.summary.jsxFileCount,
+          testFileCount: frontendResult.artifact.summary.testFileCount,
+          componentCount: frontendResult.artifact.summary.componentCount,
+          hookCount: frontendResult.artifact.summary.hookCount,
+          testBlockCount: frontendResult.artifact.summary.testBlockCount,
+          uiStringCount: frontendResult.artifact.summary.uiStringCount,
+          locatorCount: frontendResult.artifact.summary.locatorCount,
+        },
       },
     ],
   }

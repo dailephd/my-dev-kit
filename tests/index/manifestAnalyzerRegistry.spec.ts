@@ -53,7 +53,8 @@ describe('manifest analyzer registry', () => {
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'call-graph')?.status).toBe('not-run')
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'data-model')?.status).toMatch(/complete|partial/)
     expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'model-view-lineage')?.status).toBe('not-run')
-    expect(manifest.semanticArtifacts).toEqual({
+    expect(manifest.analyzers?.find((analyzer) => analyzer.id === 'frontend-semantic')?.status).toMatch(/complete|partial/)
+    expect(manifest.semanticArtifacts).toMatchObject({
       dataModel: 'data-model.json',
       dataModelGraph: 'data-model-graph.json',
       modelViewLineage: null,
@@ -69,9 +70,11 @@ describe('manifest analyzer registry', () => {
     writeFileSync(join(indexDir, 'data-model-graph.json'), '{"artifactKind":"my-dev-kit-v1-data-model-graph"}\n')
     writeFileSync(join(indexDir, 'model-view-lineage.json'), '{"artifactKind":"my-dev-kit-v1-model-view-lineage"}\n')
     manifest.semanticArtifacts = {
+      ...manifest.semanticArtifacts,
       dataModel: 'data-model.json',
       dataModelGraph: 'data-model-graph.json',
       modelViewLineage: 'model-view-lineage.json',
+      frontendSemantic: null,
     }
     writeJson(manifestPath, manifest)
 
@@ -80,6 +83,7 @@ describe('manifest analyzer registry', () => {
     expect(resolved.semanticArtifactPaths.dataModel).toBe(join(indexDir, 'data-model.json'))
     expect(resolved.semanticArtifactPaths.dataModelGraph).toBe(join(indexDir, 'data-model-graph.json'))
     expect(resolved.semanticArtifactPaths.modelViewLineage).toBe(join(indexDir, 'model-view-lineage.json'))
+    expect(resolved.semanticArtifactPaths.frontendSemantic).toBeNull()
   })
 
   it('ignores stale semantic artifacts when manifest does not reference them', () => {
@@ -91,6 +95,7 @@ describe('manifest analyzer registry', () => {
       dataModel: null,
       dataModelGraph: null,
       modelViewLineage: null,
+      frontendSemantic: null,
     }
     writeJson(manifestPath, manifest)
     writeFileSync(join(indexDir, 'data-model.json'), '{ stale data model', 'utf8')
@@ -102,6 +107,7 @@ describe('manifest analyzer registry', () => {
       dataModel: null,
       dataModelGraph: null,
       modelViewLineage: null,
+      frontendSemantic: null,
     })
     expect(() => loadLookupArtifacts(indexDir)).not.toThrow()
   })
@@ -115,6 +121,7 @@ describe('manifest analyzer registry', () => {
       dataModel: '../data-model.json',
       dataModelGraph: null,
       modelViewLineage: null,
+      frontendSemantic: null,
     }
     writeJson(manifestPath, manifest)
 

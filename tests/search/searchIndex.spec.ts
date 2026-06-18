@@ -149,6 +149,7 @@ function fixtureResolved(): ResolvedIndexManifest {
       dataModel: null,
       dataModelGraph: null,
       modelViewLineage: null,
+      frontendSemantic: null,
     },
   }
 }

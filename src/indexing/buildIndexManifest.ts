@@ -35,6 +35,7 @@ export function buildIndexManifest(options: BuildIndexManifestOptions): IndexMan
       dataModel: options.semanticArtifacts?.dataModel ?? null,
       dataModelGraph: options.semanticArtifacts?.dataModelGraph ?? null,
       modelViewLineage: options.semanticArtifacts?.modelViewLineage ?? null,
+      frontendSemantic: options.semanticArtifacts?.frontendSemantic ?? null,
     },
     analyzers: options.analyzers ?? buildDefaultAnalyzerStatuses(options),
     summary: {

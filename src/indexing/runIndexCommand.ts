@@ -44,6 +44,7 @@ export interface RunIndexCommandIndexResult {
     dataModelPath: string | null
     dataModelGraphPath: string | null
     modelViewLineagePath: string | null
+    frontendSemanticPath: string | null
   }
   analyzers: IndexManifest['analyzers']
   managedArtifacts: {
@@ -152,6 +153,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     codeGraph,
     callGraphPath,
     createdAt,
+    repoRoot: projectRoot,
   })
   const semanticMetadataBySymbolId = buildSemanticRolesFromDataModel({
     dataModel: semanticResult.dataModelResult.dataModel,
@@ -189,6 +191,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     callGraph: buildResult.callGraph,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
+    frontendSemantic: semanticResult.frontendResult.artifact,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -212,6 +215,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
         : null,
       modelViewLineagePath: manifest.semanticArtifacts?.modelViewLineage
         ? toForwardSlash(path.join(outputDir, manifest.semanticArtifacts.modelViewLineage))
+        : null,
+      frontendSemanticPath: manifest.semanticArtifacts?.frontendSemantic
+        ? toForwardSlash(path.join(outputDir, manifest.semanticArtifacts.frontendSemantic))
         : null,
     },
     analyzers: manifest.analyzers,
