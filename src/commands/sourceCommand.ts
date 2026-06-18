@@ -16,6 +16,7 @@ import {
 } from '../source/findExactMatches.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { renderExactMatchResult } from '../source/renderExactMatches.js'
+import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRegion.js'
 import { parseInteger } from './parseUtils.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
@@ -31,6 +32,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--end <n>', 'end line', parseInteger)
     .option('--symbol <name>', 'symbol name')
     .option('--contains <string>', 'exact string to search for across indexed source files')
+    .option('--react-region <region>', 'React region name (component, hook, JSX region, or prop type) to retrieve')
     .option(
       '--context <n>',
       `context lines around each match for --contains (default: ${DEFAULT_CONTEXT_LINES}, max: ${MAX_CONTEXT_LINES})`,
@@ -48,6 +50,11 @@ export function registerSourceCommand(program: Command): void {
 
       if (mode === 'exact-match') {
         handleExactMatch(options, format)
+        return
+      }
+
+      if (mode === 'react-region') {
+        handleReactRegion(options, format)
         return
       }
 
@@ -166,6 +173,81 @@ function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFor
   process.stdout.write(rendered)
 }
 
+function handleReactRegion(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const region = options.reactRegion!
+  const filePath = options.file!
+
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadSymbolIndex: false,
+  })
+
+  const frontendArtifact = loadOptionalFrontendArtifact(artifacts.resolved)
+  if (!frontendArtifact) {
+    throw new Error(
+      'No frontend semantic artifact found. Run `npx @dailephd/my-dev-kit index` on a project with TSX/JSX files first.',
+    )
+  }
+
+  let regionResult
+  try {
+    regionResult = findReactRegion({
+      region,
+      filePath,
+      frontendArtifact,
+    })
+  } catch (err) {
+    if (err instanceof ReactRegionNotFoundError) {
+      throw err
+    }
+    throw err
+  }
+
+  const { match } = regionResult
+
+  const result = getSourceSlice({
+    indexDir: options.index,
+    projectRoot: artifacts.resolved.manifest.projectRoot,
+    filePath,
+    startLine: match.startLine,
+    endLine: match.endLine,
+    maxLines: options.maxLines,
+    mode: 'symbol',
+    symbolName: match.matchedName,
+    warnings: match.warnings,
+  })
+
+  const resolvedFormat: SourceOutputFormat = format ?? 'numbered'
+
+  if (format === 'json') {
+    const jsonResult = {
+      ...result,
+      reactRegion: {
+        region,
+        matchedKind: match.matchedKind,
+        matchedId: match.matchedId,
+        matchedName: match.matchedName,
+      },
+    }
+    const rendered = JSON.stringify(jsonResult, null, 2) + '\n'
+    if (options.out) {
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote React region source to ${writtenPath}`)
+      return
+    }
+    process.stdout.write(rendered)
+    return
+  }
+
+  const rendered = renderSourceOutput(result, resolvedFormat)
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote React region source to ${writtenPath}`)
+    return
+  }
+  process.stdout.write(rendered)
+}
+
 function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
   const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
   if (!artifactPath) return null
@@ -187,6 +269,7 @@ interface SourceCommandOptions {
   contains?: string
   context: number
   path?: string
+  reactRegion?: string
   maxLines: number
   format?: string
   out?: string
@@ -202,11 +285,21 @@ function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | unde
   return undefined
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' {
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' {
   const hasContains = options.contains !== undefined
+  const hasReactRegion = options.reactRegion !== undefined
   const hasNode = options.node !== undefined
   const hasSymbol = options.symbol !== undefined
   const hasStartEnd = options.start !== undefined || options.end !== undefined
+
+  if (hasReactRegion && hasContains) throw new Error('--react-region cannot be combined with --contains.')
+  if (hasReactRegion && hasNode) throw new Error('--react-region cannot be combined with --node.')
+  if (hasReactRegion && hasSymbol) throw new Error('--react-region cannot be combined with --symbol.')
+  if (hasReactRegion && hasStartEnd) throw new Error('--react-region cannot be combined with --start or --end.')
+  if (hasReactRegion) {
+    if (!options.file) throw new Error('--react-region requires --file <path>.')
+    return 'react-region'
+  }
 
   if (hasContains && hasNode) throw new Error('--contains cannot be combined with --node.')
   if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
