@@ -292,7 +292,12 @@ class FrontendExtractor {
       this.visitTopLevel(node)
     })
 
-    // Pass 2: link prop types to components
+    // Pass 2: extract test blocks when this is a test file
+    if (this.isTestFile) {
+      this.extractTestBlocks()
+    }
+
+    // Pass 3: link prop types to components
     for (const comp of this.components) {
       if (comp.propTypeName) {
         const pt = this.propTypeByName.get(comp.propTypeName)
@@ -301,6 +306,135 @@ class FrontendExtractor {
         }
       }
     }
+  }
+
+  private extractTestBlocks(): void {
+    /** Stack of parent describe block IDs for nesting tracking. */
+    const parentStack: string[] = []
+    const self = this
+
+    function visitForTests(node: ts.Node): void {
+      if (!ts.isCallExpression(node)) {
+        ts.forEachChild(node, visitForTests)
+        return
+      }
+
+      const callInfo = extractTestCallInfo(node)
+      if (!callInfo) {
+        ts.forEachChild(node, visitForTests)
+        return
+      }
+
+      const { baseName, modifier, isSetup } = callInfo
+
+      if (isSetup) {
+        // beforeEach/afterEach/beforeAll/afterAll
+        const kind = baseName as TestBlockCandidate['kind']
+        const setupId = self.nextId('testblock')
+        self.testBlocks.push({
+          id: setupId,
+          kind,
+          title: null,
+          framework: null,
+          modifier: null,
+          parentId: parentStack.length > 0 ? parentStack[parentStack.length - 1] : null,
+          sourceRef: self.sourceRef(node),
+          warnings: [],
+        })
+        // Recurse into setup body for nested calls AND extract locators/routes
+        for (const arg of node.arguments) {
+          if (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) {
+            ts.forEachChild(arg, visitForTests)
+            self.extractLocatorsAndRoutes(arg, setupId)
+          }
+        }
+        return
+      }
+
+      // describe/test/it
+      const title = extractFirstStringArg(node)
+      const framework = detectFramework(node)
+      const kind = baseName.startsWith('describe') ? 'describe' : baseName === 'test' ? 'test' : 'it'
+
+      const parentId = parentStack.length > 0 ? parentStack[parentStack.length - 1] : null
+      const blockId = self.nextId('testblock')
+
+      // Detect route-like strings in test titles
+      if (title && ROUTE_LIKE.test(title)) {
+        self.routeStrings.push({
+          id: self.nextId('route'),
+          value: title,
+          testBlockId: blockId,
+          sourceRef: self.sourceRef(node),
+        })
+      }
+
+      self.testBlocks.push({
+        id: blockId,
+        kind,
+        title: title ?? null,
+        framework,
+        modifier: modifier ?? null,
+        parentId,
+        sourceRef: self.sourceRef(node),
+        warnings: title === null ? [{ kind: 'unsupported-pattern', message: 'Test block has no static title' }] : [],
+      })
+
+      // Recurse into the callback body for nested blocks, locators, and route strings
+      for (const arg of node.arguments) {
+        if (ts.isArrowFunction(arg) || ts.isFunctionExpression(arg)) {
+          if (kind === 'describe') {
+            parentStack.push(blockId)
+            ts.forEachChild(arg, visitForTests)
+            parentStack.pop()
+          } else {
+            // test/it body — look for locators and route strings
+            self.extractLocatorsAndRoutes(arg, blockId)
+          }
+        }
+      }
+    }
+
+    ts.forEachChild(this.sourceFile, visitForTests)
+  }
+
+  private extractLocatorsAndRoutes(callbackNode: ts.Node, testBlockId: string): void {
+    const self = this
+    function visit(node: ts.Node): void {
+      if (ts.isCallExpression(node)) {
+        // Playwright locators: page.getByRole/getByText/getByLabel/getByPlaceholder/getByTestId
+        // Also: locator(...), expect(...).toHaveText(...)
+        const locatorInfo = extractLocatorInfo(node)
+        if (locatorInfo) {
+          self.locators.push({
+            id: self.nextId('locator'),
+            kind: locatorInfo.kind,
+            value: locatorInfo.value ?? null,
+            testBlockId,
+            sourceRef: self.sourceRef(node),
+            warnings: locatorInfo.value === null
+              ? [{ kind: 'dynamic-value', message: 'Locator value is dynamic or not a string literal' }]
+              : [],
+          })
+        }
+
+        // page.goto("/path") → route string
+        const routeStr = extractGotoRouteString(node)
+        if (routeStr) {
+          self.routeStrings.push({
+            id: self.nextId('route'),
+            value: routeStr,
+            testBlockId,
+            sourceRef: self.sourceRef(node),
+          })
+        }
+
+        // Also look for string literals in assertions that look like routes
+        extractStringArgsAsRoutes(node, testBlockId, self)
+      }
+      ts.forEachChild(node, visit)
+    }
+    ts.forEachChild(callbackNode, visit)
   }
 
   private visitTopLevel(node: ts.Node): void {
@@ -771,12 +905,12 @@ class FrontendExtractor {
     }
   }
 
-  private nextId(prefix: string): string {
+  nextId(prefix: string): string {
     this.idCounter += 1
     return `${prefix}:${this.filePath}#${this.idCounter}`
   }
 
-  private sourceRef(node: ts.Node): FrontendSourceRef {
+  sourceRef(node: ts.Node): FrontendSourceRef {
     const start = this.sourceFile.getLineAndCharacterOfPosition(node.getStart(this.sourceFile))
     const end = this.sourceFile.getLineAndCharacterOfPosition(node.getEnd())
     return {
@@ -813,14 +947,155 @@ function isNestedFunctionLike(node: ts.Node): boolean {
   )
 }
 
-function isNestedFunctionDefinition(node: ts.Node): boolean {
-  return ts.isCallExpression(node) && false // unused — keep for consistency
-}
-
 function extractJsxAttrStringValue(value: ts.JsxAttributeValue): string | null {
   if (ts.isStringLiteral(value)) return value.text
   if (ts.isJsxExpression(value) && value.expression) {
     return getStringLiteral(value.expression)
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// Test block helpers
+// ---------------------------------------------------------------------------
+
+const TEST_CALL_BASES = new Set(['describe', 'test', 'it', 'beforeEach', 'afterEach', 'beforeAll', 'afterAll'])
+const SETUP_CALL_BASES = new Set(['beforeEach', 'afterEach', 'beforeAll', 'afterAll'])
+const PLAYWRIGHT_LOCATOR_METHODS = new Set(['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByTestId', 'locator'])
+
+interface TestCallInfo {
+  baseName: string
+  modifier: 'skip' | 'only' | null
+  isSetup: boolean
+}
+
+function extractTestCallInfo(node: ts.CallExpression): TestCallInfo | null {
+  const expr = node.expression
+
+  // Simple: describe('...', ...) or test('...', ...)
+  if (ts.isIdentifier(expr)) {
+    const name = expr.text
+    if (TEST_CALL_BASES.has(name)) {
+      return { baseName: name, modifier: null, isSetup: SETUP_CALL_BASES.has(name) }
+    }
+    return null
+  }
+
+  // Qualified: test.skip, describe.only, test.describe (Playwright), test.beforeEach (Playwright), etc.
+  if (ts.isPropertyAccessExpression(expr)) {
+    const obj = expr.expression
+    const prop = expr.name.text
+    if (ts.isIdentifier(obj)) {
+      const base = obj.text
+      if (TEST_CALL_BASES.has(base)) {
+        // test.describe / test.beforeEach / test.afterEach etc. — prop is the real call
+        if (TEST_CALL_BASES.has(prop)) {
+          return { baseName: prop, modifier: null, isSetup: SETUP_CALL_BASES.has(prop) }
+        }
+        // test.skip, describe.only
+        if (prop === 'skip' || prop === 'only') {
+          return { baseName: base, modifier: prop as 'skip' | 'only', isSetup: false }
+        }
+        // test.each, test.todo, test.concurrent — treat as regular test call
+        if (!SETUP_CALL_BASES.has(base)) {
+          return { baseName: base, modifier: null, isSetup: false }
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+function extractFirstStringArg(node: ts.CallExpression): string | null {
+  const first = node.arguments[0]
+  if (!first) return null
+  return getStringLiteral(first)
+}
+
+function detectFramework(node: ts.CallExpression): TestBlockCandidate['framework'] {
+  // Playwright: test() where 'test' was imported from @playwright/test
+  // Vitest: describe/it/test from 'vitest'
+  // We can't do import resolution statically here, so use heuristics:
+  // - If file contains page.goto or expect(page)... → playwright
+  // We leave this as generic since we don't have import info in extractor
+  return 'generic'
+}
+
+interface LocatorInfo {
+  kind: LocatorCandidate['kind']
+  value: string | null
+}
+
+function extractLocatorInfo(node: ts.CallExpression): LocatorInfo | null {
+  const expr = node.expression
+  if (!ts.isPropertyAccessExpression(expr)) return null
+
+  const methodName = expr.name.text
+
+  if (PLAYWRIGHT_LOCATOR_METHODS.has(methodName)) {
+    const firstArg = node.arguments[0]
+    const value = firstArg ? getStringLiteral(firstArg) : null
+    const kind = (
+      methodName === 'getByRole' ? 'getByRole'
+        : methodName === 'getByText' ? 'getByText'
+          : methodName === 'getByLabel' ? 'getByLabel'
+            : methodName === 'getByPlaceholder' ? 'getByPlaceholder'
+              : methodName === 'getByTestId' ? 'getByTestId'
+                : 'locator'
+    ) satisfies LocatorCandidate['kind']
+    return { kind, value }
+  }
+
+  // expect(...).toHaveText(...) or expect(...).toContainText(...)
+  if (methodName === 'toHaveText' || methodName === 'toContainText') {
+    const firstArg = node.arguments[0]
+    const value = firstArg ? getStringLiteral(firstArg) : null
+    return { kind: 'expect-text', value }
+  }
+
+  return null
+}
+
+function extractGotoRouteString(node: ts.CallExpression): string | null {
+  const expr = node.expression
+  if (!ts.isPropertyAccessExpression(expr)) return null
+  if (expr.name.text !== 'goto') return null
+
+  const firstArg = node.arguments[0]
+  if (!firstArg) return null
+  const value = getStringLiteral(firstArg)
+  if (!value) return null
+
+  // Only record meaningful paths (starts with /, not a URL, length > 1)
+  if (value.length > 1 && value.startsWith('/') && !value.startsWith('//') && !value.includes('://')) {
+    return value
+  }
+  return null
+}
+
+function extractStringArgsAsRoutes(
+  node: ts.CallExpression,
+  testBlockId: string,
+  extractor: { routeStrings: RouteStringCandidate[]; nextId: (prefix: string) => string; sourceRef: (node: ts.Node) => FrontendSourceRef }
+): void {
+  // Don't add routes for known non-route calls
+  const expr = node.expression
+  if (ts.isPropertyAccessExpression(expr)) {
+    const method = expr.name.text
+    // Skip locator methods already handled
+    if (PLAYWRIGHT_LOCATOR_METHODS.has(method) || method === 'goto') return
+  }
+
+  for (const arg of node.arguments) {
+    const strVal = getStringLiteral(arg)
+    if (strVal && ROUTE_LIKE.test(strVal) && strVal.length > 1) {
+      extractor.routeStrings.push({
+        id: extractor.nextId('route'),
+        value: strVal,
+        testBlockId,
+        sourceRef: extractor.sourceRef(arg),
+      })
+    }
+  }
 }
