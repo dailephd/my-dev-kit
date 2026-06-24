@@ -17,6 +17,7 @@ export interface ResolvedIndexManifest {
     dataModelGraph: string | null
     modelViewLineage: string | null
     frontendSemantic: string | null
+    frontendReachability?: string | null
   }
 }
 
@@ -58,6 +59,15 @@ export function readIndexManifest(indexDirInput: string): ResolvedIndexManifest 
         manifest.semanticArtifacts?.frontendSemantic,
         'frontendSemantic'
       ),
+      ...(manifest.semanticArtifacts?.frontendReachability !== undefined
+        ? {
+            frontendReachability: resolveOptionalArtifactPath(
+              indexDir,
+              manifest.semanticArtifacts?.frontendReachability,
+              'frontendReachability'
+            ),
+          }
+        : {}),
     },
   }
 }

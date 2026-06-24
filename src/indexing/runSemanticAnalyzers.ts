@@ -12,6 +12,12 @@ import {
   FRONTEND_SEMANTIC_SCHEMA_VERSION,
   type RunFrontendAnalyzerResult,
 } from '../frontend/index.js'
+import {
+  runFrontendReachabilityAnalyzer,
+  FRONTEND_REACHABILITY_ARTIFACT_KIND,
+  FRONTEND_REACHABILITY_SCHEMA_VERSION,
+  type RunFrontendReachabilityAnalyzerResult,
+} from '../frontend-reachability/index.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { IndexAnalyzerStatus, IndexManifest, IndexSemanticArtifacts } from './manifestTypes.js'
@@ -31,6 +37,7 @@ export interface RunSemanticAnalyzersOptions {
 export interface RunSemanticAnalyzersResult {
   dataModelResult: BuildDataModelFromIndexResult
   frontendResult: RunFrontendAnalyzerResult
+  frontendReachabilityResult: RunFrontendReachabilityAnalyzerResult
   semanticArtifacts: IndexSemanticArtifacts
   analyzers: IndexAnalyzerStatus[]
 }
@@ -51,6 +58,7 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
         dataModelGraph: null,
         modelViewLineage: null,
         frontendSemantic: null,
+        frontendReachability: null,
       },
     },
     symbolIndex: options.symbolIndex,
@@ -78,14 +86,30 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
           ? 'complete'
           : 'complete'
 
+  const hasFrontendFiles = frontendResult.artifact.summary.fileCount > 0
+
+  const frontendReachabilityResult = runFrontendReachabilityAnalyzer({
+    frontendArtifact: frontendResult.artifact,
+    repoRoot: options.repoRoot,
+    createdAt: options.createdAt,
+  })
+
+  const frontendReachabilityStatus: IndexAnalyzerStatus['status'] = !hasFrontendFiles
+    ? 'skipped'
+    : frontendReachabilityResult.errorCount > 0
+      ? 'partial'
+      : 'complete'
+
   return {
     dataModelResult,
     frontendResult,
+    frontendReachabilityResult,
     semanticArtifacts: {
       dataModel: 'data-model.json',
       dataModelGraph: 'data-model-graph.json',
       modelViewLineage: null,
-      frontendSemantic: frontendResult.artifact.summary.fileCount > 0 ? 'frontend-semantic.json' : null,
+      frontendSemantic: hasFrontendFiles ? 'frontend-semantic.json' : null,
+      frontendReachability: hasFrontendFiles ? 'frontend-reachability.json' : null,
     },
     analyzers: [
       {
@@ -142,6 +166,29 @@ export function runSemanticAnalyzers(options: RunSemanticAnalyzersOptions): RunS
           testBlockCount: frontendResult.artifact.summary.testBlockCount,
           uiStringCount: frontendResult.artifact.summary.uiStringCount,
           locatorCount: frontendResult.artifact.summary.locatorCount,
+        },
+      },
+      {
+        id: 'frontend-reachability',
+        status: frontendReachabilityStatus,
+        version: FRONTEND_REACHABILITY_SCHEMA_VERSION,
+        schemaVersion: FRONTEND_REACHABILITY_SCHEMA_VERSION,
+        artifacts: hasFrontendFiles
+          ? [
+              {
+                name: 'frontendReachability',
+                path: 'frontend-reachability.json',
+                artifactKind: FRONTEND_REACHABILITY_ARTIFACT_KIND,
+              },
+            ]
+          : [],
+        warningCount: frontendReachabilityResult.warningCount,
+        errorCount: frontendReachabilityResult.errorCount,
+        summary: {
+          routeCount: frontendReachabilityResult.artifact.stats.routeCount,
+          storageKeyCount: frontendReachabilityResult.artifact.stats.storageKeyCount,
+          uiReachabilityCount: frontendReachabilityResult.artifact.stats.uiReachabilityCount,
+          edgeCount: frontendReachabilityResult.artifact.stats.edgeCount,
         },
       },
     ],
