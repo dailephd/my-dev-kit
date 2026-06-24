@@ -168,6 +168,7 @@ When the TypeScript model analyzer produces data-model output:
 When the frontend analyzer processes TSX/JSX files:
 
 - `frontend-semantic.json`
+- `frontend-reachability.json` (v1.3.0)
 
 ### Examples
 
@@ -222,12 +223,37 @@ Result items include a `matchReasons` array. Each reason includes:
 - `field`: the indexed field that matched (e.g. `symbolName`, `semanticRole`, `path`)
 - `term`: the query term that matched
 
+### Reachability selectors (v1.3.0)
+
+`search` accepts three frontend-reachability selectors, each mutually exclusive with `--query` and with each other:
+
+- `--route <path>`: find the route fact for a static route path, plus its related components, storage keys, and UI markers.
+- `--storage-key <key>`: find the browser storage key fact, plus the components and routes that reach it.
+- `--ui <value>`: find the UI marker fact, plus its component, routes, storage gates, and test evidence.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --route "/workspaces/new" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --ui "workspace-editor-empty-state" --json
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-search-result`, with `results`, `relatedEdges`, `warnings`, and a `summary` count block.
+
+Missing-artifact behavior: when `frontend-reachability.json` is absent, the result has `status: "missing-artifact"` with a warning and exits 0 (no error).
+
+Static-analysis limitation: these selectors read static evidence from `frontend-reachability.json`. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
 ### Examples
 
 ```sh
 npx @dailephd/my-dev-kit search --index .my-dev-kit --query "service" --limit 20 --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --query "formatUser" --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --query "data-entity User" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --route "/workspaces/new" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --ui "workspace-editor-empty-state" --json
 ```
 
 ## lookup
@@ -273,6 +299,26 @@ Symbol node:
 ```sh
 symbol:<relative-path>#<symbol-name>
 ```
+
+### Reachability selectors (v1.3.0)
+
+`lookup` accepts `--route <path>`, `--storage-key <key>`, and `--ui <value>`, each mutually exclusive with `--node` and with each other. Each returns the single matching reachability fact plus its depth-1 cross-domain neighbors.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --route "/workspaces/new" --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --ui "workspace-editor-empty-state" --json
+```
+
+Example: `lookup --route "/workspaces/new"` returns the route fact and its depth-1 incident edges (owning components and any UI markers the route reaches).
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-lookup-result`, with `status` of `found`, `not-found`, or `missing-artifact`.
+
+Missing-artifact behavior: when `frontend-reachability.json` is absent, `status` is `missing-artifact` with a warning and exit 0. A selector that matches no fact returns `not-found` at exit 0.
+
+Static-analysis limitation: results are static evidence only. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
 ## source
 
@@ -361,6 +407,24 @@ This is static analysis only. It does not trace runtime rendering, route reachab
 
 Requires `--symbol` and `--file`. Cannot be combined with `--contains` or `--react-region`.
 
+### Reachability selectors (v1.3.0)
+
+`source` accepts `--route <path>`, `--storage-key <key>`, and `--ui <value>`, each mutually exclusive with the other retrieval modes and with each other. Each returns bounded source blocks at the lines where the route, storage key, or UI marker is defined, resolved from the source refs in `frontend-reachability.json`.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --route "/workspaces/new" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --ui "workspace-editor-empty-state" --format numbered
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-source-result`, with one bounded source block per source ref (default context 10 lines).
+
+Missing-artifact behavior: when `frontend-reachability.json` is absent, the result is empty with a warning and exit 0.
+
+Static-analysis limitation: source blocks are located from static source refs. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
 ### Semantic metadata propagation
 
 When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output.
@@ -442,6 +506,32 @@ npx @dailephd/my-dev-kit slice --index <artifact-dir> --node <node-id>
 
 Nodes in the slice include their `semanticRoles` and `artifactRefs` from `code-graph.json` when present. Semantic metadata is preserved in slice output.
 
+### Reachability selectors (v1.3.0)
+
+`slice` accepts `--route <path>`, `--storage-key <key>`, and `--ui <value>`, each mutually exclusive with `--node` and with each other. Each returns a depth-bounded cross-domain subgraph rooted at the route/storage-key/UI fact, traversing reachability edges in both directions.
+
+Three modifiers gate which neighbor facts and evidence are pulled in:
+
+- `--include-storage`: include storage key facts reachable from the focus.
+- `--include-ui`: include UI marker facts reachable from the focus.
+- `--include-tests`: include test evidence for included UI markers.
+
+`--route` traverses at depth 1 by default (depth 2 when any include modifier is set); `--storage-key` and `--ui` traverse at depth 2.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --route "/workspaces/new" --include-storage --include-ui --include-tests --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --ui "workspace-editor-empty-state" --include-tests --json
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-slice-result`, with included route/storage/UI facts, edges, and summary counts.
+
+Missing-artifact behavior: when `frontend-reachability.json` is absent, the result is an empty subgraph with a warning and exit 0. An `--include-*` modifier without a reachability selector is an error.
+
+Static-analysis limitation: the subgraph is built from static reachability edges. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
 ## view
 
 Render graph artifacts as DOT, SVG, or PNG. By default, `view` renders `code-graph.json`.
@@ -455,7 +545,7 @@ npx @dailephd/my-dev-kit view --index <artifact-dir> --graph <selection> --forma
 ### Flags
 
 - `--index <dir>`: index artifact directory.
-- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test>`: graph artifact to render. Defaults to `code`.
+- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability>`: graph artifact to render. Defaults to `code`.
 - `--format <dot|svg|png>`: output format.
 - `--out <path>`: output path.
 - `--edge-style <semantic|labeled|minimal>`: edge visualization style.
@@ -473,8 +563,13 @@ Supported `--graph` values:
 - `react-flow`: renders all frontend flow facts from `frontend-semantic.json`. Nodes: component, local-component, hook, handler, JSX region, flow-fact. Edges: all extracted flow relationship kinds.
 - `react-prop-event-flow`: renders only prop and event flow relationships from `frontend-semantic.json`. Same node types as `react-flow`, filtered to `react-passes-prop`, `react-fires-event`, `react-handles-event`, and `react-receives-prop` relationship kinds.
 - `frontend-test`: renders frontend test structure from `frontend-semantic.json`. Only test files (`isTestFile=true`). Nodes: test-file (box), describe (box), test/it (ellipse), setup/teardown (oval), locator (diamond), route-string (oval).
+- `route` (v1.3.0): renders the route reachability graph from `frontend-reachability.json`. Nodes: route, component, UI marker. Edges: `route-serves-component`, `route-reaches-ui`.
+- `browser-storage` (v1.3.0): renders the browser storage graph from `frontend-reachability.json`. Nodes: storage key, component, UI marker. Edges: `component-uses-storage`, `storage-gates-ui`.
+- `ui-reachability` (v1.3.0): renders the full UI reachability graph from `frontend-reachability.json`. Nodes: route, component, storage key, UI marker. Edges: all cross-domain reachability edge kinds.
 
 `--graph` is optional. The default is `code`.
+
+The three reachability graph modes (`route`, `browser-storage`, `ui-reachability`) require `manifest.json` to reference `frontendReachability`. When `frontend-reachability.json` is absent, `view` reports an error and exits non-zero (unlike `search`/`lookup`/`slice`/`source`, which return a graceful empty result at exit 0). These graphs record static evidence only; they do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
 The data-model and lineage graph modes require `manifest.json` to reference the corresponding artifact. The four frontend graph modes (`react-component`, `react-flow`, `react-prop-event-flow`, `frontend-test`) require `manifest.json` to reference `frontendSemantic`. `view` does not scan the directory for stale files.
 
@@ -520,6 +615,16 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph frontend-test --format
 ```
 
 All four frontend graph views render static artifact-backed graphs. They do not claim runtime React behavior, route reachability, or browser-state behavior.
+
+Render reachability graphs (v1.3.0, requires `frontend-reachability.json` in the index):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph route --format dot --out .my-dev-kit/route.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph browser-storage --format dot --out .my-dev-kit/browser-storage.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph ui-reachability --format dot --out .my-dev-kit/ui-reachability.dot --json
+```
+
+The reachability graph views render static evidence from `frontend-reachability.json`. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
 ## data-model
 

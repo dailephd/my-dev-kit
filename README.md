@@ -107,6 +107,7 @@ The `index` command writes:
 | `data-model.json` | Data entities, fields, relationships, source refs, and warnings, written when the TypeScript model analyzer runs |
 | `data-model-graph.json` | Separate graph of data-model entity and field nodes, written when the TypeScript model analyzer runs |
 | `frontend-semantic.json` | Frontend semantic artifact: React components, local components, prop types, hooks, handlers, JSX regions, test blocks, locators, UI strings, and flow relationships, written when the frontend analyzer runs on TSX/JSX files |
+| `frontend-reachability.json` | Frontend reachability artifact (v1.3.0): static route facts, browser storage key facts, UI reachability facts, and cross-domain reachability edges, written when the frontend analyzer runs on TSX/JSX files |
 
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
@@ -244,6 +245,45 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph frontend-test --format
 
 DOT output does not require Graphviz. All four graph views are backed by the same `frontend-semantic.json` artifact and are rendered at command time from static extracted facts. They do not claim runtime rendering behavior, route reachability, or browser-state behavior.
 
+## Frontend Reachability (v1.3.0)
+
+my-dev-kit records static evidence connecting routes, components, UI markers, browser storage keys, and tests. When `index` runs the frontend analyzer on `.tsx`/`.jsx` files, it also writes a `frontend-reachability.json` artifact that links:
+
+- static route paths (React Router `path`/`to`/`href`, Next.js `pages/` convention, test-mentioned routes) to their owning components
+- browser storage keys (`localStorage`/`sessionStorage`/`cookie` with static string keys) to the components and `useState` gates that use them
+- UI markers (`data-testid`, `aria-label`, visible text, `placeholder`, `aria-labelledby`) to their components, JSX condition gates, and any matching test locators
+
+Every fact carries a static confidence (`high`/`medium`/`low`) and warnings for dynamic or unresolved values. This is conservative static analysis: it records what the source text contains. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
+`search`, `lookup`, `slice`, and `source` accept `--route`, `--storage-key`, and `--ui` selectors, and `view` adds three reachability graph views:
+
+```sh
+# Find a route fact and its related components, storage keys, and UI markers
+npx @dailephd/my-dev-kit search --index .my-dev-kit --route "/workspaces/new" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --ui "workspace-editor-empty-state" --json
+
+# Look up a single reachability fact and its depth-1 neighbors
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --route "/workspaces/new" --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --ui "workspace-editor-empty-state" --json
+
+# Slice a cross-domain subgraph rooted at a route, pulling in storage, UI, and test evidence
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --route "/workspaces/new" --include-storage --include-ui --include-tests --json
+
+# Retrieve the bounded source where a route/storage-key/UI marker is defined
+npx @dailephd/my-dev-kit source --index .my-dev-kit --route "/workspaces/new" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --ui "workspace-editor-empty-state" --format numbered
+
+# Render reachability graph views (DOT does not require Graphviz)
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph route --format dot --out .my-dev-kit/route.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph browser-storage --format dot --out .my-dev-kit/browser-storage.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph ui-reachability --format dot --out .my-dev-kit/ui-reachability.dot
+```
+
+See [docs/COMMANDS.md](docs/COMMANDS.md) for the full reachability flag reference.
+
 ## Data-model extraction
 
 Supported extraction patterns:
@@ -336,7 +376,7 @@ All React/TSX and frontend-test analysis is conservative static extraction from 
 - Semantic roles currently produced: `data-entity` and `data-field` from the TypeScript model analyzer. Frontend facts are in `frontend-semantic.json`, not embedded as `semanticRoles` in the code graph.
 - Lookup is exact only. There is no fuzzy entity, field, or component lookup.
 - `trace-view` is conservative static analysis only. Unsupported dynamic or ambiguous patterns are warned or omitted.
-- Route-aware retrieval, browser-state tracing, and UI reachability analysis are planned for future releases.
+- Route-aware retrieval, browser-storage tracing, and UI reachability analysis (v1.3.0) record static evidence only. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
 ## Development from source
 
@@ -357,9 +397,11 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.
+Version 1.3.0 adds frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors on `search`, `lookup`, `slice`, and `source`, and `route`/`browser-storage`/`ui-reachability` graph views.
 
-Future roadmap items cover route-aware retrieval (v1.3), source continuation and expansion (v1.4), schema and layer classification (v1.5), graph-guided planner packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
+Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
+
+Future roadmap items cover source continuation and expansion (v1.4), schema and layer classification (v1.5), graph-guided planner packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

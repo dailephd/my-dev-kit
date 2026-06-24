@@ -92,6 +92,9 @@ export function WorkspaceEditorShell({
       <a href="/workspaces/new" data-testid="new-workspace-link">
         New workspace
       </a>
+      <p data-testid="workspace-editor-empty-state" aria-label="workspace empty state">
+        Workspace status
+      </p>
       <Toolbar isDirty={isDirty} onSave={handleSave} onDiscard={handleDiscard} />
       {isEmpty ? (
         <EmptyState onAdd={handleAddBlock} />

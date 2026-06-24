@@ -253,77 +253,65 @@ All four views are backed by `frontend-semantic.json` and render static artifact
 
 ### Future work for this area
 
-- Route-aware retrieval is planned for v1.3
-- Browser-state tracing is planned for v1.3
-- UI reachability analysis is planned for v1.3
+- Route-aware retrieval shipped in v1.3
+- Browser-storage tracing shipped in v1.3
+- UI reachability analysis shipped in v1.3
 - Source continuation and expansion are planned for v1.4
 
 ## Version 1.3.0
 
-Version 1.3.0 focuses on route-aware and browser-state-aware retrieval.
+Version 1.3.0 adds route-aware, browser-storage-aware, and UI-reachability retrieval.
 
-The goal is to help developers answer a practical frontend question: what code, state, test, and route are involved in making this UI visible?
+The goal is to help developers answer a practical frontend question: what route, component, UI marker, storage key, state gate, and test evidence are involved in a piece of UI?
 
-### Route-aware indexing
+All v1.3.0 facts are conservative static evidence. The tool records what the source text contains. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
-Planned features:
+### Implemented
 
-- route path to page component relationships
-- route path to API handler relationships
-- page component to navigation call relationships
-- route path to tests mentioning the route
-- route path to UI links
-- route path to access-policy entries when detectable
-- route-centered graph slicing
+#### Frontend reachability artifact
 
-Candidate command shapes:
+- `frontend-reachability.json` written by `index` and registered in `manifest.json` (`semanticArtifacts.frontendReachability`) when the frontend analyzer runs on `.tsx`/`.jsx` files
+- `frontend-reachability` analyzer registered in the `analyzers` array with `complete`/`partial`/`skipped` status and a summary of route/storage/UI/edge counts
+- artifact kind `my-dev-kit-v1-frontend-reachability`, schema version `1.0.0`, deterministically ordered arrays
 
-- `search --route <route>`
-- `slice --route <route>`
-- `slice --route <route> --include-tests`
-- `slice --route <route> --include-policy`
+#### Route fact extraction (static)
 
-### Browser storage tracing
+- static route path strings from React Router `path`/`to`/`href` literals, the Next.js `pages/` file convention, and route strings mentioned in tests
+- route path to owning component association
+- `high`/`medium`/`low` confidence with `dynamic-route` warnings for non-literal segments
 
-Planned features:
+#### Browser storage key extraction (static)
 
-- session storage key indexing
-- local storage key indexing
-- read-site detection
-- write-site detection
-- clear-site detection
-- storage key to component relationship
-- storage key to route relationship
-- storage key to artifact type relationship when detectable
+- `localStorage`/`sessionStorage` static string keys from `getItem`/`setItem`/`removeItem`/`clear` calls
+- storage key to component association and `useState` state-variable linkage in the same component scope
+- `high`/`medium`/`low` confidence with `dynamic-storage-key` warnings for computed or template-literal keys
 
-Useful examples:
+#### UI marker / reachability fact extraction (static)
 
-- `evidence-seed-artifact`
-- `structured-content-bundle`
-- `evidence-record-set`
-- `evidence-review-snapshot`
-- `evidence-graph-visualization-snapshot`
-- `workspace-editor-draft.v1`
+- UI markers (`data-testid`, `aria-label`, visible text, `placeholder`, `aria-labelledby`) with component and JSX-region context
+- JSX condition gates, state-gate linkage to storage keys, and route linkage through component membership
+- test evidence linked by exact locator-value match (`getByTestId`/`getByLabel`/`getByText`/`getByPlaceholder`)
+- `high`/`medium`/`low` confidence with `missing-test-evidence`, `dynamic-condition`, and `truncated-value` warnings
 
-### UI reachability analysis
+#### Cross-domain reachability edges
 
-Planned features:
+- `route-serves-component`, `component-uses-storage`, `component-renders-ui`, `storage-gates-ui`, `route-reaches-ui` (transitive), `test-covers-ui`, and `ui-in-gated-region`
 
-- report whether a component is imported
-- report whether a component is rendered
-- report whether rendering is conditional
-- report which state gates a UI branch
-- report which route reaches a component
-- report which user action reaches it
-- report which test proves it is visible
-- flag components that are defined but not reachable
+#### Reachability-aware commands
 
-Candidate command shapes:
+- `search --route <path>`, `search --storage-key <key>`, `search --ui <value>`
+- `lookup --route`, `lookup --storage-key`, `lookup --ui` (matching fact plus depth-1 neighbors)
+- `slice --route`, `slice --storage-key`, `slice --ui` with `--include-tests`, `--include-storage`, and `--include-ui` modifiers
+- `source --route`, `source --storage-key`, `source --ui` (bounded source at the defining lines)
+- `view --graph route`, `view --graph browser-storage`, `view --graph ui-reachability`
 
-- `lookup --ui <component-or-string>`
-- `slice --ui <component-or-string>`
-- `view --route <route>`
-- `search --storage-key <key>`
+Missing-artifact behavior: `search`/`lookup`/`slice`/`source` return a graceful empty/missing-artifact response at exit 0; `view` reports an error and exits non-zero. Each new selector is mutually exclusive with the others and with the legacy primary flag of the command.
+
+### Future work for this area
+
+- producer support for UI markers defined in local sub-components
+- route-to-API-handler and access-policy relationships
+- cookie storage key extraction
 
 ## Version 1.4.0
 
