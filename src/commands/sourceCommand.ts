@@ -19,11 +19,17 @@ import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRegion.js'
 import { parseInteger } from './parseUtils.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
-import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
+import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import {
   buildLocalComponentTreeSource,
   renderLocalComponentTreeSource,
 } from '../source/localComponentTreeSource.js'
+import {
+  loadFrontendReachabilityArtifact,
+  resolveReachabilityMode,
+  buildReachabilitySourceResult,
+  type ReachabilitySourceResult,
+} from '../frontend-reachability/index.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -31,6 +37,9 @@ export function registerSourceCommand(program: Command): void {
     .description('Retrieve bounded source from an indexed project.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--node <node-id>', 'node id to retrieve source for')
+    .option('--route <path>', 'retrieve source for a frontend-reachability route fact')
+    .option('--storage-key <key>', 'retrieve source for a frontend-reachability browser-storage key fact')
+    .option('--ui <value>', 'retrieve source for a frontend-reachability UI marker fact')
     .option('--file <path>', 'file path')
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
@@ -50,7 +59,13 @@ export function registerSourceCommand(program: Command): void {
     .option('--format <json|plain|numbered>', 'output format')
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
-    .action((options: SourceCommandOptions) => {
+    .action(function (this: Command, options: SourceCommandOptions) {
+      const reachabilityMode = resolveReachabilityMode(options)
+      if (reachabilityMode) {
+        handleReachabilitySource(this, options, reachabilityMode)
+        return
+      }
+
       const format = resolveFormat(options)
       const mode = selectMode(options)
 
@@ -285,6 +300,85 @@ function handleLocalComponentTree(options: SourceCommandOptions, format: SourceO
   process.stdout.write(rendered)
 }
 
+const REACHABILITY_SOURCE_DEFAULT_CONTEXT = 10
+
+function handleReachabilitySource(
+  command: Command,
+  options: SourceCommandOptions,
+  reachabilityMode: { mode: 'route' | 'storage-key' | 'ui'; query: string }
+): void {
+  // Reject combination with non-reachability source modes.
+  for (const [flag, present] of [
+    ['--node', options.node !== undefined],
+    ['--file', options.file !== undefined],
+    ['--symbol', options.symbol !== undefined],
+    ['--contains', options.contains !== undefined],
+    ['--react-region', options.reactRegion !== undefined],
+    ['--start', options.start !== undefined],
+    ['--end', options.end !== undefined],
+  ] as const) {
+    if (present) {
+      throw new Error(
+        `The reachability flags (--route, --storage-key, --ui) cannot be combined with ${flag}.`
+      )
+    }
+  }
+
+  const contextLines =
+    command.getOptionValueSource('context') === 'default'
+      ? REACHABILITY_SOURCE_DEFAULT_CONTEXT
+      : options.context
+  if (contextLines < 0) {
+    throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
+  }
+
+  const resolved = readIndexManifest(options.index)
+  const artifact = loadFrontendReachabilityArtifact(options.index)
+  const result = buildReachabilitySourceResult({
+    artifact,
+    mode: reachabilityMode.mode,
+    query: reachabilityMode.query,
+    indexDir: options.index,
+    projectRoot: resolved.manifest.projectRoot,
+    contextLines,
+    maxLines: options.maxLines,
+  })
+
+  const wantsJson = options.json || options.format === 'json'
+  if (wantsJson) {
+    const rendered = JSON.stringify(result, null, 2) + '\n'
+    if (options.out) {
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote reachability source result to ${writtenPath}`)
+      return
+    }
+    process.stdout.write(rendered)
+    return
+  }
+
+  const rendered = renderReachabilitySourceText(result)
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote reachability source to ${writtenPath}`)
+    return
+  }
+  process.stdout.write(rendered)
+}
+
+function renderReachabilitySourceText(result: ReachabilitySourceResult): string {
+  const lines: string[] = []
+  lines.push(`Reachability source (${result.mode}): ${result.query}`)
+  lines.push(`Status: ${result.status}`)
+  for (const warning of result.warnings) lines.push(`Warning: ${warning}`)
+  for (const block of result.blocks) {
+    lines.push('')
+    lines.push(`# ${block.factKind} ${block.label} (${block.confidence}) - ${block.factId}`)
+    lines.push(`${block.filePath}:${block.startLine}-${block.endLine}`)
+    lines.push(block.content)
+  }
+  return lines.join('\n') + '\n'
+}
+
 function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
   const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
   if (!artifactPath) return null
@@ -299,6 +393,9 @@ function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): Frontend
 interface SourceCommandOptions {
   index: string
   node?: string
+  route?: string
+  storageKey?: string
+  ui?: string
   file?: string
   start?: number
   end?: number

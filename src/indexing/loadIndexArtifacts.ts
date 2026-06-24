@@ -86,6 +86,16 @@ function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: Gr
     }
     return resolved.semanticArtifactPaths.modelViewLineage
   }
+  if (graph === 'route' || graph === 'browser-storage' || graph === 'ui-reachability') {
+    const reachabilityPath = resolved.semanticArtifactPaths.frontendReachability
+    if (!reachabilityPath) {
+      throw new Error(
+        `Missing frontendReachability artifact in manifest for --graph ${graph}. ` +
+          'Run `npx @dailephd/my-dev-kit index` on a project with TSX/JSX files to produce the frontend-reachability.json artifact.'
+      )
+    }
+    return reachabilityPath
+  }
   // react-component and react-flow: derived from frontendSemantic artifact
   if (!resolved.semanticArtifactPaths.frontendSemantic) {
     throw new Error(
@@ -100,5 +110,8 @@ function viewGraphLabel(graph: GraphArtifactSelection): string {
   if (graph === 'code') return 'code graph'
   if (graph === 'data-model') return 'data-model graph'
   if (graph === 'model-view-lineage') return 'model-view-lineage graph'
+  if (graph === 'route' || graph === 'browser-storage' || graph === 'ui-reachability') {
+    return 'frontend reachability'
+  }
   return 'frontend semantic'
 }

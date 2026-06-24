@@ -58,7 +58,13 @@ export function WorkspaceEditorShell({
   const [isEmpty, setIsEmpty] = useState(initialContent.length === 0)
 
   useEffect(() => {
+    const draft = localStorage.getItem('workspace-editor-draft.v1')
+    if (draft !== null) setContent(draft)
+  }, [])
+
+  useEffect(() => {
     setIsEmpty(content.length === 0)
+    localStorage.setItem('workspace-editor-draft.v1', content)
   }, [content])
 
   const handleChange = (value: string) => {
@@ -83,6 +89,9 @@ export function WorkspaceEditorShell({
 
   return (
     <div data-testid="workspace-editor-shell" aria-label="workspace editor">
+      <a href="/workspaces/new" data-testid="new-workspace-link">
+        New workspace
+      </a>
       <Toolbar isDirty={isDirty} onSave={handleSave} onDiscard={handleDiscard} />
       {isEmpty ? (
         <EmptyState onAdd={handleAddBlock} />

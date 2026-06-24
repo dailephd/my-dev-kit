@@ -12,6 +12,12 @@ import {
   adaptReactPropEventFlowGraph,
   adaptFrontendTestGraph,
 } from '../graph/adaptFrontendGraphs.js'
+import {
+  adaptRouteGraph,
+  adaptBrowserStorageGraph,
+  adaptUiReachabilityGraph,
+} from '../graph/adaptFrontendReachabilityGraphs.js'
+import type { FrontendReachabilityArtifact } from '../frontend-reachability/types.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import { buildRenderableDotGraph } from '../graph/buildRenderableDotGraph.js'
 import type { DataModelGraphArtifact } from '../data-model/dataModelGraphTypes.js'
@@ -27,7 +33,7 @@ export function registerViewCommand(program: Command): void {
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
-    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test>', 'graph artifact to render', 'code')
+    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -107,6 +113,9 @@ function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
   if (graph === 'react-component') return adaptReactComponentGraph(artifact as FrontendSemanticArtifact)
   if (graph === 'react-flow') return adaptReactFlowGraph(artifact as FrontendSemanticArtifact)
   if (graph === 'react-prop-event-flow') return adaptReactPropEventFlowGraph(artifact as FrontendSemanticArtifact)
+  if (graph === 'route') return adaptRouteGraph(artifact as FrontendReachabilityArtifact)
+  if (graph === 'browser-storage') return adaptBrowserStorageGraph(artifact as FrontendReachabilityArtifact)
+  if (graph === 'ui-reachability') return adaptUiReachabilityGraph(artifact as FrontendReachabilityArtifact)
   return adaptFrontendTestGraph(artifact as FrontendSemanticArtifact)
 }
 
@@ -118,10 +127,13 @@ function parseGraph(value: string): GraphArtifactSelection {
     value === 'react-component' ||
     value === 'react-flow' ||
     value === 'react-prop-event-flow' ||
-    value === 'frontend-test'
+    value === 'frontend-test' ||
+    value === 'route' ||
+    value === 'browser-storage' ||
+    value === 'ui-reachability'
   ) return value
   throw new Error(
-    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test.`
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test, route, browser-storage, ui-reachability.`
   )
 }
 

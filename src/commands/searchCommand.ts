@@ -7,6 +7,12 @@ import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
 import { searchIndex } from '../search/searchIndex.js'
 import type { SearchIndexResult } from '../search/searchTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import {
+  loadFrontendReachabilityArtifact,
+  resolveReachabilityMode,
+  buildReachabilitySearchResult,
+  type ReachabilitySearchResult,
+} from '../frontend-reachability/index.js'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -17,10 +23,32 @@ export function registerSearchCommand(program: Command): void {
     .description('Search indexed files, symbols, and graph edges.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
     .option('--query <text>', 'search query')
+    .option('--route <path>', 'search frontend-reachability route facts')
+    .option('--storage-key <key>', 'search frontend-reachability browser-storage key facts')
+    .option('--ui <value>', 'search frontend-reachability UI marker facts')
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
     .action((options: SearchCommandOptions) => {
-      if (!options.query) throw new Error('The search command requires --query <text>.')
+      const reachabilityMode = resolveReachabilityMode(options)
+      if (reachabilityMode) {
+        if (options.query !== undefined) {
+          throw new Error(
+            'The reachability flags (--route, --storage-key, --ui) cannot be combined with --query.'
+          )
+        }
+        const artifact = loadFrontendReachabilityArtifact(options.index)
+        const result = buildReachabilitySearchResult(artifact, reachabilityMode.mode, reachabilityMode.query)
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2))
+          return
+        }
+        printReachabilitySearchResult(result)
+        return
+      }
+
+      if (!options.query) {
+        throw new Error('The search command requires --query <text> (or --route, --storage-key, or --ui).')
+      }
       const resolved = readIndexManifest(options.index)
       const result = searchIndex({
         resolved,
@@ -42,8 +70,24 @@ export function registerSearchCommand(program: Command): void {
 interface SearchCommandOptions {
   index: string
   query?: string
+  route?: string
+  storageKey?: string
+  ui?: string
   limit: number
   json?: boolean
+}
+
+function printReachabilitySearchResult(result: ReachabilitySearchResult): void {
+  console.log(`Reachability search (${result.mode}): ${result.query}`)
+  if (result.status === 'missing-artifact') {
+    console.log(`Status: missing-artifact`)
+    for (const warning of result.warnings) console.log(`Warning: ${warning}`)
+    return
+  }
+  console.log(`Results: ${result.summary.resultCount}, related edges: ${result.summary.edgeCount}`)
+  for (const [index, item] of result.results.entries()) {
+    console.log(`${index + 1}. [${item.factKind}] ${item.label} (${item.confidence}) - ${item.id}`)
+  }
 }
 
 function parseLimit(value: string): number {

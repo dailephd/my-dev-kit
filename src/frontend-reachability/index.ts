@@ -56,3 +56,35 @@ export {
 } from './writeFrontendReachabilityArtifact.js'
 
 export { loadFrontendReachabilityArtifact } from './loadFrontendReachabilityArtifact.js'
+
+export {
+  resolveReachabilityMode,
+  MISSING_ARTIFACT_WARNING,
+  type ReachabilityMode,
+  type ReachabilityModeFlags,
+} from './reachabilityConsumers.js'
+
+export {
+  buildReachabilitySearchResult,
+  type ReachabilitySearchResult,
+  type ReachabilitySearchResultItem,
+} from './buildReachabilitySearchResult.js'
+
+export {
+  buildReachabilityLookupResult,
+  type ReachabilityLookupResult,
+  type ReachabilityFact,
+} from './buildReachabilityLookupResult.js'
+
+export {
+  buildReachabilitySliceResult,
+  type ReachabilitySliceResult,
+  type ReachabilitySliceModifiers,
+} from './buildReachabilitySliceResult.js'
+
+export {
+  buildReachabilitySourceResult,
+  type ReachabilitySourceResult,
+  type ReachabilitySourceBlock,
+  type BuildReachabilitySourceOptions,
+} from './buildReachabilitySourceResult.js'
