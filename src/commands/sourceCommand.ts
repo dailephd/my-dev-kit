@@ -31,6 +31,8 @@ import {
   buildReachabilitySourceResult,
   type ReachabilitySourceResult,
 } from '../frontend-reachability/index.js'
+import { buildSourceBundle } from '../source/sourceBundle.js'
+import { renderSourceBundle } from '../source/renderSourceBundle.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -59,6 +61,14 @@ export function registerSourceCommand(program: Command): void {
     .option('--max-lines <n>', 'maximum returned lines', parseInteger, 160)
     .option('--continue-from <n>', 'continue file retrieval from this line number (requires --file)', parseInteger)
     .option('--continue', 'continue from the last preview window (requires --node or --file --symbol)')
+    .option('--include-imports', 'include local import declarations in bundle')
+    .option('--include-local-types', 'include local type/interface/enum definitions in bundle')
+    .option('--include-props', 'include prop type definitions in bundle')
+    .option('--include-local-components', 'include locally-rendered child components in bundle')
+    .option('--include-local-deps', 'include all local dependencies (types, props, constants, helpers) in bundle')
+    .option('--expand-to-local-dependencies', 'alias for --include-local-deps')
+    .option('--max-bundle-lines <n>', 'max total lines across all blocks in bundle (default: 300)', parseInteger)
+    .option('--max-blocks <n>', 'max number of blocks in bundle (default: 20)', parseInteger)
     .option('--format <json|plain|numbered>', 'output format')
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
@@ -99,6 +109,11 @@ export function registerSourceCommand(program: Command): void {
 
       if (mode === 'symbol-continue') {
         handleSymbolContinue(options, format)
+        return
+      }
+
+      if (mode === 'source-bundle') {
+        handleSourceBundle(options, format)
         return
       }
 
@@ -541,6 +556,58 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
   emitSourceResult(result, format, options)
 }
 
+const DEFAULT_MAX_BUNDLE_LINES = 300
+const DEFAULT_MAX_BLOCKS = 20
+
+function handleSourceBundle(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadCodeGraph: options.node !== undefined,
+    loadSymbolIndex: true,
+  })
+
+  const frontendArtifact = loadOptionalFrontendArtifact(artifacts.resolved)
+  const maxLinesPerBlock = options.maxLines
+  const maxLinesPerBundle = options.maxBundleLines ?? DEFAULT_MAX_BUNDLE_LINES
+  const maxBlocks = options.maxBlocks ?? DEFAULT_MAX_BLOCKS
+
+  const bundle = buildSourceBundle({
+    indexDir: options.index,
+    projectRoot: artifacts.resolved.manifest.projectRoot,
+    filePath: options.file,
+    symbolName: options.symbol,
+    nodeId: options.node,
+    startLine: options.start,
+    endLine: options.end,
+    maxLinesPerBlock,
+    maxLinesPerBundle,
+    maxBlocks,
+    includeImports: options.includeImports === true,
+    includeLocalTypes: options.includeLocalTypes === true,
+    includeProps: options.includeProps === true,
+    includeLocalComponents: options.includeLocalComponents === true,
+    includeLocalDeps: (options.includeLocalDeps === true) || (options.expandToLocalDependencies === true),
+    symbolIndex: artifacts.symbolIndex!,
+    codeGraph: artifacts.codeGraph,
+    frontendArtifact,
+  })
+
+  const resolvedFormat: 'json' | 'numbered' = format === 'json' ? 'json' : 'numbered'
+  const rendered = renderSourceBundle(bundle, resolvedFormat)
+
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    if (resolvedFormat === 'json') {
+      console.log(`Wrote source bundle JSON to ${writtenPath}`)
+    } else {
+      console.log(`Wrote source bundle to ${writtenPath}`)
+    }
+    return
+  }
+
+  process.stdout.write(rendered)
+}
+
 function emitSourceResult(result: SourceSlice, format: SourceOutputFormat | undefined, options: SourceCommandOptions): void {
   if (format === undefined) {
     if (options.out) {
@@ -693,6 +760,14 @@ interface SourceCommandOptions {
   json?: boolean
   continueFrom?: number
   continue?: boolean
+  includeImports?: boolean
+  includeLocalTypes?: boolean
+  includeProps?: boolean
+  includeLocalComponents?: boolean
+  includeLocalDeps?: boolean
+  expandToLocalDependencies?: boolean
+  maxBundleLines?: number
+  maxBlocks?: number
 }
 
 function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | undefined {
@@ -704,7 +779,20 @@ function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | unde
   return undefined
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' | 'continue-from' | 'node-continue' | 'symbol-continue' {
+const BUNDLE_FLAGS = ['includeImports', 'includeLocalTypes', 'includeProps', 'includeLocalComponents', 'includeLocalDeps', 'expandToLocalDependencies'] as const
+
+function hasBundleFlags(options: SourceCommandOptions): boolean {
+  return (
+    options.includeImports === true ||
+    options.includeLocalTypes === true ||
+    options.includeProps === true ||
+    options.includeLocalComponents === true ||
+    options.includeLocalDeps === true ||
+    options.expandToLocalDependencies === true
+  )
+}
+
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' | 'continue-from' | 'node-continue' | 'symbol-continue' | 'source-bundle' {
   const hasContains = options.contains !== undefined
   const hasReactRegion = options.reactRegion !== undefined
   const hasLocalComponentTree = options.includeLocalComponentTree === true
@@ -769,12 +857,23 @@ function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'sym
   if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
   if (hasContains && hasStartEnd) throw new Error('--contains cannot be combined with --start or --end.')
   if (hasContains && options.file !== undefined) throw new Error('--contains cannot be combined with --file. Use --contains alone to search all indexed files.')
+  if (hasContains && hasBundleFlags(options)) throw new Error('Bundle flags cannot be combined with --contains.')
   if (!hasContains && options.path !== undefined) throw new Error('--path is only valid when combined with --contains.')
   if (hasContains) return 'exact-match'
 
   const hasRange = options.file !== undefined || hasStartEnd
   if (hasNode && (hasRange || hasSymbol)) throw new Error('Use only one source mode: --node, --file with --start/--end, or --file with --symbol.')
   if (!hasNode && !hasRange && !hasSymbol) throw new Error('Provide one source mode: --node, --file with --start/--end, or --file with --symbol.')
+
+  // Bundle mode: any bundle flag present
+  if (hasBundleFlags(options)) {
+    if (hasContains) throw new Error('Bundle flags cannot be combined with --contains.')
+    if (hasReactRegion) throw new Error('Bundle flags cannot be combined with --react-region.')
+    if (hasLocalComponentTree) throw new Error('Bundle flags cannot be combined with --include-local-component-tree.')
+    if (!hasNode && !hasSymbol && !hasStartEnd) throw new Error('Bundle flags require a target: --node, --file --symbol, or --file --start --end.')
+    return 'source-bundle'
+  }
+
   if (hasNode) return 'node'
   if (hasSymbol) {
     if (!options.file) throw new Error('Symbol mode requires --file <path> and --symbol <name>.')
