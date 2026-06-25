@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.2.0 supports:
+Version 1.3.0 supports:
 
 - indexing TypeScript, JavaScript, and Python source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -42,6 +42,10 @@ Version 1.2.0 supports:
 - exact entity and field inspection from data-model artifacts
 - generating `model-view-lineage.json` in `trace-view` mode
 - conservative static model-to-view lineage tracing for supported TypeScript and TSX cases
+- generating `frontend-semantic.json` for supported TSX/JSX frontend structures
+- generating `frontend-reachability.json` for static route, browser-storage, UI-marker, and cross-domain reachability evidence
+- querying exact route, storage-key, and UI-marker facts through `search`, `lookup`, `slice`, and `source`
+- rendering route, browser-storage, and UI-reachability graph views
 
 ## Public commands
 
@@ -144,7 +148,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current v1.2.0 scope:
+Current v1.3.0 scope:
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -153,15 +157,17 @@ Current v1.2.0 scope:
 - exact source string retrieval with context, classification, and repeated literal reporting
 - React region and local component-tree prop/event-flow retrieval
 - frontend semantic graph views: react-component, react-flow, react-prop-event-flow, frontend-test
+- static frontend reachability analysis producing `frontend-reachability.json`
+- exact route, storage-key, and UI-marker retrieval with bounded source and graph views
 - warnings for unsupported or ambiguous patterns
 
-Current v1.2.0 does not claim:
+Current v1.3.0 does not claim:
 
 - full ORM or schema coverage
 - runtime database behavior
 - runtime React rendering behavior
-- route-aware reachability
-- browser-state tracing
+- runtime route reachability
+- runtime browser-state tracing
 - full React render-flow tracing
 - semantic similarity search or embedding-based retrieval
 
@@ -187,7 +193,7 @@ my-dev-kit does not provide:
 - Semantic roles currently produced: `data-entity` and `data-field` from `typescript-model-analyzer`. Other defined roles are planned.
 - Unsupported dynamic or ambiguous lineage patterns are warned or omitted.
 - Lookup requires exact node IDs, exact entity names or IDs, and exact `Entity.field` selectors.
-- Graph visualization for `data-model-graph.json` and `model-view-lineage.json` is not yet available.
+- Route, browser-storage, and UI-reachability analysis remain conservative static evidence only and may omit dynamic or computed values.
 
 ## Support the project
 

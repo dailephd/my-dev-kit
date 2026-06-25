@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 - 2026-06-25
+
+Added route-aware, browser-storage-aware, and UI-reachability retrieval backed by a new static frontend reachability artifact.
+
+- Added `frontend-reachability.json`, a static semantic artifact that records route, browser-storage, UI-marker, and reachability evidence
+- Added route-aware retrieval for static route, page, navigation, and test evidence through `search`, `lookup`, `slice`, and `source`
+- Added browser-storage tracing for supported `sessionStorage` and `localStorage` read, write, remove, and clear patterns
+- Added static UI reachability evidence connecting routes, components, UI markers, storage keys, gates, and tests where detectable
+- Added `--route`, `--storage-key`, and `--ui` selectors to `search`, `lookup`, `slice`, and `source`
+- Added `view --graph route`, `view --graph browser-storage`, and `view --graph ui-reachability`
+- Updated React/TSX examples and command documentation to demonstrate v1.3.0 route, storage, and UI reachability workflows
+- Notes: v1.3.0 is conservative static analysis only; it does not execute applications, run browsers, prove runtime UI visibility, or prove user reachability
+
 ## 1.2.0 - 2026-06-18
 
 Added React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.

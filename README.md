@@ -399,6 +399,8 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 Version 1.3.0 adds frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors on `search`, `lookup`, `slice`, and `source`, and `route`/`browser-storage`/`ui-reachability` graph views.
 
+Version 1.3.0 adds frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors on `search`, `lookup`, `slice`, and `source`, and `route`/`browser-storage`/`ui-reachability` graph views.
+
 Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
 Future roadmap items cover source continuation and expansion (v1.4), schema and layer classification (v1.5), graph-guided planner packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).

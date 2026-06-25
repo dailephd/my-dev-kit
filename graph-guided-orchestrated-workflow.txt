@@ -1,0 +1,977 @@
+# Graph-Guided Orchestrated Workflow
+
+Use this workflow when asking a coding agent to implement, repair, test, refactor, harden, or extract a bounded workflow using both `my-dev-kit` and `my-dev-kit-orchestrator`.
+
+This workflow assumes both tools are available from npm and should use the latest published versions unless a task explicitly requires a pinned historical version.
+
+## Package commands
+
+Use latest npm package commands by default.
+
+my-dev-kit:
+
+```text
+npx @dailephd/my-dev-kit@latest
+```
+
+my-dev-kit-orchestrator:
+
+```text
+npx my-dev-kit-orchestrator@latest
+```
+
+If the orchestrator package is scoped in the current project documentation or package metadata, use the scoped package command instead:
+
+```text
+npx @dailephd/my-dev-kit-orchestrator@latest
+```
+
+Use the package name confirmed in the target project documentation or package metadata.
+
+## Local-development exception
+
+When the target project being modified is `my-dev-kit` itself, use the published latest `my-dev-kit` package for architecture-context retrieval of the existing repository.
+
+Use the local built CLI only when validating unpublished local changes to `my-dev-kit` behavior:
+
+```text
+npm run build
+node dist/cli.js <command> <flags>
+```
+
+Do not use unpinned `npx @dailephd/my-dev-kit@latest` to validate behavior that has not been published yet.
+
+## Purpose
+
+This workflow combines:
+
+* `my-dev-kit` for graph-guided project context retrieval
+* `my-dev-kit-orchestrator` for staged design-to-code workflow control
+
+The intended normal feature flow is:
+
+```text
+feature request
+-> orchestrator run
+-> graph-guided architecture context
+-> ArchitectureContextPacket
+-> BehaviorModel
+-> PseudocodePacket
+-> TestStrategyPacket
+-> implementation
+-> test implementation
+-> verification
+-> judge
+-> final report
+```
+
+The intended hardening flow is:
+
+```text
+hardening request
+-> orchestrator run
+-> architecture context
+-> assumption report
+-> failure-mode matrix
+-> guard pseudocode packet
+-> resilience test strategy
+-> implementation
+-> test implementation
+-> verification
+-> judge
+-> final report
+```
+
+The intended extraction flow is:
+
+```text
+extraction request
+-> source repo graph-guided inspection
+-> source workflow map
+-> source-to-target porting map
+-> do-not-port list
+-> golden behavior contract
+-> target architecture proposal
+-> target behavior model
+-> target pseudocode packet
+-> target test strategy
+-> target implementation
+-> target test implementation
+-> target verification
+-> judge against golden behavior contract
+-> final report
+```
+
+## Workflow principle
+
+Do not start by reading whole source files.
+
+Do not guess file responsibilities from the repo tree alone.
+
+Do not jump directly into implementation.
+
+Do not write tests before the test strategy exists.
+
+Do not claim completion before verification evidence exists.
+
+Do not treat source architecture as automatically desirable target architecture.
+
+Do not mix source repo retrieval results with target repo retrieval results.
+
+Use this order:
+
+1. Start or continue an orchestrator run.
+2. Use the current orchestrator stage prompt as the controlling instruction.
+3. Use `my-dev-kit` only when the current stage requires graph-guided context.
+4. Save retrieval evidence in the required report path.
+5. Synthesize retrieval evidence into the required artifact.
+6. Continue stages in order.
+7. Implement production code only at the implementation stage.
+8. Implement tests only at the test-implementation stage.
+9. Verify with actual commands.
+10. Judge the result against the design artifacts and behavior contract.
+
+## Artifact directory rules
+
+Use one stable `my-dev-kit` artifact directory per repository:
+
+```text
+.my-dev-kit
+```
+
+Re-run `index` to refresh the current repository state.
+
+Do not create a new index folder for every run unless the task explicitly needs a separate audit, comparison, snapshot, fixture index, or subproject index.
+
+`manifest.json` is the source of truth for which `my-dev-kit` artifacts are current.
+
+Do not trust stale artifact files just because they exist on disk.
+
+Use the orchestrator workspace for staged workflow artifacts:
+
+```text
+.my-dev-kit-orchestrator
+```
+
+Run folders live under:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/
+```
+
+Each run contains:
+
+```text
+00-request.txt
+run.json
+prompts/
+artifacts/
+reports/
+```
+
+## Stage gate rules
+
+Do not create `PseudocodePacket` before `BehaviorModel`.
+
+Do not implement production code before `PseudocodePacket`.
+
+Do not implement tests before `TestStrategyPacket`.
+
+Do not mark the run complete before `VerificationReport`.
+
+Do not mark the run passed before `JudgeReport` supports `PASS`.
+
+For extraction mode, do not implement before these pre-implementation artifacts exist:
+
+* `source-workflow-map.txt`
+* `source-to-target-porting-map.txt`
+* `do-not-port-list.txt`
+* `golden-behavior-contract.txt`
+* `target-architecture-proposal.txt`
+
+## Normal feature mode
+
+Use this mode for implementing a feature inside one target repository.
+
+Start a normal feature run from the target project root:
+
+```text
+npx my-dev-kit-orchestrator@latest init
+npx my-dev-kit-orchestrator@latest start --mode feature "<request>"
+```
+
+Generate the next prompt:
+
+```text
+npx my-dev-kit-orchestrator@latest prompt
+```
+
+Generate a specific stage prompt:
+
+```text
+npx my-dev-kit-orchestrator@latest prompt architecture-context
+npx my-dev-kit-orchestrator@latest prompt behavior-model
+npx my-dev-kit-orchestrator@latest prompt pseudocode-packet
+npx my-dev-kit-orchestrator@latest prompt test-strategy
+npx my-dev-kit-orchestrator@latest prompt implementation
+npx my-dev-kit-orchestrator@latest prompt test-implementation
+npx my-dev-kit-orchestrator@latest prompt verification
+npx my-dev-kit-orchestrator@latest prompt judge
+npx my-dev-kit-orchestrator@latest prompt final-report
+```
+
+If using the scoped orchestrator package, replace `npx my-dev-kit-orchestrator@latest` with:
+
+```text
+npx @dailephd/my-dev-kit-orchestrator@latest
+```
+
+## Architecture-context stage
+
+At the architecture-context stage, index or refresh the target repo:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root . --src src --out .my-dev-kit --call-graph --json
+```
+
+For monorepos, include all relevant source roots:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root . --src apps/web --src apps/nlp-service --src packages/shared --src tests --out .my-dev-kit --call-graph --json
+```
+
+Then use search, lookup, slice, and source:
+
+```text
+npx @dailephd/my-dev-kit@latest search --index .my-dev-kit --query "<task-specific query>" --limit 20 --json
+
+npx @dailephd/my-dev-kit@latest lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+
+npx @dailephd/my-dev-kit@latest slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --out .my-dev-kit/<task-name>-slice.json --json
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --node "<symbol-node-id>" --max-lines 160 --format numbered
+```
+
+Use line-range source only as fallback:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --file "<file-path>" --start <start-line> --end <end-line> --max-lines <cap> --format numbered
+```
+
+Use data-model inspection when the task involves entities, fields, schema-like structures, model semantics, or model-to-view lineage:
+
+```text
+npx @dailephd/my-dev-kit@latest data-model --index .my-dev-kit --entity "<entity-name>" --json
+
+npx @dailephd/my-dev-kit@latest data-model --index .my-dev-kit --field "<entity.field>" --json
+
+npx @dailephd/my-dev-kit@latest data-model --index .my-dev-kit --trace-view "<entity-name>" --json
+
+npx @dailephd/my-dev-kit@latest data-model --index .my-dev-kit --field "<entity.field>" --trace-view --json
+```
+
+Write the supporting retrieval report to:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/reports/architecture-context-retrieval-report.txt
+```
+
+Write the synthesized architecture context to:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/architecture-context-packet.txt
+```
+
+Later stages must consume `architecture-context-packet.txt`, not raw retrieval JSON.
+
+## v1.2 frontend retrieval rules
+
+For React, TSX, JSX, frontend-test, UI, E2E, locator, or component-flow tasks, prefer v1.2 bounded retrieval before line-range fallback or full-file reads.
+
+### Exact string and locator retrieval
+
+Use this before reading an entire component, page, or test file:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "<ui-string-or-testid-or-literal>" --context 20 --format numbered
+```
+
+Examples:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "workspace-editor-empty-state" --context 20 --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "Create workspace" --context 20 --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "structured-content" --context 20 --format json
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "/workspaces/new" --context 20 --format json
+```
+
+Use a path prefix filter when the task is constrained to a subsystem:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --contains "<literal>" --path "<path-prefix>" --context 20 --format json
+```
+
+### React region retrieval
+
+Use React region retrieval before reading a full TSX file.
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region "<region-or-component-name>" --file "<tsx-file>" --format numbered
+```
+
+Examples:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region handlers --file "src/WorkspaceEditorShell.tsx" --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region state --file "src/WorkspaceEditorShell.tsx" --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region jsx-branches --file "src/WorkspaceEditorShell.tsx" --format numbered
+
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --react-region returned-jsx --file "src/WorkspaceEditorShell.tsx" --format numbered
+```
+
+### Local component-tree retrieval
+
+Use this when a task touches parent props, local child components, callback props, event handlers, helper functions, or state setters inside one TSX file.
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --symbol "<component-name>" --file "<tsx-file>" --include-local-component-tree --format numbered
+```
+
+Example:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --format numbered
+```
+
+Filter to one prop when the task is about adding, removing, or renaming a prop:
+
+```text
+npx @dailephd/my-dev-kit@latest source --index .my-dev-kit --symbol "<component-name>" --file "<tsx-file>" --include-local-component-tree --prop "<prop-name>" --format numbered
+```
+
+### Prop-flow and event-flow graph slices
+
+Search for the component node first:
+
+```text
+npx @dailephd/my-dev-kit@latest search --index .my-dev-kit --query "<component-name>" --limit 20 --json
+```
+
+Then slice around the selected component node:
+
+```text
+npx @dailephd/my-dev-kit@latest slice --index .my-dev-kit --node "<component-node-id>" --depth 2 --direction both --include-prop-flow --json
+
+npx @dailephd/my-dev-kit@latest slice --index .my-dev-kit --node "<component-node-id>" --depth 2 --direction both --include-event-handlers --json
+
+npx @dailephd/my-dev-kit@latest slice --index .my-dev-kit --node "<component-node-id>" --depth 2 --direction both --include-prop-flow --include-event-handlers --json
+```
+
+### Frontend graph views
+
+Use frontend graph views when graph inspection helps understand component structure, render flow, prop/event flow, or frontend tests.
+
+```text
+npx @dailephd/my-dev-kit@latest view --index .my-dev-kit --graph react-component --format dot --out .my-dev-kit/react-component.dot
+
+npx @dailephd/my-dev-kit@latest view --index .my-dev-kit --graph react-flow --format dot --out .my-dev-kit/react-flow.dot
+
+npx @dailephd/my-dev-kit@latest view --index .my-dev-kit --graph react-prop-event-flow --format dot --out .my-dev-kit/react-prop-event-flow.dot
+
+npx @dailephd/my-dev-kit@latest view --index .my-dev-kit --graph frontend-test --format dot --out .my-dev-kit/frontend-test.dot
+```
+
+DOT output does not require Graphviz. Use SVG or PNG only when Graphviz is available or the project validation expects it.
+
+## Full-file read fallback policy
+
+Do not read whole files by default.
+
+For normal code tasks, full-file reads are allowed only after search, lookup, slice, and source retrieval are insufficient.
+
+For React/TSX/frontend-test tasks, full-file reads are not allowed until the agent has tried or ruled out:
+
+* `source --contains`
+* `source --react-region`
+* `source --include-local-component-tree`
+* `slice --include-prop-flow`
+* `slice --include-event-handlers`
+
+Full-file reads under 250 lines may be allowed when directly edited and bounded retrieval is insufficient.
+
+Full-file reads over 250 lines require a strong justification.
+
+Every full-file read must be reported with:
+
+* file path
+* line count
+* retrieval commands attempted first
+* why symbol, exact string, React-region, component-tree, or line-range retrieval was insufficient
+* what missing context the full file provided
+* whether the file was directly edited
+
+If no full-file read was used, say none.
+
+## Harden mode
+
+Use harden mode for validation, guard, resilience, security, failure-handling, and release-hardening work.
+
+Start a hardening run:
+
+```text
+npx my-dev-kit-orchestrator@latest start --mode harden "<hardening request>"
+```
+
+Example:
+
+```text
+npx my-dev-kit-orchestrator@latest start --mode harden "add CLI adversarial security validation for path traversal, unsafe writes, malformed artifacts, Graphviz subprocess safety, and JSON stdout safety"
+```
+
+Use graph-guided context retrieval in the architecture-context stage, then follow the harden stage order:
+
+```text
+hardening-brief
+-> architecture-context
+-> assumption-report
+-> failure-mode-matrix
+-> guard-pseudocode-packet
+-> resilience-test-strategy
+-> implementation
+-> test-implementation
+-> verification
+-> judge
+-> final-report
+```
+
+Security and release-hardening workflows must not publish packages, create tags, create GitHub releases, or run destructive commands unless explicitly requested by the maintainer.
+
+## Extraction mode
+
+Use extraction mode when transferring a bounded feature, workflow, subsystem, or behavior from an existing source repository into a new or separate target repository.
+
+Start an extraction run:
+
+```text
+npx my-dev-kit-orchestrator@latest start --mode extraction --source "<source-repo-root>" --target "<target-repo-root>" "<extraction request>"
+```
+
+Windows PowerShell example:
+
+```text
+npx my-dev-kit-orchestrator@latest start --mode extraction --source "Z:\Users\newuser\Projects\scientific-literature-explorer-v1" --target "Z:\Users\newuser\Projects\biolit-neighborhoods" "Extract search, ranked results, pagination, paper selection, evidence-set construction, and semantic paper-neighborhood workflow."
+```
+
+The source repository is evidence for porting analysis and is read-only by default.
+
+The target repository is where implementation, tests, verification, and final reporting happen.
+
+Do not assume the target project should inherit the source project architecture.
+
+Do not assume `--create-target` exists unless the current installed version documents it.
+
+## Extraction mode index separation
+
+Index the source repository separately:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root "<source-repo-root>" --src "<source-src-root>" --out "<source-repo-root>/.my-dev-kit" --call-graph --json
+```
+
+For source monorepos, include all relevant roots:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root "<source-repo-root>" --src "apps/web" --src "apps/nlp-service" --src "packages/shared" --out "<source-repo-root>/.my-dev-kit" --call-graph --json
+```
+
+Index the target repository separately, if it already has source code to inspect:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root "<target-repo-root>" --src "<target-src-root>" --out "<target-repo-root>/.my-dev-kit" --call-graph --json
+```
+
+For target monorepos:
+
+```text
+npx @dailephd/my-dev-kit@latest index --root "<target-repo-root>" --src "apps/web" --src "apps/nlp-service" --src "packages/shared" --src "tests" --out "<target-repo-root>/.my-dev-kit" --call-graph --json
+```
+
+Do not use the source repo `.my-dev-kit` index for target implementation planning.
+
+Do not use the target repo `.my-dev-kit` index to infer source behavior.
+
+## Extraction mode required artifacts
+
+Extraction mode must produce these artifacts before implementation.
+
+### 1. SourceWorkflowMap
+
+Path:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/source-workflow-map.txt
+```
+
+Purpose:
+
+Describe how the workflow currently works in the source repo.
+
+Required sections:
+
+* Source repo path
+* Workflow entry point
+* User-facing steps
+* Frontend components
+* Frontend state owners
+* API routes
+* Backend services
+* Data contracts
+* Persistence dependencies
+* External service dependencies
+* Tests found
+* Known behavior risks
+* Ambiguous or missing context
+* Source retrieval evidence used
+
+### 2. SourceToTargetPortingMap
+
+Path:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/source-to-target-porting-map.txt
+```
+
+Purpose:
+
+Classify each source subsystem as reusable, refactorable, rewritable, discardable, or postponed.
+
+Required structure for each item:
+
+* Source behavior
+* Source files or symbols
+* Target behavior
+* Target module or component
+* Decision: port as-is / port with refactor / rewrite cleanly / discard / postpone
+* Reason
+* Required tests
+* Risks
+
+### 3. DoNotPortList
+
+Path:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/do-not-port-list.txt
+```
+
+Purpose:
+
+Prevent accidental transfer of unrelated source architecture.
+
+Required sections:
+
+* Systems excluded from the target project
+* UI labels excluded from the target project
+* Backend routes excluded from the target project
+* Persistence layers excluded from the target project
+* Downstream workflows excluded from the target project
+* Reason each exclusion exists
+* Consequences if accidentally ported
+
+### 4. GoldenBehaviorContract
+
+Path:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/golden-behavior-contract.txt
+```
+
+Purpose:
+
+Define the exact behavior that must be preserved or reimplemented in the target project.
+
+This artifact is mandatory before pseudocode and test strategy.
+
+Required sections:
+
+* User-visible behavior
+* API behavior
+* State behavior
+* Sorting and ranking behavior
+* Pagination behavior
+* Selection behavior
+* Error and empty-state behavior
+* Edge cases
+* Non-negotiable regression tests
+* Acceptance criteria
+
+For fragile workflows, make this contract specific and testable.
+
+Example requirements:
+
+* Search results must be ordered by relevance descending.
+* Page-size options must be 10, 30, 50, and 100.
+* Pagination must use Previous, numbered pages, ellipsis, last page, and Next.
+* Selection must be stored by stable item ID, not page index.
+* Select all current page must select only visible page items.
+* Deselect all current page must deselect only visible page items.
+* Automatic mode must use top N valid ranked results, not the first N visible rows.
+* Manual mode must use only user-selected items.
+* Changing page size must preserve valid selections.
+* Out-of-range pages must be clamped.
+
+### 5. TargetArchitectureProposal
+
+Path:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/target-architecture-proposal.txt
+```
+
+Purpose:
+
+Describe the clean target architecture before implementation.
+
+Required sections:
+
+* Target repo path
+* Target project purpose
+* Target workflow
+* Frontend components
+* Backend services
+* API routes
+* Shared contracts
+* State ownership
+* Persistence policy
+* External dependencies
+* Testing strategy overview
+* Source components reused
+* Source components rewritten
+* Source components discarded
+* Architecture guardrails
+
+## Extraction mode stage behavior
+
+### request-brief
+
+Capture:
+
+* source repo
+* target repo
+* workflow to extract
+* desired target scope
+* excluded features
+* critical behaviors to preserve
+* expected deliverables
+
+### source-architecture-context
+
+Use `my-dev-kit` on the source repo.
+
+Generate source retrieval evidence.
+
+For frontend source workflows, include v1.2 retrieval evidence when relevant:
+
+* exact strings and locators
+* React regions
+* local component-tree source bundles
+* prop-flow and event-flow slices
+* frontend graph views
+
+Write the supporting report to:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/reports/source-architecture-context-retrieval-report.txt
+```
+
+### source-workflow-map
+
+Write:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/source-workflow-map.txt
+```
+
+This stage describes what exists in the source repo. It does not decide what should be ported yet.
+
+### porting-map
+
+Write:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/source-to-target-porting-map.txt
+```
+
+Write:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/do-not-port-list.txt
+```
+
+This stage decides what to port, rewrite, discard, and postpone.
+
+### golden-behavior-contract
+
+Write:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/golden-behavior-contract.txt
+```
+
+No production implementation should happen before this artifact exists.
+
+### target-architecture
+
+Write:
+
+```text
+.my-dev-kit-orchestrator/runs/<run-id>/artifacts/target-architecture-proposal.txt
+```
+
+If the target repo already exists, use `my-dev-kit` to inspect it.
+
+If the target repo does not exist, define the planned structure and contracts before scaffolding, unless the installed orchestrator version explicitly supports creating the target.
+
+### behavior-model
+
+Write the behavior model for the target system.
+
+The behavior model must use the golden behavior contract as the main source of truth.
+
+### pseudocode-packet
+
+Write pseudocode for the target implementation.
+
+The pseudocode must map to the target architecture, not the source architecture.
+
+### test-strategy
+
+Write the test strategy before test implementation.
+
+The test strategy must include regression coverage for the golden behavior contract.
+
+### implementation
+
+Modify only the target repo unless the request explicitly permits source repo changes.
+
+### test-implementation
+
+Add or update tests in the target repo.
+
+### verification
+
+Run actual target project validation commands.
+
+### judge
+
+Compare the implementation against:
+
+* request brief
+* source workflow map
+* source-to-target porting map
+* do-not-port list
+* golden behavior contract
+* target architecture proposal
+* behavior model
+* pseudocode packet
+* test strategy
+* implementation report
+* test implementation report
+* verification report
+
+The judge report must explicitly state one of the verdicts supported by the installed orchestrator version.
+
+If the orchestrator version supports judge correction routing, use the routed correction stage when the judge report recommends one.
+
+### final-report
+
+Summarize:
+
+* extraction request
+* source repo inspected
+* target repo modified
+* source components reused
+* source components rewritten
+* source components discarded
+* tests added
+* validation results
+* judge result
+* remaining risks
+* recommended next step
+
+## Reporting requirements
+
+Every final response must include:
+
+### Orchestrator run
+
+* run ID
+* workflow mode
+* current or final stage
+* artifacts written
+* reports written
+
+### Index artifacts used
+
+* source index directory, if extraction mode
+* target index directory
+* whether each index was refreshed or reused
+* whether `manifest.json` referenced semantic artifacts
+* whether frontend semantic artifacts were present when relevant
+
+### Search queries run
+
+* query
+* why it was used
+* whether it was run on source or target
+
+### Candidate nodes selected
+
+* node ID
+* why it was selected
+* whether it came from source or target
+
+### Source symbols retrieved
+
+* symbol node ID
+* reason it was retrieved
+* whether it came from source or target
+
+### Exact string retrieval used
+
+* string or literal searched
+* reason it was searched
+* match count
+* whether it came from source or target
+
+### React/frontend retrieval used
+
+* React region retrieved
+* component tree retrieved
+* prop-flow or event-flow slice retrieved
+* frontend graph viewed
+* reason each was used
+* whether it came from source or target
+
+### Line-range fallback retrieval used
+
+* file path
+* line range
+* reason symbol-level or frontend-specific retrieval was insufficient
+* whether it came from source or target
+
+### Full files read beyond retrieved source
+
+* file path
+* line count
+* reason it was necessary
+* what missing context it provided
+* whether it came from source or target
+
+### Semantic artifacts inspected
+
+* artifact or data-model command
+* reason it was relevant
+* whether it came from source or target
+
+### Implementation summary
+
+* production files changed
+* test files changed
+* docs changed
+* behavior implemented
+* pseudocode steps implemented
+* tests added or updated
+
+### Verification
+
+* commands run
+* exit codes
+* pass/fail status
+* skipped commands and reasons
+
+### Judge result
+
+* verdict
+* routed correction stage, if any
+* reason
+
+If no exact string retrieval was used, say none.
+
+If no React/frontend retrieval was used, say none.
+
+If no line-range fallback was used, say none.
+
+If no full-file read was used, say none.
+
+If no semantic artifacts were inspected, say none.
+
+If implementation did not reach final report, say exactly which stage remains next.
+
+## Architecture guardrail
+
+Before creating new files, identify the existing extension point.
+
+Ask:
+
+* What subsystem already owns this behavior?
+* Is there a registry, adapter, command handler, renderer, builder, analyzer, or shared type to extend?
+* Would a new file create a second parallel architecture?
+* Can this be implemented by extending the existing abstraction instead?
+* Does this belong in structural artifacts, compact semantic metadata, or detailed semantic artifacts?
+* Is this a new responsibility or an extension of an existing responsibility?
+
+For my-dev-kit specifically, ask:
+
+* Does this belong in `index`, `search`, `lookup`, `slice`, `source`, `view`, or `data-model` rather than a new command?
+* Does this belong in `symbol-index.json`, `code-graph.json`, `data-model.json`, `data-model-graph.json`, `model-view-lineage.json`, or `frontend-semantic.json`?
+* Does `manifest.json` need to register a new artifact or analyzer status?
+* Is this a compact role/ref in core artifacts or a detailed fact in a separate semantic artifact?
+* Can the feature be expressed through a flag or graph choice rather than a new command?
+* Does the feature overclaim runtime behavior when it is only static analysis?
+
+For extraction mode, also ask:
+
+* Is this source subsystem truly part of the requested target workflow?
+* Should this be ported, refactored, rewritten, discarded, or postponed?
+* Would porting this subsystem drag unrelated source architecture into the target repo?
+* Is this behavior covered by the GoldenBehaviorContract?
+* Is the target design simpler than the source design while preserving required behavior?
+
+Do not create a new module for a feature until you prove there is no existing extension point.
+
+Do not port source architecture into the target repo unless the porting map explicitly justifies it.
+
+## Release and security workflow notes
+
+Use this orchestrated workflow for large release hardening tasks, including:
+
+* cross-platform release audits
+* package-content audits
+* security validation framework work
+* CLI adversarial testing
+* path traversal hardening
+* Graphviz/subprocess safety
+* JSON stdout/stderr safety
+* generated artifact cleanup safety
+
+Do not use the full orchestrated workflow for tiny changes such as one-line README fixes, package metadata typo fixes, or a single command example update.
+
+For release publishing, use the dedicated release prompt/checklist instead of this workflow.
+
+For pre-release security validation using `my-dev-kit-lab`, use the dedicated security-validation prompt/checklist instead of this workflow.
+
+## Final principle
+
+`my-dev-kit` retrieves bounded context.
+
+`my-dev-kit-orchestrator` controls staged workflow order.
+
+The coding agent must not skip the staged workflow, must not replace bounded retrieval with broad file dumping, and must not claim completion without verification and judge evidence.
