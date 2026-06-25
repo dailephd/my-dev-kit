@@ -2,6 +2,25 @@ import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../
 
 export type SourceSliceMode = 'line-range' | 'symbol' | 'node'
 
+/**
+ * Metadata describing where to continue source retrieval from this window.
+ * Emitted whenever the output is bounded and may be incomplete.
+ */
+export interface ContinuationCursor {
+  filePath: string
+  nextStartLine: number
+  previousEndLine: number
+  targetKind: string
+  targetId?: string
+  symbolName?: string | null
+  maxLines: number
+  eof: boolean
+  symbolBoundaryKnown: boolean
+  reason: 'symbol-end-unknown' | 'max-lines-reached' | 'window-capped' | 'eof'
+  warnings: string[]
+  fallbackReason?: string
+}
+
 export interface SourceSlice {
   status: 'ok'
   mode: SourceSliceMode
@@ -17,6 +36,7 @@ export interface SourceSlice {
   artifactRefs?: SemanticArtifactRef[]
   evidenceRefs?: SemanticEvidenceRef[]
   warnings: string[]
+  continuationCursor?: ContinuationCursor
 }
 
 export interface SourceTarget {
