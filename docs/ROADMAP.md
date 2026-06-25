@@ -315,57 +315,51 @@ Missing-artifact behavior: `search`/`lookup`/`slice`/`source` return a graceful 
 
 ## Version 1.4.0
 
-Version 1.4.0 focuses on source retrieval expansion.
+Version 1.4.0 adds source continuation and bounded local dependency expansion.
 
-The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
+The goal is to reduce full-file reads when the correct file, symbol, or component is already known: "I found the right thing. Now give me the missing surrounding context without making me read the whole file."
 
-### Source continuation
+### Implemented
 
-Planned features:
+#### Source continuation
 
-- continue retrieving a large symbol after the first bounded result
-- retrieve the next source window from a known line
-- make truncation recoverable without reading the whole file
+- `source --file <path> --continue-from <n>` — reads from explicit line, returns `SourceSlice` with `ContinuationCursor`
+- `source --file <path> --symbol <name> --continue` — continues from the end of the symbol's initial 20-line preview
+- `source --node <id> --continue` — continues from the end of the node's initial preview window
+- `source --file <path> --symbol <name> --continue-from <n>` — reads from explicit line with symbol metadata attached
+- `ContinuationCursor` in all JSON responses: `nextStartLine`, `previousEndLine`, `exhausted`, `reason`, `symbolBoundaryKnown`
+- `[CONTINUE: <file> from line N (reason: ...)]` and `[EOF: <file> (N lines total)]` footers in numbered output
+- When symbol end line is unknown (symbol-index.json stores start line only): `reason = 'symbol-end-unknown'`, warning included
 
-Candidate command shapes:
+#### Local dependency expansion (source bundles)
 
-- `source --node <symbol-id> --continue`
-- `source --file <path> --symbol <name> --continue-from <line>`
+- `--include-local-types` — same-file interface/type/enum definitions referenced in the primary window
+- `--include-props` — same-file prop type definitions (exact end line from `frontend-semantic.json` when available)
+- `--include-local-components` — same-file local React child components (requires `frontend-semantic.json`)
+- `--include-local-deps` — composite: prop types + local types + constants above primary symbol + directly called helpers
+- `--expand-to-local-dependencies` — alias for `--include-local-deps`
+- `--include-imports` — local import-site lines; external packages and dynamic imports go to `skippedBlocks`
+- `--max-bundle-lines <n>` — caps total bundle line count (default 300)
+- `--max-blocks <n>` — caps total block count (default 20)
+- `SourceBundle` output type: `primaryBlock`, `expansionBlocks`, `skippedBlocks`, `limits`, `stats`, `continuationCursors`, `warnings`
+- Each block has `expansionReasons`, `confidence` (`high`/`medium`/`low`), `dedupeKey`, `targetRelationship`, optional `fallbackReason`
+- Overlapping same-file blocks merged; both expansion reasons preserved
+- Numbered output: block headers `=== [<kind>] <file>:<start>-<end> (<N> lines) — <reasons> ===`, skipped section, warnings section
+- Skipped candidates: `skippedBlocks` with `reasonCode` (`external-package`, `dynamic-import`, `max-lines-reached`, `max-blocks-reached`, `artifact-unavailable`, `inside-primary-window`, etc.)
 
-### Local context expansion
+#### Static boundaries
 
-Planned features:
+- Direct, same-file dependency resolution only — no cross-file closure
+- No runtime tracing, no browser execution
+- Pattern-matching on source text for local type and helper detection — not semantic type-checking
+- When `frontend-semantic.json` is absent: local component and prop expansion degraded or skipped with warnings
+- `confidence: 'low'` blocks have estimated end lines (no FrontendSourceRef available)
 
-- include imports for a retrieved symbol
-- include local type definitions used by a retrieved symbol
-- include local prop types used by a React component
-- include local constants used by a symbol
-- include local helper functions called by a symbol
-- include local helper components used by a component
-- include sibling source blocks when they are direct local dependencies
+### Future work for this area
 
-Candidate command shapes:
-
-- `source --node <symbol-id> --include-imports`
-- `source --node <symbol-id> --include-local-types`
-- `source --node <symbol-id> --include-local-components`
-- `source --node <symbol-id> --include-props`
-- `source --node <symbol-id> --include-local-deps`
-- `source --node <symbol-id> --expand-to-local-dependencies`
-
-### Source bundle output
-
-Planned features:
-
-- bounded source bundles around one symbol
-- local dependency closure with a max-line cap
-- explanation for each included source block
-- deterministic ordering of included blocks
-- compact output suitable for coding-agent prompts
-
-Candidate command shape:
-
-- `source --node <symbol-id> --include-local-deps --max-lines <n>`
+- Cross-file dependency closure (v1.5+)
+- Runtime component tree integration (future)
+- Semantic type-checking for dependency detection (future)
 
 ## Version 1.5.0
 
