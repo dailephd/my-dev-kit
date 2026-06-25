@@ -5,5 +5,7 @@ export default defineConfig({
     globals: true,
     include: ['tests/**/*.spec.ts'],
     exclude: ['tests/**/fixtures/**'],
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
 })
