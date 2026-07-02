@@ -101,17 +101,18 @@ The `index` command writes:
 | Artifact | Contents |
 | --- | --- |
 | `manifest.json` | Artifact registry, analyzer registry and status, project metadata, artifact paths, and summary counts |
-| `symbol-index.json` | Per-file symbol tables with locations, imports, exports, and compact semantic roles per symbol |
-| `code-graph.json` | Graph of file and symbol nodes connected by typed edges, with compact semantic roles on symbol nodes |
+| `symbol-index.json` | Per-file symbol tables with locations, imports, exports, and compact semantic roles and classification roles per symbol |
+| `code-graph.json` | Graph of file and symbol nodes connected by typed edges, with compact semantic roles and classification roles on symbol nodes |
 | `call-graph.json` | Optional static call graph written when `--call-graph` is requested |
 | `data-model.json` | Data entities, fields, relationships, source refs, and warnings, written when the TypeScript model analyzer runs |
 | `data-model-graph.json` | Separate graph of data-model entity and field nodes, written when the TypeScript model analyzer runs |
 | `frontend-semantic.json` | Frontend semantic artifact: React components, local components, prop types, hooks, handlers, JSX regions, test blocks, locators, UI strings, and flow relationships, written when the frontend analyzer runs on TSX/JSX files |
 | `frontend-reachability.json` | Frontend reachability artifact (v1.3.0): static route facts, browser storage key facts, UI reachability facts, and cross-domain reachability edges, written when the frontend analyzer runs on TSX/JSX files |
+| `classification.json` | Classification artifact (v1.5.0): conservative static schema/layer classification of files and symbols — category, edit guidance, readiness, risk labels, evidence, and uncertainty — written whenever the classification analyzer runs |
 
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
-Compact semantic roles on symbol-index symbols and code-graph nodes link back to the detailed artifacts through `artifactRefs`. The data-model and frontend semantic artifacts remain separate from `code-graph.json`.
+Compact semantic roles (`semanticRoles`/`artifactRefs`) and compact classification roles (`classificationRoles`/`classificationRefs`) on symbol-index symbols and code-graph nodes link back to their respective detailed artifacts. The data-model, frontend semantic, and classification artifacts remain separate from `code-graph.json`, each with its own node/entry ID space.
 
 `view` renders `code-graph.json` by default. Use `--graph data-model` or `--graph model-view-lineage` for data-model graphs. Use `--graph react-component`, `--graph react-flow`, `--graph react-prop-event-flow`, or `--graph frontend-test` for frontend semantic graphs. Graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
 
@@ -445,13 +446,15 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
+Version 1.5.0 adds conservative static schema/layer classification: files and symbols are classified into categories (canonical type, database model, view model, UI-only state, test fixture, generated file, configuration file, command handler, analyzer, validator, and more), each with edit guidance, a readiness state, additive risk labels, evidence, and an uncertainty tier. Classification is written to a `classification.json` artifact, registered in `manifest.json`, and surfaced as compact `classificationRoles`/`classificationRefs` through `search`, `lookup`, `slice`, and `source` — the same two-tier detailed-artifact-plus-compact-refs pattern already used by the data-model and frontend-semantic layers. Classification is static only: it never claims runtime, browser, or database behavior, and an absent `classification.json` (an older index) never changes existing command output.
+
 Version 1.4.0 adds source continuation and bounded local dependency expansion. Once you find the right symbol or component, you can continue reading past the initial preview or expand to include the same-file types, props, helpers, and constants it directly depends on — all bounded, with reasons for every included block.
 
 Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors and `route`/`browser-storage`/`ui-reachability` graph views.
 
 Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
-Future roadmap items cover schema and layer classification (v1.5), graph-guided orchestrator packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
+Future roadmap items cover graph-guided orchestrator planner packets and context capsules (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

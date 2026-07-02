@@ -18,6 +18,11 @@ npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --trace-view --json
+
+# v1.5.0 - classification.json is written by every index run; classification
+# metadata is surfaced through search/lookup/slice/source, not through data-model.
+npx @dailephd/my-dev-kit search --index examples/basic-data-model-ts/.my-dev-kit --query "canonical-type" --limit 5 --json
+npx @dailephd/my-dev-kit lookup --index examples/basic-data-model-ts/.my-dev-kit --node "symbol:src/models.ts#User" --depth 1 --resolve-classification --json
 ```
 
 Generated `.my-dev-kit` directories are local output only and are not meant to be committed.

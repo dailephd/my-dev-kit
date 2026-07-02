@@ -4,7 +4,7 @@ These folders are small projects for learning and smoke testing my-dev-kit from 
 
 - `basic-ts` — a small TypeScript project for code-graph indexing, search, lookup, and source retrieval.
 - `basic-python` — a small Python project for code-graph indexing and search behavior.
-- `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, and conservative static `trace-view` behavior.
+- `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, conservative static `trace-view` behavior, and (v1.5.0) conservative static classification of its `User` interface.
 - `basic-react-tsx` — a small React/TSX project for frontend semantic indexing, exact string retrieval, React region retrieval, local component-tree retrieval, frontend graph views, and v1.3.0 frontend-reachability retrieval (route, browser-storage, UI markers).
 
 Normal users should run `npx @dailephd/my-dev-kit` inside their own project:
@@ -49,7 +49,16 @@ npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --f
 npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --continue --format json
 npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --include-local-types --format numbered
 npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --include-local-deps --max-bundle-lines 200 --format json
+
+# Classification (v1.5.0) - every `index` run produces classification.json; the
+# examples below just show it surfaced through existing commands.
+npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-data-model-ts/.my-dev-kit --query "canonical-type" --limit 5 --json
+npx @dailephd/my-dev-kit lookup --index examples/basic-data-model-ts/.my-dev-kit --node "symbol:src/models.ts#User" --depth 1 --resolve-classification --json
+npx @dailephd/my-dev-kit source --index examples/basic-data-model-ts/.my-dev-kit --node "symbol:src/models.ts#User" --max-lines 80 --format json
 ```
+
+Classification is conservative and static: categories, edit guidance, readiness, and risk labels are derived only from file paths, naming conventions, and existing index/semantic evidence, never from runtime or browser behavior. An index built without the classification analyzer (or an older index) is still fully usable — `search`/`lookup`/`slice`/`source` simply omit the classification fields.
 
 See each example's `README.md` for the full workflow.
 

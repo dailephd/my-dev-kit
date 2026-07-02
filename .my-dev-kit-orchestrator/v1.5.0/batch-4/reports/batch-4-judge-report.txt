@@ -1,0 +1,155 @@
+Report: Batch4JudgeReport
+Batch: v1.5.0 Regression, Docs, Examples, Verification, Judge, and Final Report (Batch 4)
+
+Judged against: Batch 1's request-brief.txt, architecture-context-packet.txt,
+behavior-model.txt, classification-contract.txt, classifier-pseudocode-
+packet.txt, test-strategy-packet.txt; Batch 2's implementation and test
+reports; Batch 3's implementation and test reports; this batch's own gap-
+review, test-completion, docs-examples, and verification reports.
+
+===============================================================================
+Checklist
+===============================================================================
+
+1. Requested v1.5 behavior implemented?
+   YES. Request-brief.txt's "requested change": conservative static schema/
+   layer classification of files, symbols, types, and artifacts, surfaced
+   through existing retrieval workflows without a parallel retrieval
+   system. Confirmed implemented: src/classification/* (types, producer,
+   artifact writer, compact-ref embedding), classification.json,
+   manifest.json analyzer registration, and search/lookup/slice/source
+   integration - all verified live via CLI smoke in this batch (Stage 6/7),
+   not just by reading prior reports.
+
+2. Classification contract followed?
+   YES. classification-contract.txt's every decision (artifact name
+   `classification.json`, schemaVersion `1.0.0`, manifest registration via
+   the generic `analyzers[]` array rather than extending
+   `IndexSemanticArtifacts`, `classificationRoles`/`classificationRefs` as
+   NEW separate fields rather than overloading `semanticRoles`/
+   `artifactRefs`, the entry shape, the evidence/uncertainty model, the
+   backward-compatibility guarantees, and the section-8 command-integration
+   contract for search/lookup/slice/source) is directly reflected in
+   src/classification/classificationTypes.ts and the command-layer changes,
+   re-confirmed by this batch's own re-read (see gap-review-report.txt
+   section "cross-check" and this batch's re-verification of the exact
+   type shapes). No redesign occurred in Batch 2, 3, or 4.
+
+3. Existing extension points reused?
+   YES. Classification mirrors the existing `data-model`/`frontend-
+   semantic`/`frontend-reachability` two-tier (detailed artifact + compact
+   refs) pattern exactly; `applyClassificationToCodeGraph`/
+   `applyClassificationToSymbolIndex` are byte-for-byte structural mirrors
+   of `applySemanticRolesToCodeGraph`/`applySemanticRolesToSymbolIndex`;
+   `OPTIONAL_INDEX_ARTIFACT_FILENAMES`/stale-refresh reused unmodified;
+   `IndexAnalyzerId`'s existing `(string & {})` extensibility reused
+   without a breaking type change.
+
+4. No parallel retrieval architecture introduced?
+   YES, confirmed absent. search/lookup/slice/source remain the only four
+   retrieval commands; classification data is attached to their existing
+   output shapes (compact fields on the same node/symbol objects, an
+   opt-in resolver for full detail) rather than exposed through any new
+   command or endpoint. slice required zero new code specifically because
+   no parallel mechanism was needed - the existing raw-node passthrough
+   already carried it.
+
+5. search/lookup/slice/source integration works?
+   YES, re-verified live in this batch (not just re-reading Batch 3's
+   claims): a real `index` run against examples/basic-data-model-ts
+   produced classification.json with 11 entries; `search` for "canonical"
+   correctly returned the 3 canonical-type-classified symbols; `lookup`
+   returned `classificationRoles`/`classificationRefs` plus
+   `--resolve-classification` returned the full detailed entry; `slice`
+   preserved the compact fields on the same node; `source` propagated the
+   compact fields plus a `classificationSummary`.
+
+6. Missing-artifact fallback works?
+   YES, re-verified live in this batch against a real index with
+   classification.json deleted: all four commands returned exit 0 and
+   valid JSON, with classification fields correctly absent/null rather
+   than causing an error or a malformed placeholder.
+
+7. Evidence and uncertainty behavior is conservative?
+   YES. INV-001 (certain requires evidence), INV-002 (unknown pairs only
+   with uncertain edit guidance), INV-003 (generated-file always pairs with
+   generated-do-not-edit), and the possible/unknown-must-carry-a-warning
+   rule are all enforced at construction time via a throwing assertion
+   (`validateEntry`), not left as an unenforced convention - confirmed by
+   reading src/classification/classificationHelpers.ts and by the fact
+   that Batch 2's own test-writing caught two real violations of this rule
+   before they could reach production (documented, fixed, re-verified).
+   Ambiguous cases cap at `possible` (never rounded up), and this batch's
+   new test confirms zero optional-artifact inputs cause a fabricated
+   guess (unresolved entries correctly return `unknown`/`uncertain`).
+
+8. Tests derive from Batch 1 strategy?
+   YES. test-strategy-packet.txt's TST-001 through TST-071 matrix is
+   >95% directly traceable to actual test files (documented exhaustively
+   in Batch 2's, Batch 3's, and this batch's own test-implementation/
+   completion reports), with the two remaining gaps (TST-020 graph-
+   renderer/report-renderer, TST-070 malformed-artifact-analyzer-failure)
+   both being deliberate, disclosed, justified deferrals rather than
+   silent omissions - re-confirmed by this batch's own gap review, which
+   found no NEW undisclosed gap beyond what Batch 2 already stated.
+
+9. Docs accurately describe implemented behavior?
+   YES, and this was the primary defect this batch found and corrected:
+   before this batch, docs/ROADMAP.md's v1.5.0 section, README.md's
+   roadmap sentence, and docs/PROJECT_OVERVIEW.md's release-scope framing
+   all still described v1.5 classification in future/aspirational tense
+   (some frozen as far back as "Version 1.3.0"), and docs/ROADMAP.md
+   contained an unimplemented "Context report improvements" subsection
+   that could have been mistaken for delivered behavior. All were
+   corrected in this batch to describe only what Batches 1-3 actually
+   built, cross-checked directly against classificationTypes.ts's actual
+   field names/values (not re-typed from memory) - see batch-4-docs-
+   examples-report.txt for the full diff summary. No overclaim (runtime/
+   browser/LLM/planner-packet/automatic-safe-edit) was introduced; several
+   explicit non-claims were added.
+
+10. Non-goals respected?
+    YES across all four batches. v1.6 planner packets/context capsules,
+    v1.7 benchmarks, v1.8 scalability, v1.9 language expansion, v2.0 plugin
+    architecture, graph-renderer/report-renderer categories, and release/
+    publish work were never implemented and are explicitly still labeled
+    as future work in the corrected docs/ROADMAP.md.
+
+11. Validation evidence exists?
+    YES, extensive and current: 78 test files / 774 tests passing (full
+    suite, this batch's own fresh run, not a stale Batch 3 number quoted
+    without re-running); typecheck/build/verify all clean; live CLI smoke
+    across all 4 retrieval commands plus data-model regression plus
+    missing-artifact fallback plus cross-platform PowerShell exit-code
+    checks plus a path-with-spaces smoke plus an `npm pack --dry-run`
+    content audit - all run fresh in this batch, documented in batch-4-
+    verification-report.txt with exact commands and exit codes.
+
+12. No unresolved blocker hidden?
+    YES - confirmed no hidden blocker. The one item requiring judgment (the
+    orphaned, stale cross-platform-repair failure-report file) is disclosed
+    prominently at the top of batch-4-gap-review-report.txt with full
+    reasoning for why it does not block this batch, rather than silently
+    ignored or silently treated as satisfying the task's repair-evidence
+    requirement. The two remaining test gaps (TST-020, TST-070) are
+    disclosed, not hidden, in both the gap-review and test-completion
+    reports, with honest reasoning for why each is not closed.
+
+===============================================================================
+Verdict
+===============================================================================
+
+PASS
+
+Rationale: every checklist item above is satisfied with direct, current,
+re-verified evidence (not stale reliance on prior batches' claims alone) -
+this batch independently re-ran the full test suite, re-ran typecheck/
+build/verify, and re-ran live CLI smoke against a freshly generated index
+for every retrieval command plus the missing-artifact and cross-platform
+scenarios, all passing. The one prior-report ambiguity found (the orphaned
+cross-platform-repair file) was investigated and resolved with concrete
+evidence (the real fix's commit hashes and CI verification), not glossed
+over. Documentation, which was the primary gap entering this batch, is now
+accurate and free of overclaims. No corrective stage is required.
+
+Status: complete

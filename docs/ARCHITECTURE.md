@@ -81,11 +81,11 @@ The system has four artifact layers.
 ### Structural artifacts
 
 - `manifest.json` — artifact registry, analyzer registry, project metadata
-- `symbol-index.json` — per-file symbol tables with compact semantic roles
-- `code-graph.json` — file and symbol graph with compact semantic roles on symbol nodes
+- `symbol-index.json` — per-file symbol tables with compact semantic roles and compact classification roles
+- `code-graph.json` — file and symbol graph with compact semantic roles and compact classification roles on symbol nodes
 - `call-graph.json` — optional static call graph
 
-These artifacts describe source files, symbols, edges, and optional static call relationships. They carry compact semantic role metadata when analyzers produce it.
+These artifacts describe source files, symbols, edges, and optional static call relationships. They carry compact semantic role metadata (`semanticRoles`, `artifactRefs`) and compact classification metadata (`classificationRoles`, `classificationRefs`, v1.5.0) when analyzers produce it.
 
 ### Semantic artifacts
 
@@ -117,6 +117,18 @@ The frontend semantic artifact is consumed by:
 Frontend facts are not embedded into `code-graph.json` or `symbol-index.json`. The code graph remains focused on static source structure. Frontend facts live in their own artifact and are accessed through dedicated `source` flags or `view --graph` choices.
 
 The bridge between structural and semantic artifacts is `artifactRefs` (links from compact symbol metadata to detailed artifact entries) and `evidenceRefs` (source location evidence attached to semantic roles).
+
+### Classification artifact (v1.5.0)
+
+- `classification.json` — conservative static schema/layer classification of files and symbols: category assignments, edit guidance, readiness, risk labels, evidence, and uncertainty
+
+This artifact is built by the classification analyzer during `index`, after the data-model, frontend, and frontend-reachability analyzers run (their output is used as evidence where available). It is registered under the generic `'classification'` analyzer entry in `manifest.json`'s `analyzers` array — not under `semanticArtifacts`, which remains a fixed set of five pre-v1.5.0 artifacts.
+
+Classification follows the same two-tier pattern as `data-model.json`/`frontend-semantic.json`: `classification.json` holds detailed entries (category, edit guidance, readiness, risk labels, evidence, uncertainty, warnings), while a compact projection (`classificationRoles`, `classificationRefs`) is embedded on symbol nodes in `symbol-index.json` and `code-graph.json`, mirroring exactly how `semanticRoles`/`artifactRefs` are embedded. `classificationRoles`/`classificationRefs` are new, separate fields — they do not overload or change the meaning of `semanticRoles`/`artifactRefs`.
+
+Classification is static and conservative: categories are only assigned when file/path/naming conventions or existing semantic evidence (data-model roles, frontend-reachability facts) support them. It never claims runtime, browser, or database behavior, and it reuses existing category names from `SemanticRoleName` where one already exists, to avoid vocabulary drift between semantic roles and classification.
+
+`classification.json` absence (an older index, or a classification analyzer failure) does not change any other artifact's shape or values, and does not break `search`/`lookup`/`slice`/`source` — this mirrors how `frontend-semantic.json`/`frontend-reachability.json` absence is already handled.
 
 ## CLI layer
 
@@ -179,12 +191,14 @@ Current analyzers:
 - `call-graph` — static call graph, when `--call-graph` is requested
 - `data-model` — TypeScript model extraction, produces `data-model.json` and `data-model-graph.json`
 - `model-view-lineage` — conservative lineage, runs in `data-model --trace-view` mode
-- `frontend` — React/TSX and frontend-test extraction, produces `frontend-semantic.json`
+- `frontend-semantic` — React/TSX and frontend-test extraction, produces `frontend-semantic.json`
+- `frontend-reachability` — static route/storage-key/UI-reachability facts, produces `frontend-reachability.json` (v1.3.0), runs when `.tsx`/`.jsx` files are found
+- `classification` — conservative static schema/layer classification of files and symbols, produces `classification.json` (v1.5.0), runs after the analyzers above so their output is available as evidence
 
 Analyzer output feeds two paths:
 
-1. Compact role metadata (`semanticRoles`, `artifactRefs`) is embedded on symbols in `symbol-index.json` and on symbol nodes in `code-graph.json`.
-2. Detailed semantic artifacts (`data-model.json`, `data-model-graph.json`) are written to the output directory and registered in `manifest.json`.
+1. Compact role metadata (`semanticRoles`, `artifactRefs`, and — since v1.5.0 — `classificationRoles`, `classificationRefs`) is embedded on symbols in `symbol-index.json` and on symbol nodes in `code-graph.json`.
+2. Detailed semantic artifacts (`data-model.json`, `data-model-graph.json`, `frontend-semantic.json`, `frontend-reachability.json`, `classification.json`) are written to the output directory and registered in `manifest.json`.
 
 Analyzer status is recorded in `manifest.json` under the `analyzers` array.
 
@@ -261,10 +275,10 @@ These layers consume index artifacts.
 
 Responsibilities:
 
-- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role fields when present
-- `lookup`: exact node lookup with bounded neighbor expansion and semantic metadata in the result
-- `source`: bounded read-only source retrieval with path containment, semantic metadata propagated when present
-- `slice`: bounded graph-neighborhood extraction, semantic metadata preserved on nodes
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present
+- `lookup`: exact node lookup with bounded neighbor expansion, semantic and classification metadata in the result, and an opt-in `--resolve-classification` flag to resolve the full `classification.json` entry
+- `source`: bounded read-only source retrieval with path containment, semantic and classification metadata propagated when present
+- `slice`: bounded graph-neighborhood extraction, semantic and classification metadata preserved on nodes
 - `view`: DOT, SVG, or PNG rendering of `code-graph.json`, `data-model-graph.json`, or `model-view-lineage.json`
 
 The view layer uses a small renderable graph adapter layer:
@@ -279,9 +293,11 @@ The view layer uses a small renderable graph adapter layer:
 
 The four frontend graph views (`react-component`, `react-flow`, `react-prop-event-flow`, `frontend-test`) are all derived from the same `frontend-semantic.json` artifact at render time. They differ in which facts and relationships they include. They do not claim runtime React behavior, route reachability, or browser-state behavior.
 
-Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` as weighted fields. Results include `semanticRoles` and `artifactRefs` on matched items when present.
+Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, `semanticArtifactRef`, `classificationRole`, and `classificationEditGuidance` as weighted fields. Results include `semanticRoles`/`artifactRefs` and `classificationRoles`/`classificationRefs` on matched items when present.
 
-Lookup returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node when present.
+Lookup returns `semanticRoles`, `artifactRefs`, `evidenceRefs`, `classificationRoles`, and `classificationRefs` from the focus node when present. Lookup does not read `classification.json` unless `--resolve-classification` is passed, in which case the full matching entry is returned as `classificationDetail` (or `null` if no entry, or if `classification.json` is absent).
+
+`classification.json` absence never changes any command's output shape or values — the compact `classificationRoles`/`classificationRefs` fields are simply absent, the same way `semanticRoles`/`artifactRefs` absence is already handled.
 
 ## Frontend analyzer layer
 

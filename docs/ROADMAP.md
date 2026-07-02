@@ -363,55 +363,59 @@ The goal is to reduce full-file reads when the correct file, symbol, or componen
 
 ## Version 1.5.0
 
-Version 1.5.0 focuses on schema and layer classification and prepares the context-report foundation that the future orchestration layer will use.
+Version 1.5.0 adds conservative static schema and layer classification, built on the existing artifact and command-integration model.
 
-The goal is to help developers avoid editing the wrong layer by classifying symbols, types, and files by their role in the project. The classifications, edit/avoid/readiness categories, and risk labels produced here form the schema that the v1.6 orchestrator will use to assemble task-specific context capsules.
+The goal is to help developers avoid editing the wrong layer by classifying files and symbols by their role in the project, and by surfacing conservative edit guidance, readiness, risk labels, evidence, and uncertainty through the existing `search`, `lookup`, `slice`, and `source` commands — without introducing a second retrieval system. The classification schema and compact metadata fields introduced here (`classificationRoles`, `classificationRefs`) are the foundation the future v1.6 orchestrator will consume; v1.5.0 does not itself implement planner packets or context capsules.
 
-### Symbol and type classification
+### Implemented
 
-Planned classifications:
+#### Classification producer and artifact
 
-- canonical type
-- artifact type
-- database model
-- projection type
-- view model
-- UI-only state
-- test fixture
-- persistence adapter
-- route handler
-- client component
-- server component
-- generated file
-- configuration file
+- `classification.json` — detailed classification entries: category assignment(s), edit guidance, readiness, additive risk labels, evidence, uncertainty tier, warnings, and refs back to source/artifacts. Schema version `1.0.0`.
+- Registered as a generic `'classification'` analyzer entry in `manifest.json`'s `analyzers` array (not in the fixed-shape `semanticArtifacts`), with the same stale-artifact refresh/removal behavior as other optional artifacts
+- File-level and symbol-level classification categories:
+  - canonical type
+  - artifact type
+  - database model
+  - projection type
+  - view model
+  - UI-only state
+  - test fixture
+  - persistence adapter
+  - route handler
+  - client component
+  - server component
+  - generated file
+  - configuration file
+  - command handler
+  - analyzer
+  - validator
+  - public docs
+  - internal planning docs
+- Edit guidance values: `safe-primary-edit-target`, `inspect-before-edit`, `avoid-primary-edit-target`, `read-only-reference`, `generated-do-not-edit`, `test-only`, `docs-only`, `uncertain`
+- Readiness: `ready`, `needs-more-context`, `risky-assumption`; additive risk labels: `wrong-layer-risk`, `unreachable-ui-risk`, `requires-test-validation`, `requires-browser-validation`, `generated-file-risk`, `public-contract-risk`, `migration-risk`
+- Uncertainty tiers: `certain`, `likely`, `possible`, `unknown` — ambiguous or weak evidence is never rounded up to a higher tier, and low-confidence entries always carry an explanatory warning
+- Symbol/type-level categories reuse existing `SemanticRoleName`/subtype spellings verbatim where one already exists (v1.1/v1.2), avoiding vocabulary drift
 
-### Context report improvements
+#### Compact metadata and command integration
 
-Planned report fields:
+- `classificationRoles` and `classificationRefs` — new, separate optional compact fields on `CodeGraphNode`/`GraphSymbolRecord`/`SymbolDefinition`; do not overload or change the meaning of `semanticRoles`/`artifactRefs`
+- `search`: classification role and edit-guidance fields are searchable; results include the compact `classificationRoles`/`classificationRefs`
+- `lookup`: focus node includes `classificationRoles`/`classificationRefs`; an opt-in `--resolve-classification` flag resolves the full `classification.json` entry
+- `slice`: preserves `classificationRoles`/`classificationRefs` on every node, the same way `semanticRoles`/`artifactRefs` are preserved
+- `source`: propagates `classificationRoles`/`classificationRefs` for `--node`/`--symbol` targets, plus a compact `classificationSummary` (risk labels, edit guidance, warnings) resolved from `classification.json`
 
-- what is reachable today
-- what is defined but unused
-- what is read-only
-- what is editable
-- what is guest-safe
-- what is authenticated-only
-- what is canonical state
-- what is projection state
-- what route or user action reaches each component
-- files that are safe to modify first
-- files that should be avoided for the task
+#### Static boundaries
 
-### Readiness categories
+- Classification is derived only from source text, the existing index graph, and existing semantic/data-model/frontend artifacts — no runtime execution, no browser, no database connection, no LLM or network calls
+- `classification.json` absence (an older index, or an analyzer that has not run) never changes any other artifact's shape or values, and never breaks `search`/`lookup`/`slice`/`source`
+- Classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence — not an automatic or authoritative "safe to edit" decision
 
-Planned categories:
+### Future work for this area
 
-- `ready`
-- `needs-more-context`
-- `risky-assumption`
-- `wrong-layer-risk`
-- `unreachable-ui-risk`
-- `requires-test-validation`
-- `requires-browser-validation`
+- Context-report-style aggregation (what's reachable, what's read-only vs. editable, which files are safe to modify first for a given task) is not implemented in v1.5.0. It is a plausible input to the v1.6 orchestrator below, not a v1.5.0 deliverable.
+- `graph-renderer`/`report-renderer` classification categories, deferred pending concrete file-level evidence
+- Cross-file classification signal aggregation (v1.6+)
 
 ## Version 1.6.0: Orchestrator / Graph-Guided Planner Packets
 

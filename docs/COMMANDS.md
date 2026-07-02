@@ -142,6 +142,8 @@ The frontend analyzer runs on `.tsx` and `.jsx` source files to produce the fron
 
 The frontend analyzer also detects files that match test file patterns (`.test.`, `.spec.`, `__tests__`) and extracts test facts (describe/test/it blocks, setup/teardown, locators, route strings) when those files are in the symbol index. **Note:** The base indexer excludes files matching `.test.` and `.spec.` from default file discovery. Test facts in `frontend-semantic.json` are only present when test files reach the symbol index through a source root that the indexer processes.
 
+The classification analyzer (v1.5.0) runs after the analyzers above, using their output as evidence where available. It performs conservative static schema/layer classification of files and symbols — categories such as `canonical-type`, `database-model`, `view-model`, `test-fixture`, `generated-file`, `configuration-file`, `command-handler`, `analyzer`, and `validator` — and produces `classification.json` plus compact `classificationRoles`/`classificationRefs` fields on classified symbols in `symbol-index.json` and `code-graph.json`. Classification is static and conservative: it is derived only from file paths, naming conventions, and existing index/semantic evidence, never from runtime or browser behavior, and low-confidence classifications are marked `possible`/`unknown` with an explanatory warning rather than rounded up to a confident category. See the [`search`](#classification-metadata-v150), [`lookup`](#classification-metadata-v150-1), [`slice`](#classification-metadata-v150-2), and [`source`](#classification-metadata-v150-3) sections below for how classification metadata is surfaced.
+
 Analyzer results and status are recorded in `manifest.json` under the `analyzers` array.
 
 ### Managed artifact refresh
@@ -169,6 +171,10 @@ When the frontend analyzer processes TSX/JSX files:
 
 - `frontend-semantic.json`
 - `frontend-reachability.json` (v1.3.0)
+
+Always, when the classification analyzer runs successfully (regardless of whether TSX/JSX or data-model output exists):
+
+- `classification.json` (v1.5.0)
 
 ### Examples
 
@@ -223,6 +229,14 @@ Result items include a `matchReasons` array. Each reason includes:
 - `field`: the indexed field that matched (e.g. `symbolName`, `semanticRole`, `path`)
 - `term`: the query term that matched
 
+### Classification metadata (v1.5.0)
+
+When classification metadata is present in the index, search includes `classificationRole` and `classificationEditGuidance` as weighted search targets, alongside the existing semantic fields — a query for a category name (e.g. `canonical-type`) or an edit-guidance value (e.g. `generated-do-not-edit`) can match classified files and symbols.
+
+Result items include `classificationRoles` (compact: `role`, `editGuidance`, `readiness`, `uncertainty`) and `classificationRefs` (pointers back to `classification.json`) when present on the matched node or symbol.
+
+When `classification.json` is absent (an older index, or a classification analyzer that has not run), these fields are simply absent from result items — search does not fail and existing `semanticRoles`/`artifactRefs` behavior is unaffected.
+
 ### Reachability selectors (v1.3.0)
 
 `search` accepts three frontend-reachability selectors, each mutually exclusive with `--query` and with each other:
@@ -271,6 +285,7 @@ npx @dailephd/my-dev-kit lookup --index <artifact-dir> --node <node-id>
 - `--index <dir>`: index artifact directory.
 - `--node <node-id>`: exact node ID. Required.
 - `--depth <n>`: neighbor expansion depth. Valid range is 0 through 3.
+- `--resolve-classification`: resolve the full `classification.json` entry for `--node`, when a classification analyzer artifact is present (v1.5.0).
 - `--json`: print JSON result to stdout.
 
 ### Behavior
@@ -285,6 +300,14 @@ npx @dailephd/my-dev-kit lookup --index <artifact-dir> --node <node-id>
 ### Semantic metadata
 
 The lookup result includes `semanticRoles`, `artifactRefs`, and `evidenceRefs` when present on the focus node. These fields are drawn from the code graph and reflect the compact semantic metadata written by `index`.
+
+### Classification metadata (v1.5.0)
+
+The lookup result includes `classificationRoles` (compact: `role`, `editGuidance`, `readiness`, `uncertainty`) and `classificationRefs` (pointers back to `classification.json`) when present on the focus node, both at the top level of the result and nested inside `node` — mirroring exactly how `semanticRoles`/`artifactRefs` already appear in both places.
+
+Passing `--resolve-classification` additionally resolves the full matching entry from `classification.json` (category, edit guidance, readiness, risk labels, evidence, uncertainty, warnings) as `classificationDetail`. Without the flag, `classificationDetail` is not present in the result. With the flag, if `classification.json` is absent or has no matching entry, `classificationDetail` is `null` rather than an error.
+
+When `classification.json` is absent (an older index, or a classification analyzer that has not run), lookup does not fail — the compact `classificationRoles`/`classificationRefs` fields are simply absent, and existing `semanticRoles`/`artifactRefs`/`evidenceRefs` behavior is unaffected.
 
 ### Node ID formats
 
@@ -438,6 +461,10 @@ Static-analysis limitation: source blocks are located from static source refs. T
 ### Semantic metadata propagation
 
 When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output.
+
+### Classification metadata (v1.5.0)
+
+When `--node` or `--symbol`/`--file` mode targets a classified symbol or file, the source result also propagates the compact `classificationRoles`/`classificationRefs` fields, mirroring how `semanticRoles`/`artifactRefs` already propagate. In addition, a compact `classificationSummary` field (category, edit guidance, readiness, risk labels, uncertainty, deduplicated evidence refs, and warnings — not the full evidence text) is resolved from `classification.json` when available. The default plain console output prints one concise line ("Classification edit guidance: ...", plus any risk labels) when a summary is present. Line-range retrieval (no symbol/file target) has no classification fields, the same way it has no `semanticRoles` today. When `classification.json` is absent, `classificationSummary` is `null` and `source` does not fail; v1.4.0 source continuation and local dependency expansion behavior is unaffected.
 
 ### Safety behavior
 
@@ -607,6 +634,10 @@ npx @dailephd/my-dev-kit slice --index <artifact-dir> --node <node-id>
 ### Semantic metadata
 
 Nodes in the slice include their `semanticRoles` and `artifactRefs` from `code-graph.json` when present. Semantic metadata is preserved in slice output.
+
+### Classification metadata (v1.5.0)
+
+Nodes in the slice also include their compact `classificationRoles` and `classificationRefs` from `code-graph.json` when present, preserved the same way `semanticRoles`/`artifactRefs` are — `slice` copies node objects as-is, so no slice-specific code is needed for this. Only the compact projection is included; the full detailed `classification.json` entry is never duplicated into slice output. When `classification.json` is absent, these fields are simply absent and slice output is otherwise unaffected.
 
 ### Reachability selectors (v1.3.0)
 

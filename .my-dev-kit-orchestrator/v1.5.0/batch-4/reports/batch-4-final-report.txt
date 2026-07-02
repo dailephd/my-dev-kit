@@ -1,0 +1,173 @@
+Report: Batch4FinalReport
+Batch name: v1.5.0 Regression, Docs, Examples, Verification, Judge, and Final Report (Batch 4)
+Branch: feature/v1.5.0-classification-finalization
+Commit hash before final commit: 3723ef51c8f34353c8d281387afbc7947da85a5e
+  ("Integrate v1.5.0 classification retrieval metadata" - Batch 3's commit)
+
+===============================================================================
+Latest @dailephd package versions and dist-tags observed
+===============================================================================
+
+@dailephd/my-dev-kit: version 1.4.0; versions include 1.0.0-1.4.0; dist-tags
+  {"latest":"1.4.0"}
+@dailephd/my-dev-kit-orchestrator: version 1.0.0; dist-tags
+  {"latest":"1.0.0"}
+
+===============================================================================
+Production files changed in Batch 4
+===============================================================================
+
+None. Batch 4 found the Batch 2/3 implementation sound and complete - no
+production src/ code was added or modified in this batch.
+
+===============================================================================
+Test files changed in Batch 4
+===============================================================================
+
+One new file: tests/classification/classificationGracefulDegradation.spec.ts
+(2 tests). No existing test file was modified.
+
+===============================================================================
+Docs changed in Batch 4
+===============================================================================
+
+README.md, docs/COMMANDS.md, docs/ARCHITECTURE.md,
+docs/PROJECT_OVERVIEW.md, docs/ROADMAP.md (see batch-4-docs-examples-
+report.txt for the full per-file diff summary). docs/RELEASE.md was
+intentionally not touched (out of scope).
+
+===============================================================================
+Examples changed in Batch 4
+===============================================================================
+
+examples/README.md, examples/basic-data-model-ts/README.md (command-example
+text only; no example project source files changed; no generated
+`.my-dev-kit` directory added or committed).
+
+===============================================================================
+Reports created
+===============================================================================
+
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-gap-review-report.txt
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-test-completion-report.txt
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-docs-examples-report.txt
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-verification-report.txt
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-judge-report.txt
+.my-dev-kit-orchestrator/v1.5.0/batch-4/reports/batch-4-final-report.txt (this file)
+
+===============================================================================
+Final classification artifact name
+===============================================================================
+
+classification.json, schemaVersion '1.0.0' - unchanged from Batch 2/3,
+re-confirmed live in this batch's fresh CLI smoke.
+
+===============================================================================
+Manifest registration summary
+===============================================================================
+
+Registered under the generic `'classification'` IndexAnalyzerId in
+manifest.json's `analyzers[]` array (not in the fixed-shape
+`semanticArtifacts`), with `status`, `version`/`schemaVersion` ('1.0.0'),
+`artifacts: [{name: 'classification', path: 'classification.json',
+artifactKind: 'my-dev-kit-v1-classification'}]`, `warningCount`,
+`errorCount`, and a `summary` block - re-verified live against a fresh
+index run in this batch (Stage 6), status observed as 'partial' (expected:
+some entries are low-confidence with warnings, zero errors).
+
+===============================================================================
+Command integration summary
+===============================================================================
+
+search: compact `classificationRoles`/`classificationRefs` on result items;
+  classification role/edit-guidance are searchable fields; zero
+  classification.json reads needed.
+lookup: compact fields on the focus node (top level and nested); opt-in
+  `--resolve-classification` flag resolves the full detailed entry.
+slice: compact fields preserved on every node via the existing raw-node
+  passthrough - zero code change was needed for this command.
+source: compact fields propagated for `--node`/`--symbol` targets, plus a
+  new compact `classificationSummary` (risk labels, edit guidance,
+  warnings) and one concise console line in default plain output.
+All four re-verified live in this batch against a freshly generated index
+(not just re-reading Batch 3's claims).
+
+===============================================================================
+Missing-artifact compatibility summary
+===============================================================================
+
+All four commands (search, lookup, slice, source) return exit 0 and valid
+JSON when classification.json is absent (an older index, or an analyzer
+that has not run); classification fields are simply absent, or `null` where
+an explicit resolution was requested (`classificationDetail`,
+`classificationSummary`). Re-verified live in this batch against a real
+index copy with classification.json deleted, in addition to the 6
+automated tests already covering this (tests/classification/
+commandIntegration/missingClassificationArtifact.spec.ts).
+
+===============================================================================
+Regression coverage summary
+===============================================================================
+
+Full test suite (774 tests, 78 files) passes, including every existing
+v1.1 (data-model), v1.2 (frontend semantic), v1.3 (frontend-reachability),
+and v1.4 (source continuation/expansion) spec file, unmodified. Live CLI
+regression smoke additionally re-confirmed v1.1 data-model commands
+(--entity, --field, --trace-view) and cross-platform CLI startup/help/
+version/error-exit-code behavior on native Windows PowerShell.
+
+===============================================================================
+Validation command summary
+===============================================================================
+
+npm ci, npm run typecheck, npm test (full suite), npm run build, npm run
+verify, node dist/cli.js --version/--help, npx vitest run tests/
+classification (targeted), live index/search/lookup/slice/source/data-model
+CLI smoke, missing-artifact smoke, PowerShell cross-platform exit-code
+checks, path-with-spaces smoke, npm pack --dry-run. Full command list and
+exact results in batch-4-verification-report.txt.
+
+===============================================================================
+Validation results
+===============================================================================
+
+All green. 774/774 tests pass (78 files). typecheck/build/verify all exit
+0. All CLI smoke commands (classification-specific, regression, missing-
+artifact, cross-platform, path-with-spaces) exit with the expected code and
+produce valid output. npm pack --dry-run contains only the intended 30
+public-facing files - no generated indexes, smoke folders, tarballs, or
+scratch files.
+
+===============================================================================
+Judge verdict
+===============================================================================
+
+PASS (see batch-4-judge-report.txt for the full 12-point checklist and
+rationale).
+
+===============================================================================
+Remaining risks
+===============================================================================
+
+- TST-070 (classification analyzer failure reported as manifest status
+  'failed', not a thrown exception) has production code coverage but no
+  dedicated test - no realistic trigger exists in the current integration
+  shape (classification only reads already-validated in-memory objects,
+  never re-parses untrusted JSON from disk). Disclosed in every batch that
+  touched it; not a blocker.
+- graph-renderer/report-renderer classification categories remain
+  deferred pending future concrete file-level evidence, per Batch 1's own
+  decision - unchanged status, correctly reflected as future work in the
+  now-corrected docs/ROADMAP.md.
+- No performance testing exists for classification.json lookups on large
+  projects (linear find by targetId) - acceptable for expected index sizes
+  today; flagged as a v1.8-scale concern only if it becomes relevant,
+  consistent with the project's own stated non-goals.
+
+===============================================================================
+Whether v1.5.0 implementation is ready for the separate pre-release workflow
+===============================================================================
+
+v1.5.0 implementation is ready for the separate pre-release checklist prompt.
+
+Status: complete

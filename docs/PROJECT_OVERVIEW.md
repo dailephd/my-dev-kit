@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.3.0 supports:
+Version 1.5.0 supports:
 
 - indexing TypeScript, JavaScript, and Python source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -46,6 +46,10 @@ Version 1.3.0 supports:
 - generating `frontend-reachability.json` for static route, browser-storage, UI-marker, and cross-domain reachability evidence
 - querying exact route, storage-key, and UI-marker facts through `search`, `lookup`, `slice`, and `source`
 - rendering route, browser-storage, and UI-reachability graph views
+- continuing bounded source retrieval past an initial preview window, and expanding to same-file local dependencies (types, props, local components, imports, helpers), with reasons for every included block (v1.4.0)
+- running a conservative static classification analyzer that assigns files and symbols a schema/layer category, edit guidance, readiness, additive risk labels, evidence, and an uncertainty tier
+- generating `classification.json` and embedding compact `classificationRoles`/`classificationRefs` on symbols and code-graph nodes
+- surfacing classification metadata through `search`, `lookup` (including an opt-in `--resolve-classification` flag for full detail), `slice`, and `source` (v1.5.0)
 
 ## Public commands
 
@@ -71,6 +75,9 @@ The `index` command writes:
 - `call-graph.json` — optional static call graph, when `--call-graph` is requested
 - `data-model.json` — data entities, fields, relationships, and source evidence, when the TypeScript model analyzer runs
 - `data-model-graph.json` — derived semantic graph of data-model entities and fields, when the TypeScript model analyzer runs
+- `frontend-semantic.json` — React component, prop, hook, handler, JSX, and test facts, when the frontend analyzer runs on TSX/JSX files
+- `frontend-reachability.json` — static route, browser-storage, and UI-marker reachability facts, when the frontend analyzer runs on TSX/JSX files
+- `classification.json` — conservative static schema/layer classification of files and symbols, whenever the classification analyzer runs (v1.5.0)
 
 The `data-model` command additionally writes:
 
@@ -148,7 +155,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current v1.3.0 scope:
+Current v1.5.0 scope:
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -159,9 +166,11 @@ Current v1.3.0 scope:
 - frontend semantic graph views: react-component, react-flow, react-prop-event-flow, frontend-test
 - static frontend reachability analysis producing `frontend-reachability.json`
 - exact route, storage-key, and UI-marker retrieval with bounded source and graph views
-- warnings for unsupported or ambiguous patterns
+- bounded source continuation and same-file local dependency expansion (v1.4.0)
+- conservative static schema/layer classification of files and symbols, producing `classification.json` and compact `classificationRoles`/`classificationRefs` (v1.5.0)
+- warnings for unsupported, ambiguous, or low-confidence patterns
 
-Current v1.3.0 does not claim:
+Current v1.5.0 does not claim:
 
 - full ORM or schema coverage
 - runtime database behavior
@@ -170,6 +179,8 @@ Current v1.3.0 does not claim:
 - runtime browser-state tracing
 - full React render-flow tracing
 - semantic similarity search or embedding-based retrieval
+- an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
+- v1.6 planner packets or context capsules, v1.7 retrieval benchmarks, or a plugin architecture
 
 ## What my-dev-kit does not do
 
