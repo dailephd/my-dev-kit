@@ -19,6 +19,17 @@ import {
   applySemanticRolesToSymbolIndex,
   buildSemanticRolesFromDataModel,
 } from '../semantics/index.js'
+import {
+  applyClassificationToCodeGraph,
+  applyClassificationToSymbolIndex,
+  buildClassificationArtifact,
+  buildClassificationRefsBySymbolId,
+  CLASSIFICATION_SCHEMA_VERSION,
+  type ClassificationArtifact,
+  type CompactClassificationMetadata,
+} from '../classification/index.js'
+import { CLASSIFICATION_FILENAME } from './managedArtifacts.js'
+import type { IndexAnalyzerStatus } from './manifestTypes.js'
 
 export interface RunIndexCommandOptions {
   root?: string
@@ -165,19 +176,37 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   const enrichedSymbolIndex = applySemanticRolesToSymbolIndex(buildResult.index, semanticMetadataBySymbolId)
   const frontendFlowCodeGraph = addFrontendRelationshipsToCodeGraph(codeGraph, semanticResult.frontendResult.artifact)
   const enrichedCodeGraph = applySemanticRolesToCodeGraph(frontendFlowCodeGraph, semanticMetadataBySymbolId)
+
+  const { classification, classificationAnalyzerStatus } = runClassificationAnalyzer({
+    symbolIndex: enrichedSymbolIndex,
+    codeGraph: enrichedCodeGraph,
+    dataModel: semanticResult.dataModelResult.dataModel,
+    frontendSemantic: semanticResult.frontendResult.artifact,
+    frontendReachability: semanticResult.frontendReachabilityResult.artifact,
+    createdAt,
+  })
+  const classificationRefsBySymbolId = classification
+    ? buildClassificationRefsBySymbolId(classification.entries, CLASSIFICATION_FILENAME)
+    : new Map<string, CompactClassificationMetadata>()
+  const classifiedSymbolIndex = applyClassificationToSymbolIndex(enrichedSymbolIndex, classificationRefsBySymbolId)
+  const classifiedCodeGraph = applyClassificationToCodeGraph(enrichedCodeGraph, classificationRefsBySymbolId)
+
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
     languages,
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: buildResult.callGraph !== null,
-    symbolIndex: enrichedSymbolIndex,
-    codeGraph: enrichedCodeGraph,
+    symbolIndex: classifiedSymbolIndex,
+    codeGraph: classifiedCodeGraph,
     warnings,
     errors,
     createdAt,
     semanticArtifacts: semanticResult.semanticArtifacts,
-    analyzers: replaceAnalyzerStatuses(baseManifest.analyzers, semanticResult.analyzers),
+    analyzers: replaceAnalyzerStatuses(
+      [...(baseManifest.analyzers ?? []), classificationAnalyzerStatus],
+      semanticResult.analyzers
+    ),
   })
 
   progress?.({
@@ -189,9 +218,10 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   writeIndexArtifacts({
     outputDir,
     manifest,
-    symbolIndex: enrichedSymbolIndex,
-    codeGraph: enrichedCodeGraph,
+    symbolIndex: classifiedSymbolIndex,
+    codeGraph: classifiedCodeGraph,
     callGraph: buildResult.callGraph,
+    classification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
     frontendSemantic: semanticResult.frontendResult.artifact,
@@ -263,6 +293,69 @@ function buildDryRunResult(
     largestFiles: discovery.largestFiles,
     sampleIndexedFiles: discovery.sampleIndexedFiles,
     sampleSkippedFiles: discovery.sampleSkippedFiles,
+  }
+}
+
+interface RunClassificationAnalyzerOptions {
+  symbolIndex: Parameters<typeof buildClassificationArtifact>[0]['symbolIndex']
+  codeGraph: Parameters<typeof buildClassificationArtifact>[0]['codeGraph']
+  dataModel: Parameters<typeof buildClassificationArtifact>[0]['dataModel']
+  frontendSemantic: Parameters<typeof buildClassificationArtifact>[0]['frontendSemantic']
+  frontendReachability: Parameters<typeof buildClassificationArtifact>[0]['frontendReachability']
+  createdAt: string
+}
+
+/**
+ * PSE-001 integration point: runs after enrichedSymbolIndex/enrichedCodeGraph
+ * exist (so existing-semantic-role evidence is available), and reports
+ * manifest analyzer status 'failed' rather than throwing/aborting the whole
+ * index run if classification construction fails (AC-002/TST-070 graceful
+ * failure-mode contract) - other analyzers' artifacts are unaffected either way
+ * since this runs after their results are already computed.
+ */
+function runClassificationAnalyzer(options: RunClassificationAnalyzerOptions): {
+  classification: ClassificationArtifact | null
+  classificationAnalyzerStatus: IndexAnalyzerStatus
+} {
+  try {
+    const { artifact, warningCount } = buildClassificationArtifact(options)
+    return {
+      classification: artifact,
+      classificationAnalyzerStatus: {
+        id: 'classification',
+        status: warningCount > 0 ? 'partial' : 'complete',
+        version: CLASSIFICATION_SCHEMA_VERSION,
+        schemaVersion: CLASSIFICATION_SCHEMA_VERSION,
+        artifacts: [
+          {
+            name: 'classification',
+            path: CLASSIFICATION_FILENAME,
+            artifactKind: 'my-dev-kit-v1-classification',
+          },
+        ],
+        warningCount,
+        errorCount: 0,
+        summary: {
+          entryCount: artifact.summary.entryCount,
+          fileEntryCount: artifact.summary.fileEntryCount,
+          symbolEntryCount: artifact.summary.symbolEntryCount,
+        },
+      },
+    }
+  } catch (error) {
+    return {
+      classification: null,
+      classificationAnalyzerStatus: {
+        id: 'classification',
+        status: 'failed',
+        version: CLASSIFICATION_SCHEMA_VERSION,
+        schemaVersion: CLASSIFICATION_SCHEMA_VERSION,
+        artifacts: [],
+        warningCount: 0,
+        errorCount: 1,
+        summary: { errorMessage: error instanceof Error ? error.message : String(error) },
+      },
+    }
   }
 }
 

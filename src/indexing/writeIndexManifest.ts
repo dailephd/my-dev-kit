@@ -9,9 +9,11 @@ import {
   sortFrontendReachabilityArtifact,
   type FrontendReachabilityArtifact,
 } from '../frontend-reachability/index.js'
+import type { ClassificationArtifact } from '../classification/classificationTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import {
   CALL_GRAPH_FILENAME,
+  CLASSIFICATION_FILENAME,
   CODE_GRAPH_FILENAME,
   DATA_MODEL_FILENAME,
   DATA_MODEL_GRAPH_FILENAME,
@@ -31,6 +33,7 @@ export interface WriteIndexArtifactsOptions {
   dataModelGraph?: DataModelGraphArtifact | null
   frontendSemantic?: FrontendSemanticArtifact | null
   frontendReachability?: FrontendReachabilityArtifact | null
+  classification?: ClassificationArtifact | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
@@ -55,6 +58,9 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
         sortFrontendReachabilityArtifact(options.frontendReachability)
       )
     }
+  }
+  if (options.classification) {
+    writeJson(path.join(options.outputDir, CLASSIFICATION_FILENAME), options.classification)
   }
 }
 

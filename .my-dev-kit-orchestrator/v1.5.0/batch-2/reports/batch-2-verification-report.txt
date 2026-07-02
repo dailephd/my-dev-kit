@@ -1,0 +1,174 @@
+Report: Batch2VerificationReport
+Batch: v1.5.0 Classification Producer and Artifact Integration (Batch 2)
+Working directory: Z:\Users\newuser\Projects\my-dev-kit-v1
+Branch: feature/v1.5.0-classification-producer-artifact
+
+===============================================================================
+Commands run, working directory, exit code, result
+===============================================================================
+
+1. npm view @dailephd/my-dev-kit versions --json
+   cwd: repo root. Exit 0. Result: ["1.0.0","1.1.0","1.2.0","1.3.0","1.4.0"]
+   - 1.4.0 present as expected.
+
+2. npm view @dailephd/my-dev-kit version
+   cwd: repo root. Exit 0. Result: 1.4.0
+
+3. npm view @dailephd/my-dev-kit dist-tags --json
+   cwd: repo root. Exit 0. Result: {"latest":"1.4.0"} - latest correctly
+   points to 1.4.0, no stop condition triggered.
+
+4. npm view @dailephd/my-dev-kit-orchestrator version
+   cwd: repo root. Exit 0. Result: 1.0.0
+
+5. npm view @dailephd/my-dev-kit-orchestrator dist-tags --json
+   cwd: repo root. Exit 0. Result: {"latest":"1.0.0"}
+
+6. git fetch origin --prune --tags / git checkout feature/v1.5.0-classification-
+   planning-contracts / git pull --ff-only / git checkout -b feature/v1.5.0-
+   classification-producer-artifact / git merge --no-ff origin/main
+   cwd: repo root. Exit 0 for all. Merge was clean, zero conflicts (see
+   implementation report "Current main merged into Batch 2 branch" section
+   for full detail and the merge commit hash).
+
+7. npx @dailephd/my-dev-kit@latest index --root . --src src --out .my-dev-kit
+   --call-graph --json (architecture-context refresh, Stage 2)
+   cwd: repo root. Exit 0. Confirmed frontend-reachability analyzer status
+   'complete', all analyzers ran, managedArtifacts.removed listed all 8
+   expected stale filenames.
+
+8. Multiple npx @dailephd/my-dev-kit@latest search/lookup/slice/source
+   commands (Stage 2/3 architecture-context and assumption-resolution
+   retrieval) - all exit 0, all documented inline during the session and in
+   contract-implementation-notes.txt.
+
+9. npm run typecheck (tsc --noEmit)
+   cwd: repo root. Exit 0. Zero errors, both before writing tests (after
+   production code) and again after adding tests.
+
+10. npx vitest run tests/classification
+    cwd: repo root. First run: 2 files failed (2 tests) - both real
+    production bugs (missing warning generation for low-confidence single
+    candidates; readiness incorrectly flagged as 'risky-assumption' for any
+    warning rather than specifically a conflicting-category warning). Both
+    fixed in src/classification/classificationHelpers.ts, classifyFiles.ts,
+    classifySymbols.ts. Second run: exit 0, 5 files, 31 tests, all passed.
+
+11. npm test (npx vitest run, full suite)
+    cwd: repo root. Exit 0. 72 files, 746 tests, all passed. (Pre-batch
+    baseline was 67 files/715 tests on origin/main per this session's own
+    earlier CI investigation - the +5 files/+31 tests delta matches exactly
+    the new tests/classification/* files added in this batch. Zero
+    regressions.)
+
+12. npm run build (tsup)
+    cwd: repo root. Exit 0. dist/cli.js built, 418.34 KB, "Build success".
+
+13. node dist/cli.js --version
+    cwd: repo root. Exit 0. Output: 1.4.0 (matches package.json, confirms
+    the built CLI is not broken by this batch's changes).
+
+14. node dist/cli.js index --root examples/basic-data-model-ts --src src
+    --out examples/basic-data-model-ts/.my-dev-kit-v1-5-batch-2-smoke --json
+    cwd: repo root. Exit 0. NOTE: because both --root and --out were given as
+    relative paths, the actual output directory resolved to
+    examples/basic-data-model-ts/examples/basic-data-model-ts/.my-dev-kit-
+    v1-5-batch-2-smoke (root-relative path resolution, consistent with how
+    a prior .my-dev-kit-release-smoke directory already exists at the same
+    nested location in this repo from an earlier session - not a bug
+    introduced by this batch). All subsequent smoke inspections were pointed
+    at the actual resolved path.
+
+15. Manifest inspection (node -e reading manifest.json artifacts/
+    semanticArtifacts/analyzers)
+    Result: classification analyzer present with id 'classification',
+    status 'partial' (8 warnings, 0 errors - warnings are the expected
+    "no static evidence" / low-confidence entries, not failures), artifacts
+    path 'classification.json', summary {entryCount:11, fileEntryCount:2,
+    symbolEntryCount:9}.
+
+16. classification.json inspection
+    Result: schemaVersion '1.0.0', 11 entries (2 file + 9 symbol), including
+    a `canonical-type` classification for the `User` symbol backed by
+    existing-semantic-role evidence with an artifactSource pointing at
+    data-model.json.
+
+17. Compact metadata inspection (symbol-index.json / code-graph.json contain
+    "classificationRoles"/"classificationRefs" substring check)
+    Result: all 4 checks true (symbolIndexHasClassificationRoles,
+    symbolIndexHasClassificationRefs, codeGraphHasClassificationRoles,
+    codeGraphHasClassificationRefs).
+
+18. node dist/cli.js search --index <smoke-dir> --query "User" --limit 5 --json
+    Exit 0. Returned 5 real node IDs including symbol:src/models.ts#User.
+
+19. node dist/cli.js lookup --index <smoke-dir> --node "symbol:src/models.ts#User"
+    --depth 1 --json
+    Exit 0. Node object includes classificationRoles:
+    [{"role":"canonical-type","editGuidance":"inspect-before-edit",
+    "readiness":"ready","uncertainty":"certain"}] and classificationRefs
+    pointing at classification.json.
+
+20. node dist/cli.js slice --index <smoke-dir> --node "symbol:src/models.ts#User"
+    --depth 1 --direction both --json
+    Exit 0. Same classificationRoles/classificationRefs present on the node
+    in slice output, byte-identical to the lookup output - directly confirms
+    the slice-preservation assumption end-to-end with real CLI output, not
+    just the code-level inference documented in contract-implementation-
+    notes.txt section 1.
+
+21. Cleanup: rm -rf <smoke-dir>, rm scratch-lookup.json/scratch-slice.json
+    Exit 0. git status --short confirmed only intended source/test files
+    remain (no smoke artifacts, no temp files).
+
+===============================================================================
+Skipped commands and reasons
+===============================================================================
+
+None. Every command listed in the task's required verification stage was
+run for real; none were skipped or assumed.
+
+===============================================================================
+Failed commands
+===============================================================================
+
+Two vitest runs failed on the FIRST attempt (see item 10) - both were real
+bugs in newly-written production code, caught by the newly-written tests
+exactly as intended, and fixed before the batch was considered complete. No
+command failed that was not subsequently fixed and re-verified as passing.
+
+===============================================================================
+Corrective recommendation
+===============================================================================
+
+None outstanding. Both bugs found during this stage are fixed and covered by
+the tests that caught them (no corrective action deferred to a later batch).
+
+===============================================================================
+Smoke artifact result
+===============================================================================
+
+Pass. classification.json, updated symbol-index.json/code-graph.json, and
+updated manifest.json were all generated correctly by the unpublished local
+build (node dist/cli.js), matching the schema/shape described in the
+implementation report. Smoke artifacts were removed after inspection; no
+smoke output was committed.
+
+===============================================================================
+Manifest registration result
+===============================================================================
+
+Pass. 'classification' analyzer entry present with correct id, status,
+version, schemaVersion, artifacts[], warningCount, errorCount, summary -
+verified via a real index run's manifest.json, not just unit tests.
+
+===============================================================================
+Compact metadata result
+===============================================================================
+
+Pass. classificationRoles/classificationRefs present on the classified
+symbol in symbol-index.json, code-graph.json, and in real lookup/slice CLI
+output; absent (not an empty array) on unclassified symbols - verified both
+by automated tests and by direct CLI smoke inspection.
+
+Status: complete

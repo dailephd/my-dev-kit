@@ -1,0 +1,363 @@
+Report: Batch2ImplementationReport
+Batch name: v1.5.0 Classification Producer and Artifact Integration (Batch 2)
+Branch: feature/v1.5.0-classification-producer-artifact
+Commit before implementation: 27c5143b55ca1eabee8f6c2cd27ce0a41383edb9
+  (merge commit "Merge origin/main (v1.4.0) into Batch 2 working branch")
+
+===============================================================================
+Scope
+===============================================================================
+
+Implement the producer/artifact side of v1.5.0 classification per Batch 1's
+settled contract: core classification types/taxonomy, a conservative static
+classification producer (file-level and symbol-level), a detailed
+classification.json artifact, manifest/analyzer registration, compact
+classificationRoles/classificationRefs embedded into code-graph.json and
+symbol-index.json, and targeted producer/artifact/invariant/regression tests
+derived from test-strategy-packet.txt. Command-output integration
+(search/lookup/slice/source surfacing classification) is explicitly out of
+scope (Batch 3).
+
+===============================================================================
+Batch 1 artifacts consumed
+===============================================================================
+
+All 9 required files read in full:
+request-brief.txt, architecture-context-retrieval-report.txt (via
+architecture-context-packet.txt, its consumer-facing summary),
+architecture-context-packet.txt, behavior-model.txt, classification-contract.txt,
+classifier-pseudocode-packet.txt, test-strategy-packet.txt,
+batch-1-verification-report.txt (referenced for validation-command precedent),
+batch-1-final-report.txt.
+
+===============================================================================
+Pre-Batch-2 readiness report consumed
+===============================================================================
+
+Yes - .my-dev-kit-orchestrator/v1.5.0/pre-batch-2-readiness-report.txt read in
+full. Verdict was READY_WITH_NOTES. All carried-forward notes (4-commits-behind
+staleness, validator pattern undefined, 2 unconfirmed test paths, prose-only
+trace linking) are addressed in contract-implementation-notes.txt.
+
+===============================================================================
+Current main merged into Batch 2 branch: YES
+===============================================================================
+
+Merge commit: 27c5143b55ca1eabee8f6c2cd27ce0a41383edb9
+  "Merge origin/main (v1.4.0) into Batch 2 working branch"
+  (--no-ff merge of origin/main into a fresh feature/v1.5.0-classification-
+  producer-artifact branch created from feature/v1.5.0-classification-
+  planning-contracts). Merge was clean - zero conflicts. Diff brought in was
+  scoped entirely to src/commands/sourceCommand.ts, src/lookup/*,
+  src/source/sourceBundle*.ts, src/source/renderSourceBundle.ts,
+  src/source/renderSourceOutput.ts, docs/package metadata, and two new
+  regression test files (tests/source/sourceContinuation.spec.ts,
+  tests/source/localDependencyExpansion.spec.ts) - confirmed via
+  `git diff fadb690 origin/main --stat`. Zero changes to
+  src/indexing/*, src/semantics/*, src/graph/*, src/symbol-index/*,
+  src/data-model/*, src/frontend/*, src/frontend-reachability/* between
+  Batch 1's base commit and the current v1.4.0 tip. Batch 1's own commit
+  (030f22b) and the v1.4.0 version-bump commit (9b8c249) are both confirmed
+  present as ancestors of the merge commit via
+  `git merge-base --is-ancestor`. Batch 1's
+  .my-dev-kit-orchestrator/v1.5.0/batch-1/ artifacts were untouched by the
+  merge (not part of main's diff).
+
+===============================================================================
+Final artifact name from Batch 1
+===============================================================================
+
+classification.json, CLASSIFICATION_SCHEMA_VERSION = '1.0.0', registered
+under IndexAnalyzerId 'classification' in manifest.json's analyzers[] array
+(no change to the fixed-shape IndexSemanticArtifacts interface, per the
+contract's explicit decision).
+
+===============================================================================
+classificationRoles/classificationRefs confirmation
+===============================================================================
+
+Confirmed as two NEW, separate optional fields on CodeGraphNode ('symbol'-
+kind nodes only) and GraphSymbolRecord, explicitly not overloading
+semanticRoles/artifactRefs. classificationRefs reuses SemanticArtifactRef
+verbatim. classificationRoles is a new compact ClassificationRoleRef[] type
+(role/editGuidance/readiness/uncertainty), distinct from the full
+ClassificationRole shape used inside classification.json entries.
+
+===============================================================================
+Deferred assumptions resolved
+===============================================================================
+
+All 6 required Stage-3 items resolved with concrete evidence (not
+guessed/invented) - see contract-implementation-notes.txt for full detail:
+1. Slice metadata preservation - directly verified via live lookup/slice
+   runs plus docs/GRAPH_SCHEMA.md corroboration; no slice.ts change needed.
+2. Frontend-reachability vocabulary - enumerated via source/search against
+   src/frontend-reachability/types.ts.
+3. docs/ARCHITECTURE.md, docs/COMMANDS.md, docs/GRAPH_SCHEMA.md - targeted
+   grep confirmed no contradictions; not rewritten (non-goal).
+4. command-handler/analyzer/validator static patterns - all three now
+   concretely defined with directory+naming+export-evidence rules; validator
+   grounded in the real src/io/validation.ts file (previously undefined,
+   flagged as a must-resolve item by the readiness report).
+5. Regression test paths - confirmed via Glob: tests/frontend/
+   frontendAnalyzer.spec.ts (v1.2), tests/frontend-reachability/
+   regression.spec.ts (v1.3), tests/source/sourceContinuation.spec.ts +
+   tests/source/localDependencyExpansion.spec.ts (v1.4).
+6. v1.4.0 source continuation/expansion impact - confirmed via
+   `git diff fadb690 origin/main --stat` that v1.4.0 touched zero files in
+   the classification integration path (src/indexing/*, src/semantics/*,
+   src/graph/*, src/symbol-index/*).
+
+Additional finding beyond the 6 required items: only `role: 'data-entity'`
+is ever assigned anywhere in this codebase (grep-confirmed); the practical
+category signal for existing semantic roles lives in `subtype`, not `role`.
+classifySymbols.ts checks both fields for a v1.5-category match. Documented
+as a mechanical correction, not a contract conflict, in
+contract-implementation-notes.txt section 7.
+
+===============================================================================
+Files/modules selected for modification
+===============================================================================
+
+New (src/classification/):
+  classificationTypes.ts, classifyFiles.ts, classifySymbols.ts,
+  gatherSymbolEvidence.ts, buildClassificationArtifact.ts,
+  applyClassificationToCodeGraph.ts, applyClassificationToSymbolIndex.ts,
+  index.ts (barrel, mirrors src/semantics/index.ts)
+
+Modified:
+  src/indexing/manifestTypes.ts (add 'classification' to IndexAnalyzerId -
+    additive, no breaking change since it's already `(string & {})`)
+  src/indexing/managedArtifacts.ts (add CLASSIFICATION_FILENAME constant,
+    append to OPTIONAL_INDEX_ARTIFACT_FILENAMES)
+  src/indexing/runIndexCommand.ts (invoke buildClassificationArtifact after
+    enrichedSymbolIndex/enrichedCodeGraph exist, embed compact refs, include
+    classification analyzer status, write classification.json)
+  src/graph/codeGraphTypes.ts (add classificationRoles?/classificationRefs?
+    to CodeGraphNode)
+  src/symbol-index/types.ts (add classificationRoles?/classificationRefs? to
+    GraphSymbolRecord)
+  src/indexing/writeIndexManifest.ts (write classification.json when present)
+
+New tests (tests/classification/):
+  classificationArtifact.spec.ts, classifyFiles.spec.ts,
+  classifySymbols.spec.ts, classificationInvariants.spec.ts,
+  applyClassificationToCodeGraph.spec.ts
+
+===============================================================================
+Files/modules intentionally avoided
+===============================================================================
+
+src/commands/searchCommand.ts, src/lookup/*, src/source/renderSourceOutput.ts,
+src/commands/sliceCommand.ts, src/graph/sliceGraph.ts (no slice.ts change
+needed per the resolved slice-preservation assumption), any docs/*.md, any
+release/publish tooling, src/data-model/*, src/frontend/*,
+src/frontend-reachability/* producer internals (classification is a
+consumer of their output only), src/commands/sourceCommand.ts and
+src/source/sourceBundle*.ts (v1.4.0 territory, unrelated to classification).
+
+===============================================================================
+v1.4.0 compatibility risks
+===============================================================================
+
+Low. Confirmed via diff that v1.4.0's changes and Batch 2's changes touch
+disjoint file sets (v1.4.0: source/lookup/sourceCommand layer; Batch 2:
+indexing/semantics-adjacent classification layer). Regression risk is
+addressed by running tests/source/sourceContinuation.spec.ts and
+tests/source/localDependencyExpansion.spec.ts unmodified in the full test
+suite (TST-063).
+
+===============================================================================
+Context adequacy statement
+===============================================================================
+
+context sufficient for implementation
+
+===============================================================================
+Core types added
+===============================================================================
+
+src/classification/classificationTypes.ts: ClassificationRoleName (18 values:
+13 required categories + command-handler/analyzer/validator/public-docs/
+internal-planning-docs; graph-renderer/report-renderer deferred per BEH-022),
+ClassificationTargetKind, EditGuidance, Readiness, RiskLabel, UncertaintyTier,
+EvidenceKind, ClassificationWarningKind, ClassificationWarning, SourceRef
+(type alias of SemanticEvidenceRef), ClassificationEvidence, ClassificationRole,
+ClassificationRoleRef (compact projection), ClassificationEntry,
+ClassificationSummary, ClassificationArtifact. CLASSIFICATION_SCHEMA_VERSION =
+'1.0.0', CLASSIFICATION_ARTIFACT_KIND = 'my-dev-kit-v1-classification'.
+
+===============================================================================
+Producer/artifact writer behavior
+===============================================================================
+
+- classificationHelpers.ts: resolveCandidateConflicts (PSE-040, with evidence
+  propagation - see deviations), createEvidence/assertNoOverclaiming/
+  assertCertainHasEvidence/assertUnknownPairsWithUncertainGuidance/
+  assertGeneratedFilePairing/validateEntry (INV-001 through INV-003 enforced
+  at construction time - a violation throws, matching AC-002's "build-time
+  assertion failure, not a silently written malformed artifact"),
+  buildLowConfidenceWarnings (auto-generates a warning whenever a resolved
+  candidate lands at possible/unknown tier - see deviations),
+  deriveReadiness, dedupeRisks.
+- classifyFiles.ts (PSE-010): file-level matchers for generated-file,
+  configuration-file, command-handler, analyzer, validator, test-fixture,
+  public-docs/internal-planning-docs, each grounded in concrete evidence from
+  contract-implementation-notes.txt section 4. Zero-candidate files receive a
+  documented-absence entry (AC-007), never omitted.
+- classifySymbols.ts (PSE-020/PSE-022): reuses existing semantic role/subtype
+  category names (checking both fields - see deviations), corroborates via
+  frontend-reachability facts, deterministic edit-guidance/risk derivation.
+- gatherSymbolEvidence.ts: builds the evidence bundle consumed by
+  classifySymbols (existing role/subtype match, frontend-reachability
+  componentId match against the symbol's node id).
+- buildClassificationArtifact.ts (PSE-001): iterates symbolIndex.files in
+  stable order for file entries, then each file's symbols in declaration
+  order for symbol entries, concatenates deterministically (BEH-071).
+
+===============================================================================
+Manifest integration behavior
+===============================================================================
+
+- manifestTypes.ts: added 'classification' to IndexAnalyzerId (additive,
+  already `(string & {})`-extensible - no breaking change).
+- managedArtifacts.ts: added CLASSIFICATION_FILENAME = 'classification.json',
+  appended to OPTIONAL_INDEX_ARTIFACT_FILENAMES (participates in
+  refreshIndexOutput's existing stale-cleanup pass automatically).
+- runIndexCommand.ts: added runClassificationAnalyzer() which runs after
+  enrichedSymbolIndex/enrichedCodeGraph exist (so existing-semantic-role
+  evidence is available), wrapped in try/catch to report manifest status
+  'failed' rather than aborting the index run if construction throws
+  (TST-070). classificationAnalyzerStatus is folded into the base analyzers
+  array before replaceAnalyzerStatuses() runs, so it survives the existing
+  merge-by-id logic unmodified.
+- writeIndexManifest.ts: writes classification.json when the analyzer
+  produced an artifact (mirrors the existing conditional-write pattern for
+  dataModel/frontendSemantic).
+
+===============================================================================
+classificationRoles/classificationRefs integration behavior
+===============================================================================
+
+- codeGraphTypes.ts / symbol-index/types.ts: added classificationRoles?/
+  classificationRefs? to CodeGraphNode, GraphSymbolRecord, and
+  SymbolDefinition (SymbolDefinition needed it too since FileSummary.symbols
+  is SymbolDefinition[], not GraphSymbolRecord[] - both are enriched).
+- buildClassificationRefsBySymbolId.ts: builds a map-by-symbolId of compact
+  metadata, including ONLY 'symbol'-kind classification entries with >=1
+  resolved classification (entries with zero classifications are excluded,
+  so the compact fields stay absent rather than an empty array - matching
+  how semanticRoles/artifactRefs absence is already handled, confirmed by
+  TST-040's "unmatched symbols have the field absent" expectation).
+- applyClassificationToCodeGraph.ts / applyClassificationToSymbolIndex.ts:
+  byte-for-byte structural mirrors of applySemanticRolesToCodeGraph/
+  applySemanticRolesToSymbolIndex (AC-003).
+- Verified live (not just by test) via the required local CLI smoke: search/
+  lookup/slice all return classificationRoles/classificationRefs on the
+  classified `User` symbol node without crashing, confirming AC-003 and the
+  slice-preservation assumption end-to-end.
+
+===============================================================================
+v1.4.0 compatibility notes
+===============================================================================
+
+Full test suite (746 tests, 72 files) passes unmodified, including
+tests/source/sourceContinuation.spec.ts, tests/source/
+localDependencyExpansion.spec.ts (v1.4 regression), tests/frontend/
+frontendAnalyzer.spec.ts (v1.2 regression), tests/frontend-reachability/
+regression.spec.ts (v1.3 regression), and tests/semantics/
+semanticRoleEnrichment.spec.ts (v1.1 regression) - none were modified by this
+batch. This confirms the "disjoint file sets" compatibility risk assessment
+from Stage 4 held in practice.
+
+===============================================================================
+Deviations from Batch 1 contract
+===============================================================================
+
+1. classifySymbols.ts checks BOTH existingRole.role and existingRole.subtype
+   for a v1.5-category match (not just `.role` as PSE-020's pseudocode
+   literally shows), because only `role: 'data-entity'` is ever assigned by
+   any producer in this codebase - the practical category signal lives in
+   `subtype`. Documented in contract-implementation-notes.txt section 7. This
+   is a mechanical implementation detail, not a change to BEH-020's naming-
+   consistency intent.
+2. resolveCandidateConflicts (classificationHelpers.ts) was extended beyond
+   PSE-040's literal pseudocode to (a) propagate the winning candidate's
+   evidence array (PSE-040 as written discards it, which would make
+   INV-001's "certain-tier requires evidence" unsatisfiable for any resolved
+   entry) and (b) auto-generate a warning via buildLowConfidenceWarnings
+   whenever the resolved tier is possible/unknown, even for a single
+   (non-ambiguous) candidate - PSE-033's avoidOverclaiming check is written
+   against entries in general, and a single low-confidence candidate (e.g.
+   validator matched by filename alone, no export corroboration) still needs
+   a warning even though PSE-040's conflict-resolution pseudocode only shows
+   the ambiguous/multi-candidate path adding one. Both were caught by the new
+   tests failing during Stage 10 (invariant violations thrown at
+   construction time exactly as AC-002 intends), then fixed - no invariant
+   was weakened; the fixes make the pseudocode's own invariants (INV-001,
+   PSE-033) actually hold.
+3. readiness/risk-label derivation (deriveReadiness, deriveFileRisks,
+   deriveSymbolRisks) is a Batch-2-original conservative implementation, not
+   drawn from a Batch 1 pseudocode section - behavior-model.txt BEH-032 and
+   the pseudocode packet explicitly leave the "exact mapping" as "an
+   implementation decision for Batch 2, constrained by this conservative
+   direction." `migration-risk` is never emitted (no static evidence source
+   was identified in either Batch 1 or Batch 2's architecture context for
+   it) - this is a conservative omission, not a contract violation, since
+   risk labels are additive/optional (0 or more).
+4. TST-002 (manifest analyzer/artifact registration) was covered by a new
+   assertion in the new tests/classification/classificationArtifact.spec.ts
+   file rather than by extending the existing tests/index/
+   manifestAnalyzerRegistry.spec.ts as test-strategy-packet.txt suggested -
+   done to avoid modifying an existing v1.1-era test file; the assertion
+   coverage is equivalent.
+
+===============================================================================
+Full-file reads used
+===============================================================================
+
+All under the 250-line threshold except two files that were directly edited
+(symbol-index/types.ts at 259 lines, runIndexCommand.ts at 287 lines before
+editing) - both read in full because they were direct edit targets and
+targeted retrieval had already narrowed exactly which symbols mattered
+(retrieval attempted first via `search`/`lookup`/`source --symbol`; the full
+read was needed to see the complete existing pipeline wiring before
+inserting new code safely). Files read in full: manifestTypes.ts (61),
+managedArtifacts.ts (29), runSemanticAnalyzers.ts (206), codeGraphTypes.ts
+(56, pre-edit), symbol-index/types.ts (259, pre-edit), semanticTypes.ts
+(106), applySemanticRolesToCodeGraph.ts (22),
+applySemanticRolesToSymbolIndex.ts (43), buildSemanticRolesFromDataModel.ts
+(97), semantics/index.ts (4), writeIndexManifest.ts (63),
+buildIndexManifest.ts (101), refreshIndexOutput.ts (25), runIndexCommand.ts
+(287, pre-edit), data-model/types.ts (106),
+tests/semantics/semanticRoleEnrichment.spec.ts (154),
+tests/index/manifestAnalyzerRegistry.spec.ts (163),
+tests/index/manifestArtifactRegistry.spec.ts (132). All of these are either
+direct edit targets, direct mirror targets (semantics/* mirrored exactly by
+classification/*), or direct test-pattern references consumed to write new
+tests in the same style. No speculative/unrelated full-file reads were made.
+
+===============================================================================
+Production behavior implemented
+===============================================================================
+
+Static, deterministic, conservative classification of files and symbols
+using existing index/semantic artifacts as evidence; a new classification.json
+detailed artifact; manifest/analyzer registration; compact
+classificationRoles/classificationRefs on CodeGraphNode/GraphSymbolRecord/
+SymbolDefinition. No runtime, browser, database, or network behavior of any
+kind (BEH-070) - confirmed by code review: the only I/O in
+src/classification/* is none (pure functions over already-loaded in-memory
+artifacts); all file/network/process access happens in runIndexCommand.ts's
+existing pipeline, unchanged in kind.
+
+===============================================================================
+Non-goals respected
+===============================================================================
+
+No search/lookup/slice/source command-code changes (classification-contract
+section 8 remains a forward-looking contract only). No planner packets, no
+retrieval capsules, no benchmark suites, no plugin architecture, no
+docs/*.md rewrites, no release/publish/version-bump work, no broadened
+language/framework support.
+===============================================================================

@@ -1,5 +1,6 @@
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { FrontendSourceRef, ReactFlowRelationshipKind } from '../frontend/index.js'
+import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 
 export const CODE_GRAPH_SCHEMA_VERSION = '1.0.0'
 
@@ -29,6 +30,8 @@ export interface CodeGraphNode {
   sourceRef?: FrontendSourceRef
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
 }
 
 export interface CodeGraphEdge {

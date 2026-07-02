@@ -6,6 +6,7 @@ export const DATA_MODEL_FILENAME = 'data-model.json'
 export const DATA_MODEL_GRAPH_FILENAME = 'data-model-graph.json'
 export const FRONTEND_SEMANTIC_FILENAME = 'frontend-semantic.json'
 export const FRONTEND_REACHABILITY_FILENAME = 'frontend-reachability.json'
+export const CLASSIFICATION_FILENAME = 'classification.json'
 
 export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
   INDEX_MANIFEST_FILENAME,
@@ -19,6 +20,7 @@ export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
   DATA_MODEL_GRAPH_FILENAME,
   FRONTEND_SEMANTIC_FILENAME,
   FRONTEND_REACHABILITY_FILENAME,
+  CLASSIFICATION_FILENAME,
 ] as const
 
 export const MANAGED_INDEX_ARTIFACT_FILENAMES = [

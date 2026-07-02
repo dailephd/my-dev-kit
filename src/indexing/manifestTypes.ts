@@ -39,6 +39,7 @@ export type IndexAnalyzerId =
   | 'model-view-lineage'
   | 'frontend-semantic'
   | 'frontend-reachability'
+  | 'classification'
   | (string & {})
 
 export type IndexAnalyzerStatusValue = 'not-run' | 'complete' | 'partial' | 'failed' | 'skipped'

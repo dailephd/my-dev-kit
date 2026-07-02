@@ -10,6 +10,7 @@
  */
 
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
+import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -69,6 +70,8 @@ export interface SymbolDefinition {
   signature?: string
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
 }
 
 /**
@@ -185,6 +188,8 @@ export interface GraphSymbolRecord {
   line: number
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
 }
 
 /**
