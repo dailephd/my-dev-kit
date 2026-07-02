@@ -4,19 +4,56 @@
 
 `my-dev-kit` is a CLI-first development context kit for indexing codebases, building graph artifacts, searching project structure, slicing relevant neighborhoods, and retrieving bounded source context for LLM-assisted development.
 
-The product goal is simple: help developers understand large projects without reading whole files, broad folders, or unfiltered documentation — and to support downstream tools and LLM-assisted workflows with deterministic, bounded local artifacts.
+The product goal is simple: help developers understand large projects without reading whole files, broad folders, or unfiltered documentation — and support downstream tools and LLM-assisted workflows with deterministic, bounded local artifacts.
 
-The current release focuses on deterministic local artifacts:
+The current stable v1 line focuses on deterministic local artifacts and graph-guided retrieval:
 
+- `manifest.json`
 - `symbol-index.json`
 - `code-graph.json`
-- optional call graph artifacts
+- optional `call-graph.json`
+- `data-model.json`
+- `data-model-graph.json`
+- `model-view-lineage.json`
+- `frontend-semantic.json`
+- `frontend-reachability.json`
+- `classification.json`
 - bounded source retrieval
+- source continuation and local source bundles
 - graph slices
 - DOT, SVG, and PNG graph views
 - deterministic keyword search over index artifacts
+- compact semantic and classification metadata surfaced through retrieval commands
 
-Future releases improve data-model understanding, frontend workflows, route and browser-state retrieval, source expansion, precision, scale, language coverage, and retrieval quality.
+Future releases should preserve the core model:
+
+```text
+index -> manifest -> artifacts -> search -> lookup -> slice -> source -> view
+```
+
+New languages, frameworks, and platforms should be added through adapters and artifact producers rather than by replacing the retrieval model.
+
+## Product principles
+
+`my-dev-kit` should remain:
+
+- local-first
+- deterministic
+- inspectable
+- read-only with respect to indexed projects
+- conservative in static-analysis claims
+- useful to humans and coding agents
+- compatible with staged workflows in `my-dev-kit-orchestrator`
+
+`my-dev-kit` should not:
+
+- call an LLM
+- make network requests during indexing or retrieval
+- edit source files
+- execute the target application
+- connect to databases
+- claim runtime behavior when it only has static evidence
+- become a second orchestrator runtime
 
 ## Version 1.0.0
 
@@ -95,7 +132,7 @@ Version 1.0.x releases focus on release hardening, documentation quality, and sa
 
 ### Large-repository safety
 
-Planned improvements:
+Planned and incremental improvements:
 
 - default ignore rules for common generated folders
 - `--exclude` support where missing
@@ -107,7 +144,7 @@ Planned improvements:
 
 ### Retrieval workflow reporting
 
-Planned improvements:
+Planned and incremental improvements:
 
 - report search queries used
 - report selected candidate nodes
@@ -125,10 +162,11 @@ The graph-guided workflow should be easy to audit:
 3. slice around the strongest node or nodes
 4. retrieve source by exact node or symbol
 5. use line ranges only when symbol retrieval is not enough
+6. use full-file reads only as a justified fallback
 
 ### Documentation and examples
 
-Planned improvements:
+Planned and incremental improvements:
 
 - clearer `README.md`
 - clearer `QUICKSTART.md`
@@ -148,121 +186,103 @@ Version 1.1.0 adds the first semantic integration layer on top of the existing c
 
 #### Index-first semantic architecture
 
-- `index` now runs semantic analyzers as part of the index run
+- `index` runs semantic analyzers as part of the index run
 - `manifest.json` is the authoritative artifact registry; it records all current artifact paths and analyzer status
-- Stale artifacts from previous runs are removed when `index` refreshes the artifact directory
-- Analyzer registry (`analyzers` array) in `manifest.json` records status, version, and artifact refs per analyzer
+- stale artifacts from previous runs are removed when `index` refreshes the artifact directory
+- analyzer registry in `manifest.json` records status, version, and artifact refs per analyzer
 
 #### Semantic metadata contracts
 
 - `semanticRoles` and `artifactRefs` arrays on symbols in `symbol-index.json`
 - `semanticRoles` and `artifactRefs` arrays on symbol nodes in `code-graph.json`
 - `evidenceRefs` collected from semantic roles for use in lookup output
-- Semantic schema version `1.0.0` with defined role names
+- semantic schema version `1.0.0` with defined role names
 
 #### Data-model artifacts linked from index
 
 - `data-model.json` and `data-model-graph.json` written by `index` when the TypeScript model analyzer produces output
-- Artifact paths recorded in `manifest.json` under `semanticArtifacts`
-- Compact `data-entity` and `data-field` roles embedded on qualifying symbols in index artifacts
+- artifact paths recorded in `manifest.json`
+- compact `data-entity` and `data-field` roles embedded on qualifying symbols in index artifacts
 
 #### Data-model extraction and inspection
 
-- Conservative TypeScript model extraction for exported interfaces, type aliases, and classes
-- Exact entity lookup by name or stable ID
-- Exact field lookup by `Entity.field`
-- `data-model.json`, `data-model-graph.json` as separate artifacts
+- conservative TypeScript model extraction for exported interfaces, type aliases, and classes
+- exact entity lookup by name or stable ID
+- exact field lookup by `Entity.field`
+- `data-model.json` and `data-model-graph.json` as separate artifacts
 - `data-model` command for focused inspection and regeneration
 
 #### Conservative model-to-view lineage
 
 - `model-view-lineage.json` produced in `data-model --trace-view` mode
-- Conservative static lineage for supported transformation, view-model, component prop, and JSX rendering patterns
+- conservative static lineage for supported transformation, view-model, component prop, and JSX rendering patterns
 - `trace-view` mode for entity and field-level lineage
 
 #### Semantic-aware commands
 
-- `search`: indexes `semanticRole`, `semanticSubtype`, `semanticSource`, and `semanticArtifactRef` fields; returns semantic metadata on matched items
-- `lookup`: returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node
-- `slice`: preserves `semanticRoles` and `artifactRefs` on nodes in the slice output
-- `source`: propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol target
-
-### Future work in this area
-
-- Broader semantic role coverage: `route-handler`, `react-component`, `view-model`, `ui-only-state`, and others
-- React and TSX semantic roles
-- Browser storage and route roles
-- Broader ORM and schema extractors (Prisma, SQL, TypeORM, Sequelize)
-- Source retrieval expansion for semantic targets
-- Graph visualization for data-model and lineage artifacts (DOT, SVG, PNG for `data-model-graph.json`)
-- Analyzer profiles and selective analyzer runs
-- Incremental indexing and scalability
+- `search` indexes semantic fields and returns semantic metadata on matched items
+- `lookup` returns `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the focus node
+- `slice` preserves semantic metadata on nodes in the slice output
+- `source` propagates semantic metadata from the symbol target
 
 ## Version 1.2.0
 
-Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four new frontend semantic graph views.
+Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and frontend semantic graph views.
 
 ### Implemented
 
 #### TSX and React indexing
 
-- exported component indexing (function and arrow-function forms)
+- exported component indexing
 - local component indexing
 - prop type indexing
-- hook block indexing (`useState`, `useEffect`, and others)
-- event-handler indexing (named and inline)
+- hook block indexing
+- event-handler indexing
 - JSX region indexing
-- frontend semantic artifact (`frontend-semantic.json`) written and registered in `manifest.json`
+- `frontend-semantic.json` written and registered in `manifest.json`
 
 #### Frontend-test indexing
 
 - `describe`, `test`, and `it` block indexing with titles
-- `beforeEach` and `afterEach` setup/teardown indexing
-- locator indexing (visible text, test ID, ARIA, locator chains)
+- setup and teardown indexing
+- locator indexing
 - route-like string indexing
 - test helper indexing
 
 #### Exact string and repeated literal retrieval
 
-- `source --contains <string>` — exact string search across all indexed source files
-- `source --context <n>` — context lines around each match
-- `source --path <prefix>` — path prefix filter for `--contains`
-- match classification (`declaration-like`, `usage-like`, `unknown`) based on static heuristics
-- frontend value context enrichment when the string is a frontend-indexed literal
+- `source --contains <string>` exact string search across indexed source files
+- `source --context <n>` context lines around each match
+- `source --path <prefix>` path prefix filter for `--contains`
+- match classification based on static heuristics
+- frontend value context enrichment when the string is frontend-indexed
 
 #### React region retrieval
 
-- `source --react-region <region> --file <path>` — retrieve a named React component, hook, handler, JSX region, or prop type by name
+- `source --react-region <region> --file <path>` retrieves a named React component, hook, handler, JSX region, or prop type
 - case-insensitive region name matching with priority ordering
-- JSON output includes `reactRegion` metadata block
+- JSON output includes `reactRegion` metadata
 
 #### Local component-tree prop/event-flow retrieval
 
-- statically extracted flow relationships: `react-passes-prop`, `react-fires-event`, `react-handles-event`, `react-receives-prop`, `react-renders-local-component`, `react-handler-sets-state`, `react-handler-reads-state`
-- `source --symbol <component> --file <path> --include-local-component-tree` — retrieve component and its local children as connected source blocks
-- `source --prop <name>` — filter to a specific prop name
+- statically extracted React prop and event flow relationships
+- `source --symbol <component> --file <path> --include-local-component-tree`
+- `source --prop <name>` filter for component-tree retrieval
 
 #### Frontend graph views
 
-- `view --graph react-component` — static React component structure graph (file, component, local-component, prop-type nodes)
-- `view --graph react-flow` — all frontend flow facts and relationships
-- `view --graph react-prop-event-flow` — filtered to prop and event flow relationships only
-- `view --graph frontend-test` — frontend test structure (test files, describe/test/it blocks, locators, route strings)
+- `view --graph react-component`
+- `view --graph react-flow`
+- `view --graph react-prop-event-flow`
+- `view --graph frontend-test`
 
-All four views are backed by `frontend-semantic.json` and render static artifact-backed graphs. They do not claim runtime React behavior, route reachability, or browser-state behavior.
-
-### Future work for this area
-
-- Route-aware retrieval shipped in v1.3
-- Browser-storage tracing shipped in v1.3
-- UI reachability analysis shipped in v1.3
-- Source continuation and expansion are planned for v1.4
+All frontend facts are static artifact-backed evidence. They do not prove runtime rendering, route reachability, or browser-state behavior.
 
 ## Version 1.3.0
 
 Version 1.3.0 adds route-aware, browser-storage-aware, and UI-reachability retrieval.
 
-The goal is to help developers answer a practical frontend question: what route, component, UI marker, storage key, state gate, and test evidence are involved in a piece of UI?
+The goal is to help developers answer: what route, component, UI marker, storage key, state gate, and test evidence are involved in a piece of UI?
 
 All v1.3.0 facts are conservative static evidence. The tool records what the source text contains. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
@@ -270,42 +290,48 @@ All v1.3.0 facts are conservative static evidence. The tool records what the sou
 
 #### Frontend reachability artifact
 
-- `frontend-reachability.json` written by `index` and registered in `manifest.json` (`semanticArtifacts.frontendReachability`) when the frontend analyzer runs on `.tsx`/`.jsx` files
-- `frontend-reachability` analyzer registered in the `analyzers` array with `complete`/`partial`/`skipped` status and a summary of route/storage/UI/edge counts
-- artifact kind `my-dev-kit-v1-frontend-reachability`, schema version `1.0.0`, deterministically ordered arrays
+- `frontend-reachability.json` written by `index` and registered in `manifest.json` when the frontend analyzer runs
+- analyzer status recorded in `manifest.json`
+- deterministic artifact structure and ordering
 
-#### Route fact extraction (static)
+#### Route fact extraction
 
-- static route path strings from React Router `path`/`to`/`href` literals, the Next.js `pages/` file convention, and route strings mentioned in tests
+- static route strings from React Router literals, Next.js `pages/` convention, and route strings mentioned in tests
 - route path to owning component association
-- `high`/`medium`/`low` confidence with `dynamic-route` warnings for non-literal segments
+- confidence and warnings for dynamic route patterns
 
-#### Browser storage key extraction (static)
+#### Browser storage key extraction
 
-- `localStorage`/`sessionStorage` static string keys from `getItem`/`setItem`/`removeItem`/`clear` calls
-- storage key to component association and `useState` state-variable linkage in the same component scope
-- `high`/`medium`/`low` confidence with `dynamic-storage-key` warnings for computed or template-literal keys
+- `localStorage` and `sessionStorage` static string keys
+- storage key to component association
+- state-variable linkage in the same component scope when detectable
+- confidence and warnings for computed keys
 
-#### UI marker / reachability fact extraction (static)
+#### UI marker and reachability fact extraction
 
-- UI markers (`data-testid`, `aria-label`, visible text, `placeholder`, `aria-labelledby`) with component and JSX-region context
-- JSX condition gates, state-gate linkage to storage keys, and route linkage through component membership
-- test evidence linked by exact locator-value match (`getByTestId`/`getByLabel`/`getByText`/`getByPlaceholder`)
-- `high`/`medium`/`low` confidence with `missing-test-evidence`, `dynamic-condition`, and `truncated-value` warnings
+- UI markers such as `data-testid`, `aria-label`, visible text, `placeholder`, and `aria-labelledby`
+- component and JSX-region context
+- JSX condition gates
+- route and storage linkage through static component membership
+- test evidence linked by exact locator-value match
 
 #### Cross-domain reachability edges
 
-- `route-serves-component`, `component-uses-storage`, `component-renders-ui`, `storage-gates-ui`, `route-reaches-ui` (transitive), `test-covers-ui`, and `ui-in-gated-region`
+- `route-serves-component`
+- `component-uses-storage`
+- `component-renders-ui`
+- `storage-gates-ui`
+- `route-reaches-ui`
+- `test-covers-ui`
+- `ui-in-gated-region`
 
 #### Reachability-aware commands
 
 - `search --route <path>`, `search --storage-key <key>`, `search --ui <value>`
-- `lookup --route`, `lookup --storage-key`, `lookup --ui` (matching fact plus depth-1 neighbors)
-- `slice --route`, `slice --storage-key`, `slice --ui` with `--include-tests`, `--include-storage`, and `--include-ui` modifiers
-- `source --route`, `source --storage-key`, `source --ui` (bounded source at the defining lines)
+- `lookup --route`, `lookup --storage-key`, `lookup --ui`
+- `slice --route`, `slice --storage-key`, `slice --ui` with relevant include modifiers
+- `source --route`, `source --storage-key`, `source --ui`
 - `view --graph route`, `view --graph browser-storage`, `view --graph ui-reachability`
-
-Missing-artifact behavior: `search`/`lookup`/`slice`/`source` return a graceful empty/missing-artifact response at exit 0; `view` reports an error and exits non-zero. Each new selector is mutually exclusive with the others and with the legacy primary flag of the command.
 
 ### Future work for this area
 
@@ -317,165 +343,168 @@ Missing-artifact behavior: `search`/`lookup`/`slice`/`source` return a graceful 
 
 Version 1.4.0 adds source continuation and bounded local dependency expansion.
 
-The goal is to reduce full-file reads when the correct file, symbol, or component is already known: "I found the right thing. Now give me the missing surrounding context without making me read the whole file."
+The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
 
 ### Implemented
 
 #### Source continuation
 
-- `source --file <path> --continue-from <n>` — reads from explicit line, returns `SourceSlice` with `ContinuationCursor`
-- `source --file <path> --symbol <name> --continue` — continues from the end of the symbol's initial 20-line preview
-- `source --node <id> --continue` — continues from the end of the node's initial preview window
-- `source --file <path> --symbol <name> --continue-from <n>` — reads from explicit line with symbol metadata attached
-- `ContinuationCursor` in all JSON responses: `nextStartLine`, `previousEndLine`, `exhausted`, `reason`, `symbolBoundaryKnown`
-- `[CONTINUE: <file> from line N (reason: ...)]` and `[EOF: <file> (N lines total)]` footers in numbered output
-- When symbol end line is unknown (symbol-index.json stores start line only): `reason = 'symbol-end-unknown'`, warning included
+- `source --file <path> --continue-from <n>`
+- `source --file <path> --symbol <name> --continue`
+- `source --node <id> --continue`
+- `source --file <path> --symbol <name> --continue-from <n>`
+- continuation cursor metadata in JSON output
+- continuation and EOF footers in numbered output
+- warnings when symbol boundaries are unknown
 
-#### Local dependency expansion (source bundles)
+#### Local dependency expansion
 
-- `--include-local-types` — same-file interface/type/enum definitions referenced in the primary window
-- `--include-props` — same-file prop type definitions (exact end line from `frontend-semantic.json` when available)
-- `--include-local-components` — same-file local React child components (requires `frontend-semantic.json`)
-- `--include-local-deps` — composite: prop types + local types + constants above primary symbol + directly called helpers
-- `--expand-to-local-dependencies` — alias for `--include-local-deps`
-- `--include-imports` — local import-site lines; external packages and dynamic imports go to `skippedBlocks`
-- `--max-bundle-lines <n>` — caps total bundle line count (default 300)
-- `--max-blocks <n>` — caps total block count (default 20)
-- `SourceBundle` output type: `primaryBlock`, `expansionBlocks`, `skippedBlocks`, `limits`, `stats`, `continuationCursors`, `warnings`
-- Each block has `expansionReasons`, `confidence` (`high`/`medium`/`low`), `dedupeKey`, `targetRelationship`, optional `fallbackReason`
-- Overlapping same-file blocks merged; both expansion reasons preserved
-- Numbered output: block headers `=== [<kind>] <file>:<start>-<end> (<N> lines) — <reasons> ===`, skipped section, warnings section
-- Skipped candidates: `skippedBlocks` with `reasonCode` (`external-package`, `dynamic-import`, `max-lines-reached`, `max-blocks-reached`, `artifact-unavailable`, `inside-primary-window`, etc.)
+- `--include-local-types`
+- `--include-props`
+- `--include-local-components`
+- `--include-local-deps`
+- `--expand-to-local-dependencies`
+- `--include-imports`
+- `--max-bundle-lines <n>`
+- `--max-blocks <n>`
+- `SourceBundle` output with primary block, expansion blocks, skipped blocks, limits, stats, continuation cursors, and warnings
+- deterministic block ordering and deduplication
+- explanation for every included and skipped block
 
 #### Static boundaries
 
-- Direct, same-file dependency resolution only — no cross-file closure
-- No runtime tracing, no browser execution
-- Pattern-matching on source text for local type and helper detection — not semantic type-checking
-- When `frontend-semantic.json` is absent: local component and prop expansion degraded or skipped with warnings
-- `confidence: 'low'` blocks have estimated end lines (no FrontendSourceRef available)
+- direct, same-file dependency resolution only
+- no cross-file closure
+- no runtime tracing
+- no browser execution
+- degraded or skipped frontend-specific expansion when frontend artifacts are unavailable
 
 ### Future work for this area
 
-- Cross-file dependency closure (v1.5+)
-- Runtime component tree integration (future)
-- Semantic type-checking for dependency detection (future)
+- cross-file dependency closure
+- richer semantic type-checking for dependency detection
+- bundle-quality benchmarks
 
 ## Version 1.5.0
 
 Version 1.5.0 adds conservative static schema and layer classification, built on the existing artifact and command-integration model.
 
-The goal is to help developers avoid editing the wrong layer by classifying files and symbols by their role in the project, and by surfacing conservative edit guidance, readiness, risk labels, evidence, and uncertainty through the existing `search`, `lookup`, `slice`, and `source` commands — without introducing a second retrieval system. The classification schema and compact metadata fields introduced here (`classificationRoles`, `classificationRefs`) are the foundation the future v1.6 orchestrator will consume; v1.5.0 does not itself implement planner packets or context capsules.
+The goal is to help developers avoid editing the wrong layer by classifying files and symbols by their role in the project, and by surfacing conservative edit guidance, readiness, risk labels, evidence, and uncertainty through the existing retrieval commands without introducing a second retrieval system.
 
 ### Implemented
 
 #### Classification producer and artifact
 
-- `classification.json` — detailed classification entries: category assignment(s), edit guidance, readiness, additive risk labels, evidence, uncertainty tier, warnings, and refs back to source/artifacts. Schema version `1.0.0`.
-- Registered as a generic `'classification'` analyzer entry in `manifest.json`'s `analyzers` array (not in the fixed-shape `semanticArtifacts`), with the same stale-artifact refresh/removal behavior as other optional artifacts
-- File-level and symbol-level classification categories:
-  - canonical type
-  - artifact type
-  - database model
-  - projection type
-  - view model
-  - UI-only state
-  - test fixture
-  - persistence adapter
-  - route handler
-  - client component
-  - server component
-  - generated file
-  - configuration file
-  - command handler
-  - analyzer
-  - validator
-  - public docs
-  - internal planning docs
-- Edit guidance values: `safe-primary-edit-target`, `inspect-before-edit`, `avoid-primary-edit-target`, `read-only-reference`, `generated-do-not-edit`, `test-only`, `docs-only`, `uncertain`
-- Readiness: `ready`, `needs-more-context`, `risky-assumption`; additive risk labels: `wrong-layer-risk`, `unreachable-ui-risk`, `requires-test-validation`, `requires-browser-validation`, `generated-file-risk`, `public-contract-risk`, `migration-risk`
-- Uncertainty tiers: `certain`, `likely`, `possible`, `unknown` — ambiguous or weak evidence is never rounded up to a higher tier, and low-confidence entries always carry an explanatory warning
-- Symbol/type-level categories reuse existing `SemanticRoleName`/subtype spellings verbatim where one already exists (v1.1/v1.2), avoiding vocabulary drift
+- `classification.json` detailed classification entries
+- category assignments
+- edit guidance
+- readiness
+- additive risk labels
+- evidence
+- uncertainty tier
+- warnings
+- refs back to source/artifacts
+- analyzer entry in `manifest.json`
+- stale-artifact refresh/removal behavior
+
+#### File-level and symbol-level categories
+
+- canonical type
+- artifact type
+- database model
+- projection type
+- view model
+- UI-only state
+- test fixture
+- persistence adapter
+- route handler
+- client component
+- server component
+- generated file
+- configuration file
+- command handler
+- analyzer
+- validator
+- public docs
+- internal planning docs
 
 #### Compact metadata and command integration
 
-- `classificationRoles` and `classificationRefs` — new, separate optional compact fields on `CodeGraphNode`/`GraphSymbolRecord`/`SymbolDefinition`; do not overload or change the meaning of `semanticRoles`/`artifactRefs`
-- `search`: classification role and edit-guidance fields are searchable; results include the compact `classificationRoles`/`classificationRefs`
-- `lookup`: focus node includes `classificationRoles`/`classificationRefs`; an opt-in `--resolve-classification` flag resolves the full `classification.json` entry
-- `slice`: preserves `classificationRoles`/`classificationRefs` on every node, the same way `semanticRoles`/`artifactRefs` are preserved
-- `source`: propagates `classificationRoles`/`classificationRefs` for `--node`/`--symbol` targets, plus a compact `classificationSummary` (risk labels, edit guidance, warnings) resolved from `classification.json`
+- `classificationRoles` and `classificationRefs` as separate optional compact fields
+- `search` includes classification role and edit-guidance fields
+- `lookup` includes compact metadata and supports `--resolve-classification`
+- `slice` preserves compact classification metadata
+- `source` propagates compact classification metadata and a compact classification summary when available
 
 #### Static boundaries
 
-- Classification is derived only from source text, the existing index graph, and existing semantic/data-model/frontend artifacts — no runtime execution, no browser, no database connection, no LLM or network calls
-- `classification.json` absence (an older index, or an analyzer that has not run) never changes any other artifact's shape or values, and never breaks `search`/`lookup`/`slice`/`source`
-- Classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence — not an automatic or authoritative "safe to edit" decision
+- classification is derived only from source text, the existing graph, and existing artifacts
+- no runtime execution
+- no browser execution
+- no database connection
+- no LLM or network calls
+- absence of `classification.json` never breaks existing retrieval commands
+- classification guidance is advisory and evidence-backed, not an automatic edit decision
 
 ### Future work for this area
 
-- Context-report-style aggregation (what's reachable, what's read-only vs. editable, which files are safe to modify first for a given task) is not implemented in v1.5.0. It is a plausible input to the v1.6 orchestrator below, not a v1.5.0 deliverable.
-- `graph-renderer`/`report-renderer` classification categories, deferred pending concrete file-level evidence
-- Cross-file classification signal aggregation (v1.6+)
+- task-specific context-report aggregation
+- stronger cross-file classification signal aggregation
+- additional categories only when real code evidence justifies them
 
-## Version 1.6.0: Orchestrator / Graph-Guided Planner Packets
+## Version 1.6.0
 
-Version 1.6.0 introduces the orchestration layer that turns search, lookup, slice, source, semantic artifacts, and source bundles into compact task-specific context capsules and retrieval audit records.
+Version 1.6.0 focuses on orchestrator-ready retrieval capsules and context packets.
 
-The goal is to make graph locality directly affect what context is retained for a coding task. The orchestrator selects, prunes, and packages retrieval results into bounded planner packets that downstream tools and developers can use without reading broad unrelated context.
+The goal is not to replace `my-dev-kit-orchestrator`. The goal is to make `my-dev-kit` produce compact, task-specific retrieval outputs that the orchestrator can consume without raw graph dumps or full-file context.
 
-```mermaid
-flowchart TD
-  A[search] --> E[Orchestrator]
-  B[lookup] --> E
-  C[slice] --> E
-  D[source] --> E
-  E --> F[Context capsule / Planner packet]
-  F --> G[Retrieval audit record]
-```
+### Planned capabilities
 
-### Graph-focused retrieval
+#### Retrieval capsules
 
-Planned features:
+- compact context packets built from `search`, `lookup`, `slice`, `source`, semantic artifacts, source bundles, and classification metadata
+- retained and dropped evidence summaries
+- explicit reasons for selected files, symbols, docs, and source blocks
+- source continuation and source bundle summaries included when used
+- classification/edit-guidance summary included when available
+- stable JSON output suitable for downstream prompts and audit reports
 
-- focus-node selection from ranked retrieval winners
-- multi-seed graph focus when confidence is low
-- subsystem-aware retrieval mode
-- feature-add retrieval mode
-- stronger ranking for sibling implementations
-- stronger ranking for subsystem contracts
-- stronger ranking for registries
-- stronger ranking for local tests
-- penalties for unrelated top-level files
+#### Retrieval audit records
 
-### Planner packet pruning
+- search queries used
+- candidate nodes selected
+- lookup targets used
+- slice focus nodes used
+- source blocks retrieved
+- source continuation used or skipped
+- local expansion used or skipped
+- metadata inspected
+- full-file read recommendations or fallback reasons
 
-Planned features:
+#### Context capsule modes
 
-- hard caps on candidate files
-- hard caps on doc sections
-- hard caps on source slices
-- hard caps on graph nodes and edges
-- graph-local file retention
-- graph-local doc retention
-- graph-local source-slice retention
-- explicit explanation for retained and dropped entries
+Candidate modes:
 
-### Graph-first prompt packing
+- focused implementation
+- repair
+- test design
+- refactor
+- hardening
+- extraction source analysis
+- extraction target analysis
 
-Planned features:
+#### Compatibility boundary
 
-- prioritize graph-local code blocks
-- prioritize graph-local doc sections
-- prioritize graph-local source slices
-- compress broad retrieval summaries when graph confidence is high
-- omit broad context blocks when graph-local context is enough
-- keep fallback behavior for low-confidence graph focus
+- `my-dev-kit` produces capsules and audit records
+- `my-dev-kit-orchestrator` remains the staged workflow controller
+- no autonomous agent execution
+- no automatic source modification
 
 ## Version 1.7.0
 
-Version 1.7.0 focuses on retrieval-quality regression benchmarks for validating the orchestrator and planner packets introduced in v1.6.
+Version 1.7.0 focuses on retrieval-quality regression benchmarks.
 
-The goal is to make bounded-context quality testable and to confirm that the orchestrator selects the right context for representative coding tasks.
+The goal is to make bounded-context quality testable and to confirm that retrieval selects the right context for representative coding tasks.
 
 ### Benchmark coverage
 
@@ -484,7 +513,7 @@ Planned benchmark task types:
 - add a sibling implementation in a known subsystem
 - modify a registry-driven feature
 - update a route-level UI
-- update a Playwright test by route
+- update a Playwright or Vitest test by route or locator
 - modify a React component prop flow
 - retrieve a session-storage workflow
 - locate a hidden conditional render branch
@@ -492,12 +521,9 @@ Planned benchmark task types:
 - update a repeated tab value or enum-like string without reading the full file
 - retrieve React render-flow regions without reading the full component file
 - trace prop and event flow across a local React component tree
-- remove a prop across local React child components without leaving orphaned references
 - trace a data model field into a generated view model or rendered UI element
 - distinguish canonical data-model usage from view-model or UI-only usage
-- update a large TSX component without full-file retrieval
-- distinguish canonical schema from projection schema
-- retrieve data-model relationships for a schema-heavy project
+- update a large component without full-file retrieval
 
 ### Assertions
 
@@ -505,34 +531,30 @@ Planned assertions:
 
 - top-K retrieval quality
 - graph-focus correctness
-- planner packet size limits
+- context packet size limits
 - absence of unrelated generic files in top ranks
 - source expansion correctness
 - source continuation correctness
 - exact string and reference tracing correctness
 - React render-flow retrieval correctness
-- intra-file prop and event-flow tracing correctness
+- local component-tree retrieval correctness
 - model-to-view lineage correctness
 - canonical model versus view-model classification correctness
 - no unnecessary full-file reads
 - route, UI, and test coverage
-- data-model graph correctness where applicable
 
 ### Metrics
 
 Planned metrics:
 
 - selected file count
-- selected doc section count
 - selected source slice count
 - selected graph node count
 - selected graph edge count
 - reference match count
-- React render-region retrieval coverage
+- render-region retrieval coverage
 - local component-tree retrieval coverage
-- prop-flow and event-flow match count
 - model-to-view lineage edge count
-- rendered field usage count
 - full-file reads avoided
 - full-file reads allowed
 - full-file reads unjustified
@@ -543,11 +565,11 @@ Planned metrics:
 
 Version 1.8.0 focuses on scalability and indexing ergonomics.
 
-The goal is to make `my-dev-kit` more practical for larger repositories.
+The goal is to make `my-dev-kit` more practical for larger repositories before expanding into heavier multi-language and Android projects.
 
-### Incremental indexing
+### Planned capabilities
 
-Planned features:
+#### Incremental indexing
 
 - changed-file detection
 - cache reuse
@@ -556,9 +578,7 @@ Planned features:
 - invalidation when configuration changes
 - clear cache reset command
 
-### Watch mode
-
-Planned features:
+#### Watch mode
 
 - watch source roots
 - rebuild changed files
@@ -566,9 +586,7 @@ Planned features:
 - report changed nodes and edges
 - keep output deterministic
 
-### Graph diff
-
-Planned features:
+#### Graph diff
 
 - compare two index runs
 - report added nodes
@@ -578,9 +596,7 @@ Planned features:
 - report removed edges
 - report changed edge metadata
 
-### Search and lookup filtering
-
-Planned features:
+#### Search and lookup filtering
 
 - filter search by node kind
 - filter search by symbol kind
@@ -590,9 +606,436 @@ Planned features:
 
 ## Version 1.9.0
 
-Version 1.9.0 focuses on language and framework coverage.
+Version 1.9.0 starts Android support with Android project detection and Kotlin/Java structural indexing.
 
-The goal is to expand support while keeping static analysis conservative.
+The goal is to let `my-dev-kit` recognize Android project structure and retrieve useful Kotlin/Java source context without rewriting the existing artifact model.
+
+### Planned capabilities
+
+#### Android project detection
+
+- detect Android projects from Gradle files and Android manifests
+- detect Gradle modules
+- distinguish app modules and library modules
+- detect source sets such as `main`, `test`, and `androidTest`
+- detect Kotlin source roots
+- detect Java source roots
+- detect generated/build directories that should be ignored
+
+Candidate artifacts:
+
+- `android-project.json`
+- `android-modules.json`
+
+#### Kotlin structural indexing
+
+- `.kt` file discovery
+- package declarations
+- imports
+- classes
+- interfaces
+- objects
+- data classes
+- sealed classes
+- enums
+- functions
+- extension functions
+- properties
+- constructors
+- annotations
+- `suspend` functions
+- basic coroutine and `Flow`/`StateFlow` usage markers
+
+#### Java structural indexing
+
+- `.java` file discovery
+- package declarations
+- imports
+- classes
+- interfaces
+- enums
+- methods
+- fields
+- annotations
+- `extends` and `implements` relationships
+
+#### Android component detection
+
+Static detection for common Android classes and patterns:
+
+- `Activity`
+- `Fragment`
+- `ViewModel`
+- `Service`
+- `BroadcastReceiver`
+- `ContentProvider`
+- `Worker`
+- repository classes
+- use-case classes
+- Room entities and DAOs when detectable by annotations
+- Retrofit services when detectable by annotations
+- Hilt/Dagger modules when detectable by annotations
+
+#### Command integration
+
+- include Kotlin/Java symbols in `symbol-index.json`
+- include Kotlin/Java file and symbol nodes in `code-graph.json`
+- preserve existing TypeScript/JavaScript/Python behavior
+- keep Android artifacts registered in `manifest.json`
+- keep static-analysis boundaries explicit
+
+### Non-goals
+
+- no Android build execution during indexing
+- no emulator execution
+- no runtime app analysis
+- no APK or AAB inspection in this version
+- no Play Store workflow
+- no Gradle dependency resolution beyond static file parsing
+
+## Version 1.10.0
+
+Version 1.10.0 adds Android Gradle, manifest, resource, and navigation artifacts.
+
+The goal is to make Android behavior visible outside Kotlin/Java source files, because important app behavior is often defined in Gradle, XML manifests, resources, and navigation graphs.
+
+### Planned capabilities
+
+#### Gradle project model
+
+Static parsing for:
+
+- `settings.gradle`
+- `settings.gradle.kts`
+- `build.gradle`
+- `build.gradle.kts`
+- `gradle/libs.versions.toml`
+
+Extract where practical:
+
+- included modules
+- Android Gradle plugin usage
+- application/library module type
+- namespace
+- application ID
+- min SDK
+- target SDK
+- compile SDK
+- build types
+- product flavors
+- dependencies
+- plugins
+- source sets
+
+Candidate artifact:
+
+- `android-gradle.json`
+
+#### Manifest artifact
+
+Static parsing for `AndroidManifest.xml`:
+
+- package/namespace information where available
+- permissions
+- activities
+- services
+- receivers
+- providers
+- exported components
+- intent filters
+- launcher activity
+- deep links
+- application metadata
+
+Candidate artifact:
+
+- `android-manifest.json`
+
+#### Resource artifact
+
+Static resource indexing for:
+
+- `res/values/strings.xml`
+- `res/values/colors.xml`
+- `res/values/themes.xml`
+- `res/drawable/`
+- `res/mipmap/`
+- `res/xml/`
+- `res/layout/` when XML views are used
+
+Extract where practical:
+
+- string resource keys
+- style/theme names
+- color names
+- drawable names
+- layout IDs
+- view IDs
+- navigation XML references
+
+Candidate artifact:
+
+- `android-resources.json`
+
+#### Navigation artifact
+
+Static parsing for Android navigation evidence:
+
+- XML navigation graph destinations when present
+- Compose route string constants when detectable
+- deep-link mappings from manifest/navigation resources
+- screen-to-route relationships when statically visible
+
+Candidate artifact:
+
+- `android-navigation.json`
+
+### Command integration
+
+Candidate selectors:
+
+- `search --android-route <route>`
+- `search --permission <permission>`
+- `search --resource <name>`
+- `lookup --android-component <name>`
+- `source --android-route <route>`
+- `slice --android-route <route>`
+- `view --graph android-module`
+- `view --graph android-manifest`
+- `view --graph android-navigation`
+
+### Static boundaries
+
+- no Gradle build execution
+- no dependency downloads
+- no runtime intent resolution
+- no proof that a deep link works at runtime
+- no Play Store or signing validation
+
+## Version 1.11.0
+
+Version 1.11.0 adds Jetpack Compose semantic retrieval and Android UI-test indexing.
+
+The goal is to make Android UI work feel similar to the existing React/TSX workflow: retrieve the screen, state, handlers, UI strings, test tags, child composables, and related tests without reading random whole files.
+
+### Planned capabilities
+
+#### Compose semantic artifact
+
+Candidate artifact:
+
+- `android-compose-semantic.json`
+
+Extract conservative static facts:
+
+- `@Composable` functions
+- screen-level composables
+- local composables
+- `@Preview` functions
+- child composable calls
+- `remember` and `rememberSaveable` state
+- `collectAsState` / `collectAsStateWithLifecycle` usage
+- `LaunchedEffect` and `DisposableEffect` usage
+- `Modifier.testTag` values
+- visible text literals
+- `stringResource` references
+- click handlers
+- navigation calls
+- `Scaffold`, `LazyColumn`, `NavHost`, and major UI-region markers where detectable
+- ViewModel references
+
+#### Compose source retrieval
+
+Candidate command shapes:
+
+- `source --composable <name>`
+- `source --composable <name> --include-compose-tree`
+- `source --android-ui <text>`
+- `source --test-tag <tag>`
+- `slice --composable <name>`
+- `slice --composable <name> --include-viewmodel`
+- `slice --composable <name> --include-navigation`
+
+#### Android test indexing
+
+Index facts from:
+
+- `test/` unit tests
+- `androidTest/` instrumented tests
+- Compose UI tests
+- Espresso tests where detectable
+- Robolectric tests where detectable
+
+Extract:
+
+- test class names
+- test method names
+- JUnit annotations
+- Compose test rules
+- visible text assertions
+- test tag assertions
+- route strings
+- fake repositories
+- mocked ViewModels or dependencies
+
+#### Android graph views
+
+Candidate graph views:
+
+- `view --graph compose-ui`
+- `view --graph compose-navigation`
+- `view --graph android-test`
+
+### Static boundaries
+
+- no emulator execution
+- no Compose runtime execution
+- no proof that UI is visible at runtime
+- no screenshot or accessibility-tree analysis
+- no automatic test execution
+
+## Version 1.12.0
+
+Version 1.12.0 adds Android architecture classification and Android data-flow retrieval.
+
+The goal is to help coding agents avoid wrong-layer edits in Android apps by identifying screens, state owners, data owners, persistence layers, network layers, resources, and tests.
+
+### Planned classifications
+
+Add Android-specific categories to classification metadata:
+
+- Android project
+- Gradle module
+- app module
+- library module
+- Android manifest
+- manifest component
+- Activity
+- Fragment
+- Compose screen
+- Compose UI component
+- ViewModel
+- UI state
+- UI event
+- navigation route
+- repository
+- use case
+- Room entity
+- Room DAO
+- Room database
+- Retrofit service
+- Hilt module
+- Worker
+- resource file
+- XML layout
+- Compose UI test
+- instrumented test
+- Android unit test
+- generated Android build file
+
+### Planned edit guidance
+
+Use existing edit-guidance concepts where possible:
+
+- safe primary edit target
+- inspect before edit
+- avoid primary edit target
+- read-only reference
+- generated do not edit
+- test only
+- docs only
+- uncertain
+
+Android-specific risk labels may include:
+
+- wrong-layer risk
+- manifest-security-risk
+- generated-build-file-risk
+- resource-contract-risk
+- navigation-contract-risk
+- emulator-validation-required
+- instrumented-test-required
+
+### Android data-flow retrieval
+
+Candidate slice modes:
+
+- screen to ViewModel
+- ViewModel to repository
+- repository to DAO
+- repository to Retrofit service
+- route to screen
+- manifest deep link to route/screen
+- UI string or test tag to composable and test
+- Room entity to DAO and repository
+
+Candidate command shapes:
+
+- `slice --composable <name> --include-viewmodel --include-repository`
+- `slice --android-route <route> --include-screen --include-viewmodel --include-tests`
+- `slice --room-entity <entity> --include-dao --include-repository`
+- `search --android-role viewmodel`
+- `search --android-role repository`
+
+### Static boundaries
+
+- Android classification remains advisory and static
+- no runtime dependency injection resolution
+- no database inspection
+- no network inspection
+- no emulator execution
+- no guarantee that navigation or UI is reachable at runtime
+
+## Version 1.13.0
+
+Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.
+
+The goal is to make Android support testable, usable, and repeatable for real app-building workflows.
+
+### Planned benchmark coverage
+
+Representative Android tasks:
+
+- add a new Compose screen
+- modify an existing Compose screen
+- trace a button test tag to its handler and ViewModel state
+- trace a route to its composable and navigation declaration
+- trace a UI string resource to composables and tests
+- trace a ViewModel state field to UI rendering
+- trace a repository call to Retrofit or Room
+- modify a Room entity and find DAO/repository/test implications
+- find manifest permissions and exported components
+- distinguish screen UI from ViewModel state ownership
+- avoid generated Gradle/build output
+- retrieve Android unit tests and instrumented tests separately
+
+### Planned examples
+
+Example projects or fixtures:
+
+- minimal Kotlin Android app fixture
+- minimal Compose screen fixture
+- Compose + ViewModel + Repository fixture
+- Room entity/DAO fixture
+- Retrofit service fixture
+- manifest/deep-link fixture
+- Compose UI test fixture
+
+### Planned documentation
+
+- Android quickstart
+- Android indexing examples
+- Android command examples
+- Android static-analysis boundaries
+- Android workflow examples for coding agents
+- Android test retrieval examples
+- Android wrong-layer edit examples
+
+## Version 1.14.0
+
+Version 1.14.0 broadens non-Android language and framework coverage after the Android foundation is in place.
+
+The goal is to expand support while keeping static analysis conservative and adapter-based.
 
 ### Python improvements
 
@@ -605,6 +1048,7 @@ Planned features:
 - better decorator metadata extraction
 - better Django model extraction
 - better SQLAlchemy model extraction
+- FastAPI route extraction
 
 ### JavaScript improvements
 
@@ -613,6 +1057,8 @@ Planned features:
 - improved JSDoc type extraction
 - better CommonJS handling where practical
 - better mixed JavaScript and TypeScript project support
+- better Express route extraction
+- better NestJS decorator extraction where useful
 
 ### Framework improvements
 
@@ -629,15 +1075,15 @@ Candidate framework targets:
 - SQLAlchemy
 - Prisma
 
-### Additional language support
+### Additional future languages
 
 Candidate future languages:
 
 - Go
 - Rust
-- Java
+- Java beyond Android use cases
 - C#
-- Kotlin
+- Kotlin beyond Android use cases
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
 
@@ -678,6 +1124,19 @@ Candidate first-class node types:
 - database model
 - projection type
 - graph-local evidence bundle
+- Gradle module
+- Android manifest component
+- Android resource
+- Android navigation route
+- Kotlin symbol
+- Java symbol
+- Compose screen
+- Compose UI component
+- ViewModel
+- Room entity
+- DAO
+- Retrofit service
+- Android test block
 
 ### Plugin architecture
 
@@ -688,6 +1147,7 @@ Candidate plugin categories:
 - test-framework plugins
 - ORM plugins
 - schema plugins
+- mobile-platform plugins
 - graph-view plugins
 - retrieval-ranking plugins
 
@@ -711,10 +1171,13 @@ Candidate command groups:
 - `model-lineage`
 - `model-view-trace`
 - `graph-diff`
+- `android-project`
+- `android-manifest`
+- `android-resources`
+- `compose`
+- `android-test`
 
 ### Compatibility
-
-Version 2.0.0 includes a compatibility plan for v1 artifacts.
 
 If artifact formats change, the release provides one of the following:
 
@@ -722,6 +1185,27 @@ If artifact formats change, the release provides one of the following:
 - a compatibility reader
 - a documented version boundary
 - a clear artifact regeneration path
+
+## Ecosystem integration notes
+
+`my-dev-kit` should provide Android artifacts and retrieval results that other tools can consume.
+
+`my-dev-kit-orchestrator` should remain responsible for staged workflow control. Android support in the orchestrator should be added as workflow profiles or prompt modules that consume `my-dev-kit` Android artifacts. The orchestrator should not become the Android parser.
+
+`my-dev-kit-lab` should remain responsible for security validation. Android security checks should consume target project files and `my-dev-kit` Android artifacts where useful, but they belong in the lab project rather than in the core indexing CLI.
+
+Recommended ecosystem split for Android:
+
+```text
+my-dev-kit
+  Android/Kotlin/Java/Gradle/Manifest/Compose indexing and retrieval
+
+my-dev-kit-orchestrator
+  Android-aware architecture-context, test-strategy, implementation, and verification profiles
+
+my-dev-kit-lab
+  Android security and release-risk validation profiles
+```
 
 ## Long-term direction
 
@@ -732,10 +1216,13 @@ The core product direction is:
 - compact structural artifacts instead of raw context dumps
 - graph-guided retrieval instead of full-file reads
 - bounded source context instead of broad source injection
+- source continuation and source bundles instead of full-file fallback
+- classification metadata instead of wrong-layer edits
 - model-to-view lineage instead of manual tracing from schemas to generated UI
 - literal and reference tracing instead of full-file string hunting
 - React render-flow retrieval instead of full-component reading
 - local React prop and event-flow tracing instead of full-file component-tree reading
+- Android project, Gradle, manifest, resource, Compose, and ViewModel-aware retrieval for mobile app work
 - explicit fallback reporting instead of hidden assumptions
 - conservative static analysis instead of overclaimed runtime understanding
 - framework-aware retrieval where it improves real development workflows
