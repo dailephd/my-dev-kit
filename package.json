@@ -1,60 +1,60 @@
-﻿{
-    "name":  "@dailephd/my-dev-kit",
-    "version":  "1.4.0",
-    "description":  "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static lineage for TypeScript, JavaScript, and Python projects.",
-    "type":  "module",
-    "bin":  {
-                "my-dev-kit":  "dist/cli.js"
-            },
-    "files":  [
-                  "dist",
-                  "README.md",
-                  "LICENSE",
-                  "CHANGELOG.md",
-                  "docs/ARCHITECTURE.md",
-                  "docs/CI_CD.md",
-                  "docs/COMMANDS.md",
-                  "docs/DEVELOPMENT.md",
-                  "docs/GRAPH_SCHEMA.md",
-                  "docs/PROJECT_OVERVIEW.md",
-                  "docs/QUICKSTART.md",
-                  "docs/RELEASE.md",
-                  "docs/ROADMAP.md",
-                  "docs/SECURITY.md",
-                  "docs/WORKFLOWS.md",
-                  "examples/README.md",
-                  "examples/basic-data-model-ts/src",
-                  "examples/basic-data-model-ts/README.md",
-                  "examples/basic-ts/src",
-                  "examples/basic-ts/README.md",
-                  "examples/basic-python/src",
-                  "examples/basic-python/README.md",
-                  "examples/basic-react-tsx/src",
-                  "examples/basic-react-tsx/README.md"
-              ],
-    "scripts":  {
-                    "dev":  "tsx src/cli.ts",
-                    "build":  "tsup",
-                    "typecheck":  "tsc --noEmit",
-                    "test":  "vitest run",
-                    "verify":  "npm run typecheck \u0026\u0026 npm run test \u0026\u0026 npm run build",
-                    "clean":  "node -e \"require(\u0027node:fs\u0027).rmSync(\u0027dist\u0027, { recursive: true, force: true })\"",
-                    "prepack":  "npm run build"
-                },
-    "license":  "MIT",
-    "author":  "dailephd LLC",
-    "dependencies":  {
-                         "commander":  "^12.1.0",
-                         "typescript":  "^5.9.3"
-                     },
-    "devDependencies":  {
-                            "@types/node":  "^20.19.25",
-                            "esbuild":  "^0.28.1",
-                            "tsup":  "^8.5.1",
-                            "tsx":  "^4.22.4",
-                            "vitest":  "^4.1.9"
-                        },
-    "overrides":  {
-                      "esbuild":  "^0.28.1"
-                  }
+{
+  "name": "@dailephd/my-dev-kit",
+  "version": "1.4.0",
+  "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static lineage for TypeScript, JavaScript, and Python projects.",
+  "type": "module",
+  "bin": {
+    "my-dev-kit": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs/ARCHITECTURE.md",
+    "docs/CI_CD.md",
+    "docs/COMMANDS.md",
+    "docs/DEVELOPMENT.md",
+    "docs/GRAPH_SCHEMA.md",
+    "docs/PROJECT_OVERVIEW.md",
+    "docs/QUICKSTART.md",
+    "docs/RELEASE.md",
+    "docs/ROADMAP.md",
+    "docs/SECURITY.md",
+    "docs/WORKFLOWS.md",
+    "examples/README.md",
+    "examples/basic-data-model-ts/src",
+    "examples/basic-data-model-ts/README.md",
+    "examples/basic-ts/src",
+    "examples/basic-ts/README.md",
+    "examples/basic-python/src",
+    "examples/basic-python/README.md",
+    "examples/basic-react-tsx/src",
+    "examples/basic-react-tsx/README.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test && npm run build",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepack": "npm run build"
+  },
+  "license": "MIT",
+  "author": "dailephd LLC",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "esbuild": "^0.28.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.9"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  }
 }
