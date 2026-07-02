@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.0 - 2026-06-25
+
+Added source continuation and bounded local dependency expansion.
+
+- Added `source --file <path> --continue-from <n>` — reads from an explicit line number with a `ContinuationCursor` in JSON output pointing to the next window
+- Added `source --file <path> --symbol <name> --continue` — continues from the end of the symbol's initial 20-line preview window
+- Added `source --node <id> --continue` — continues from the end of the node's initial preview window
+- Added `source --file <path> --symbol <name> --continue-from <n>` — reads from explicit line with optional symbol metadata attached
+- Added `ContinuationCursor` to every `SourceSlice` JSON response: `nextStartLine`, `previousEndLine`, `eof`/`exhausted`, `reason`, `symbolBoundaryKnown`
+- Added `[CONTINUE: <file> from line N]` and `[EOF: <file> (N lines total)]` footers to numbered output
+- Added `source --include-local-types` — includes same-file interface/type/enum definitions referenced in the primary window
+- Added `source --include-props` — includes same-file prop type definitions (uses `frontend-semantic.json` when available for exact end lines)
+- Added `source --include-local-components` — includes same-file local React child components rendered by the primary symbol
+- Added `source --include-local-deps` — composite flag: includes same-file prop types, local types, constants above the primary symbol, and directly called helper functions
+- Added `source --expand-to-local-dependencies` — alias for `--include-local-deps`
+- Added `source --include-imports` — includes local import-site lines; external packages and dynamic imports go to `skippedBlocks` with reason codes
+- Added `source --max-bundle-lines <n>` — caps total bundle line count (default 300); exceeded candidates become `skippedBlocks`
+- Added `source --max-blocks <n>` — caps total block count (default 20); exceeded candidates become `skippedBlocks`
+- Added `SourceBundle` output type with `primaryBlock`, `expansionBlocks`, `skippedBlocks`, `limits`, `stats`, `continuationCursors`, `warnings`
+- Each `SourceExpansionBlock` has `expansionReasons`, `confidence`, `dedupeKey`, `targetRelationship`, `fallbackReason` (when end line estimated from heuristic)
+- Overlapping same-file blocks are merged deterministically; both expansion reasons are preserved
+- Numbered bundle output: block headers `=== [<kind>] <file>:<start>-<end> (<N> lines) — <reasons> ===`, skipped section, warnings section, continuation footer
+- Expansion is static-analysis only: direct, same-file dependencies; no cross-file closure, no runtime tracing, no browser execution
+- Notes: symbol end lines are still not stored in the symbol index; `--include-*` and `--continue` flags use the frontend-semantic artifact or a next-symbol heuristic to estimate end lines when available; confidence is reported per block
+
 ## 1.3.0 - 2026-06-25
 
 Added route-aware, browser-storage-aware, and UI-reachability retrieval backed by a new static frontend reachability artifact.

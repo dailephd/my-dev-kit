@@ -12,7 +12,16 @@ export function parseSourceOutputFormat(value: string): SourceOutputFormat {
 export function renderSourceOutput(result: SourceSlice, format: SourceOutputFormat): string {
   if (format === 'json') return JSON.stringify(result, null, 2) + '\n'
   if (format === 'plain') return result.content.endsWith('\n') ? result.content : result.content + '\n'
-  return renderNumberedSource(result.content, result.startLine)
+  let output = renderNumberedSource(result.content, result.startLine)
+  const cursor = result.continuationCursor
+  if (cursor) {
+    if (cursor.eof) {
+      output += `\n[EOF: ${cursor.filePath} (${cursor.previousEndLine} lines total)]\n`
+    } else {
+      output += `\n[CONTINUE: ${cursor.filePath} from line ${cursor.nextStartLine} (reason: ${cursor.reason})]\n`
+    }
+  }
+  return output
 }
 
 export function renderNumberedSource(content: string, startLine: number): string {

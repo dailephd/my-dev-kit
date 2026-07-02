@@ -1,6 +1,6 @@
 {
   "name": "@dailephd/my-dev-kit",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static lineage for TypeScript, JavaScript, and Python projects.",
   "type": "module",
   "bin": {
