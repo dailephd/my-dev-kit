@@ -37,6 +37,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:security": "vitest run tests/security",
     "verify": "npm run typecheck && npm run test && npm run build",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepack": "npm run build"

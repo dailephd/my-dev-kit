@@ -1,0 +1,277 @@
+Report: Batch5SecurityValidationReport
+Batch: v1.5.0 Final Pre-Release Readiness, Cross-Platform Audit, Security
+Validation, and Release Branch Preparation (Batch 5), Stage 7
+
+===============================================================================
+Executive summary
+===============================================================================
+
+my-dev-kit-lab's target-aware security validation was run against
+my-dev-kit-v1 on release/v1.5.0. The first run reported one MAJOR blocker:
+the target project had no `test:security` npm script, so the lab tool
+could not execute the target's own security test suite. Investigation
+confirmed my-dev-kit-v1 already has a complete `tests/security/` directory
+(5 files, 60 tests covering path traversal, malformed artifacts, output
+path handling, graph traversal limits, and dot-escaping) - the gap was a
+missing script alias, not a missing test or a real security defect. Added
+`"test:security": "vitest run tests/security"` to package.json (a release-
+readiness/tooling-compatibility fix, not new product behavior), re-ran
+target-side validation (typecheck/test both re-passed, 774/774), and
+re-ran the target-aware security validation. Final verdict:
+READY FOR RELEASE PREPARATION, with only 4 non-blocking informational
+findings (outdated devDependencies).
+
+===============================================================================
+my-dev-kit-lab path
+===============================================================================
+
+Z:\Users\newuser\Projects\my-dev-kit-lab
+
+===============================================================================
+my-dev-kit-lab commit
+===============================================================================
+
+60b7a47357caec20d872a3a97a2ebd50f7fb7d02 (branch release/v0.2.1). Note: the
+lab repo had pre-existing uncommitted documentation changes (`.gitignore`,
+CHANGELOG.md, README.md, and several docs/*.md files) at the time of this
+validation - unrelated to this batch's work, not touched, not stashed, and
+not required to be clean for the lab's own tooling to run correctly (these
+are the lab's own in-progress work, not something Batch 5 has any mandate
+to modify).
+
+===============================================================================
+Target project path
+===============================================================================
+
+Z:\Users\newuser\Projects\my-dev-kit-v1
+
+===============================================================================
+Target project branch
+===============================================================================
+
+release/v1.5.0
+
+===============================================================================
+Target project commit
+===============================================================================
+
+b3a3f95c07767210328daef661465018d1249734 (at the time of the first
+target-aware validation run; the security-fix commit that followed is
+tracked separately in this batch's own commit history, applied ON release/
+v1.5.0 directly per this stage's investigation - see "whether target files
+were modified" below).
+
+===============================================================================
+Target package name and version
+===============================================================================
+
+@dailephd/my-dev-kit, version 1.5.0
+
+===============================================================================
+Commands run from my-dev-kit-lab
+===============================================================================
+
+1. git fetch origin --prune --tags / git status --short (dirty, pre-
+   existing, documented above)
+2. npm install - exit 0, 58 packages, 0 vulnerabilities
+3. npm run build (node scripts/clean-dist.mjs && tsc -p tsconfig.json) -
+   exit 0
+4. npm run test - exit 0, 97 test files, 477 tests, all passed
+5. npm run verify (full chain: build + test + benchmarks + report +
+   screenshot + evaluation + agents + experiments + plots +
+   visualization-demos + gallery + demo + integration + e2e +
+   verify:benchmarks) - run in background due to its long chained runtime;
+   completed with exit 0, every sub-suite passed (confirmed by reading the
+   background task's full output - test files/tests all green across every
+   suite, "Benchmark verification passed. Checks: 10" as the final line)
+6. npm run security:validate (self-validation, no --target) - exit 0.
+   Verdict: READY FOR RELEASE PREPARATION. 5 informational findings
+   (outdated devDependencies in the lab's own package.json: @types/node,
+   playwright, tsx, typescript, vitest). CodeQL/Semgrep both ran and
+   passed (not skipped - both tools are available in this environment).
+   Symlink/junction escape tests: SKIPPED-ENVIRONMENT (reported explicitly
+   as skipped, not silently treated as passed). Several deeper checks
+   ("Source read-only boundary", "Graphviz/subprocess safety", "JSON
+   stdout/stderr safety", "Artifact content safety", "Invalid input/error-
+   message behavior") were reported as "(Checks not included in this run)"
+   - not silently passed, explicitly labeled as not part of this run mode.
+7. npm run security:validate -- --target "Z:\Users\newuser\Projects\my-dev-kit-v1"
+   (target-aware validation, FIRST run, before the fix) - exit 1. Verdict:
+   NOT READY: SECURITY BLOCKER REMAINS. 1 MAJOR finding: "Target
+   test:security script is missing." 4 informational findings (outdated
+   target devDependencies).
+8. npm run security:validate -- --target "Z:\Users\newuser\Projects\my-dev-kit-v1"
+   (target-aware validation, SECOND run, after adding the test:security
+   script to the target and re-validating it locally) - exit 0. Verdict:
+   READY FOR RELEASE PREPARATION. 0 MAJOR/blocker findings. 4 informational
+   findings (outdated target devDependencies: @types/node, commander, tsx,
+   typescript - all pre-existing, non-blocking, not newly introduced by
+   this batch).
+9. npm run security:deps -- --target ... - 4 passed, 1 warned (the
+   outdated-dependency informational group), 0 failed.
+10. npm run security:package -- --target ... - 1 passed, 0 findings.
+11. npm run security:semgrep -- --target ... - Status: PASSED.
+12. npm run security:codeql -- --target ... - Status: PASSED.
+
+===============================================================================
+Commands run from the target project
+===============================================================================
+
+1. Edit package.json: added `"test:security": "vitest run tests/security"`.
+2. npm run test:security - exit 0, 5 test files, 60 tests, all passed
+   (tests/security/dotEscaping.spec.ts, graphTraversalLimits.spec.ts,
+   malformedArtifacts.spec.ts, outputPath.spec.ts, pathTraversal.spec.ts -
+   all pre-existing files, none created or modified by this fix).
+3. npm run typecheck - exit 0.
+4. npm test (full suite) - exit 0, 78 files, 774 tests (unchanged count -
+   the script addition adds no new test file, it only exposes an existing
+   subset via a new script alias).
+5. npm run build - exit 0.
+6. npm pack --dry-run - exit 0, 30 files (unchanged file count - no new
+   file was added to the package; `tests/` was never and is still not
+   included in the package's `files` allowlist).
+
+===============================================================================
+Self-validation verdict
+===============================================================================
+
+READY FOR RELEASE PREPARATION (for my-dev-kit-lab itself, v0.2.1).
+
+===============================================================================
+Target validation verdict
+===============================================================================
+
+READY FOR RELEASE PREPARATION (for my-dev-kit-v1 / @dailephd/my-dev-kit
+1.5.0, release/v1.5.0), after the test:security script fix.
+
+===============================================================================
+Generated report paths
+===============================================================================
+
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\v0.2.1-security-validation.txt
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\v0.2.1-security-validation.json
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\my-dev-kit-v1.5.0-security-validation.txt
+  (this is the SECOND/final run's report - it overwrote the first failing
+  run's report at the same path, since both runs target the same package
+  name+version; this is expected/correct behavior for re-running validation
+  against the same version after a fix, not a report-collision bug -
+  confirmed distinct from OTHER prior versions' reports, e.g.
+  my-dev-kit-v1.3.0-security-validation.txt and
+  my-dev-kit-v1.4.0-security-validation.txt, both still present and
+  untouched in the same directory)
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\my-dev-kit-v1.5.0-security-validation.json
+
+All report generation confirmed to stay entirely within my-dev-kit-lab's
+own reports/security/ directory - none were written into the target
+repository (confirmed via `git status --short` and a directory-listing
+check in the target repo, both showing no new files).
+
+===============================================================================
+Security findings by severity (final, second run)
+===============================================================================
+
+MAJOR: 0 (the one MAJOR finding from the first run was resolved before
+  this final report was written)
+INFORMATIONAL: 4 - all "outdated dependency" notices (@types/node,
+  commander, tsx, typescript have newer versions available). These are
+  pre-existing, non-blocking, and not release blockers per this task's own
+  policy (informational findings do not gate READY_FOR_PUBLISH_PROMPT).
+
+CodeQL: PASSED. Semgrep: PASSED. npm audit (both --omit=dev and full):
+PASSED. OSV-Scanner: PASSED. Package tarball inspection: PASSED. Target
+security test suite: PASSED (60/60). Fuzz smoke: PASSED (9 targets, 450
+iterations).
+
+===============================================================================
+Optional skipped checks
+===============================================================================
+
+Symlink/junction escape tests: SKIPPED-ENVIRONMENT (environment-dependent,
+explicitly marked, not silently passed) - reported by the lab's OWN self-
+validation, not target-specific.
+"Source read-only boundary", "Graphviz/subprocess safety", "JSON stdout/
+stderr safety", "Artifact content safety", "Invalid input/error-message
+behavior" checks: reported as "(Checks not included in this run)" in both
+the self-validation and target-aware runs - these are deeper checks not
+enabled by the default `security:validate` invocation used here (no flag
+was passed to request them); explicitly disclosed as not-included, not
+silently treated as passed. Per this task's stated policy ("If my-dev-kit-
+lab itself reports only optional skipped checks, that is not necessarily a
+target release blocker"), these do not block the target's readiness
+verdict, since the tool's own executive summary already reflects them as
+excluded from its "Checks run: 10" count rather than as failed/passed
+checks.
+
+===============================================================================
+Whether target files were modified
+===============================================================================
+
+By my-dev-kit-lab's tooling itself: NO. Every `security:validate`/
+`security:deps`/`security:package`/`security:semgrep`/`security:codeql`
+invocation against the target was read-only with respect to the target
+repository (confirmed via `git status --short` before and after each run -
+no new tracked or untracked files appeared as a result of running the
+lab's tools).
+
+By this batch's own investigation (NOT by the lab tool): YES, one file -
+package.json - was edited to add the `test:security` script, as a direct,
+deliberate, disclosed release-readiness fix (not an automatic/unexpected
+side effect of the lab's validation). This is exactly the kind of "final
+release-readiness fix if needed" this batch's own task instructions
+explicitly permit, and is not "new feature scope" or a classification-
+behavior change.
+
+===============================================================================
+Target git status before and after
+===============================================================================
+
+Before (Stage 7.1, on release/v1.5.0 at commit b3a3f95): clean (`git status
+--short` returned no output).
+After all lab-tool invocations, before the package.json fix: still clean
+(lab tooling made no changes).
+After the package.json fix: ` M package.json` only (this batch's own
+deliberate edit).
+
+===============================================================================
+Package dry-run result (re-run after the fix)
+===============================================================================
+
+PASS. 30 files, version 1.5.0, unchanged file count/composition from
+before the fix (adding a script alias does not add any file to the
+package - `tests/` remains excluded from `files`).
+
+===============================================================================
+Remaining risks
+===============================================================================
+
+- 4 informational "outdated dependency" findings on the target
+  (@types/node, commander, tsx, typescript) - non-blocking per this task's
+  own policy; a future batch or the maintainer's normal dependency-update
+  cadence can address these, not required for v1.5.0 release readiness.
+- The deeper optional checks (source read-only boundary, Graphviz/
+  subprocess safety, JSON stdout/stderr safety, artifact content safety,
+  invalid-input/error-message behavior) were not exercised by this
+  invocation of the lab's tooling - this is a lab-tooling-invocation-mode
+  question, not a target defect; this batch's OWN Stage 6 cross-platform
+  audit already directly exercised the equivalent JSON-stdout/stderr-
+  safety and Graphviz-subprocess-safety behavior via live CLI smoke
+  (progress+JSON redirect test, Graphviz --allow-dot-fallback test), both
+  of which passed, so these specific risk areas are not actually uncovered
+  for v1.5.0 even though the lab's own automated check didn't run them in
+  this invocation mode.
+
+===============================================================================
+Recommended next step
+===============================================================================
+
+Proceed to Stage 8 (final package-content and release-readiness
+validation) and Stage 9 (pre-release readiness judge).
+
+===============================================================================
+Whether the target project is ready for release
+===============================================================================
+
+YES, from a security-validation standpoint - READY FOR RELEASE
+PREPARATION, with only non-blocking informational findings remaining.
+
+Status: complete
