@@ -1,0 +1,246 @@
+Report: Batch5FinalReport
+Batch name: v1.5.0 Final Pre-Release Readiness, Cross-Platform Audit,
+Security Validation, and Release Branch Preparation (Batch 5)
+Base branch: feature/v1.5.0-classification-finalization
+Audit branch: audit/v1.5.0-pre-release-readiness (commit b3a3f95)
+Release branch: release/v1.5.0 (commit 3afb81f, current HEAD)
+Cross-platform audit branch: fix/v1.5.0-cross-platform-audit (pushed,
+  identical to release/v1.5.0 - zero changes were needed, never merged
+  since there was nothing to merge)
+
+===============================================================================
+Latest @dailephd package versions observed (npm, before this batch's work)
+===============================================================================
+
+@dailephd/my-dev-kit: versions 1.0.0-1.4.0; version (latest dist-tag target)
+  1.4.0; dist-tags {"latest":"1.4.0"}. 1.5.0 was NOT present on npm at the
+  start of this batch - matches the expected pre-publish state exactly.
+@dailephd/my-dev-kit-orchestrator: version 1.0.0; dist-tags
+  {"latest":"1.0.0"}.
+
+===============================================================================
+Local package version
+===============================================================================
+
+Bumped from 1.4.0 to 1.5.0 in this batch (package.json, package-lock.json,
+src/version.ts). Confirmed consistent across all three sources plus the
+built CLI's own `--version` output and `npm pack --dry-run`'s tarball
+metadata, in every validation run through Stage 8.
+
+===============================================================================
+Prior reports consumed
+===============================================================================
+
+All 7 Batch 1 files, all 4 Batch 2 reports, all 4 Batch 3 reports, all 6
+Batch 4 reports (confirmed present, Batch 4 judge verdict PASS). One
+orphaned/stale cross-platform-repair file (failure-report only, no fix/
+verification report) was investigated and determined non-blocking - see
+batch-5-prior-batch-review-report.txt for the full reasoning (it documents
+an inconclusive investigation on an unrelated branch that predates this
+work, and the REAL cross-platform CI defect - a package.json BOM
+corruption - was separately found, fixed, merged to main, and verified
+green across all 6 CI combinations earlier in this overall session).
+
+===============================================================================
+Files changed in Batch 5
+===============================================================================
+
+Production/config: package.json (version 1.4.0->1.5.0; added
+  `test:security` script), package-lock.json (version synced to 1.5.0 via
+  `npm install`), src/version.ts (bumped to 1.5.0; also fixed a latent
+  UTF-8 BOM corruption from the same commit that corrupted package.json
+  earlier this session).
+No src/ production behavior was changed - only version metadata and one
+new npm script alias (no new source file, no modified command behavior,
+no classification-logic change).
+
+===============================================================================
+Tests changed in Batch 5
+===============================================================================
+
+None added or modified. The `test:security` script exposes an existing
+subset of tests (tests/security/, 5 files, 60 tests, all pre-existing from
+earlier version work) via a new script alias only - no test file was
+created or edited.
+
+===============================================================================
+Docs changed in Batch 5
+===============================================================================
+
+CHANGELOG.md (new "## 1.5.0" entry), docs/GRAPH_SCHEMA.md
+(classificationRoles/classificationRefs documentation added to both
+symbol-index.json and code-graph.json sections, plus classification.json
+added to the artifact-overview list and flow diagram; opportunistically
+added the pre-existing missing frontend-semantic.json/frontend-
+reachability.json entries to the same list), docs/RELEASE.md (all
+version-specific "1.3.0" references updated to "1.5.0"; classification.json
+added to all three "Expected artifacts" checklists). README.md, docs/
+ARCHITECTURE.md, docs/COMMANDS.md, docs/PROJECT_OVERVIEW.md, docs/ROADMAP.md,
+examples/README.md were already accurate as of Batch 4 and required no
+further change (re-confirmed, not re-edited).
+
+===============================================================================
+Package metadata changed
+===============================================================================
+
+package.json version and scripts (see above). No change to `files` array,
+license, author, dependencies, or bin mapping.
+
+===============================================================================
+Validation commands and results
+===============================================================================
+
+npm ci, npm run typecheck, npm test (full suite, 774/774 across 78 files -
+run fresh multiple times across Stages 3, 6, 8, always green), npm run
+build, npm run verify, node dist/cli.js --version (1.5.0)/--help, npm pack
+--dry-run (30 files, clean), npm audit --omit=dev ("found 0
+vulnerabilities"), npm audit full ("found 0 vulnerabilities"). Targeted
+v1.5/regression tests by path (tests/classification, tests/data-model,
+tests/frontend, tests/frontend-reachability, tests/source, tests/cli - 44
+files/437 tests, all passed). `npx vitest run tests --runInBand` was
+attempted per the task's literal instruction; vitest does not support
+`--runInBand` (that is a Jest flag) - substituted with the plain `npm test`
+full-suite run and the targeted-path run above, both already covering the
+same ground.
+
+===============================================================================
+Cross-platform audit result
+===============================================================================
+
+PASS with zero fixes needed. Package scripts, path handling (one
+intentional POSIX-normalized exception in the Python adapter, confirmed
+safe), CI matrix configuration, and documentation commands were all
+already fully cross-platform-safe. Windows-native validation (build/test/
+verify), CLI smoke, path-with-spaces smoke, PowerShell progress/JSON
+stdout-stderr redirection, and Graphviz fallback (Graphviz IS available in
+this environment; real SVG produced, fallback status clearly reported)
+all passed on first attempt. No commit was created on fix/v1.5.0-cross-
+platform-audit since nothing needed fixing.
+
+===============================================================================
+Cross-platform CI matrix result
+===============================================================================
+
+PASS. .github/workflows/ci.yml's matrix (ubuntu-latest, macos-latest,
+windows-latest x Node 20.x, 22.x) already matched the recommended
+configuration. Both pushes to release/v1.5.0 in this batch triggered CI
+runs, and BOTH completed with overall status "success":
+  - commit b3a3f95 ("Prepare v1.5.0 pre-release readiness"): success, 12m15s
+  - commit 3afb81f ("Add test:security script..."): success, 12m36s
+(confirmed via `gh run list --branch release/v1.5.0`, both rows show
+"completed success").
+
+===============================================================================
+my-dev-kit-lab security result
+===============================================================================
+
+Self-validation (lab v0.2.1): READY FOR RELEASE PREPARATION.
+Target-aware validation (my-dev-kit-v1.5.0), first run: NOT READY -
+  SECURITY BLOCKER REMAINS (1 MAJOR: missing `test:security` script).
+Investigated and resolved: the target already had a complete tests/
+  security/ directory (60 tests: path traversal, malformed artifacts,
+  output path, graph traversal limits, dot escaping) - the gap was a
+  missing script alias, not a missing test or a real vulnerability. Added
+  the script, re-validated target-side (typecheck/test/build/pack all
+  green), re-ran the security validation.
+Target-aware validation, second/final run: READY FOR RELEASE PREPARATION.
+  0 MAJOR findings, 4 non-blocking informational findings (outdated
+  devDependencies: @types/node, commander, tsx, typescript). CodeQL,
+  Semgrep, npm audit (both modes), OSV-Scanner, package tarball inspection,
+  and the target's own security test suite (60/60) all PASSED. No target
+  files were modified by the lab's tooling itself (confirmed via git
+  status before/after every lab-tool invocation); the one target-project
+  file change (package.json) was this batch's own deliberate, disclosed
+  release-readiness fix, not an automated side effect.
+
+===============================================================================
+Generated security report paths
+===============================================================================
+
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\v0.2.1-security-validation.txt/.json
+Z:\Users\newuser\Projects\my-dev-kit-lab\reports\security\my-dev-kit-v1.5.0-security-validation.txt/.json
+(both entirely within my-dev-kit-lab's own repository; nothing was written
+into my-dev-kit-v1)
+
+===============================================================================
+npm audit result
+===============================================================================
+
+0 vulnerabilities in both `npm audit --omit=dev` and full `npm audit`.
+Nothing to safe-fix.
+
+===============================================================================
+Package dry-run result
+===============================================================================
+
+PASS. 30 files, version 1.5.0, 151.4 kB tarball / 685.3 kB unpacked. No
+generated indexes, smoke folders, tarballs, or private files. No tarball
+was ever actually written to disk (confirmed via direct `ls` check after
+each dry-run).
+
+===============================================================================
+Readiness verdict
+===============================================================================
+
+READY_FOR_PUBLISH_PROMPT
+
+(Full checklist and rationale in batch-5-pre-release-readiness-report.txt,
+Stage 9. This final report confirms both CI runs on release/v1.5.0
+completed successfully, which was the one piece of evidence still pending
+when that report was drafted - no downgrade is needed.)
+
+===============================================================================
+Commit hashes
+===============================================================================
+
+audit/v1.5.0-pre-release-readiness: b3a3f95 ("Prepare v1.5.0 pre-release
+  readiness")
+release/v1.5.0 (before this final commit): 3afb81f ("Add test:security
+  script for security validation compatibility")
+release/v1.5.0 (this final commit, adding the remaining Batch 5 reports):
+  recorded after the commit below is created.
+
+===============================================================================
+Audit branch push status
+===============================================================================
+
+Pushed successfully in Stage 4 (no authentication issues). No further
+commits were made to audit/v1.5.0-pre-release-readiness after release/
+v1.5.0 was branched from it in Stage 5 - the two branches have since
+diverged by design (release/v1.5.0 received the Stage 7 security fix and
+this final report commit; the audit branch was not required to track
+those, per the task's own stage sequence, which treats the audit branch as
+having served its Stage 1-4 purpose once release/v1.5.0 exists).
+
+===============================================================================
+release/v1.5.0 branch creation/update status
+===============================================================================
+
+Created in Stage 5 (did not previously exist locally or remotely).
+Updated twice: Stage 7's security-fix commit (3afb81f), and this final
+report commit. Both pushes succeeded with no authentication issues.
+
+===============================================================================
+Remaining risks
+===============================================================================
+
+- 4 informational "outdated dependency" findings on the target
+  (@types/node, commander, tsx, typescript) - non-blocking, can be
+  addressed on the maintainer's normal dependency-update cadence.
+- TST-070 (classification analyzer failure -> manifest 'failed' status, no
+  dedicated test) and graph-renderer/report-renderer deferral - both
+  carried forward unchanged from Batch 2/4, both explicitly non-blocking
+  by design (documented conservative deferrals, not defects).
+- No performance testing exists for classification.json lookups at scale -
+  explicitly a v1.8-scale non-goal, not a v1.5.0 concern.
+- my-dev-kit-lab's own repository had pre-existing uncommitted
+  documentation changes at the time of this validation (unrelated to
+  my-dev-kit-v1, not touched) - noted for completeness, not a v1.5.0 risk.
+
+===============================================================================
+Recommended next step
+===============================================================================
+
+Run the separate publish prompt from release/v1.5.0.
+
+Status: complete
