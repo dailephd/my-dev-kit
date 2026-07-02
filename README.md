@@ -284,6 +284,54 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph ui-reachability --form
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full reachability flag reference.
 
+## Source continuation (v1.4.0)
+
+When the first bounded source result is not enough, continue reading without defaulting to a whole-file read.
+
+```sh
+# Continue a file from an explicit line
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --continue-from 21
+
+# Continue from the end of a symbol's initial preview
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --continue
+
+# Continue from the end of a node's initial preview
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "symbol:src/editor.ts#EditorShell" --continue
+```
+
+JSON output always includes a `continuationCursor` with `nextStartLine`, `previousEndLine`, `exhausted`, and `reason`. Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer.
+
+## Local dependency expansion (v1.4.0)
+
+Retrieve a primary symbol and the same-file definitions it directly depends on as a bounded, structured bundle.
+
+```sh
+# Include same-file types and helpers (composite flag)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --include-local-deps --format numbered
+
+# Include prop types (uses frontend-semantic when available for exact end lines)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --include-props --format numbered
+
+# Include locally rendered child components
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --include-local-components --format numbered
+
+# Include local import lines (external packages go to skippedBlocks)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --include-imports --format numbered
+
+# Cap bundle size
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --include-local-deps --max-bundle-lines 150 --max-blocks 8 --format json
+```
+
+Bundle output (`--format json`) includes `primaryBlock`, `expansionBlocks` (each with `kind`, `expansionReasons`, `confidence`, `dedupeKey`), `skippedBlocks` (with `reasonCode` and human reason), `limits`, `stats`, and `continuationCursors`.
+
+Numbered output prints a block header before each block:
+
+```
+=== [local-type] src/editor.ts:3-7 (5 lines) — local-type ===
+```
+
+Expansion is static-analysis only: direct, same-file dependencies. No cross-file closure, no runtime tracing, no browser execution.
+
 ## Data-model extraction
 
 Supported extraction patterns:
@@ -369,7 +417,7 @@ All React/TSX and frontend-test analysis is conservative static extraction from 
 
 ## Limitations
 
-- Symbol end lines are not recorded during indexing. Symbol source retrieval returns a capped preview from the symbol's start line with a warning. Use explicit line ranges for exact bounds.
+- Symbol end lines are not stored in the symbol index. Symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
 - Data-model extraction is conservative and currently focused on supported TypeScript patterns.
 - Frontend semantic extraction is conservative. Dynamic component registrations, runtime-composed JSX, and computed prop names may not be extracted or may be partially extracted with warnings.
@@ -397,13 +445,13 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.3.0 adds frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors on `search`, `lookup`, `slice`, and `source`, and `route`/`browser-storage`/`ui-reachability` graph views.
+Version 1.4.0 adds source continuation and bounded local dependency expansion. Once you find the right symbol or component, you can continue reading past the initial preview or expand to include the same-file types, props, helpers, and constants it directly depends on — all bounded, with reasons for every included block.
 
-Version 1.3.0 adds frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors on `search`, `lookup`, `slice`, and `source`, and `route`/`browser-storage`/`ui-reachability` graph views.
+Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors and `route`/`browser-storage`/`ui-reachability` graph views.
 
-Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
+Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
-Future roadmap items cover source continuation and expansion (v1.4), schema and layer classification (v1.5), graph-guided planner packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
+Future roadmap items cover schema and layer classification (v1.5), graph-guided orchestrator packets (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

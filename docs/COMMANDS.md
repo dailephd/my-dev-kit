@@ -364,10 +364,20 @@ Use one retrieval mode per command.
 - `--react-region <region>`: React region name to retrieve. Resolves a component, local component, JSX region, hook, or prop type by name from the frontend semantic artifact. Requires `--file`.
 - `--include-local-component-tree`: retrieve the named component and its local child components as a connected source bundle. Requires `--symbol`.
 - `--prop <name>`: filter local component-tree retrieval to show the named prop. Requires `--include-local-component-tree`.
-- `--max-lines <n>`: maximum number of lines to return.
+- `--max-lines <n>`: maximum number of lines to return per block. Default: 160.
 - `--format <json|plain|numbered>`: output format.
 - `--out <path>`: write rendered output to a file.
 - `--json`: alias for `--format json`.
+- `--continue-from <n>`: continue file retrieval from this line number. Requires `--file`. (v1.4.0)
+- `--continue`: continue from the end of the initial preview window. Requires `--node` or `--file --symbol`. (v1.4.0)
+- `--include-imports`: include local import-site lines in bundle; external packages go to `skippedBlocks`. (v1.4.0)
+- `--include-local-types`: include same-file interface/type/enum definitions referenced in the primary window. (v1.4.0)
+- `--include-props`: include same-file prop type definitions. Uses `frontend-semantic.json` for exact end lines when available. (v1.4.0)
+- `--include-local-components`: include same-file local React child components. Requires `frontend-semantic.json`. (v1.4.0)
+- `--include-local-deps`: composite: includes prop types, local types, constants above primary symbol, and directly called helpers. (v1.4.0)
+- `--expand-to-local-dependencies`: alias for `--include-local-deps`. (v1.4.0)
+- `--max-bundle-lines <n>`: cap total lines across all bundle blocks. Default: 300. (v1.4.0)
+- `--max-blocks <n>`: cap total block count in bundle. Default: 20. (v1.4.0)
 
 ### --contains behavior
 
@@ -441,9 +451,86 @@ When `--node` or `--symbol` mode is used, the source result propagates `semantic
 
 `source` never modifies source files.
 
+### --continue-from behavior (v1.4.0)
+
+`--continue-from <n>` reads from line `n` to `n + maxLines - 1` (or EOF). Returns a `SourceSlice` with a `continuationCursor` in JSON output.
+
+- If `n` is past EOF: returns empty content, `continuationCursor.exhausted = true`, and a warning.
+- Optional `--symbol <name>`: attaches symbol metadata to the result without changing the line range.
+- Cannot be combined with `--node`, `--contains`, `--react-region`, `--include-local-component-tree`, or `--start`/`--end`.
+
+JSON output includes `continuationCursor.nextStartLine` to chain subsequent reads. Numbered output prints `[CONTINUE: <file> from line N]` or `[EOF: <file> (N lines total)]`.
+
+### --continue behavior (v1.4.0)
+
+`--continue` advances past the initial preview window of a symbol or node.
+
+- `--file <path> --symbol <name> --continue`: continues from `symbolStartLine + min(maxLines, 20)`.
+- `--node <id> --continue`: continues from `nodeEndLine + 1` (symbol nodes) or `min(maxLines, fileLines) + 1` (file nodes).
+
+`reason` in the continuation cursor:
+- `'symbol-end-unknown'`: symbol end line is not in the index; initial window was capped at 20 lines.
+- `'eof'`: file is exhausted.
+- `'window-capped'`: window was capped by `--max-lines`.
+
+Cannot be combined with `--continue-from` or bundle flags.
+
+### --include-* and source bundle behavior (v1.4.0)
+
+Any of `--include-imports`, `--include-local-types`, `--include-props`, `--include-local-components`, `--include-local-deps`, or `--expand-to-local-dependencies` activates bundle mode, returning a `SourceBundle` instead of a `SourceSlice`.
+
+**Purpose:** Each flag adds a category of same-file direct dependencies to the primary block.
+
+| Flag | What it adds |
+|------|-------------|
+| `--include-imports` | Local import-site lines (external packages → `skippedBlocks`) |
+| `--include-local-types` | Same-file interface/type/enum defs referenced in primary window |
+| `--include-props` | Same-file prop type defs (exact from `frontend-semantic.json` when available) |
+| `--include-local-components` | Local React child components (requires `frontend-semantic.json`) |
+| `--include-local-deps` | Composite: props + types + constants above primary + called helpers |
+| `--expand-to-local-dependencies` | Alias for `--include-local-deps` |
+
+**JSON output (`--format json` or `--json`):**
+
+```json
+{
+  "status": "ok",
+  "mode": "source-bundle",
+  "primaryBlock": { "kind": "primary-target", "expansionReasons": ["primary-target"], "confidence": "high", ... },
+  "expansionBlocks": [
+    { "kind": "local-type", "expansionReasons": ["local-type"], "confidence": "high", ... }
+  ],
+  "skippedBlocks": [
+    { "kind": "import-site", "reasonCode": "external-package", "reason": "External package import: react", ... }
+  ],
+  "limits": { "maxLinesPerBundle": 300, "maxBlocks": 20, "maxLinesHit": false, "maxBlocksHit": false },
+  "stats": { "primaryLineCount": 49, "expansionBlockCount": 1, "skippedBlockCount": 1, "totalLineCount": 54 },
+  "continuationCursors": [{ "nextStartLine": 100, "exhausted": false, "reason": "window-capped", ... }],
+  "warnings": []
+}
+```
+
+**Numbered output:** block headers `=== [<kind>] <file>:<start>-<end> (<N> lines) — <reasons> ===` followed by numbered lines, then a skipped section, warnings section, and continuation footer.
+
+**Block confidence:**
+- `high`: end line from `frontend-semantic.json` (`FrontendSourceRef`) or explicit line range.
+- `medium`: end line estimated from next-symbol heuristic.
+- `low`: end line unknown; preview only.
+
+**Deduplication:** overlapping same-file blocks are merged into one block; both expansion reasons are preserved.
+
+**Limits:** `--max-bundle-lines <n>` (default 300) and `--max-blocks <n>` (default 20). When reached, remaining candidates become `skippedBlocks` with `reasonCode: 'max-lines-reached'` or `'max-blocks-reached'`.
+
+**Static boundaries:**
+- Direct, same-file dependency resolution only. No cross-file closure.
+- No runtime tracing. No browser execution.
+- When `frontend-semantic.json` is absent: local component and prop expansion skipped with `reasonCode: 'artifact-unavailable'`.
+
+Cannot be combined with `--contains`, `--react-region`, or `--include-local-component-tree`.
+
 ### Limitation
 
-The current index records symbol start lines but not complete symbol end lines. Symbol retrieval returns a bounded preview from the symbol start line and may include a warning.
+The symbol index records symbol start lines but not complete symbol end lines. v1.4.0 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines. `confidence` per block reports the estimation quality. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
 
 ### Examples
 
@@ -471,6 +558,21 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShel
 
 # Local component tree with prop filter
 npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --include-local-component-tree --prop onSuccess --format numbered
+
+# Continue from line 21 (v1.4.0)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/WorkspaceEditorShell.tsx --continue-from 21 --format numbered
+
+# Continue from end of symbol preview (v1.4.0)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/WorkspaceEditorShell.tsx --symbol WorkspaceEditorShell --continue --format json
+
+# Include same-file types and helpers (v1.4.0)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/WorkspaceEditorShell.tsx --symbol WorkspaceEditorShell --include-local-deps --format numbered
+
+# Include prop types with JSON output (v1.4.0)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/WorkspaceEditorShell.tsx --symbol WorkspaceEditorShell --include-props --format json
+
+# Bundle with limits (v1.4.0)
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/WorkspaceEditorShell.tsx --symbol WorkspaceEditorShell --include-local-deps --max-bundle-lines 150 --max-blocks 5 --format json
 ```
 
 ## slice

@@ -43,6 +43,12 @@ npx @dailephd/my-dev-kit search --index examples/basic-react-tsx/.my-dev-kit --s
 npx @dailephd/my-dev-kit search --index examples/basic-react-tsx/.my-dev-kit --ui "workspace-editor-empty-state" --json
 npx @dailephd/my-dev-kit slice --index examples/basic-react-tsx/.my-dev-kit --route "/workspaces/new" --include-storage --include-ui --include-tests --json
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph ui-reachability --format dot --out examples/basic-react-tsx/.my-dev-kit/ui-reachability.dot
+
+# Source continuation and local dependency expansion (v1.4.0)
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --continue-from 1 --format numbered
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --continue --format json
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --include-local-types --format numbered
+npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --file "src/WorkspaceEditorShell.tsx" --symbol WorkspaceEditorShell --include-local-deps --max-bundle-lines 200 --format json
 ```
 
 See each example's `README.md` for the full workflow.

@@ -1,8 +1,9 @@
 import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import { loadSourceArtifacts } from '../indexing/loadIndexArtifacts.js'
-import { getSourceSlice } from '../lookup/getSourceSlice.js'
+import { buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice } from '../lookup/getSourceSlice.js'
 import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
+import type { SourceSlice } from '../lookup/sourceSliceTypes.js'
 import {
   parseSourceOutputFormat,
   renderSourceOutput,
@@ -30,6 +31,8 @@ import {
   buildReachabilitySourceResult,
   type ReachabilitySourceResult,
 } from '../frontend-reachability/index.js'
+import { buildSourceBundle } from '../source/sourceBundle.js'
+import { renderSourceBundle } from '../source/renderSourceBundle.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -56,6 +59,16 @@ export function registerSourceCommand(program: Command): void {
     )
     .option('--path <prefix>', 'path prefix filter for --contains (e.g. "src/components")')
     .option('--max-lines <n>', 'maximum returned lines', parseInteger, 160)
+    .option('--continue-from <n>', 'continue file retrieval from this line number (requires --file)', parseInteger)
+    .option('--continue', 'continue from the last preview window (requires --node or --file --symbol)')
+    .option('--include-imports', 'include local import declarations in bundle')
+    .option('--include-local-types', 'include local type/interface/enum definitions in bundle')
+    .option('--include-props', 'include prop type definitions in bundle')
+    .option('--include-local-components', 'include locally-rendered child components in bundle')
+    .option('--include-local-deps', 'include all local dependencies (types, props, constants, helpers) in bundle')
+    .option('--expand-to-local-dependencies', 'alias for --include-local-deps')
+    .option('--max-bundle-lines <n>', 'max total lines across all blocks in bundle (default: 300)', parseInteger)
+    .option('--max-blocks <n>', 'max number of blocks in bundle (default: 20)', parseInteger)
     .option('--format <json|plain|numbered>', 'output format')
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
@@ -81,6 +94,26 @@ export function registerSourceCommand(program: Command): void {
 
       if (mode === 'local-component-tree') {
         handleLocalComponentTree(options, format)
+        return
+      }
+
+      if (mode === 'continue-from') {
+        handleContinueFrom(options, format)
+        return
+      }
+
+      if (mode === 'node-continue') {
+        handleNodeContinue(options, format)
+        return
+      }
+
+      if (mode === 'symbol-continue') {
+        handleSymbolContinue(options, format)
+        return
+      }
+
+      if (mode === 'source-bundle') {
+        handleSourceBundle(options, format)
         return
       }
 
@@ -122,32 +155,7 @@ export function registerSourceCommand(program: Command): void {
         warnings: target.warnings,
       })
 
-      if (format === undefined) {
-        if (options.out) {
-          const rendered = renderSourceOutput(result, 'plain')
-          const writtenPath = writeSourceOutput(options.out, rendered)
-          console.log(`Wrote plain source to ${writtenPath}`)
-        } else {
-          console.log(`${result.filePath}:${result.startLine}-${result.endLine}`)
-          if (result.warnings.length > 0) console.log(`Warnings: ${result.warnings.join('; ')}`)
-          console.log(result.content)
-        }
-        return
-      }
-
-      const rendered = renderSourceOutput(result, format)
-
-      if (options.out) {
-        const writtenPath = writeSourceOutput(options.out, rendered)
-        if (format === 'json') {
-          console.log(`Wrote JSON source result to ${writtenPath}`)
-        } else {
-          console.log(`Wrote ${format} source to ${writtenPath}`)
-        }
-        return
-      }
-
-      process.stdout.write(rendered)
+      emitSourceResult(result, format, options)
     })
 }
 
@@ -300,6 +308,339 @@ function handleLocalComponentTree(options: SourceCommandOptions, format: SourceO
   process.stdout.write(rendered)
 }
 
+function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const continueFrom = options.continueFrom!
+  const filePath = options.file!
+
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadCodeGraph: false,
+    loadSymbolIndex: options.symbol !== undefined,
+  })
+
+  const projectRoot = artifacts.resolved.manifest.projectRoot
+  const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
+  const fileLineCount = readFileLineCount(absolutePath)
+  const normalizedFilePath = toForwardSlash(filePath)
+
+  const warnings: string[] = []
+
+  if (continueFrom > fileLineCount) {
+    warnings.push(`Continuation from line ${continueFrom} is past the end of file (${fileLineCount} lines).`)
+    const cursor = buildContinuationCursor({
+      filePath: normalizedFilePath,
+      endLine: fileLineCount,
+      fileLineCount,
+      targetKind: 'line-range',
+      symbolName: options.symbol ?? null,
+      maxLines: options.maxLines,
+      symbolBoundaryKnown: true,
+      warnings,
+    })
+    const eofResult: SourceSlice = {
+      status: 'ok',
+      mode: 'line-range',
+      indexDir: options.index,
+      filePath: normalizedFilePath,
+      absolutePath: toForwardSlash(absolutePath),
+      symbolName: options.symbol ?? null,
+      startLine: continueFrom,
+      endLine: fileLineCount,
+      lineCount: 0,
+      content: '',
+      warnings,
+      continuationCursor: cursor,
+    }
+    emitSourceResult(eofResult, format, options)
+    return
+  }
+
+  let symbolName: string | null = null
+  let semanticRoles = undefined
+  let artifactRefs = undefined
+  let evidenceRefs = undefined
+  if (options.symbol && artifacts.symbolIndex) {
+    try {
+      const symTarget = resolveSymbolTarget(artifacts.symbolIndex, filePath, options.symbol, options.maxLines)
+      symbolName = symTarget.symbolName ?? null
+      semanticRoles = symTarget.semanticRoles
+      artifactRefs = symTarget.artifactRefs
+      evidenceRefs = symTarget.evidenceRefs
+    } catch {
+      // symbol metadata is optional in continue-from mode
+    }
+  }
+
+  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+
+  const result = getSourceSlice({
+    indexDir: options.index,
+    projectRoot,
+    filePath,
+    startLine: continueFrom,
+    endLine,
+    maxLines: options.maxLines,
+    mode: 'line-range',
+    symbolName,
+    symbolBoundaryKnown: true,
+    semanticRoles,
+    artifactRefs,
+    evidenceRefs,
+    warnings,
+  })
+
+  emitSourceResult(result, format, options)
+}
+
+function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadCodeGraph: true,
+    loadSymbolIndex: true,
+  })
+
+  const nodeTarget = resolveFileNodeTarget(artifacts.codeGraph!, options.node!, options.maxLines)
+  const projectRoot = artifacts.resolved.manifest.projectRoot
+  let filePath: string
+  let symbolName: string | null = null
+  let symStartLine: number | null = null
+  let semanticRoles = undefined
+  let artifactRefs = undefined
+  let evidenceRefs = undefined
+
+  if (nodeTarget.mode === 'symbol') {
+    const symTarget = resolveSymbolTarget(artifacts.symbolIndex!, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines)
+    filePath = symTarget.filePath
+    symbolName = symTarget.symbolName ?? null
+    symStartLine = symTarget.startLine!
+    semanticRoles = symTarget.semanticRoles
+    artifactRefs = symTarget.artifactRefs
+    evidenceRefs = symTarget.evidenceRefs
+  } else {
+    filePath = nodeTarget.filePath
+  }
+
+  const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
+  const fileLineCount = readFileLineCount(absolutePath)
+  const normalizedFilePath = toForwardSlash(filePath)
+
+  // Symbol nodes: first window is startLine..startLine+min(maxLines,20)-1
+  // File nodes: first window is 1..min(maxLines,fileLineCount)
+  const continueFrom = symStartLine !== null
+    ? symStartLine + Math.min(options.maxLines, 20)
+    : Math.min(options.maxLines, fileLineCount) + 1
+  const symbolBoundaryKnown = symStartLine === null
+
+  const warnings: string[] = []
+
+  if (continueFrom > fileLineCount) {
+    warnings.push(`Continuation from line ${continueFrom} is past the end of file (${fileLineCount} lines).`)
+    const cursor = buildContinuationCursor({
+      filePath: normalizedFilePath,
+      endLine: fileLineCount,
+      fileLineCount,
+      targetKind: 'node',
+      targetId: options.node,
+      symbolName,
+      maxLines: options.maxLines,
+      symbolBoundaryKnown,
+      warnings,
+    })
+    const eofResult: SourceSlice = {
+      status: 'ok',
+      mode: 'node',
+      indexDir: options.index,
+      filePath: normalizedFilePath,
+      absolutePath: toForwardSlash(absolutePath),
+      symbolName,
+      startLine: continueFrom,
+      endLine: fileLineCount,
+      lineCount: 0,
+      content: '',
+      warnings,
+      continuationCursor: cursor,
+    }
+    emitSourceResult(eofResult, format, options)
+    return
+  }
+
+  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+
+  const result = getSourceSlice({
+    indexDir: options.index,
+    projectRoot,
+    filePath,
+    startLine: continueFrom,
+    endLine,
+    maxLines: options.maxLines,
+    mode: 'node',
+    symbolName,
+    symbolBoundaryKnown,
+    targetId: options.node,
+    semanticRoles,
+    artifactRefs,
+    evidenceRefs,
+    warnings,
+  })
+
+  emitSourceResult(result, format, options)
+}
+
+function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadCodeGraph: false,
+    loadSymbolIndex: true,
+  })
+
+  const symTarget = resolveSymbolTarget(artifacts.symbolIndex!, options.file!, options.symbol!, options.maxLines)
+  const startLine = symTarget.startLine!
+  const previousEndLine = startLine + Math.min(options.maxLines, 20) - 1
+  const continueFrom = previousEndLine + 1
+
+  const projectRoot = artifacts.resolved.manifest.projectRoot
+  const absolutePath = ensureInsideProjectRoot(projectRoot, options.file!)
+  const fileLineCount = readFileLineCount(absolutePath)
+  const normalizedFilePath = toForwardSlash(symTarget.filePath)
+
+  const warnings: string[] = []
+
+  if (continueFrom > fileLineCount) {
+    warnings.push(`Continuation from line ${continueFrom} is past the end of file (${fileLineCount} lines).`)
+    const cursor = buildContinuationCursor({
+      filePath: normalizedFilePath,
+      endLine: fileLineCount,
+      fileLineCount,
+      targetKind: 'symbol',
+      symbolName: symTarget.symbolName ?? null,
+      maxLines: options.maxLines,
+      symbolBoundaryKnown: false,
+      warnings,
+    })
+    const eofResult: SourceSlice = {
+      status: 'ok',
+      mode: 'symbol',
+      indexDir: options.index,
+      filePath: normalizedFilePath,
+      absolutePath: toForwardSlash(absolutePath),
+      symbolName: symTarget.symbolName ?? null,
+      startLine: continueFrom,
+      endLine: fileLineCount,
+      lineCount: 0,
+      content: '',
+      warnings,
+      continuationCursor: cursor,
+    }
+    emitSourceResult(eofResult, format, options)
+    return
+  }
+
+  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+
+  const result = getSourceSlice({
+    indexDir: options.index,
+    projectRoot,
+    filePath: options.file!,
+    startLine: continueFrom,
+    endLine,
+    maxLines: options.maxLines,
+    mode: 'symbol',
+    symbolName: symTarget.symbolName,
+    symbolBoundaryKnown: false,
+    semanticRoles: symTarget.semanticRoles,
+    artifactRefs: symTarget.artifactRefs,
+    evidenceRefs: symTarget.evidenceRefs,
+    warnings,
+  })
+
+  emitSourceResult(result, format, options)
+}
+
+const DEFAULT_MAX_BUNDLE_LINES = 300
+const DEFAULT_MAX_BLOCKS = 20
+
+function handleSourceBundle(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  const artifacts = loadSourceArtifacts({
+    indexDir: options.index,
+    loadCodeGraph: options.node !== undefined,
+    loadSymbolIndex: true,
+  })
+
+  const frontendArtifact = loadOptionalFrontendArtifact(artifacts.resolved)
+  const maxLinesPerBlock = options.maxLines
+  const maxLinesPerBundle = options.maxBundleLines ?? DEFAULT_MAX_BUNDLE_LINES
+  const maxBlocks = options.maxBlocks ?? DEFAULT_MAX_BLOCKS
+
+  const bundle = buildSourceBundle({
+    indexDir: options.index,
+    projectRoot: artifacts.resolved.manifest.projectRoot,
+    filePath: options.file,
+    symbolName: options.symbol,
+    nodeId: options.node,
+    startLine: options.start,
+    endLine: options.end,
+    maxLinesPerBlock,
+    maxLinesPerBundle,
+    maxBlocks,
+    includeImports: options.includeImports === true,
+    includeLocalTypes: options.includeLocalTypes === true,
+    includeProps: options.includeProps === true,
+    includeLocalComponents: options.includeLocalComponents === true,
+    includeLocalDeps: (options.includeLocalDeps === true) || (options.expandToLocalDependencies === true),
+    symbolIndex: artifacts.symbolIndex!,
+    codeGraph: artifacts.codeGraph,
+    frontendArtifact,
+  })
+
+  const resolvedFormat: 'json' | 'numbered' = format === 'json' ? 'json' : 'numbered'
+  const rendered = renderSourceBundle(bundle, resolvedFormat)
+
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    if (resolvedFormat === 'json') {
+      console.log(`Wrote source bundle JSON to ${writtenPath}`)
+    } else {
+      console.log(`Wrote source bundle to ${writtenPath}`)
+    }
+    return
+  }
+
+  process.stdout.write(rendered)
+}
+
+function emitSourceResult(result: SourceSlice, format: SourceOutputFormat | undefined, options: SourceCommandOptions): void {
+  if (format === undefined) {
+    if (options.out) {
+      const rendered = renderSourceOutput(result, 'plain')
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote plain source to ${writtenPath}`)
+    } else {
+      console.log(`${result.filePath}:${result.startLine}-${result.endLine}`)
+      if (result.warnings.length > 0) console.log(`Warnings: ${result.warnings.join('; ')}`)
+      console.log(result.content)
+      const cursor = result.continuationCursor
+      if (cursor && !cursor.eof) {
+        console.log(`[CONTINUE: ${cursor.filePath} from line ${cursor.nextStartLine} (reason: ${cursor.reason})]`)
+      }
+    }
+    return
+  }
+
+  const rendered = renderSourceOutput(result, format)
+
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    if (format === 'json') {
+      console.log(`Wrote JSON source result to ${writtenPath}`)
+    } else {
+      console.log(`Wrote ${format} source to ${writtenPath}`)
+    }
+    return
+  }
+
+  process.stdout.write(rendered)
+}
+
 const REACHABILITY_SOURCE_DEFAULT_CONTEXT = 10
 
 function handleReachabilitySource(
@@ -316,6 +657,8 @@ function handleReachabilitySource(
     ['--react-region', options.reactRegion !== undefined],
     ['--start', options.start !== undefined],
     ['--end', options.end !== undefined],
+    ['--continue-from', options.continueFrom !== undefined],
+    ['--continue', options.continue === true],
   ] as const) {
     if (present) {
       throw new Error(
@@ -379,6 +722,11 @@ function renderReachabilitySourceText(result: ReachabilitySourceResult): string 
   return lines.join('\n') + '\n'
 }
 
+function readFileLineCount(absolutePath: string): number {
+  const raw = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+  return raw.length > 0 && raw[raw.length - 1] === '' ? raw.length - 1 : raw.length
+}
+
 function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): FrontendSemanticArtifact | null {
   const artifactPath = resolved.semanticArtifactPaths.frontendSemantic
   if (!artifactPath) return null
@@ -410,6 +758,16 @@ interface SourceCommandOptions {
   format?: string
   out?: string
   json?: boolean
+  continueFrom?: number
+  continue?: boolean
+  includeImports?: boolean
+  includeLocalTypes?: boolean
+  includeProps?: boolean
+  includeLocalComponents?: boolean
+  includeLocalDeps?: boolean
+  expandToLocalDependencies?: boolean
+  maxBundleLines?: number
+  maxBlocks?: number
 }
 
 function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | undefined {
@@ -421,13 +779,57 @@ function resolveFormat(options: SourceCommandOptions): SourceOutputFormat | unde
   return undefined
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' {
+const BUNDLE_FLAGS = ['includeImports', 'includeLocalTypes', 'includeProps', 'includeLocalComponents', 'includeLocalDeps', 'expandToLocalDependencies'] as const
+
+function hasBundleFlags(options: SourceCommandOptions): boolean {
+  return (
+    options.includeImports === true ||
+    options.includeLocalTypes === true ||
+    options.includeProps === true ||
+    options.includeLocalComponents === true ||
+    options.includeLocalDeps === true ||
+    options.expandToLocalDependencies === true
+  )
+}
+
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' | 'continue-from' | 'node-continue' | 'symbol-continue' | 'source-bundle' {
   const hasContains = options.contains !== undefined
   const hasReactRegion = options.reactRegion !== undefined
   const hasLocalComponentTree = options.includeLocalComponentTree === true
   const hasNode = options.node !== undefined
   const hasSymbol = options.symbol !== undefined
   const hasStartEnd = options.start !== undefined || options.end !== undefined
+  const hasContinueFrom = options.continueFrom !== undefined
+  const hasContinue = options.continue === true
+
+  if (hasContinue && hasContinueFrom) {
+    throw new Error('--continue and --continue-from cannot be used together.')
+  }
+
+  if (hasContinue) {
+    if (!hasNode && !hasSymbol) throw new Error('--continue requires --node or --file --symbol.')
+    if (hasNode) {
+      if (hasSymbol || hasStartEnd || hasContains || hasReactRegion || hasLocalComponentTree) {
+        throw new Error('--node --continue cannot be combined with --file, --symbol, --start, --end, --contains, or --react-region.')
+      }
+      return 'node-continue'
+    }
+    if (!options.file) throw new Error('--file --symbol --continue requires --file.')
+    if (hasNode || hasStartEnd || hasContains || hasReactRegion || hasLocalComponentTree) {
+      throw new Error('--file --symbol --continue cannot be combined with --node, --start, --end, --contains, or --react-region.')
+    }
+    return 'symbol-continue'
+  }
+
+  if (hasContinueFrom) {
+    if (hasNode) throw new Error('--continue-from cannot be combined with --node.')
+    if (!options.file) throw new Error('--continue-from requires --file <path>.')
+    if (hasContains) throw new Error('--continue-from cannot be combined with --contains.')
+    if (hasReactRegion) throw new Error('--continue-from cannot be combined with --react-region.')
+    if (hasLocalComponentTree) throw new Error('--continue-from cannot be combined with --include-local-component-tree.')
+    if (hasStartEnd) throw new Error('--continue-from cannot be combined with --start or --end.')
+    return 'continue-from'
+  }
 
   if (!hasLocalComponentTree && options.prop !== undefined) {
     throw new Error('--prop is only valid with --include-local-component-tree.')
@@ -455,12 +857,23 @@ function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'sym
   if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
   if (hasContains && hasStartEnd) throw new Error('--contains cannot be combined with --start or --end.')
   if (hasContains && options.file !== undefined) throw new Error('--contains cannot be combined with --file. Use --contains alone to search all indexed files.')
+  if (hasContains && hasBundleFlags(options)) throw new Error('Bundle flags cannot be combined with --contains.')
   if (!hasContains && options.path !== undefined) throw new Error('--path is only valid when combined with --contains.')
   if (hasContains) return 'exact-match'
 
   const hasRange = options.file !== undefined || hasStartEnd
   if (hasNode && (hasRange || hasSymbol)) throw new Error('Use only one source mode: --node, --file with --start/--end, or --file with --symbol.')
   if (!hasNode && !hasRange && !hasSymbol) throw new Error('Provide one source mode: --node, --file with --start/--end, or --file with --symbol.')
+
+  // Bundle mode: any bundle flag present
+  if (hasBundleFlags(options)) {
+    if (hasContains) throw new Error('Bundle flags cannot be combined with --contains.')
+    if (hasReactRegion) throw new Error('Bundle flags cannot be combined with --react-region.')
+    if (hasLocalComponentTree) throw new Error('Bundle flags cannot be combined with --include-local-component-tree.')
+    if (!hasNode && !hasSymbol && !hasStartEnd) throw new Error('Bundle flags require a target: --node, --file --symbol, or --file --start --end.')
+    return 'source-bundle'
+  }
+
   if (hasNode) return 'node'
   if (hasSymbol) {
     if (!options.file) throw new Error('Symbol mode requires --file <path> and --symbol <name>.')
