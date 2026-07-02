@@ -1,0 +1,157 @@
+Report: Batch1FinalReport
+Batch name: v1.5.0 Classification Planning and Contracts (Batch 1)
+Branch: feature/v1.5.0-classification-planning-contracts (branched from main)
+Commit hash before commit: fadb690ccc1504e272ab7f8a29e0813bf0d7c338
+  (main's tip - "Fix v1.3.0 dev dependency security audit"; note the v1.4.0
+  work visible in `git log --oneline` at session start, commits 814389f/
+  6b4d83f/689bbc3, lives only on audit/v1.4.0-pre-release-readiness and is
+  NOT yet in main/this branch's history)
+
+Package versions observed:
+- @dailephd/my-dev-kit: 1.3.0 (npm view + npx --version, matching)
+- @dailephd/my-dev-kit-orchestrator: 1.0.0 (npm view + npx --version, matching)
+
+Artifacts created (.my-dev-kit-orchestrator/v1.5.0/batch-1/artifacts/):
+- request-brief.txt
+- architecture-context-packet.txt
+- behavior-model.txt
+- classification-contract.txt
+- classifier-pseudocode-packet.txt
+- test-strategy-packet.txt
+
+Reports created (.my-dev-kit-orchestrator/v1.5.0/batch-1/reports/):
+- architecture-context-retrieval-report.txt
+- batch-1-verification-report.txt
+- batch-1-final-report.txt (this file)
+
+Orchestrator run: a parallel scoped orchestrator workflow run was initialized
+and driven through its equivalent stages (request-brief, architecture-context,
+behavior-model, pseudocode-packet, test-strategy) at
+.my-dev-kit-orchestrator/runs/20260702T090327-v1-5-classification-planning/,
+using mode=feature. All 5 of that run's Batch-1-relevant artifacts pass
+`my-dev-kit-orchestrator check` (structural/section validation). The optional
+`check --trace` found trace-ID linking format issues (documented in the
+verification report) - non-blocking, since trace IDs are optional per the
+orchestrator's own stage prompts.
+
+Path note: the task's requested output path
+.my-dev-kit-orchestrator/v1.5.0/batch-1/{artifacts,reports}/ matches the
+existing project convention (this repository's own orchestrator workspace
+already exists at .my-dev-kit-orchestrator/, containing prior
+runs/20260624T164100-v1-3-frontend-reachability/ and
+runs/20260625T090158-v1-4-source-expansion/ orchestrator runs from earlier
+version planning). The requested v1.5.0/batch-1/ subdirectory sits alongside
+the orchestrator's own runs/ directory inside that same workspace root, so no
+alternate path was needed.
+
+Architecture context adequacy status: context sufficient with listed
+assumptions (see architecture-context-packet.txt, final section). The three
+listed assumptions are low-risk and explicitly deferred to Batch 2
+confirmation, not blocking.
+
+Summary of classification contract decision:
+- New artifact: classification.json, schemaVersion '1.0.0', registered as a
+  generic analyzer entry (IndexAnalyzerId 'classification') in manifest.json's
+  existing analyzers[] list - no change to the fixed-shape
+  IndexSemanticArtifacts interface.
+- Compact refs: two NEW optional fields, `classificationRoles` and
+  `classificationRefs`, added to CodeGraphNode and GraphSymbolRecord -
+  explicitly NOT reusing/overloading the existing `semanticRoles`/
+  `artifactRefs` fields, per the task's own instruction not to silently
+  overload existing semantic fields. Category NAME strings are still reused
+  verbatim where v1.1/v1.2's SemanticRoleName already covers a category
+  (11 of 13 required categories already exist there), avoiding vocabulary
+  drift while keeping storage independent.
+- Evidence/uncertainty model mirrors the shape (not the exact type) of the
+  existing SemanticEvidenceRef/SemanticRoleWarning/SemanticRoleConfidence
+  types, with a distinct UncertaintyTier enum ('certain'|'likely'|'possible'|
+  'unknown') chosen because it measures a different axis (confidence in
+  correctness) than the existing SemanticRoleConfidence enum (how a role was
+  derived).
+- Enrichment pattern mirrors applySemanticRolesToCodeGraph /
+  applySemanticRolesToSymbolIndex exactly (map-by-id, same node.kind guard).
+- Command integration (search/lookup/slice/source surfacing classification)
+  is explicitly deferred past this batch; a forward-looking contract for it
+  is documented in classification-contract.txt section 8 for a later batch.
+
+Summary of proposed implementation batches after Batch 1:
+Batch 2 - Classification producer and artifact integration: implement core
+classification types/taxonomy (src/classification/classificationTypes.ts),
+implement the classification producer (classifyFiles.ts, classifySymbols.ts,
+gatherSymbolEvidence.ts, buildClassificationArtifact.ts), emit
+classification.json, register the analyzer/artifact in manifest.json, add the
+CLASSIFICATION_FILENAME constant to managedArtifacts.ts, embed compact
+classificationRoles/classificationRefs into code-graph.json/symbol-index.json
+via new applyClassificationToCodeGraph.ts/applyClassificationToSymbolIndex.ts,
+and add producer/artifact/invariant tests per test-strategy-packet.txt's
+TST-001 through TST-042, TST-060 through TST-071.
+A likely Batch 3 (not committed to here, follows from classification-contract
+section 8): command integration - surface classification through
+search/lookup/slice/source, covering the deferred TST-050 through TST-053.
+
+Validation commands and results: all PASS. See
+batch-1-verification-report.txt for full detail. Summary: git status --short
+(informational, pre-existing uncommitted v1.4.0-session changes unrelated to
+this batch), npm view x2 (1.3.0 / 1.0.0), npx --version x2 (matching), npm ci
+(89 packages, 0 vulnerabilities), npm run build (success, dist\cli.js
+353.17 KB), npm run typecheck (0 errors).
+
+Full-file reads used: none. All retrieval was via my-dev-kit `source
+--symbol` (bounded, per-symbol) or a single bounded 46-line `--start/--end`
+range fallback. Two Read tool calls were made in this batch, both bounded,
+offset-limited excerpts (not full-file reads): docs/ROADMAP.md lines 370-421
+(52-line offset range) and the pre-existing
+revised-graph-guided-orchestrated-workflow.txt for its first 60 lines plus a
+6-line Depth-selection excerpt via Grep context - both under the 250-line
+threshold and directly relevant to confirming workflow-depth and category
+naming decisions.
+
+Production code changes: none. Zero files under src/ were created or
+modified by this batch.
+
+Test code changes: none. Zero files under tests/ were created or modified by
+this batch.
+
+Remaining risks:
+- The classification contract's decision to add two brand-new compact fields
+  (rather than reusing semanticRoles/artifactRefs) is the single highest-
+  leverage design decision in this batch; if Batch 2 implementation disagrees
+  with this direction, all Batch 2 producer/enrichment work would need to be
+  revisited. This risk is mitigated by the explicit rationale documented in
+  classification-contract.txt section 4, directly traceable to the task's own
+  instruction not to overload existing fields.
+- Exact static patterns for command-handler, analyzer, and especially
+  validator classification are described only at the convention level (PSE-010)
+  and are not yet concrete regex/heuristic definitions - Batch 2 must define
+  these precisely, and test-strategy-packet.txt (TST-018) flags validator's
+  pattern as fully undefined.
+- Two regression test file paths (existing frontend-semantic and
+  frontend-reachability spec files) were not directly confirmed via
+  architecture-context retrieval in this batch (search queries targeted
+  semantics/manifest, not frontend-specific tests) - flagged in
+  test-strategy-packet.txt TST-061/TST-062 for Batch 2 confirmation.
+- Trace-ID cross-linking in behavior-model.txt / classifier-pseudocode-
+  packet.txt / test-strategy-packet.txt uses prose references rather than the
+  orchestrator's strict "FROM_ID -> TO_ID" syntax; `check --trace` reports
+  this as fail/warn. Non-blocking (trace IDs are optional), but a Batch 2
+  reviewer should be aware traceability is prose-based, not machine-linked,
+  in this batch's artifacts.
+- This branch was created from `main` (commit fadb690), which does NOT yet
+  include the v1.4.0 work that exists only on
+  audit/v1.4.0-pre-release-readiness (commits 814389f/6b4d83f/689bbc3) plus
+  further uncommitted changes on that branch, carried onto this branch as
+  uncommitted working-tree state per explicit user instruction ("keep all
+  changes... move to branch main first"). Those uncommitted changes remain
+  present and untouched in the working tree but are NOT part of this batch's
+  commit (only .my-dev-kit-orchestrator/v1.5.0/batch-1/ is staged). Whoever
+  merges this feature branch should be aware that v1.4.0's own release-audit
+  work is a separate, still-pending merge into main.
+
+Recommended next batch: Batch 2 - Classification producer and artifact
+integration (implement core classification types/taxonomy, implement the
+classification producer, emit classification.json, register artifact/
+analyzer status in manifest.json, embed compact classification refs where
+this batch's contract requires it, add producer/artifact tests) - matches
+the task's expected recommended next batch exactly.
+
+Status: complete
