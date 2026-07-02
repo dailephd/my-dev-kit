@@ -1,0 +1,88 @@
+Report: Batch5LocalValidationReport
+Batch: v1.5.0 Final Pre-Release Readiness, Cross-Platform Audit, Security
+Validation, and Release Branch Preparation (Batch 5)
+Working directory: Z:\Users\newuser\Projects\my-dev-kit-v1
+Branch: audit/v1.5.0-pre-release-readiness
+
+===============================================================================
+Commands run, working directory, exit codes
+===============================================================================
+
+1. npm ci - cwd repo root - exit 0 - 89 packages, 0 vulnerabilities.
+2. npm run typecheck (tsc --noEmit) - cwd repo root - exit 0, zero errors.
+   Script banner correctly shows `@dailephd/my-dev-kit@1.5.0` (confirms the
+   version bump took effect).
+3. npm test (npx vitest run, full suite) - cwd repo root - exit 0. 78 test
+   files, 774 tests, all passed. Identical count to Batch 4's final state
+   (774/78) - the version-bump-only changes in this batch do not add or
+   remove any test.
+4. npm run build (tsup) - cwd repo root - exit 0. dist/cli.js, 423.26 KB,
+   "Build success".
+5. npm run verify (typecheck && test && build) - cwd repo root - exit 0,
+   all three sub-steps green, consistent with items 2-4 run independently.
+6. node dist/cli.js --version - cwd repo root - exit 0. Output: 1.5.0
+   (correct - confirms the version.ts BOM fix and package.json bump both
+   took effect in the built artifact).
+7. node dist/cli.js --help - cwd repo root - exit 0. Full usage text
+   listing all 7 commands.
+8. npm pack --dry-run - cwd repo root - exit 0. 30 files, package version
+   1.5.0, filename dailephd-my-dev-kit-1.5.0.tgz, 151.3 kB tarball. No
+   tarball actually written to disk (dry-run). File list unchanged in
+   composition from Batch 4's own dry-run (same 30 files, only docs/
+   GRAPH_SCHEMA.md and docs/RELEASE.md content changed in size, no new/
+   removed files).
+
+===============================================================================
+Targeted v1.5 tests by file path
+===============================================================================
+
+npx vitest run tests/classification tests/data-model tests/frontend
+tests/frontend-reachability tests/source tests/cli
+- cwd repo root - exit 0. 44 test files, 437 tests, all passed.
+- tests/classification (11 files, 59 tests): classification artifact
+  production, manifest analyzer/artifact registration, classification
+  producer correctness (all 18 categories exercised across the unit/
+  integration spec files), classificationRoles/classificationRefs compact
+  metadata, search/lookup/slice/source classification integration (26
+  tests), missing-classification-artifact fallback (6 tests), graceful
+  degradation on missing optional semantic artifacts (2 tests, added in
+  Batch 4).
+- tests/data-model (v1.1 regression): all passed.
+- tests/frontend (v1.2 regression): all passed.
+- tests/frontend-reachability (v1.3 regression): all passed.
+- tests/source (v1.4 source continuation/expansion regression, plus
+  classification propagation through source): all passed.
+- tests/cli (CLI help/command-registration regression): all passed -
+  confirms `--version` correctly reports the new package.json version
+  dynamically (the test reads package.json itself, not a hardcoded
+  string), and all command --help registrations remain correct.
+
+===============================================================================
+Pass/fail summary
+===============================================================================
+
+PASS across every command and every targeted test group. No failures, no
+skips beyond the ones explicitly documented below.
+
+===============================================================================
+Skipped commands and reasons
+===============================================================================
+
+None of the task's Stage 3 required commands were skipped.
+
+===============================================================================
+Failed tests
+===============================================================================
+
+None.
+
+===============================================================================
+Corrective action taken
+===============================================================================
+
+None required during this stage - the release-metadata corrections (version
+bump, BOM fix, docs updates) were already applied in Stage 2 before this
+validation ran, and validation confirms they did not introduce any
+regression.
+
+Status: complete

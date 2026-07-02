@@ -1,0 +1,196 @@
+Report: Batch5PriorBatchReviewReport
+Batch: v1.5.0 Final Pre-Release Readiness, Cross-Platform Audit, Security
+Validation, and Release Branch Preparation (Batch 5)
+Base branch: feature/v1.5.0-classification-finalization
+Audit branch: audit/v1.5.0-pre-release-readiness
+
+===============================================================================
+Required prior reports - presence check
+===============================================================================
+
+All 7 Batch 1 files, all 4 Batch 2 reports, all 4 Batch 3 reports, and all 6
+Batch 4 reports listed in this task's "Required prior reports" section were
+confirmed present via direct file check before reading. None missing.
+
+===============================================================================
+Batch 1 status
+===============================================================================
+
+Status: complete. Produced the planning/contract foundation: request-
+brief.txt, architecture-context-packet.txt (context adequacy: "sufficient
+with listed assumptions"), behavior-model.txt, classification-contract.txt
+(artifact name classification.json, schemaVersion 1.0.0, manifest
+registration via the generic analyzers[] array, classificationRoles/
+classificationRefs as new separate compact fields), classifier-pseudocode-
+packet.txt, test-strategy-packet.txt (TST-001 through TST-071). No
+production code, no tests, no docs changes (correctly, by design - a
+planning-only batch). Validation (batch-1-verification-report.txt,
+referenced by the final report): git/npm/build/typecheck all PASS.
+
+===============================================================================
+Batch 2 status
+===============================================================================
+
+Status: complete. Implemented the classification producer/artifact/
+manifest-registration/compact-refs layer. 31 new tests, 0 regressions. Two
+real production bugs were found and fixed during Batch 2's own test-writing
+(a resolved low-confidence candidate not generating a required warning; a
+readiness-derivation bug conflating "any warning" with "conflicting-
+category warning") - both caught and fixed before the batch was considered
+complete, not carried forward as defects.
+
+===============================================================================
+Batch 3 status
+===============================================================================
+
+Status: complete. Implemented search/lookup/slice/source command
+integration. 26 new tests, 0 regressions, 0 production bugs (one test-
+authoring mistake, fixed). slice required zero production code changes -
+confirmed the compact fields already flow through the existing raw-node
+passthrough.
+
+===============================================================================
+Batch 4 status
+===============================================================================
+
+Status: complete. Gap review found the implementation sound (no new
+production code needed); closed one test gap (missing-optional-artifacts
+graceful degradation, 2 new tests); corrected genuinely stale documentation
+across 5 files (README.md, docs/COMMANDS.md, docs/ARCHITECTURE.md,
+docs/PROJECT_OVERVIEW.md, docs/ROADMAP.md) and 2 example READMEs, moving
+v1.5.0 from "planned"/aspirational language to accurate implemented-
+behavior language, and removing an unimplemented "Context report
+improvements" section from the roadmap that could have been mistaken for
+delivered behavior. Full validation (774 tests/78 files, typecheck/build/
+verify, live CLI smoke including missing-artifact fallback, cross-platform
+PowerShell exit-code checks, path-with-spaces smoke, npm pack --dry-run)
+all passed.
+
+===============================================================================
+Batch 4 judge verdict
+===============================================================================
+
+PASS (confirmed by direct grep of batch-4-judge-report.txt's "Verdict"
+section: "PASS"). Rationale recorded there: every checklist item (requested
+behavior implemented, contract followed, extension points reused, no
+parallel retrieval architecture, all 4 commands integrated, missing-
+artifact fallback works, evidence/uncertainty conservative, tests derive
+from Batch 1 strategy, docs accurate, non-goals respected, validation
+evidence exists, no hidden blocker) was satisfied with direct re-verified
+evidence, not stale reliance on prior claims.
+
+Per this Batch 5 task's stop condition ("If Batch 4 judge is not PASS, stop
+and report that Batch 5 cannot proceed"): Batch 4 judge IS PASS, so Batch 5
+proceeds.
+
+===============================================================================
+Cross-platform repair status
+===============================================================================
+
+One file exists at .my-dev-kit-orchestrator/v1.5.0/cross-platform-repair/
+reports/cli-cross-platform-failure-report.txt (untracked, gitignored - not
+part of any git commit). No fix-report or verification-report exists
+alongside it. This is the SAME file already investigated and disclosed in
+Batch 4's gap-review-report.txt, re-confirmed unchanged here:
+
+- It documents an INCONCLUSIVE investigation on an unrelated, earlier
+  branch (feature/v1.5.0-classification-planning-contracts at commit
+  030f22b, referencing package.json version "1.3.0"), predating Batches
+  2-4 entirely.
+- Its own conclusion: "This failure CANNOT BE REPRODUCED in this
+  environment... work stops here." It never asserts a repair IS required -
+  every command/test/CI-equivalent step it ran passed with the exact
+  expected exit codes.
+- Separately, a REAL cross-platform CI defect was found and fixed earlier
+  in this overall session: commit 9b8c249 ("bump version to 1.4.0")
+  corrupted package.json with a UTF-8 BOM, crashing every CLI invocation
+  that reads package.json and failing CI identically on windows-latest and
+  macos-latest (confirmed via live GitHub Actions runs). Fixed in PR #1,
+  merged to main at commit fd875e3, verified green across all 6 CI matrix
+  combinations via a real re-run. This fix is inherited by every v1.5
+  branch (Batch 2's merge of origin/main pulled in fd875e3 and its
+  ancestors).
+
+Conclusion, unchanged from Batch 4: this does NOT trigger the "cross-
+platform repair was required but its report is missing" stop condition -
+no repair was ever confirmed required by the orphaned report, and the real
+repair that WAS required has direct, verifiable, already-merged evidence.
+Additionally, Batch 5's own Stage 6 performs a full, fresh, standardized
+cross-platform audit from release/v1.5.0 (package-script audit, path-
+handling audit, CI-matrix verification, Windows/space-path/Graphviz/JSON-
+stdout smoke) - this independently supersedes reliance on the stale report
+regardless of its provenance.
+
+===============================================================================
+Unresolved risks from each batch - blocking assessment
+===============================================================================
+
+Batch 1: "two brand-new compact fields" design risk - RESOLVED (Batch 2
+  implemented exactly this design, no revisit needed). Validator/command-
+  handler/analyzer static patterns - RESOLVED (Batch 2 defined all three
+  concretely, validator grounded in the real src/io/validation.ts file).
+  Two regression test paths unconfirmed - RESOLVED (Batch 2/3/4 confirmed
+  both via Glob). None of Batch 1's risks remain open.
+
+Batch 2: TST-070 (classification analyzer failure -> manifest 'failed'
+  status, no dedicated test) - STILL OPEN, but explicitly non-blocking:
+  production code path exists (try/catch), no realistic trigger exists in
+  the current integration shape to test it meaningfully. graph-renderer/
+  report-renderer deferral - STILL OPEN, but this is an intentional design
+  decision (BEH-022), not a defect. Readiness/risk-label derivation being
+  "Batch-2-original" - not a risk, this was explicitly sanctioned latitude
+  per behavior-model.txt.
+
+Batch 3: three untouched getSourceSlice call sites lacking classification
+  metadata - STILL OPEN but explicitly not a regression (those modes never
+  had semantic metadata either); correctly scoped out.
+
+Batch 4: same TST-070/graph-renderer items carried forward (unchanged, see
+  above) plus "no performance testing on classification.json lookups at
+  scale" - explicitly a v1.8-scale non-goal, not a v1.5 concern.
+
+BLOCKING ASSESSMENT: none of the above unresolved risks block pre-release
+readiness. All are either (a) resolved by a later batch, (b) explicitly
+non-blocking by design (documented conservative deferrals matching Batch
+1's own non-goal boundaries), or (c) out-of-scope-by-design consistency
+notes rather than defects. No risk requires new implementation work in
+Batch 5.
+
+===============================================================================
+v1.5 scope completeness confirmation
+===============================================================================
+
+- classification artifact exists: YES - classification.json, schemaVersion
+  1.0.0 (src/classification/classificationTypes.ts,
+  CLASSIFICATION_SCHEMA_VERSION constant).
+- classification producer works: YES - src/classification/classifyFiles.ts,
+  classifySymbols.ts, gatherSymbolEvidence.ts, buildClassificationArtifact.ts;
+  31 Batch 2 tests + 2 Batch 4 graceful-degradation tests, all passing.
+- manifest registers classification analyzer/artifact: YES - 'classification'
+  IndexAnalyzerId in manifest.json's analyzers[] array, confirmed live via
+  CLI smoke in both Batch 4 and (to be re-confirmed) this batch.
+- classificationRoles/classificationRefs compact metadata exists: YES - new
+  separate optional fields on CodeGraphNode/GraphSymbolRecord/
+  SymbolDefinition, confirmed not overloading semanticRoles/artifactRefs.
+- search/lookup/slice/source classification integration works: YES - Batch
+  3's 4-command integration, 26 tests, re-verified live in Batch 4.
+- missing classification artifact fallback works: YES - 6 dedicated tests
+  (missingClassificationArtifact.spec.ts) plus live smoke in Batch 4.
+- tests cover producer and command integration: YES - 59 classification-
+  specific tests across 11 files as of Batch 4's final state.
+- docs/examples describe implemented behavior accurately: YES, as of Batch
+  4's correction pass (README.md, docs/COMMANDS.md, docs/ARCHITECTURE.md,
+  docs/PROJECT_OVERVIEW.md, docs/ROADMAP.md, examples/README.md,
+  examples/basic-data-model-ts/README.md all updated and cross-checked
+  against actual type/field names, not re-typed from memory).
+- no v1.6 planner packet behavior was implemented: CONFIRMED - no
+  src/planner*, src/orchestrator*, or "packet"/"capsule" terminology exists
+  anywhere in src/; docs/ROADMAP.md explicitly still frames v1.6 as future
+  work with no v1.5 overlap.
+
+CONCLUSION: v1.5.0 scope is complete. Batch 5 may proceed to release
+metadata review, local validation, cross-platform audit, security
+validation, and release-branch preparation without any additional feature
+implementation.
+
+Status: complete

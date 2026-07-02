@@ -30,20 +30,30 @@ Semantic artifacts (written by `index` when the TypeScript model analyzer produc
 - `data-model.json`
 - `data-model-graph.json`
 
+Frontend semantic artifacts (written by `index` when the frontend analyzer runs on TSX/JSX files):
+
+- `frontend-semantic.json`
+- `frontend-reachability.json` (v1.3.0)
+
 Lineage artifact (written in `data-model --trace-view` mode):
 
 - `model-view-lineage.json`
+
+Classification artifact (written by `index` whenever the classification analyzer runs, v1.5.0):
+
+- `classification.json`
 
 Artifact flow:
 
 ```text
 index
   -> manifest.json           (artifact registry, analyzer registry)
-  -> symbol-index.json       (symbols with compact semanticRoles, artifactRefs)
-  -> code-graph.json         (nodes with compact semanticRoles, artifactRefs)
+  -> symbol-index.json       (symbols with compact semanticRoles/classificationRoles, artifactRefs/classificationRefs)
+  -> code-graph.json         (nodes with compact semanticRoles/classificationRoles, artifactRefs/classificationRefs)
   -> call-graph.json         (optional)
   -> data-model.json         (when TypeScript model analyzer runs)
   -> data-model-graph.json   (when TypeScript model analyzer runs)
+  -> classification.json     (when the classification analyzer runs, v1.5.0)
 
 data-model --trace-view
   -> model-view-lineage.json
@@ -190,6 +200,8 @@ Each symbol record may include:
 - `signature`
 - `semanticRoles`
 - `artifactRefs`
+- `classificationRoles` (v1.5.0)
+- `classificationRefs` (v1.5.0)
 
 ### semanticRoles on symbols
 
@@ -211,6 +223,21 @@ Other role names are defined in the semantic schema (`route-handler`, `react-com
 ### artifactRefs on symbols
 
 `artifactRefs` at the symbol level are the union of artifact refs across all semantic roles for that symbol.
+
+### classificationRoles and classificationRefs on symbols (v1.5.0)
+
+When the classification analyzer has classified a symbol, it writes a compact `classificationRoles` array and a `classificationRefs` array on the symbol record. These are new, separate fields — they do not overload or change the meaning of `semanticRoles`/`artifactRefs`.
+
+Each `classificationRoles` entry includes:
+
+- `role`: classification category name (e.g. `canonical-type`, `database-model`, `command-handler`)
+- `editGuidance`: e.g. `safe-primary-edit-target`, `inspect-before-edit`, `generated-do-not-edit`
+- `readiness`: `ready`, `needs-more-context`, or `risky-assumption`
+- `uncertainty`: `certain`, `likely`, `possible`, or `unknown`
+
+This is a compact projection only — it does not include evidence, risk labels, warnings, or the human-readable reason text. Those live in the detailed `classification.json` artifact; `classificationRefs` (using the same shape as `artifactRefs`) points back to the matching entry there.
+
+A symbol with no classification entry, or an index without a classification analyzer, simply omits both fields — this never changes existing `semanticRoles`/`artifactRefs` behavior.
 
 ### Current limitation
 
@@ -273,12 +300,18 @@ Symbol nodes may include:
 - `exported`
 - `semanticRoles`
 - `artifactRefs`
+- `classificationRoles` (v1.5.0)
+- `classificationRefs` (v1.5.0)
 
 ### semanticRoles and artifactRefs on symbol nodes
 
 Symbol nodes carry compact `semanticRoles` and `artifactRefs` arrays when the TypeScript model analyzer has classified the corresponding symbol. These are the same compact records as on `symbol-index.json` symbols.
 
 File nodes do not carry semantic role metadata.
+
+### classificationRoles and artifactRefs on symbol nodes (v1.5.0)
+
+Symbol nodes carry the same compact `classificationRoles`/`classificationRefs` records described above for `symbol-index.json` when the classification analyzer has classified the corresponding symbol. File nodes do not carry classification metadata. `slice` preserves these fields on every node it returns, the same way it preserves `semanticRoles`/`artifactRefs`.
 
 ### Edge model
 

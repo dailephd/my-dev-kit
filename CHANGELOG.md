@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.0 - 2026-07-02
+
+Added conservative static schema/layer classification of files and symbols, surfaced through the existing `search`, `lookup`, `slice`, and `source` commands.
+
+- Added `classification.json`, a static classification artifact (schemaVersion `1.0.0`) recording category assignment(s), edit guidance, readiness, additive risk labels, evidence, and an uncertainty tier per file/symbol
+- Added the `classification` analyzer, registered in `manifest.json`'s `analyzers` array; runs after the data-model, frontend, and frontend-reachability analyzers so their output is available as evidence
+- Classification categories: `canonical-type`, `artifact-type`, `database-model`, `projection-type`, `view-model`, `ui-only-state`, `test-fixture`, `persistence-adapter`, `route-handler`, `client-component`, `server-component`, `generated-file`, `configuration-file`, `command-handler`, `analyzer`, `validator`, `public-docs`, `internal-planning-docs`
+- Added edit-guidance values (`safe-primary-edit-target`, `inspect-before-edit`, `avoid-primary-edit-target`, `read-only-reference`, `generated-do-not-edit`, `test-only`, `docs-only`, `uncertain`), readiness states (`ready`, `needs-more-context`, `risky-assumption`), additive risk labels, and uncertainty tiers (`certain`, `likely`, `possible`, `unknown`)
+- Added `classificationRoles` and `classificationRefs` compact fields on `CodeGraphNode`/`GraphSymbolRecord`/`SymbolDefinition` — new fields, separate from `semanticRoles`/`artifactRefs`
+- `search`: classification role and edit-guidance are now searchable fields; results include compact `classificationRoles`/`classificationRefs`
+- `lookup`: focus node includes `classificationRoles`/`classificationRefs`; added `--resolve-classification` to resolve the full `classification.json` entry on request
+- `slice`: preserves `classificationRoles`/`classificationRefs` on every node
+- `source`: propagates `classificationRoles`/`classificationRefs` for `--node`/`--symbol` targets, plus a compact `classificationSummary` (risk labels, edit guidance, warnings)
+- Classification is static and conservative only: no runtime execution, no browser, no database connection, no LLM or network calls; low-confidence classifications are marked `possible`/`unknown` with an explanatory warning rather than rounded up
+- An index without `classification.json` (an older index, or an analyzer that has not run) is fully compatible — existing command output is unaffected
+
 ## 1.4.0 - 2026-06-25
 
 Added source continuation and bounded local dependency expansion.
