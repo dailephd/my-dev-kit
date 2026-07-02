@@ -1,0 +1,192 @@
+Report: Batch3ImplementationReport
+Batch name: v1.5.0 Retrieval Command Integration for Classification Metadata (Batch 3)
+Branch: feature/v1.5.0-classification-command-integration
+Commit before implementation: 292f00cba689c6e116c3f56b328d6b6ce01402e8
+  ("Implement v1.5.0 classification producer artifacts" - Batch 2's commit)
+
+===============================================================================
+Scope
+===============================================================================
+
+Surface v1.5.0 classification metadata through the four existing retrieval
+commands (search, lookup, slice, source) per Batch 1's command integration
+contract (classification-contract.txt section 8), using Batch 2's actual
+implementation (classificationRoles/classificationRefs on CodeGraphNode/
+GraphSymbolRecord/SymbolDefinition, classification.json detailed artifact,
+manifest.analyzers registration). No command-group additions, no artifact
+redesign, no producer changes.
+
+===============================================================================
+Batch 1 artifacts consumed
+===============================================================================
+
+All 8 required files re-confirmed present and consulted (already read in full
+earlier in this same working session during Batch 2; re-verified section 8
+"Command integration contract for later batches" verbatim against the
+current file - unchanged since Batch 1): request-brief.txt,
+architecture-context-retrieval-report.txt, architecture-context-packet.txt,
+behavior-model.txt, classification-contract.txt, classifier-pseudocode-
+packet.txt, test-strategy-packet.txt, batch-1-final-report.txt.
+
+===============================================================================
+Batch 2 reports consumed
+===============================================================================
+
+All 4 required reports re-confirmed present and consulted (authored earlier
+in this same session): batch-2-implementation-report.txt,
+batch-2-test-implementation-report.txt, batch-2-verification-report.txt,
+batch-2-final-report.txt. Cross-checked classification-contract.txt section 8
+against Batch 2's actual classificationTypes.ts (ClassificationRoleRef shape:
+role/editGuidance/readiness/uncertainty; classificationRefs: SemanticArtifactRef[])
+- no conflict found, no deviation from Batch 2 needs justification for this
+batch's purposes; Batch 2's 4 documented deviations are all producer-internal
+(candidate resolution, readiness/risk derivation) and do not affect the
+command-integration field names or shapes this batch depends on.
+
+===============================================================================
+Classification artifact name
+===============================================================================
+
+classification.json, schemaVersion '1.0.0', registered under
+IndexAnalyzerId 'classification' in manifest.json's analyzers[] array (NOT in
+the fixed-shape semanticArtifacts/semanticArtifactPaths structure - confirmed
+by reading src/indexing/manifestTypes.ts and src/indexing/
+readIndexManifest.ts: ResolvedIndexManifest.semanticArtifactPaths has no
+classification field, by design, per Batch 1's contract decision. This
+batch's shared resolver therefore reads manifest.analyzers directly, not
+semanticArtifactPaths).
+
+===============================================================================
+Command surfaces selected for modification
+===============================================================================
+
+- src/search/searchTypes.ts, src/search/searchIndex.ts (search)
+- src/commands/lookupCommand.ts, src/lookup/lookupNode.ts (lookup)
+- src/lookup/sourceSliceTypes.ts, src/lookup/resolveSourceTarget.ts,
+  src/lookup/getSourceSlice.ts, src/commands/sourceCommand.ts (source)
+- slice: NO code change (see below)
+
+===============================================================================
+Shared metadata resolver/loader plan
+===============================================================================
+
+New file: src/classification/resolveClassificationForCommands.ts (extends
+Batch 2's src/classification/ module - not a new/parallel architecture):
+- resolveClassificationArtifactPath(manifest, indexDir): reads
+  manifest.analyzers to find id==='classification', returns its first
+  artifact's resolved absolute path (with the same escape-path safety check
+  pattern already used in readIndexManifest.ts's resolveArtifactPath), or
+  null if the analyzer entry/artifact/file is absent.
+- loadClassificationArtifact(indexDir, manifest): reads and JSON-parses the
+  file, returns null on any failure (missing analyzer entry, missing file,
+  malformed JSON) - never throws, matching INV-004's graceful-degradation
+  requirement and this batch's stop condition ("missing classification
+  artifact causes command crashes").
+- findClassificationEntryByTargetId(artifact, targetId): linear find by
+  entry.targetId (classification.json is small/index-scoped, not worth a Map
+  for the expected entry counts).
+- buildClassificationCommandSummary(entry): compact projection - returns
+  {classifications, editGuidance, readiness, risks, uncertainty, evidenceRefs,
+  artifactRefs, warnings} (evidenceRefs is entry.evidence[].sourceLocation,
+  deduplicated - a compact ref list, NOT the full evidence objects with
+  staticPattern/reason text, keeping command output bounded per the task's
+  "avoid loading unrelated large artifacts" / "do not duplicate the whole
+  detailed artifact" constraints).
+
+search does NOT call this resolver at all - its compact fields
+(classificationRoles/classificationRefs) already live directly on the
+matched CodeGraphNode/SymbolDefinition, exactly like semanticRoles/
+artifactRefs today; no classification.json read is needed for search.
+
+lookup calls this resolver ONLY when a new --resolve-classification flag is
+passed (opt-in, matching the contract's "plus an option to resolve
+classificationRefs into full ClassificationEntry detail ... on request" -
+lookup's on-request resolution returns the FULL ClassificationEntry, not the
+summary, since the contract explicitly says "full ClassificationEntry
+detail").
+
+source calls this resolver unconditionally but tolerates a null result
+silently - it attaches the compact buildClassificationCommandSummary() (not
+the full entry) inline as a new optional `classificationSummary` field,
+satisfying "source should include warnings for generated-file risk,
+wrong-layer risk, or uncertainty ... if supported by the classification
+artifact" without turning source into a second detailed-artifact viewer.
+
+===============================================================================
+Output compatibility plan
+===============================================================================
+
+All new fields are additive and optional (`?`), appended after existing
+fields in each type, mirroring exactly how semanticRoles/artifactRefs/
+evidenceRefs were added in v1.1/v1.2. No existing field is renamed, removed,
+or repurposed. JSON output remains valid; plain/numbered text output for
+source gets one new optional line only when a classification summary exists
+(risks/edit-guidance), otherwise output is byte-identical to pre-Batch-3.
+Search ranking (rankSearchResults.ts) is NOT modified - classification
+fields are surfaced on result items exactly like semanticRoles today
+(informational only, not search-ranked) unless testing reveals the contract
+requires classification-term matching (see Stage 5 below); this keeps
+ranking behavior deterministic and unchanged from v1.1-v1.4.
+
+===============================================================================
+Test plan summary
+===============================================================================
+
+New tests/classification/commandIntegration/ directory (mirrors the existing
+tests/classification/ convention from Batch 2) with one spec file per
+command surface: searchIntegration.spec.ts, lookupIntegration.spec.ts,
+sliceIntegration.spec.ts, sourceIntegration.spec.ts, plus a
+missingClassificationArtifact.spec.ts covering graceful degradation across
+all four commands. Full existing suite re-run for regression (TST-060
+through TST-063 equivalent - v1.1/v1.2/v1.3/v1.4 command behavior unchanged).
+
+===============================================================================
+Files/modules selected for modification
+===============================================================================
+
+New: src/classification/resolveClassificationForCommands.ts,
+tests/classification/commandIntegration/*.spec.ts (5 files)
+Modified: src/search/searchTypes.ts, src/search/searchIndex.ts,
+src/commands/lookupCommand.ts, src/lookup/lookupNode.ts,
+src/lookup/sourceSliceTypes.ts, src/lookup/resolveSourceTarget.ts,
+src/lookup/getSourceSlice.ts, src/commands/sourceCommand.ts,
+src/classification/index.ts (barrel export addition)
+
+===============================================================================
+Files/modules intentionally avoided
+===============================================================================
+
+src/graph/sliceGraph.ts, src/commands/sliceCommand.ts (no change - compact
+fields already flow through raw CodeGraphNode passthrough, confirmed live in
+Batch 2's own smoke test: lookup and slice both returned classificationRoles/
+classificationRefs on the same node with zero slice-specific code). src/data-
+model/*, src/frontend/*, src/frontend-reachability/* (classification remains
+a consumer, not a modifier, of their output). src/source/sourceBundle.ts,
+src/source/renderSourceBundle.ts, src/lookup/localDependencyExpansion-related
+code (v1.4.0 territory - source-bundle/continuation modes do not carry
+per-symbol semantic metadata today either, so adding classification there
+would be new scope beyond mirroring the existing pattern; left untouched).
+docs/*.md, package.json, release/publish tooling.
+
+===============================================================================
+Risks
+===============================================================================
+
+- sourceCommand.ts is 887 lines; only the two call sites that already thread
+  semanticRoles/artifactRefs/evidenceRefs (line-range ~143, symbol-continue
+  ~540) are being extended - the other three getSourceSlice call sites
+  (exact-match ~242, continue-from ~376, node-continue ~469) do not carry
+  symbol-level semantic metadata today either, so they are intentionally left
+  unchanged for consistency (not a regression - matches existing v1.1-v1.4
+  behavior for those modes).
+- rankSearchResults.ts is not being modified in this batch (see output
+  compatibility plan) - if verification later shows classification-term
+  matching is expected in search's field-matching behavor beyond result
+  metadata, this is flagged as a possible small follow-up within this same
+  batch, not deferred to Batch 4.
+
+===============================================================================
+Context adequacy statement
+===============================================================================
+
+context sufficient for implementation

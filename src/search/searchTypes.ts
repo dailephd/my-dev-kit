@@ -2,6 +2,7 @@ import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraph
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
+import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
 export type SearchResultKind = 'file' | 'symbol' | 'edge'
@@ -21,6 +22,8 @@ export type SearchMatchField =
   | 'semanticSource'
   | 'semanticArtifactRef'
   | 'frontendValue'
+  | 'classificationRole'
+  | 'classificationEditGuidance'
 
 export interface SearchMatchReason {
   field: SearchMatchField
@@ -44,6 +47,8 @@ export interface SearchResultItem {
   }
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
 }
 
 export interface SearchIndexOptions {

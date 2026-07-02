@@ -1,0 +1,135 @@
+Report: Batch3VerificationReport
+Batch: v1.5.0 Retrieval Command Integration for Classification Metadata (Batch 3)
+Working directory: Z:\Users\newuser\Projects\my-dev-kit-v1
+Branch: feature/v1.5.0-classification-command-integration
+
+===============================================================================
+Commands run, working directory, exit code, result
+===============================================================================
+
+1. npm view @dailephd/my-dev-kit version
+   cwd: repo root. Exit 0. Result: 1.4.0
+
+2. npm view @dailephd/my-dev-kit-orchestrator version
+   cwd: repo root. Exit 0. Result: 1.0.0
+
+3. git fetch origin --prune --tags / git checkout feature/v1.5.0-
+   classification-producer-artifact / git pull --ff-only / git checkout -b
+   feature/v1.5.0-classification-command-integration
+   cwd: repo root. Exit 0 for all. Base branch was clean before branching
+   (git status --short: no output).
+
+4. npx @dailephd/my-dev-kit@latest index --root . --src src --out
+   .my-dev-kit --call-graph --json (architecture-context refresh, Stage 2)
+   cwd: repo root. Exit 0.
+
+5. Multiple npx @dailephd/my-dev-kit@latest search queries (Stage 2
+   architecture-context retrieval) plus one lookup call to directly confirm
+   the search/lookup/slice/source extension points - all exit 0, all
+   documented inline during the session and in the implementation report.
+
+6. npm run typecheck (tsc --noEmit) - run 4 times, once after each command
+   surface's changes (search, lookup, source) plus once more after adding
+   tests.
+   cwd: repo root. Exit 0 every time, zero errors.
+
+7. npx vitest run tests/classification/commandIntegration
+   cwd: repo root. First run: 1 file failed (1 test) - a test-authoring
+   mistake (expected the wrong ClassificationRole vs. ClassificationRoleRef
+   shape), not a production bug. Fixed in the test file. Second run: exit 0,
+   5 files, 26 tests, all passed.
+
+8. npm ci
+   cwd: repo root. Exit 0. 89 packages, 0 vulnerabilities.
+
+9. npm run typecheck (post npm ci)
+   cwd: repo root. Exit 0.
+
+10. npm test (npx vitest run, full suite)
+    cwd: repo root. Exit 0. 77 files, 772 tests, all passed. Pre-batch
+    baseline (Batch 2's final state) was 72 files/746 tests; the +5 files/
+    +26 tests delta matches exactly this batch's new tests. Zero
+    regressions.
+
+11. npm run build (tsup)
+    cwd: repo root. Exit 0. dist/cli.js, 423.26 KB, "Build success".
+
+12. node dist/cli.js --version
+    cwd: repo root. Exit 0. Output: 1.4.0.
+
+13. node dist/cli.js index --root examples/basic-data-model-ts --src src
+    --out examples/basic-data-model-ts/.my-dev-kit-v1-5-batch-3-smoke --json
+    cwd: repo root. Exit 0. Same root-relative-path nesting behavior noted in
+    Batch 2's verification report (--root and --out both relative resolve to
+    examples/basic-data-model-ts/examples/basic-data-model-ts/.my-dev-kit-
+    v1-5-batch-3-smoke) - not a bug introduced by this batch, consistent
+    with prior sessions' observed behavior. All subsequent smoke commands
+    were pointed at the actual resolved path.
+
+14. node dist/cli.js search --index <smoke-dir> --query "canonical" --limit
+    10 --json
+    Exit 0. 3 results (User, UserRecord, UserViewModel), all with
+    classificationRoles containing role 'canonical-type' - confirms
+    classification-term searchability.
+
+15. node dist/cli.js search --index <smoke-dir> --query "User" --limit 10
+    --json
+    Exit 0. 10 results including symbol:src/models.ts#User with
+    classificationRoles/classificationRefs populated.
+
+16. node dist/cli.js lookup --index <smoke-dir> --node
+    "symbol:src/models.ts#User" --depth 1 --json
+    Exit 0. classificationRoles/classificationRefs present at both the
+    top level and inside `node`.
+
+17. node dist/cli.js lookup --index <smoke-dir> --node
+    "symbol:src/models.ts#User" --depth 1 --resolve-classification --json
+    Exit 0. classificationDetail present with the full ClassificationEntry
+    shape (targetId, targetKind, classifications, evidence, etc.).
+
+18. node dist/cli.js slice --index <smoke-dir> --node
+    "symbol:src/models.ts#User" --depth 1 --direction both --json
+    Exit 0. classificationRoles/classificationRefs present on the matched
+    node in slice output.
+
+19. node dist/cli.js source --index <smoke-dir> --node
+    "symbol:src/models.ts#User" --max-lines 120 --format json
+    Exit 0. classificationRoles, classificationRefs, and classificationSummary
+    all present.
+
+20. Missing-artifact fallback: copied the smoke index to a second temp
+    directory, deleted classification.json, then ran:
+    node dist/cli.js search --index <missing-dir> --query "User" --limit 10 --json
+    node dist/cli.js lookup --index <missing-dir> --node "symbol:src/models.ts#User" --depth 1 --json
+    node dist/cli.js source --index <missing-dir> --node "symbol:src/models.ts#User" --max-lines 80 --format json
+    All exit 0. All produced valid JSON (confirmed via JSON.parse in a node
+    -e script). source's classificationSummary was null (correctly absent,
+    not a crash or malformed placeholder).
+
+21. Cleanup: removed all scratch-*.json files, the smoke index directory, and
+    the missing-artifact copy. git status --short confirmed only the
+    intended production/test files remain (no smoke artifacts, no leftover
+    nested examples/ directory).
+
+===============================================================================
+Skipped commands and reasons
+===============================================================================
+
+None. Every command listed in the task's required verification stage was
+run for real.
+
+===============================================================================
+Failed commands
+===============================================================================
+
+One vitest run failed on the first attempt (item 7) - a test-authoring
+mistake in the newly-written test itself (wrong expected object shape), not
+a production code bug. Fixed and re-verified passing. No production code
+defect was found during this batch's verification stage (unlike Batch 2,
+which found two real production bugs at this same stage).
+
+===============================================================================
+Corrective recommendation
+===============================================================================
+
+None outstanding.

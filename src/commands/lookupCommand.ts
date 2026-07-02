@@ -18,6 +18,7 @@ interface LookupCommandOptions {
   ui?: string
   depth: number
   json?: boolean
+  resolveClassification?: boolean
 }
 
 export function registerLookupCommand(program: Command): void {
@@ -30,6 +31,10 @@ export function registerLookupCommand(program: Command): void {
     .option('--storage-key <key>', 'look up a frontend-reachability browser-storage key fact')
     .option('--ui <value>', 'look up a frontend-reachability UI marker fact')
     .option('--depth <n>', 'traversal depth', parseInteger, 1)
+    .option(
+      '--resolve-classification',
+      'resolve the full classification.json entry for --node, when a classification analyzer artifact is present'
+    )
     .option('--json', 'print JSON output')
     .action((options: LookupCommandOptions) => {
       const reachabilityMode = resolveReachabilityMode(options)
@@ -60,6 +65,8 @@ export function registerLookupCommand(program: Command): void {
         depth: options.depth,
         manifestPath: toForwardSlash(artifacts.resolved.manifestPath),
         codeGraphPath: toForwardSlash(artifacts.resolved.artifactPaths.codeGraph),
+        resolveClassification: options.resolveClassification,
+        manifest: artifacts.resolved.manifest,
       })
       if (options.json) {
         console.log(JSON.stringify(result, null, 2))
@@ -69,6 +76,9 @@ export function registerLookupCommand(program: Command): void {
       console.log(`Incoming edges: ${result.incomingEdges.length}`)
       console.log(`Outgoing edges: ${result.outgoingEdges.length}`)
       console.log(`Neighbors within depth ${result.depth}: ${result.neighbors.length}`)
+      if (result.classificationRoles?.length) {
+        console.log(`Classification: ${result.classificationRoles.map((role) => role.role).join(', ')}`)
+      }
     })
 }
 

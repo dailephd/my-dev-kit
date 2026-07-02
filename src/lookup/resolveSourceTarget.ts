@@ -26,6 +26,8 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
       semanticRoles: node.semanticRoles,
       artifactRefs: node.artifactRefs,
       evidenceRefs: collectEvidenceRefs(node.semanticRoles),
+      classificationRoles: node.classificationRoles,
+      classificationRefs: node.classificationRefs,
       warnings: [],
     }
   }
@@ -51,6 +53,8 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
     semanticRoles: symbol.semanticRoles,
     artifactRefs: symbol.artifactRefs,
     evidenceRefs: collectEvidenceRefs(symbol.semanticRoles),
+    classificationRoles: symbol.classificationRoles,
+    classificationRefs: symbol.classificationRefs,
     warnings: ['Symbol location has a start line only; returning a small bounded preview from that line.'],
   }
 }

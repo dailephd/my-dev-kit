@@ -21,6 +21,8 @@ const WEIGHTS = {
   semanticSource: 2,
   semanticArtifactRef: 3,
   frontendValue: 14,
+  classificationRole: 7,
+  classificationEditGuidance: 3,
 } as const
 
 const EDGE_WEIGHTS = {
@@ -171,6 +173,7 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
   if (node.symbolKind) fields.push(field('symbolKind', node.symbolKind, WEIGHTS.symbolKind))
   if (node.exported && node.symbolName) fields.push(field('export', node.symbolName, WEIGHTS.export))
   fields.push(...semanticFields(node.semanticRoles, node.artifactRefs))
+  fields.push(...classificationFields(node.classificationRoles))
 
   return {
     item: {
@@ -181,6 +184,8 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
       nodeId: node.id,
       semanticRoles: node.semanticRoles,
       artifactRefs: node.artifactRefs,
+      classificationRoles: node.classificationRoles,
+      classificationRefs: node.classificationRefs,
     },
     fields,
   }
@@ -212,6 +217,7 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   if (symbol.exported) fields.push(field('export', symbol.name, WEIGHTS.export))
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
   fields.push(...semanticFields(symbol.semanticRoles, symbol.artifactRefs))
+  fields.push(...classificationFields(symbol.classificationRoles))
 
   return {
     item: {
@@ -222,6 +228,8 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
       nodeId: symbolNodeId(file.path, symbol.name),
       semanticRoles: symbol.semanticRoles,
       artifactRefs: symbol.artifactRefs,
+      classificationRoles: symbol.classificationRoles,
+      classificationRefs: symbol.classificationRefs,
     },
     fields,
   }
@@ -288,6 +296,18 @@ function semanticFields(
     fields.push(...artifactRefFields(role.artifactRefs))
   }
   fields.push(...artifactRefFields(artifactRefs))
+  return fields
+}
+
+/** Mirrors semanticFields() for the compact classificationRoles projection (role + editGuidance only - searchable). */
+function classificationFields(
+  classificationRoles: CodeGraphNode['classificationRoles'] | SymbolDefinition['classificationRoles']
+): SearchCandidateField[] {
+  const fields: SearchCandidateField[] = []
+  for (const role of classificationRoles ?? []) {
+    fields.push(field('classificationRole', role.role, WEIGHTS.classificationRole))
+    fields.push(field('classificationEditGuidance', role.editGuidance, WEIGHTS.classificationEditGuidance))
+  }
   return fields
 }
 

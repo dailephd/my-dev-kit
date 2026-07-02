@@ -1,5 +1,11 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
+import type { IndexManifest } from '../indexing/manifestTypes.js'
+import type { ClassificationEntry, ClassificationRoleRef } from '../classification/classificationTypes.js'
+import {
+  findClassificationEntryByTargetId,
+  loadClassificationArtifact,
+} from '../classification/resolveClassificationForCommands.js'
 
 export interface LookupNodeResult {
   status: 'found'
@@ -10,6 +16,10 @@ export interface LookupNodeResult {
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
   evidenceRefs?: SemanticEvidenceRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
+  /** Full ClassificationEntry detail, resolved from classification.json only when `resolveClassification` is requested. */
+  classificationDetail?: ClassificationEntry | null
   incomingEdges: CodeGraphEdge[]
   outgoingEdges: CodeGraphEdge[]
   neighbors: CodeGraphNode[]
@@ -27,6 +37,9 @@ export function lookupNode(options: {
   depth: number
   manifestPath: string
   codeGraphPath: string
+  /** When true and `manifest` is provided, resolves the full ClassificationEntry from classification.json (on request, per classification-contract.txt section 8). */
+  resolveClassification?: boolean
+  manifest?: IndexManifest
 }): LookupNodeResult {
   validateDepth(options.depth)
   const node = options.graph.nodes.find((candidate) => candidate.id === options.nodeId)
@@ -40,6 +53,11 @@ export function lookupNode(options: {
     .sort(compareById)
   const neighbors = collectNeighbors(options.graph, options.nodeId, options.depth)
 
+  const classificationDetail =
+    options.resolveClassification && options.manifest
+      ? findClassificationEntryByTargetId(loadClassificationArtifact(options.indexDir, options.manifest), options.nodeId)
+      : undefined
+
   return {
     status: 'found',
     indexDir: options.indexDir,
@@ -49,6 +67,9 @@ export function lookupNode(options: {
     semanticRoles: emptyToUndefined(node.semanticRoles),
     artifactRefs: emptyToUndefined(node.artifactRefs),
     evidenceRefs: emptyToUndefined(collectEvidenceRefs(node.semanticRoles)),
+    classificationRoles: emptyToUndefined(node.classificationRoles),
+    classificationRefs: emptyToUndefined(node.classificationRefs),
+    ...(classificationDetail !== undefined ? { classificationDetail } : {}),
     incomingEdges,
     outgoingEdges,
     neighbors,

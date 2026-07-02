@@ -33,6 +33,13 @@ import {
 } from '../frontend-reachability/index.js'
 import { buildSourceBundle } from '../source/sourceBundle.js'
 import { renderSourceBundle } from '../source/renderSourceBundle.js'
+import type { IndexManifest } from '../indexing/manifestTypes.js'
+import {
+  buildClassificationCommandSummary,
+  findClassificationEntryByTargetId,
+  loadClassificationArtifact,
+  type ClassificationCommandSummary,
+} from '../classification/resolveClassificationForCommands.js'
 
 export function registerSourceCommand(program: Command): void {
   program
@@ -152,6 +159,14 @@ export function registerSourceCommand(program: Command): void {
         semanticRoles: target.semanticRoles,
         artifactRefs: target.artifactRefs,
         evidenceRefs: target.evidenceRefs,
+        classificationRoles: target.classificationRoles,
+        classificationRefs: target.classificationRefs,
+        classificationSummary: resolveClassificationSummaryForTarget(
+          artifacts.resolved.manifest,
+          options.index,
+          target.filePath,
+          target.symbolName
+        ),
         warnings: target.warnings,
       })
 
@@ -550,6 +565,14 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
     semanticRoles: symTarget.semanticRoles,
     artifactRefs: symTarget.artifactRefs,
     evidenceRefs: symTarget.evidenceRefs,
+    classificationRoles: symTarget.classificationRoles,
+    classificationRefs: symTarget.classificationRefs,
+    classificationSummary: resolveClassificationSummaryForTarget(
+      artifacts.resolved.manifest,
+      options.index,
+      symTarget.filePath,
+      symTarget.symbolName
+    ),
     warnings,
   })
 
@@ -608,6 +631,25 @@ function handleSourceBundle(options: SourceCommandOptions, format: SourceOutputF
   process.stdout.write(rendered)
 }
 
+/**
+ * Resolves a compact classification risk/warning/edit-guidance summary for a
+ * source target, keyed by the same file/symbol node id already used by
+ * search/lookup/slice (file:<path> or symbol:<path>#<name>). Returns null
+ * (never throws) when classification.json is absent, unregistered, or has
+ * no matching entry - source must not fail when classification data is
+ * missing (classification-contract.txt section 7 backward compatibility).
+ */
+function resolveClassificationSummaryForTarget(
+  manifest: IndexManifest,
+  indexDir: string,
+  filePath: string,
+  symbolName: string | null | undefined
+): ClassificationCommandSummary | null {
+  const targetId = symbolName ? `symbol:${filePath}#${symbolName}` : `file:${filePath}`
+  const artifact = loadClassificationArtifact(indexDir, manifest)
+  return buildClassificationCommandSummary(findClassificationEntryByTargetId(artifact, targetId))
+}
+
 function emitSourceResult(result: SourceSlice, format: SourceOutputFormat | undefined, options: SourceCommandOptions): void {
   if (format === undefined) {
     if (options.out) {
@@ -617,6 +659,11 @@ function emitSourceResult(result: SourceSlice, format: SourceOutputFormat | unde
     } else {
       console.log(`${result.filePath}:${result.startLine}-${result.endLine}`)
       if (result.warnings.length > 0) console.log(`Warnings: ${result.warnings.join('; ')}`)
+      if (result.classificationSummary) {
+        const { editGuidance, risks } = result.classificationSummary
+        const riskNote = risks.length > 0 ? ` (${risks.join(', ')})` : ''
+        console.log(`Classification edit guidance: ${editGuidance}${riskNote}`)
+      }
       console.log(result.content)
       const cursor = result.continuationCursor
       if (cursor && !cursor.eof) {

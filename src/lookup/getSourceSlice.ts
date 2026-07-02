@@ -27,6 +27,9 @@ export function getSourceSlice(options: {
   semanticRoles?: SourceSlice['semanticRoles']
   artifactRefs?: SourceSlice['artifactRefs']
   evidenceRefs?: SourceSlice['evidenceRefs']
+  classificationRoles?: SourceSlice['classificationRoles']
+  classificationRefs?: SourceSlice['classificationRefs']
+  classificationSummary?: SourceSlice['classificationSummary']
   warnings?: string[]
 }): SourceSlice {
   validateLineRange(options.startLine, options.endLine, options.maxLines)
@@ -71,6 +74,9 @@ export function getSourceSlice(options: {
     semanticRoles: emptyToUndefined(options.semanticRoles),
     artifactRefs: emptyToUndefined(options.artifactRefs),
     evidenceRefs: emptyToUndefined(options.evidenceRefs),
+    classificationRoles: emptyToUndefined(options.classificationRoles),
+    classificationRefs: emptyToUndefined(options.classificationRefs),
+    ...(options.classificationSummary !== undefined ? { classificationSummary: options.classificationSummary } : {}),
     warnings: options.warnings ?? [],
     continuationCursor: cursor,
   }

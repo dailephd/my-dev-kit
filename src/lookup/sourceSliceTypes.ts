@@ -1,4 +1,6 @@
 import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
+import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
+import type { ClassificationCommandSummary } from '../classification/resolveClassificationForCommands.js'
 
 export type SourceSliceMode = 'line-range' | 'symbol' | 'node'
 
@@ -35,6 +37,10 @@ export interface SourceSlice {
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
   evidenceRefs?: SemanticEvidenceRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
+  /** Compact risk/warning/edit-guidance summary resolved from classification.json, when present. */
+  classificationSummary?: ClassificationCommandSummary | null
   warnings: string[]
   continuationCursor?: ContinuationCursor
 }
@@ -48,5 +54,7 @@ export interface SourceTarget {
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
   evidenceRefs?: SemanticEvidenceRef[]
+  classificationRoles?: ClassificationRoleRef[]
+  classificationRefs?: SemanticArtifactRef[]
   warnings: string[]
 }
