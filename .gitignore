@@ -60,3 +60,9 @@ reports/
 
 # Local import/scratch folders
 alpha-import/
+
+.my-dev-kit-v11-planning
+.my-dev-kit-orchestrator
+compact-prompt-reference.txt
+graph-guided-orchestrated-workflow.txt
+graph-guided-retrieval-workflow.txt
