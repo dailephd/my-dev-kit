@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.1 - 2026-07-04
+
+Repository-hygiene patch release: no source, CLI, or artifact-contract changes.
+
+- Reorganized and consolidated `.gitignore` (sectioned comments, consolidated `.my-dev-kit*` ignore patterns, generalized `*.txt` ignore rule, removed stale entries)
+- No changes to `package.json` `files` allowlist, published package contents, or CLI behavior
+
 ## 1.6.0 - 2026-07-04
 
 Added deterministic context-capsule generation and retrieval audit artifacts for downstream planning workflows.

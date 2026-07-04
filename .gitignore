@@ -1,41 +1,44 @@
+# Dependencies
 node_modules/
+
+# Build/package outputs
 dist/
 *.tgz
-coverage/
-log/
-tmp/
-.tmp/
-.cache/
-.my-dev-kit/
-.my-dev-kit-*/
-.my-dev-kit-context/
-.my-dev-kit-context-*/
-**/.my-dev-kit/
-**/.my-dev-kit-*/
-**/.my-dev-kit-smoke*/
-**/.my-dev-kit-compare/
-.my-dev-kit-v11-planning/
-.my-dev-kit-v1/
-.my-dev-kit-v1-*/
-.my-dev-kit-ci/
-.my-dev-kit-local-ci/
-.env
-.env.*
-!.env.example
-.DS_Store
-Thumbs.db
-alpha-import/
-.idea/
-.claude/
-tmp_*.json
-
-# Local build/test artifacts
 *.tsbuildinfo
-*.log
+
+# Test/coverage artifacts
+coverage/
 .nyc_output/
 .vite/
 test-results/
 playwright-report/
+
+# Logs/temp/cache
+log/
+logs/
+*.log
+tmp/
+.tmp/
+.cache/
+tmp_*.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.claude/
+
+# Ignore all .txt files
+*.txt
+
+# Ignore all folders starting with .my-dev-kit anywhere in the repo
+.my-dev-kit*/
+**/.my-dev-kit*/
 
 # Scratch planning and audit artifacts
 AUDIT_V1_REUSE.md
@@ -43,7 +46,6 @@ DEPENDENCY_RISK_REPORT.md
 EXTRACTION_NOTES.md
 FILE_COPY_MANIFEST.json
 FILE_REUSE_AUDIT.json
-docs/DOCUMENTATION_COMPATIBILITY_AUDIT.md
 INDEX_IMPLEMENTATION_NOTES.md
 LOOKUP_SOURCE_IMPLEMENTATION_NOTES.md
 PACKAGE_SETUP_NOTES.md
@@ -51,7 +53,10 @@ REFACTOR_PLAN.md
 SEARCH_IMPLEMENTATION_NOTES.md
 SLICE_IMPLEMENTATION_NOTES.md
 VIEW_IMPLEMENTATION_NOTES.md
-multi-prompt.txt
-project_tree.txt
+
+# Docs/generated reports
+docs/DOCUMENTATION_COMPATIBILITY_AUDIT.md
 reports/
-revised-graph-guided-orchestrated-workflow-20260702.txt
+
+# Local import/scratch folders
+alpha-import/
