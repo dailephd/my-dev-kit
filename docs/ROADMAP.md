@@ -496,64 +496,101 @@ replace orchestrator stages.
 
 ## Version 1.7.0
 
-Version 1.7.0 focuses on retrieval-quality regression benchmarks.
+Version 1.7.0 is planned as an internal, developer-facing retrieval regression suite for `my-dev-kit` itself.
 
-The goal is to make bounded-context quality testable and to confirm that retrieval selects the right context for representative coding tasks.
+The goal is to prevent regressions in the bounded-context behavior introduced and expanded through v1.6.0 context capsules. Nothing in this section is implemented yet.
 
-### Benchmark coverage
+### Purpose
 
-Planned benchmark task types:
+The planned suite should answer product-specific retrieval questions such as:
 
-- add a sibling implementation in a known subsystem
-- modify a registry-driven feature
-- update a route-level UI
-- update a Playwright or Vitest test by route or locator
-- modify a React component prop flow
-- retrieve a session-storage workflow
-- locate a hidden conditional render branch
-- trace a repeated literal across a file or subsystem
-- update a repeated tab value or enum-like string without reading the full file
-- retrieve React render-flow regions without reading the full component file
-- trace prop and event flow across a local React component tree
-- trace a data model field into a generated view model or rendered UI element
-- distinguish canonical data-model usage from view-model or UI-only usage
-- update a large component without full-file retrieval
+- did query planning regress?
+- did candidate file or candidate node ranking regress?
+- did single-seed focus selection regress?
+- did selected graph evidence regress?
+- did bounded source evidence regress?
+- did semantic, classification, or artifact-reference summaries regress?
+- did conservative static conflict detection regress?
+- did `general`, `feature-add`, or `subsystem` mode behavior regress?
+- did `--no-source` behavior regress?
+- did context adequacy, audit completeness, cap compliance, compatibility, or no-raw-content guarantees regress?
 
-### Assertions
+### Planned retrieval regression coverage
 
-Planned assertions:
+Representative deterministic local fixtures should eventually cover:
 
-- top-K retrieval quality
-- graph-focus correctness
-- context packet size limits
-- absence of unrelated generic files in top ranks
-- source expansion correctness
-- source continuation correctness
-- exact string and reference tracing correctness
-- React render-flow retrieval correctness
-- local component-tree retrieval correctness
-- model-to-view lineage correctness
-- canonical model versus view-model classification correctness
-- no unnecessary full-file reads
-- route, UI, and test coverage
+- context capsule generation
+- retrieval audit record generation
+- query planning
+- candidate file ranking
+- candidate node ranking
+- focus selection
+- selected graph evidence
+- bounded source evidence
+- semantic summaries
+- classification summaries
+- artifact-reference summaries
+- conservative static conflict detection
+- mode behavior for `general`, `feature-add`, and `subsystem`
+- `--no-source`
+- cap compliance
+- no-raw-content guarantees
+- context adequacy states
+- older-index and classification-absent compatibility
 
-### Metrics
+### Planned assertions
 
-Planned metrics:
+Planned assertions should stay deterministic and local:
 
-- selected file count
-- selected source slice count
-- selected graph node count
-- selected graph edge count
-- reference match count
-- render-region retrieval coverage
-- local component-tree retrieval coverage
-- model-to-view lineage edge count
-- full-file reads avoided
-- full-file reads allowed
-- full-file reads unjustified
-- fallback reason counts
-- prompt-size reduction from graph-guided retrieval
+- the right bounded context is retained for representative tasks
+- retained and dropped reasons remain stable and explainable
+- audit records remain complete and ordered
+- no raw graph, source, semantic, or classification artifacts leak into normal outputs
+- caps are enforced without hiding required evidence
+- older-index compatibility stays intact when optional artifacts are absent
+- full-file-read recommendations stay empty unless targeted retrieval is truly insufficient
+
+### Planned metrics
+
+Likely internal retrieval regression metrics include:
+
+- selected file, node, edge, and source-slice counts
+- retained-versus-dropped evidence counts
+- conflict and ambiguity signal counts
+- full-file recommendation counts
+- compatibility warning counts
+- fixture pass/fail summaries by retrieval behavior area
+
+These are maintainer metrics for regression detection, not a public performance benchmark or hosted benchmark service.
+
+### Entry point decision
+
+Initial implementation should prefer a maintainer or development entry point such as `npm run benchmark:retrieval`.
+
+A public CLI command remains undecided. If a public command is ever added later, that should be justified by the implementation rather than assumed by the roadmap now.
+
+### Boundary with my-dev-kit-lab
+
+`my-dev-kit` should own the retrieval regression suite because it validates whether `my-dev-kit` retrieves the right bounded context from deterministic fixtures and protects context, search, slice, source, classification, and audit behavior from regressions.
+
+`my-dev-kit-lab` should remain responsible for release readiness, security posture, dependency and package safety, and external release gates. It should not be the home for product-specific retrieval-quality assertions.
+
+### Non-goals
+
+Version 1.7.0 is not planned as:
+
+- a general benchmark framework
+- a public benchmark platform
+- my-dev-kit-lab functionality
+- security validation
+- release validation
+- package-content or dependency audit automation
+- CodeQL, Semgrep, or OSV workflow ownership
+- performance benchmarking or load testing
+- runtime app testing or browser execution
+- LLM evaluation
+- embedding or semantic-similarity benchmarking
+- a replacement for `my-dev-kit-lab`
 
 ## Version 1.8.0
 

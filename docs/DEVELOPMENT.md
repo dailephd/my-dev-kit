@@ -53,6 +53,16 @@ Examples:
 
 The development command runs src/cli.ts directly.
 
+## Planned v1.7.0 retrieval regression suite
+
+Planned v1.7.0 work is a maintainer-facing retrieval regression suite for `my-dev-kit`'s own retrieval behavior.
+
+The current plan is to keep it local, deterministic, and fixture-based. It should validate retrieval behavior such as context capsule generation, ranking, focus selection, graph and source evidence, metadata summaries, conservative static conflict detection, `--no-source`, compatibility, and no-raw-content guarantees without adding network calls, LLM calls, runtime app execution, or source editing.
+
+The likely first entry point is a development script such as `npm run benchmark:retrieval`. A public CLI command is still a future design decision, not part of the current implementation.
+
+This planned suite is separate from release and security validation. `my-dev-kit` should own retrieval regression checks; `my-dev-kit-lab` should continue to own release-readiness, dependency/package, and security validation workflows.
+
 ## Build
 
 Build the distributable CLI:

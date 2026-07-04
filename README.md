@@ -455,7 +455,7 @@ Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifa
 
 Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
-Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; future roadmap items cover retrieval benchmarks (v1.7) and scalability improvements (v1.8+).
+Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; planned v1.7 work narrows to an internal retrieval regression suite for my-dev-kit's own bounded-context behavior, and v1.8+ continues the scalability roadmap.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

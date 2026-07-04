@@ -185,7 +185,7 @@ Current v1.6.0 does not claim:
 - full React render-flow tracing
 - semantic similarity search or embedding-based retrieval
 - an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
-- v1.7 retrieval benchmarks or a plugin architecture
+- a planned v1.7.0 internal retrieval regression suite or a plugin architecture
 
 ## What my-dev-kit does not do
 
@@ -198,6 +198,12 @@ my-dev-kit does not provide:
 - semantic similarity search or embedding-based retrieval
 - package publishing automation
 - GitHub release automation
+
+## Product boundary with my-dev-kit-lab
+
+`my-dev-kit` owns product retrieval behavior. Planned v1.7.0 work is an internal retrieval regression suite that checks whether deterministic fixtures still produce the right bounded context, search, slice, source, classification, conflict, and audit behavior after product changes.
+
+`my-dev-kit-lab` owns release and security validation. It answers whether a release candidate is safe to ship, whether package contents and dependencies are acceptable, and whether external release gates passed. It should not replace product-specific retrieval-quality assertions inside `my-dev-kit`.
 
 ## Current limitations
 
