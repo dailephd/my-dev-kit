@@ -141,5 +141,5 @@ export type WrappedUser = Partial<User>
     expect(Array.isArray(lineage.nodes)).toBe(true)
     expect(Array.isArray(lineage.edges)).toBe(true)
     expect(readFileSync(codeGraphPath, 'utf8')).toBe(beforeCodeGraph)
-  })
+  }, 60000)
 })

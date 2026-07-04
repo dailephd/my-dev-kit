@@ -458,7 +458,7 @@ Version 1.6.0 focuses on orchestrator-ready retrieval capsules and context packe
 
 The goal is not to replace `my-dev-kit-orchestrator`. The goal is to make `my-dev-kit` produce compact, task-specific retrieval outputs that the orchestrator can consume without raw graph dumps or full-file context.
 
-### Planned capabilities
+### Implemented capabilities
 
 #### Retrieval capsules
 
@@ -483,15 +483,9 @@ The goal is not to replace `my-dev-kit-orchestrator`. The goal is to make `my-de
 
 #### Context capsule modes
 
-Candidate modes:
-
-- focused implementation
-- repair
-- test design
-- refactor
-- hardening
-- extraction source analysis
-- extraction target analysis
+Implemented modes are `general`, `feature-add`, and `subsystem`. They apply
+small deterministic ranking adjustments only; they do not control workflows or
+replace orchestrator stages.
 
 #### Compatibility boundary
 

@@ -1,6 +1,6 @@
 # Commands
 
-my-dev-kit provides seven public CLI commands:
+my-dev-kit provides eight public CLI commands:
 
 - `index`
 - `search`
@@ -9,6 +9,7 @@ my-dev-kit provides seven public CLI commands:
 - `slice`
 - `view`
 - `data-model`
+- `context`
 
 Use this document as the command reference for the installed CLI.
 
@@ -915,6 +916,83 @@ Regenerate data-model artifacts explicitly:
 
 ```sh
 npx @dailephd/my-dev-kit data-model --index .my-dev-kit --out .my-dev-kit --json
+```
+
+## context
+
+Write a bounded, local, deterministic context capsule for a query against an existing index.
+
+`context` is a **v1.6.0 command**. It is local and deterministic:
+
+- It does not call an LLM.
+- It does not make network requests.
+- It does not edit or execute project source code.
+- It does not replace my-dev-kit-orchestrator or any staged workflow tool.
+
+`context` performs deterministic query planning and single-seed, graph-focused candidate selection: it normalizes the query, extracts structured query terms, ranks candidate files and graph nodes using the existing `search` engine, selects **at most one** primary focus node/file, and builds a bounded graph neighborhood around that focus using the same traversal as `slice`. It respects the persisted `--max-candidate-files`, `--max-graph-nodes`, and `--max-graph-edges` limits, and records ambiguity notes and lowers confidence/adequacy when a single focus cannot be selected with certainty, rather than guessing.
+
+`context` also attaches **bounded, content-free source evidence** around the selected focus and graph neighborhood (file path + line range only, never file content), at most one optional local-dependency source bundle for a symbol-kind focus, and compact semantic/classification/artifact-reference summaries - all pruned into `requiredContext`/`optionalSupportContext`/`droppedContext`. Source evidence is enabled by default and bounded by `--max-source-slices`; `--no-source` skips slices and bundles while retaining graph and metadata evidence.
+
+The three modes apply only small deterministic ranking adjustments: `general` preserves balanced baseline ranking, `feature-add` lightly prefers statically safe/inspect-first implementation evidence and nearby tests over docs-only evidence, and `subsystem` lightly prefers the strongest candidate's path cluster. Static conflict detection is deliberately narrow: it reports a conflict only when a selected restrictive edit target and a near-tied safe/inspect-first candidate have explicit incompatible classification guidance. It does not infer runtime behavior or turn ordinary ambiguity into a conflict.
+
+### Usage
+
+```sh
+npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <path> --json
+```
+
+Also write a retrieval audit record:
+
+```sh
+npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <path> --audit-out <path> --json
+```
+
+### Flags
+
+- `--index <dir>`: index artifact directory. Defaults to `.my-dev-kit`.
+- `--query <text>`: required. The task query to record in the capsule.
+- `--out <path>`: required. Where to write `context-capsule.json`.
+- `--audit-out <path>`: optional. Where to write `retrieval-audit-record.json`.
+- `--mode <general|feature-add|subsystem>`: optional, defaults to `general`. Applies only the small deterministic ranking adjustments described above; it never changes caps, source breadth, graph depth, or single-seed focus.
+- `--max-candidate-files <n>`: optional positive integer. Caps the retained `candidateFiles` entries; entries beyond the cap are recorded as dropped with reason `cap exceeded (--max-candidate-files)`.
+- `--max-source-slices <n>`: optional positive integer, defaults to 8 when omitted. Caps `selectedSource.slices`; the primary focus node's slice is always retained first, then selected graph neighbors up to the cap.
+- `--max-graph-nodes <n>`, `--max-graph-edges <n>`: optional positive integers. Cap `selectedGraph.nodes`/`selectedGraph.edges` around the primary focus node; the focus node itself is never dropped by the node cap.
+- `--no-source`: disable source slices and source bundles. Semantic/classification summaries remain enabled, and adequacy records that source was intentionally disabled.
+- `--json`: print the written capsule (and audit record path, when produced) as JSON to stdout.
+
+### Output
+
+`context-capsule.json` includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `limits`, `requiredContext`, `optionalSupportContext`, `droppedContext`, `warnings`, `contextAdequacy`, `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, and `sourceControl`.
+
+- `queryPlan` includes the normalized query and deterministic structured terms (raw, quoted phrases, path-like, symbol-like, route-like, command-like, artifact-like, classification-like).
+- `candidateFiles`/`candidateNodes` include ranked, explained candidates (`score`, `reasons`, `matchedTerms`, `retained`, `droppedReason` when dropped).
+- `focus` records **at most one** primary focus node/file (`focusNodeId`, `focusFilePath`, `selectionMode`, `confidence`, `reasons`, `ambiguityNotes`). `focusNodeId` is `null` when no candidate is safe to select.
+- `selectedGraph` is a bounded neighborhood (`nodes`, `edges`, `omittedNodeCount`, `omittedEdgeCount`) around the focus node, built the same way `slice` builds a neighborhood.
+- `selectedSource` lists bounded, **content-free** source slices (`filePath`, `startLine`, `endLine`, `reason`, `sourceRetrievalMethod`, `truncated`, `continuationUsed`) around the focus node and selected graph neighbors, capped by `--max-source-slices`.
+- `selectedSourceBundles` contains **at most one** local-dependency source bundle (built the same way `source`'s bundle mode works) for a symbol-kind focus, with content-free block metadata only.
+- `semanticSummary`/`classificationSummary` compactly pass through already-present semantic roles, artifact refs, evidence refs, and (when `classification.json` is registered) edit guidance/readiness/risk labels/uncertainty for the focus, graph, and retained candidates - never a raw artifact dump. Both report `available: false` with a reason instead of crashing when the underlying data is absent.
+- `artifactReferenceSummary` lists each artifact the manifest knows about (`symbolIndex`, `codeGraph`, `dataModel`, `classification`, etc.) with an `available` flag and a reason.
+- `retention`/`pruning` summarize retained/dropped counts for candidates, graph evidence, and (as of Batch 3) source slices/bundles, plus the cap settings applied.
+- `modeEffects` records every non-zero adjustment and reason. `sourceControl` records default-enabled or intentional disablement. `conflicts` contains only conservative static edit-guidance conflicts and is normally empty.
+- `contextAdequacy.status` reflects candidate/focus/graph/source/metadata sufficiency and explicit conflicts. `--no-source` becomes a listed assumption rather than a retrieval failure. A detected static conflict uses `context conflict found and user or upstream stage decision required`.
+
+`retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, and `contextAdequacy`. The final ordered sequence contains the Batch 3 generation steps plus `apply-mode-ranking-adjustment`, `skip-source-evidence`, and `detect-context-conflicts`. Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
+
+Both artifacts are compatible with indexes that do not have `classification.json` registered.
+
+### Known limitations
+
+- Focus selection is **single-seed only**: never more than one `focusNodeId`. Multi-seed focus is deferred to a later v1.6 batch.
+- Mode behavior is intentionally limited to small ranking adjustments; it does not implement broad workflow policy.
+- Source continuation is limited to **one bounded window**, for the primary focus slice only. Local dependency expansion happens only through the one optional source bundle - there is no separate slice-level expansion mechanism.
+- Conflict detection requires explicit incompatible static edit guidance on near-tied candidates; runtime, browser, and intent conflicts remain outside its scope.
+- `my-dev-kit` produces artifacts only. It does not run `my-dev-kit-orchestrator`, call LLMs, edit source files, execute applications, validate security, or publish releases.
+
+### Examples
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "add a sibling data model field" --out .my-dev-kit/context-capsule.json --audit-out .my-dev-kit/retrieval-audit-record.json --mode feature-add --max-candidate-files 8 --max-graph-nodes 30 --max-graph-edges 50 --json
 ```
 
 ## Bundled examples

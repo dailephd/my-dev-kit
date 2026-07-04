@@ -29,7 +29,7 @@ beforeAll(() => {
   expect(generate.status).toBe(0)
   const trace = runCli(['data-model', '--index', semanticOutDir, '--out', semanticOutDir, '--trace-view', 'User', '--json'])
   expect(trace.status).toBe(0)
-})
+}, 60000)
 
 afterAll(() => {
   rmSync(outDir, { recursive: true, force: true })

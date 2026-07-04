@@ -91,6 +91,7 @@ npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --tra
 | `slice` | Build a bounded subgraph around a focus node, preserving semantic metadata |
 | `view` | Render the code graph, data-model graph, lineage graph, or frontend semantic graphs as DOT, SVG, or PNG |
 | `data-model` | Inspect exact entities or fields, or regenerate data-model artifacts and trace supported static view usage |
+| `context` | Write a bounded, local, deterministic context capsule and optional retrieval audit for a query against an existing index |
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
 
@@ -454,7 +455,7 @@ Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifa
 
 Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
-Future roadmap items cover graph-guided orchestrator planner packets and context capsules (v1.6), retrieval benchmarks (v1.7), and scalability improvements (v1.8+).
+Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; future roadmap items cover retrieval benchmarks (v1.7) and scalability improvements (v1.8+).
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

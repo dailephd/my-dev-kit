@@ -8,6 +8,7 @@ import { registerSearchCommand } from './commands/searchCommand.js'
 import { registerSliceCommand } from './commands/sliceCommand.js'
 import { registerSourceCommand } from './commands/sourceCommand.js'
 import { registerViewCommand } from './commands/viewCommand.js'
+import { registerContextCommand } from './commands/contextCommand.js'
 import { VERSION } from './version.js'
 
 export function createProgram(): Command {
@@ -25,6 +26,7 @@ export function createProgram(): Command {
   registerSourceCommand(program)
   registerSliceCommand(program)
   registerSearchCommand(program)
+  registerContextCommand(program)
 
   return program
 }

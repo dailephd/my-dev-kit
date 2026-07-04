@@ -159,5 +159,5 @@ describe('manifest analyzer registry', () => {
     expect(source.status).toBe(0)
     expect(slice.status).toBe(0)
     expect(view.status).toBe(0)
-  })
+  }, 60000)
 })

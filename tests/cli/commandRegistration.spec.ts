@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const commands = ['index', 'view', 'lookup', 'source', 'slice', 'search']
+const commands = ['index', 'view', 'lookup', 'source', 'slice', 'search', 'context']
 
 function runCli(args: string[]) {
   return spawnSync(process.execPath, [tsxCliPath(), 'src/cli.ts', ...args], {

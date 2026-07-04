@@ -30,6 +30,7 @@ npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --o
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --entity User --json
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --field User.email --json
 npx @dailephd/my-dev-kit data-model --index examples/basic-data-model-ts/.my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit context --index examples/basic-data-model-ts/.my-dev-kit --query "add a sibling data model field to User" --out examples/basic-data-model-ts/.my-dev-kit/context-capsule.json --audit-out examples/basic-data-model-ts/.my-dev-kit/retrieval-audit-record.json --mode feature-add --json
 
 # React/TSX example
 npx @dailephd/my-dev-kit index --root examples/basic-react-tsx --src src --out .my-dev-kit --json

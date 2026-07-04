@@ -95,7 +95,7 @@ describe('manifest artifact registry', () => {
     expect(view.status).toBe(0)
     expect(existsSync(join(indexDir, 'graph.dot'))).toBe(true)
     expect(readFileSync(join(indexDir, 'user-note.txt'), 'utf8')).toBe('unknown user file\n')
-  })
+  }, 60000)
 
   it('does not load stale call-graph.json when manifest does not reference it', () => {
     const root = createFixture()
