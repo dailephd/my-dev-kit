@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.5.0 supports:
+Version 1.6.0 supports:
 
 - indexing TypeScript, JavaScript, and Python source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -50,10 +50,13 @@ Version 1.5.0 supports:
 - running a conservative static classification analyzer that assigns files and symbols a schema/layer category, edit guidance, readiness, additive risk labels, evidence, and an uncertainty tier
 - generating `classification.json` and embedding compact `classificationRoles`/`classificationRefs` on symbols and code-graph nodes
 - surfacing classification metadata through `search`, `lookup` (including an opt-in `--resolve-classification` flag for full detail), `slice`, and `source` (v1.5.0)
+- generating bounded `context-capsule.json` artifacts and optional `retrieval-audit-record.json` artifacts for query-focused downstream planning
+- ranking context candidates deterministically with bounded `general`, `feature-add`, and `subsystem` mode behavior
+- selecting bounded graph and source evidence for context capsules, with conservative static conflict detection and `--no-source` source suppression
 
 ## Public commands
 
-my-dev-kit provides seven public commands.
+my-dev-kit provides eight public commands.
 
 | Command | Purpose |
 | --- | --- |
@@ -64,6 +67,7 @@ my-dev-kit provides seven public commands.
 | `slice` | Build a bounded graph neighborhood around a focus node |
 | `view` | Render the code graph as DOT, SVG, or PNG |
 | `data-model` | Inspect exact entities or fields, regenerate data-model artifacts, and trace supported static view usage |
+| `context` | Build a bounded context capsule and optional retrieval audit for a task query against an existing index |
 
 ## Generated artifacts
 
@@ -155,7 +159,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current v1.5.0 scope:
+Current v1.6.0 scope:
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -168,9 +172,10 @@ Current v1.5.0 scope:
 - exact route, storage-key, and UI-marker retrieval with bounded source and graph views
 - bounded source continuation and same-file local dependency expansion (v1.4.0)
 - conservative static schema/layer classification of files and symbols, producing `classification.json` and compact `classificationRoles`/`classificationRefs` (v1.5.0)
+- bounded context capsules and retrieval audit records with deterministic query planning, candidate ranking, graph/source selection, retention, adequacy assessment, conservative static conflict detection, and optional source suppression (v1.6.0)
 - warnings for unsupported, ambiguous, or low-confidence patterns
 
-Current v1.5.0 does not claim:
+Current v1.6.0 does not claim:
 
 - full ORM or schema coverage
 - runtime database behavior
@@ -180,7 +185,7 @@ Current v1.5.0 does not claim:
 - full React render-flow tracing
 - semantic similarity search or embedding-based retrieval
 - an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
-- v1.6 planner packets or context capsules, v1.7 retrieval benchmarks, or a plugin architecture
+- v1.7 retrieval benchmarks or a plugin architecture
 
 ## What my-dev-kit does not do
 

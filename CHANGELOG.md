@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.0 - 2026-07-04
+
+Added deterministic context-capsule generation and retrieval audit artifacts for downstream planning workflows.
+
+- Added the `context` CLI command for bounded, local, deterministic query-to-context retrieval against an existing index
+- Added `context-capsule.json` output with deterministic query planning, candidate ranking, single-seed focus selection, bounded graph evidence, bounded source evidence, semantic/classification/artifact-reference summaries, retention/pruning, required/optional/dropped context, context adequacy, conservative static conflict detection, mode effects, and source-control metadata
+- Added optional `retrieval-audit-record.json` output with an ordered 32-step audit trail, fallbacks, warnings, and full-file recommendation reporting
+- Added deterministic mode-specific ranking adjustments for `feature-add` and `subsystem`; `general` remains the balanced baseline
+- Added conservative static conflict detection for incompatible edit-guidance cases backed by existing static evidence
+- Added `--no-source` to disable source slices and source bundles while retaining graph and metadata evidence
+- Added compatibility coverage for older indexes without `classification.json` and indexes missing optional semantic artifacts
+- Added deterministic output, no-raw-dump, audit-completeness, conflict, mode, and source-control tests for the context pipeline
+- Added public command and example documentation for context capsules, retrieval audits, bounded source defaults, and `--no-source`
+
 ## 1.5.0 - 2026-07-02
 
 Added conservative static schema/layer classification of files and symbols, surfaced through the existing `search`, `lookup`, `slice`, and `source` commands.

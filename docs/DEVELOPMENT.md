@@ -144,7 +144,7 @@ Build and pack the package:
 
 Install the tarball globally:
 
-    npm install -g ./dailephd-my-dev-kit-1.0.0.tgz
+    npm install -g ./dailephd-my-dev-kit-1.6.0.tgz
 
 Run installed CLI checks:
 
