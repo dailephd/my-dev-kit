@@ -53,15 +53,75 @@ Examples:
 
 The development command runs src/cli.ts directly.
 
-## Planned v1.7.0 retrieval regression suite
+## v1.7.0 retrieval regression suite
 
-Planned v1.7.0 work is a maintainer-facing retrieval regression suite for `my-dev-kit`'s own retrieval behavior.
+v1.7.0 is adding a maintainer-facing retrieval regression suite for
+`my-dev-kit`'s own retrieval behavior. It is local, deterministic, and
+fixture-config-based.
 
-The current plan is to keep it local, deterministic, and fixture-based. It should validate retrieval behavior such as context capsule generation, ranking, focus selection, graph and source evidence, metadata summaries, conservative static conflict detection, `--no-source`, compatibility, and no-raw-content guarantees without adding network calls, LLM calls, runtime app execution, or source editing.
+Run it with:
 
-The likely first entry point is a development script such as `npm run benchmark:retrieval`. A public CLI command is still a future design decision, not part of the current implementation.
+```sh
+npm run benchmark:retrieval
+```
 
-This planned suite is separate from release and security validation. `my-dev-kit` should own retrieval regression checks; `my-dev-kit-lab` should continue to own release-readiness, dependency/package, and security validation workflows.
+This runs directly from TypeScript source via `tsx` (no build step
+required, the same mechanism `npm run dev` already uses). It loads
+`benchmarks/retrieval/v1.7/core.json`, validates the config, and for each
+non-skipped task: resolves the task's fixture and source roots, builds a
+fresh local index under `.my-dev-kit/retrieval-regression/tasks/<task-id>/index/`
+(never inside the fixture itself), runs the real v1.6 `context` command
+against that index as a subprocess, and captures the resulting
+`context-capsule.json`, `retrieval-audit-record.json`, and a
+`task-execution.json` execution record. Suite-level
+`retrieval-regression-report.json`/`.txt` are written summarizing every
+task's status, assertion results, metrics, and verdict (never raw
+capsule/audit/graph/source content).
+
+As of Batch 3, each executed task's generated capsule and audit record are
+evaluated against that task's configured `expectations` (candidate
+files/nodes, focus, selected graph, source evidence, semantic/
+classification summaries, artifact references, conflicts, mode effects,
+audit steps, no-raw-content, cap compliance, and context adequacy - see
+`src/retrievalRegression/assertions.ts`). A task's verdict is `REGRESSION`
+when a required assertion fails, `BLOCKED` when execution or a required
+assertion could not be evaluated (missing/unreadable evidence), and `PASS`
+otherwise; the suite verdict follows the same precedence
+(`BLOCKED` > `REGRESSION` > `PASS`). Deterministic suite metrics
+(`src/retrievalRegression/metrics.ts`) report task/assertion counts and
+per-category pass rates (`null` when a category has no applicable
+assertions, never a fabricated rate).
+
+`npm run benchmark:retrieval` passes `--fail-on-regression`, so it now
+exits nonzero if the suite regresses or is blocked. Without that flag, the
+runner still writes a `REGRESSION`/`BLOCKED` report but exits 0 (an
+infra-level failure - invalid config, or a failure to write the report -
+always exits nonzero regardless of the flag). `--max-failures <n>` stops
+running remaining tasks once `n` blocked/regressed tasks have accumulated,
+recording the rest as `planned` with a clear reason and setting
+`options.maxFailuresReached` in the report.
+
+The maintained core suite now runs six deterministic tasks covering
+data-model feature-add, subsystem mode, no-source metadata retrieval,
+React/TSX component retrieval, no-false-conflict behavior, and an
+ambiguous service query. Coverage is representative rather than
+exhaustive.
+
+`benchmark:retrieval` remains separate from `npm run verify`. Although the
+suite is deterministic and makes no network or LLM calls, it starts
+multiple indexing/context subprocesses and the broader test suite has
+shown unrelated heavy CLI timeout flakiness. Run it as a distinct
+maintainer/pre-release local check.
+
+It is not a public CLI command (there is no `retrieval-benchmark`,
+`context-benchmark`, or `retrieval-regression` command registered in
+`src/cli.ts`), it is not wired into `npm run verify` or CI, and it does
+not call an LLM, make network requests, execute user application code, or
+edit source files.
+
+This suite is separate from release and security validation. `my-dev-kit`
+owns retrieval regression checks; `my-dev-kit-lab` continues to own
+release-readiness, dependency/package, and security validation workflows.
 
 ## Build
 

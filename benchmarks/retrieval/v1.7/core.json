@@ -1,0 +1,210 @@
+{
+  "schemaVersion": "1.0.0",
+  "suiteId": "retrieval-regression-core-v1.7",
+  "name": "Retrieval regression core suite",
+  "description": "Representative deterministic retrieval regression suite for my-dev-kit's v1.6.0 context-capsule workflow.",
+  "target": "my-dev-kit",
+  "defaultMode": "general",
+  "tasks": [
+    {
+      "id": "data-model-user-feature-add",
+      "title": "Data model User feature-add retrieval",
+      "description": "Validates that context execution can generate a capsule and retrieval audit record for a small data-model fixture, and that the generated evidence satisfies stable retrieval-quality expectations.",
+      "fixtureRoot": "../../../examples/basic-data-model-ts",
+      "sourceRoots": ["src"],
+      "query": "add a sibling data model field to User",
+      "mode": "feature-add",
+      "noSource": false,
+      "skip": false,
+      "tags": ["data-model", "context", "feature-add"],
+      "caps": { "maxCandidateFiles": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+      "expectations": {
+        "candidateFiles": [
+          { "pathContains": "models.ts", "topK": 3, "required": true }
+        ],
+        "candidateNodes": [
+          { "nodeIdContains": "User", "pathContains": "models.ts", "topK": 8, "required": true }
+        ],
+        "focus": {
+          "pathContains": "models.ts",
+          "nodeIdContains": "User",
+          "allowNoFocus": false,
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredFileContains": ["models.ts"],
+          "maxNodes": 20,
+          "maxEdges": 20,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFileContains": ["models.ts"],
+          "minSlices": 1,
+          "maxSlices": 8,
+          "required": true
+        },
+        "semanticSummary": {
+          "required": true,
+          "requiredRoles": ["data-entity"],
+          "allowUnavailable": false
+        },
+        "classificationSummary": {
+          "required": true,
+          "requiredCategories": ["canonical-type"],
+          "requiredEditGuidance": ["inspect-before-edit"],
+          "allowUnavailable": false
+        },
+        "artifactReferences": {
+          "requiredKinds": ["symbolIndex", "codeGraph"],
+          "allowUnavailable": false,
+          "required": true
+        },
+        "conflicts": {
+          "expectedStatus": "none",
+          "allowNone": true,
+          "required": true
+        },
+        "auditSteps": {
+          "requiredStepIds": [
+            "step-validate-inputs",
+            "step-load-manifest",
+            "step-run-search",
+            "step-select-primary-focus",
+            "step-write-context-capsule",
+            "step-write-retrieval-audit-record"
+          ],
+          "requireUniqueStepIds": true,
+          "minStepCount": 20,
+          "required": true
+        },
+        "noRawContent": {
+          "enabled": true
+        },
+        "caps": {
+          "maxCandidateFiles": 20,
+          "maxCandidateNodes": 20,
+          "maxSourceSlices": 8,
+          "maxGraphNodes": 20,
+          "maxGraphEdges": 20
+        },
+        "adequacy": {
+          "allowedStatuses": [
+            "context sufficient for implementation",
+            "context sufficient with listed assumptions"
+          ],
+          "allowAssumptions": true,
+          "allowConflict": false,
+          "allowInsufficient": false,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "data-model-user-subsystem",
+      "title": "Data model User subsystem retrieval",
+      "description": "Validates subsystem-mode retrieval around the User data-model area.",
+      "fixtureRoot": "../../../examples/basic-data-model-ts",
+      "sourceRoots": ["src"],
+      "query": "inspect the User data model subsystem and related model usage",
+      "mode": "subsystem",
+      "noSource": false,
+      "tags": ["data-model", "subsystem"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+      "expectations": {
+        "candidateFiles": [{ "pathContains": "models.ts", "topK": 5, "required": true }],
+        "selectedGraph": { "maxNodes": 20, "maxEdges": 20, "required": true },
+        "sourceEvidence": { "maxSlices": 8, "required": true },
+        "modeEffects": { "expectedMode": "subsystem", "expectedApplied": true, "required": true },
+        "auditSteps": { "requiredStepIds": ["step-validate-inputs", "step-run-search", "step-write-context-capsule", "step-write-retrieval-audit-record"], "requireUniqueStepIds": true, "minStepCount": 20, "required": true },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+        "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions", "more context required before implementation"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": true, "required": true }
+      }
+    },
+    {
+      "id": "data-model-user-no-source",
+      "title": "Data model User metadata-only retrieval",
+      "description": "Validates that no-source retrieval retains candidate and metadata evidence without source slices.",
+      "fixtureRoot": "../../../examples/basic-data-model-ts",
+      "sourceRoots": ["src"],
+      "query": "add a sibling data model field to User",
+      "mode": "feature-add",
+      "noSource": true,
+      "tags": ["data-model", "no-source", "compatibility"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+      "expectations": {
+        "candidateFiles": [{ "pathContains": "models.ts", "topK": 3, "required": true }],
+        "sourceEvidence": { "noSourceExpected": true, "maxSlices": 8, "required": true },
+        "semanticSummary": { "required": true, "allowUnavailable": false },
+        "classificationSummary": { "required": true, "allowUnavailable": false },
+        "auditSteps": { "requiredStepIds": ["step-validate-inputs", "step-skip-source-evidence", "step-write-context-capsule", "step-write-retrieval-audit-record"], "requireUniqueStepIds": true, "minStepCount": 20, "required": true },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+        "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": false, "required": true }
+      }
+    },
+    {
+      "id": "react-component-feature-add",
+      "title": "React workspace editor feature-add retrieval",
+      "description": "Validates React/TSX component and bounded source retrieval for the workspace editor.",
+      "fixtureRoot": "../../../examples/basic-react-tsx",
+      "sourceRoots": ["src"],
+      "query": "modify the WorkspaceEditorShell component prop flow and empty UI branch",
+      "mode": "feature-add",
+      "noSource": false,
+      "tags": ["react", "tsx", "feature-add"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 8, "maxGraphNodes": 24, "maxGraphEdges": 30 },
+      "expectations": {
+        "candidateFiles": [{ "pathContains": "WorkspaceEditorShell.tsx", "topK": 3, "required": true }],
+        "focus": { "pathContains": "WorkspaceEditorShell.tsx", "allowNoFocus": false, "required": true },
+        "sourceEvidence": { "requiredFileContains": ["WorkspaceEditorShell.tsx"], "minSlices": 1, "maxSlices": 8, "required": true },
+        "selectedGraph": { "maxNodes": 24, "maxEdges": 30, "required": true },
+        "auditSteps": { "requiredStepIds": ["step-validate-inputs", "step-run-search", "step-write-context-capsule", "step-write-retrieval-audit-record"], "requireUniqueStepIds": true, "minStepCount": 20, "required": true },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 24, "maxGraphEdges": 30 },
+        "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": false, "required": true }
+      }
+    },
+    {
+      "id": "no-false-conflict-clean-data-model",
+      "title": "Clean data model has no false conflict",
+      "description": "Validates conservative conflict detection does not invent a conflict for a canonical User edit.",
+      "fixtureRoot": "../../../examples/basic-data-model-ts",
+      "sourceRoots": ["src"],
+      "query": "add a canonical User field in the data model",
+      "mode": "feature-add",
+      "noSource": false,
+      "tags": ["data-model", "conflict", "no-false-positive"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+      "expectations": {
+        "candidateFiles": [{ "pathContains": "models.ts", "topK": 5, "required": true }],
+        "conflicts": { "expectedStatus": "none", "allowNone": true, "required": true },
+        "auditSteps": { "requiredStepIds": ["step-detect-context-conflicts", "step-write-context-capsule", "step-write-retrieval-audit-record"], "requireUniqueStepIds": true, "minStepCount": 20, "required": true },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+        "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": false, "required": true }
+      }
+    },
+    {
+      "id": "ambiguous-user-service-query",
+      "title": "Ambiguous user service retrieval",
+      "description": "Validates bounded deterministic behavior for a broad service query without requiring no-focus behavior.",
+      "fixtureRoot": "../../../examples/basic-ts",
+      "sourceRoots": ["src"],
+      "query": "update user service behavior",
+      "mode": "general",
+      "noSource": false,
+      "tags": ["ambiguity", "service", "general"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+      "expectations": {
+        "candidateFiles": [{ "pathContains": "userService", "topK": 8, "required": true }],
+        "selectedGraph": { "maxNodes": 20, "maxEdges": 20, "required": true },
+        "sourceEvidence": { "maxSlices": 8, "required": true },
+        "auditSteps": { "requiredStepIds": ["step-validate-inputs", "step-run-search", "step-write-context-capsule", "step-write-retrieval-audit-record"], "requireUniqueStepIds": true, "minStepCount": 20, "required": true },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
+        "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions", "more context required before implementation"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": true, "required": true }
+      }
+    }
+  ]
+}

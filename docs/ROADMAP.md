@@ -496,9 +496,80 @@ replace orchestrator stages.
 
 ## Version 1.7.0
 
-Version 1.7.0 is planned as an internal, developer-facing retrieval regression suite for `my-dev-kit` itself.
+Version 1.7.0 implements an internal, developer-facing retrieval regression suite for `my-dev-kit` itself.
 
-The goal is to prevent regressions in the bounded-context behavior introduced and expanded through v1.6.0 context capsules. Nothing in this section is implemented yet.
+The goal is to prevent regressions in the bounded-context behavior introduced and expanded through v1.6.0 context capsules.
+
+### Batch 1 status (implemented)
+
+Batch 1 added the internal foundation: TypeScript contracts for suite
+config/task/report/verdict shapes, a config loader with clear validation
+errors, a JSON+TXT report writer, a minimal runner, and the
+`npm run benchmark:retrieval` entry point. It is internal-only (no public
+CLI command) and not wired into `npm run verify` or CI.
+
+### Batch 2 status (implemented)
+
+Batch 2 adds the execution core: a fixture/source-root resolver with
+filesystem-safe task-ID and output-path handling, per-task index
+preparation (reusing `runIndexCommand()` directly), and a context
+execution adapter that runs the real v1.6 `context` command as a
+subprocess against each task's fresh index. `core.json`'s one task is now
+executable (no longer `skip: true`) and produces real
+`context-capsule.json`/`retrieval-audit-record.json`/`task-execution.json`
+artifacts per run. A task that executes successfully is reported
+`executed` (verdict `PASS` meaning "ran without error"); a task whose
+fixture/index/context step fails is reported `blocked`. There is still no
+assertion engine: nothing compares the retrieved evidence against
+per-task expectations yet, and the `REGRESSION` verdict remains
+unreachable.
+
+### Batch 3 status (implemented)
+
+Batch 3 adds the judgment layer on top of Batch 2's execution core:
+
+- a deterministic assertion engine (`src/retrievalRegression/assertions.ts`)
+  that reads each task's generated `context-capsule.json` and
+  `retrieval-audit-record.json` and evaluates configurable expectations
+  for candidate files/nodes, focus, selected graph evidence, bounded
+  source evidence, semantic/classification summaries, artifact
+  references, conflicts, mode effects, audit steps (including ordering
+  and uniqueness), no-raw-content, cap compliance, and context adequacy
+- a metrics engine (`src/retrievalRegression/metrics.ts`) that aggregates
+  task/assertion counts and per-category pass rates deterministically
+  (missing denominators report `null`, never a fabricated rate)
+- verdict logic (`src/retrievalRegression/verdict.ts`) that makes
+  `REGRESSION` reachable: a task regresses when a required assertion
+  fails, is blocked when execution or a required assertion could not be
+  evaluated, and otherwise passes; the suite verdict is `BLOCKED` if any
+  task is blocked, else `REGRESSION` if any task regressed, else `PASS`
+- `--fail-on-regression` (only fails the process nonzero on
+  `REGRESSION`/`BLOCKED` when passed; a report is always written) and
+  `--max-failures` (stops running remaining tasks once the limit of
+  blocked/regressed tasks is reached, recording them as `planned` with a
+  clear reason) on the `runRetrievalRegression.ts` entry point
+- `core.json`'s one executable task now carries real, stable expectations
+  based on the actual generated Batch 2 capsule/audit shapes, and
+  `npm run benchmark:retrieval` now passes `--fail-on-regression`
+- JSON and TXT reports include assertion results, metrics, verdicts, and
+  a compact failed-assertions-by-task summary, without inlining raw
+  source, graph, capsule, audit, semantic, or classification content
+
+### Batch 4 status (implemented)
+
+Batch 4 completes a representative six-task core suite using the existing
+data-model, React/TSX, and basic TypeScript examples. It covers
+data-model feature-add, subsystem mode, no-source behavior, React/TSX
+retrieval, no-false-conflict behavior, and ambiguity, with audit,
+no-raw-content, caps, and adequacy expectations on every executable task.
+Classification-absent behavior remains covered by assertion unit tests but
+is deferred as an executable task because current indexing always emits
+classification and the runner does not mutate generated artifacts.
+
+`benchmark:retrieval` remains separate from `npm run verify`: it is a
+heavier subprocess-based maintainer check, while the broader test suite
+has known unrelated timeout flakiness. Historical baseline comparison is
+not implemented.
 
 ### Purpose
 
@@ -515,9 +586,9 @@ The planned suite should answer product-specific retrieval questions such as:
 - did `--no-source` behavior regress?
 - did context adequacy, audit completeness, cap compliance, compatibility, or no-raw-content guarantees regress?
 
-### Planned retrieval regression coverage
+### Retrieval regression coverage
 
-Representative deterministic local fixtures should eventually cover:
+Representative deterministic local tasks cover:
 
 - context capsule generation
 - retrieval audit record generation
@@ -538,9 +609,10 @@ Representative deterministic local fixtures should eventually cover:
 - context adequacy states
 - older-index and classification-absent compatibility
 
-### Planned assertions
+### Assertions
 
-Planned assertions should stay deterministic and local:
+The assertion engine and representative suite are implemented. Assertions
+remain deterministic and local:
 
 - the right bounded context is retained for representative tasks
 - retained and dropped reasons remain stable and explainable
@@ -552,6 +624,8 @@ Planned assertions should stay deterministic and local:
 
 ### Planned metrics
 
+The metrics engine itself is implemented as of Batch 3 (see above), computing
+task/assertion counts and per-category pass rates from real assertion results.
 Likely internal retrieval regression metrics include:
 
 - selected file, node, edge, and source-slice counts

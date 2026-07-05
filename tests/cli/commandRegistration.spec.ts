@@ -30,4 +30,14 @@ describe('command registration', () => {
     expect(result.status).toBe(2)
     expect(result.stderr).toContain('requires --query')
   })
+
+  it('does not register a public retrieval-benchmark/context-benchmark/retrieval-regression command (v1.7.0 Batch 1 stays internal-only)', () => {
+    const result = runCli(['--help'])
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).not.toContain('retrieval-benchmark')
+    expect(result.stdout).not.toContain('context-benchmark')
+    expect(result.stdout).not.toContain('retrieval-regression')
+    expect(commands).toHaveLength(7)
+  })
 })
