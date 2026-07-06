@@ -1,6 +1,6 @@
 # Commands
 
-my-dev-kit provides eight public CLI commands:
+my-dev-kit provides nine public CLI commands:
 
 - `index`
 - `search`
@@ -10,6 +10,7 @@ my-dev-kit provides eight public CLI commands:
 - `view`
 - `data-model`
 - `context`
+- `graph-diff`
 
 Use this document as the command reference for the installed CLI.
 
