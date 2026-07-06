@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.8.0 - 2026-07-06
+
+Final v1.8.0 release line: safer large-repo indexing ergonomics, incremental indexing with partial rebuild for the core artifact pipeline, and deterministic read-only graph comparison. Deferred from the implemented v1.8.0 release work: watch mode, retrieval filtering, a dedicated `call-graph.json` diff section, and non-fallback partial call-graph rebuild.
+
+- `index` and `index --dry-run` now skip `.my-dev-kit` and any `.my-dev-kit-*` directory by default, so indexing no longer re-scans its own or another `my-dev-kit` output directory
+- Added a deterministic large-repo preflight step: both `index` and `index --dry-run` report a `preflightWarnings` array (`{ code, message }`) in JSON output and a `Preflight warnings:` section in human output, in a fixed order
+  - `large-file-count`: eligible file count exceeds a static threshold of 5000
+  - `broad-source-root`: a `--src` value resolves to the project root and discovered file count exceeds 1000
+  - warnings are advisory only: they never fail the command and never claim safety beyond static file-count evidence
+- Added an "Indexing large monorepos" section to `docs/COMMANDS.md` covering per-package `--src`/`--out` scoping and using `--dry-run` before indexing an unfamiliar large repository
+- No changes to `manifest.json` schema, artifact file names, or existing `--dry-run`/`--progress`/default-ignore behavior for small projects
+
+**v1.8.0 Batch 2** adds the incremental-indexing foundation: cache metadata and changed-file detection. **`--incremental` does not perform a partial artifact rebuild yet** — any detected change, or any incompatible/missing/stale cache, still triggers a full rebuild through the existing pipeline; only a genuine no-op run skips rebuilding.
+
+- Added `index --incremental`: compares the current file set against an internal `cache-metadata.json` (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules) and reports a deterministic `cache` object (`{ requested, mode, cacheMetadataPath, invalidationReason, changedFileSummary }`) in JSON output and a `Cache mode:`/`Changed files:` section in human output
+  - modes: `incremental-full-initial`, `incremental-full-cache-incompatible`, `incremental-full-config-changed`, `incremental-no-change`, `incremental-change-detected-full-rebuild`
+  - `changedFileSummary` reports added/changed/removed/unchanged counts plus bounded (20-entry), alphabetically sorted samples
+- Added `index --reset-cache`: deletes only `cache-metadata.json` from `--out` (never `manifest.json` or other artifacts), reports `{ requested, existed, path }` in both JSON and human output, and succeeds when no cache exists; combined with `--incremental`, resets first and then performs a safe `incremental-full-initial` run
+- `manifest.json` now records `indexMode` (`"full"`/`"incremental"`) on every build, and `cacheMode`/`cacheInvalidationReason`/`changedFileSummary` on builds that actually ran
+- `cache-metadata.json` is internal indexer bookkeeping only — not registered in `manifest.json`'s `artifacts` map and not part of the documented public artifact set
+- Preserved all Batch 1 behavior: `preflightWarnings`, `--dry-run` (writes no artifacts, never touches the cache), `--progress` (stdout stays parseable JSON), and `.my-dev-kit`/`.my-dev-kit-*` self-ignore (cache metadata is never indexed as source)
+- Does not implement: partial artifact rebuild, deterministic artifact merge across changed/unchanged analyses, stable artifact IDs across partial rebuilds, graph-diff, or watch mode
+
+**v1.8.0 Batch 3** adds real partial-rebuild correctness for the core artifact pipeline (`symbol-index.json`/`code-graph.json`), on top of Batch 2's cache metadata and changed-file detection.
+
+- `index --incremental` now reuses unchanged files' per-file analysis instead of re-parsing them, re-analyzes changed/added files exactly like a full build, and removes deleted files from every affected artifact
+  - two new modes: `incremental-partial` (partial rebuild used, no artifact fallback needed) and `incremental-partial-with-artifact-fallback` (partial rebuild used, but at least one artifact family — currently only ever `call-graph` — was fully regenerated instead of reused; reported in `partialRebuildFallbackArtifacts`)
+  - `incremental-change-detected-full-rebuild` is now reserved for the honest fallback case where partial-rebuild reuse is not safely possible (missing/unreadable/schema-incompatible previous `symbol-index.json`) — not the default path for a healthy cache anymore
+- `graph.fileDeps`/`graph.symbols` are still recomputed globally from the full merged file set on every partial rebuild (import/re-export/export-all resolution depends on the complete current file set); file and symbol node IDs stay stable for unchanged files since they are derived purely from path/name
+- `--call-graph` is always fully regenerated during a partial rebuild (its extraction re-parses source text directly) — never silently treated as reused
+- `data-model.json`/`frontend-semantic.json`/`frontend-reachability.json`/`classification.json` needed no changes: they already run over the complete current index on every build and are automatically kept correct by a correctly merged core index
+- `cache-metadata.json` per-file entries now also carry `reExportSpecifiers`/`exportAllSpecifiers` (needed to safely reuse an unchanged file's analysis); `CACHE_SCHEMA_VERSION` was bumped so a pre-Batch-3 cache is rebuilt once rather than misread
+- `manifest.json` gained `partialRebuildFallbackArtifacts`
+- Added equivalence tests (`tests/index/partialRebuild.spec.ts`) proving partial incremental output is logically equivalent to a clean full `index` run across changed/added/removed-file and re-export/export-all cross-file-dependency fixtures, plus stable-ID and call-graph-fallback coverage
+- Preserved all Batch 1 and Batch 2 behavior: preflight warnings, `--dry-run`, `--progress`, `.my-dev-kit`/`.my-dev-kit-*` self-ignore, `--reset-cache`, and `incremental-no-change`/`incremental-full-*` modes
+- Does not implement: partial (non-fallback) call-graph rebuild, graph-diff, or watch mode
+
+**v1.8.0 Batch 4** adds the `graph-diff` command: a deterministic, read-only comparison of two existing index directories, built on Batch 3's stable node/edge IDs.
+
+- Added `graph-diff --before <index-dir> --after <index-dir> --json`: compares `manifest.json`/`code-graph.json` (required) and `symbol-index.json`/`classification.json`/`data-model.json`/`frontend-semantic.json`/`frontend-reachability.json` (optional, degrading to a warning + "unavailable" section when absent from either side)
+- Node/edge diffing reuses the existing stable `node.id`/`edge.id` identity — no new comparison scheme. Reports `added`/`removed` (compact refs, sorted) and `changed` (only the differing fields, with compact `before`/`after` limited to those fields)
+- `symbol-index.json`: compact added/removed/changed file-path and symbol-id companion diff
+- `manifest.json`: fixed-field diff (`indexMode`, `cacheMode`, `changedFileSummary`, `partialRebuildFallbackArtifacts`, analyzer status changes, etc. — excludes `createdAt`)
+- `classification.json`: per-entry diff by its own stable id (added/removed/changed edit guidance, risk labels, classifications, readiness, uncertainty)
+- `data-model.json`/`frontend-semantic.json`/`frontend-reachability.json`: safe summary-count-only diff (not a fragile deep per-entry diff — these artifacts have no single stable per-entry identity)
+- Never runs `index`; never writes to or modifies either `--before`/`--after` directory
+- Exit `0` for any valid comparison (with or without differences); non-zero with a clear error for invalid arguments, a missing index directory, or a malformed required artifact; a missing *optional* artifact never causes a non-zero exit
+- Added `tests/graph-diff/graphDiff.spec.ts` (17 tests): no-difference, added/removed/changed node and edge fixtures, optional-artifact presence handling, error paths, determinism, and read-only-input-directory verification
+- Does not implement: watch mode, search/lookup/slice/source filtering, or a dedicated `call-graph.json` diff section
+
+**v1.8.0 Batch 5** performs the final integration and compatibility gate for the shipped v1.8.0 work.
+
+- Reconciled `README.md`, `docs/GRAPH_SCHEMA.md`, `docs/PROJECT_OVERVIEW.md`, `docs/ROADMAP.md`, and help/test coverage so the documented v1.8.0 behavior matches the implemented Batch 1 through 4 surfaces
+- Re-verified package contents with `npm pack --dry-run`; generated `.my-dev-kit*` folders, workflow reports, and other private/generated artifacts remain excluded from the published package
+- No new CLI commands, flags, persisted artifact schemas, Android support, release audit, security validation, or publishing behavior
+
 ## 1.6.1 - 2026-07-04
 
 Repository-hygiene patch release: no source, CLI, or artifact-contract changes.

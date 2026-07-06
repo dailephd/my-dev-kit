@@ -1,3 +1,5 @@
+import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
+
 export interface IndexManifest {
   artifactKind: 'my-dev-kit-v1-manifest'
   version: '1.0.0'
@@ -22,7 +24,21 @@ export interface IndexManifest {
   }
   warnings: string[]
   errors: string[]
+  /** How this specific build was produced. Set every time artifacts are (re)written. */
+  indexMode?: IndexModeValue
+  /** Populated only when `indexMode` is `'incremental'`. */
+  cacheMode?: CacheMode
+  cacheInvalidationReason?: string | null
+  changedFileSummary?: ChangedFileSummary | null
+  /**
+   * Artifact families that were fully regenerated rather than partially
+   * reused during a partial rebuild (e.g. `["call-graph"]`). Always an
+   * empty array outside the two `incremental-partial*` cache modes.
+   */
+  partialRebuildFallbackArtifacts?: string[]
 }
+
+export type IndexModeValue = 'full' | 'incremental'
 
 export interface IndexSemanticArtifacts {
   dataModel: string | null

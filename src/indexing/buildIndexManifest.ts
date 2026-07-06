@@ -1,6 +1,7 @@
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
-import type { IndexAnalyzerStatus, IndexManifest, IndexSemanticArtifacts } from './manifestTypes.js'
+import type { IndexAnalyzerStatus, IndexManifest, IndexModeValue, IndexSemanticArtifacts } from './manifestTypes.js'
+import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
 
 export interface BuildIndexManifestOptions {
   projectRoot: string
@@ -15,6 +16,11 @@ export interface BuildIndexManifestOptions {
   semanticArtifacts?: Partial<IndexSemanticArtifacts>
   analyzers?: IndexAnalyzerStatus[]
   createdAt?: string
+  indexMode?: IndexModeValue
+  cacheMode?: CacheMode
+  cacheInvalidationReason?: string | null
+  changedFileSummary?: ChangedFileSummary | null
+  partialRebuildFallbackArtifacts?: string[]
 }
 
 export function buildIndexManifest(options: BuildIndexManifestOptions): IndexManifest {
@@ -48,6 +54,15 @@ export function buildIndexManifest(options: BuildIndexManifestOptions): IndexMan
     },
     warnings: options.warnings,
     errors: options.errors,
+    indexMode: options.indexMode ?? 'full',
+    ...(options.cacheMode !== undefined ? { cacheMode: options.cacheMode } : {}),
+    ...(options.cacheInvalidationReason !== undefined
+      ? { cacheInvalidationReason: options.cacheInvalidationReason }
+      : {}),
+    ...(options.changedFileSummary !== undefined ? { changedFileSummary: options.changedFileSummary } : {}),
+    ...(options.partialRebuildFallbackArtifacts !== undefined
+      ? { partialRebuildFallbackArtifacts: options.partialRebuildFallbackArtifacts }
+      : {}),
   }
 }
 

@@ -92,8 +92,20 @@ npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --tra
 | `view` | Render the code graph, data-model graph, lineage graph, or frontend semantic graphs as DOT, SVG, or PNG |
 | `data-model` | Inspect exact entities or fields, or regenerate data-model artifacts and trace supported static view usage |
 | `context` | Write a bounded, local, deterministic context capsule and optional retrieval audit for a query against an existing index |
+| `graph-diff` | Compare two existing index directories and report added/removed/changed graph nodes, edges, and artifact metadata |
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
+
+## v1.8.0 highlights
+
+Version 1.8.0 adds the final indexing-ergonomics and comparison work shipped in Batches 1 through 4:
+
+- deterministic large-repo preflight warnings and `.my-dev-kit`/`.my-dev-kit-*` self-ignore during indexing
+- `index --incremental` and `index --reset-cache`, with internal `cache-metadata.json` bookkeeping
+- real partial rebuild for `symbol-index.json` and `code-graph.json`, with honest full-regeneration fallback for `call-graph.json`
+- `graph-diff` for deterministic, read-only comparison of two existing index directories
+
+Deferred from the implemented v1.8.0 release work: watch mode, retrieval filtering, a dedicated `call-graph.json` diff section, and non-fallback partial call-graph rebuild. See [docs/ROADMAP.md](docs/ROADMAP.md) for the exact status split.
 
 ## Generated artifacts
 

@@ -61,11 +61,23 @@ export interface BuildConfig {
   onProgress?: (event: BuildIndexProgressEvent) => void
 }
 
+/** Per-file extraction metadata not carried in the compact `FileSummary` shape. */
+export interface FileExtractionMeta {
+  reExportSpecifiers: string[]
+  exportAllSpecifiers: string[]
+}
+
 /** The products of a build run. */
 export interface BuildResult {
   index: SymbolIndex
   callGraph: CallGraph | null
   discovery: SourceDiscoveryResult
+  /**
+   * Per-file extraction metadata (module specifiers not present in `FileSummary`),
+   * keyed by relative path. Used by incremental partial-rebuild reuse (Batch 3) to
+   * reconstruct a full `ExtractionResult` for an unchanged file without re-parsing it.
+   */
+  fileExtractionMeta: Map<string, FileExtractionMeta>
 }
 
 export type BuildIndexProgressEvent =
@@ -108,6 +120,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
   const callGraphInputsByAdapter = new Map<LanguageAdapter, SourceFileInput[]>()
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
+  const fileExtractionMeta = new Map<string, FileExtractionMeta>()
 
   emitBuildProgress(config, 'index-start', 'Indexing started', startTime, 0, sourceFiles.length)
   let filesIndexed = 0
@@ -123,6 +136,10 @@ export function buildIndex(config: BuildConfig): BuildResult {
     const adapter = registry.adapterForFile(relPath)!
     const result = adapter.extractFromSource(relPath, sourceText)
     rawExtractions.push({ relPath, extraction: result })
+    fileExtractionMeta.set(relPath, {
+      reExportSpecifiers: result.reExportSpecifiers,
+      exportAllSpecifiers: result.exportAllSpecifiers,
+    })
     summaries.push({
       path: relPath,
       language: result.language,
@@ -189,7 +206,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
     // callGraphArtifact set by writer after writing the artifact
   }
 
-  return { index, callGraph, discovery }
+  return { index, callGraph, discovery, fileExtractionMeta }
 }
 
 // ---------------------------------------------------------------------------
@@ -201,8 +218,12 @@ export function buildIndex(config: BuildConfig): BuildResult {
  *
  * - fileDeps: resolved internal file-to-file dependency edges, sorted from→to
  * - symbols:  flat compact symbol records across all files, sorted file→name
+ *
+ * Exported for reuse by incremental partial-rebuild merging (Batch 3), which
+ * must recompute this section globally from a merged set of reused and fresh
+ * per-file extractions rather than a purely fresh set.
  */
-function buildGraphSection(
+export function buildGraphSection(
   rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }>,
   indexedFileSet: Set<string>,
   registry: ReturnType<typeof createDefaultRegistry>

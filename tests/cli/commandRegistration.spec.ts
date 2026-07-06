@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const commands = ['index', 'view', 'lookup', 'source', 'slice', 'search', 'context']
+const commands = ['index', 'view', 'lookup', 'source', 'slice', 'search', 'context', 'graph-diff']
 
 function runCli(args: string[]) {
   return spawnSync(process.execPath, [tsxCliPath(), 'src/cli.ts', ...args], {
@@ -38,6 +38,6 @@ describe('command registration', () => {
     expect(result.stdout).not.toContain('retrieval-benchmark')
     expect(result.stdout).not.toContain('context-benchmark')
     expect(result.stdout).not.toContain('retrieval-regression')
-    expect(commands).toHaveLength(7)
+    expect(commands).toHaveLength(8)
   })
 })

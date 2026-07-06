@@ -9,6 +9,7 @@ import { registerSliceCommand } from './commands/sliceCommand.js'
 import { registerSourceCommand } from './commands/sourceCommand.js'
 import { registerViewCommand } from './commands/viewCommand.js'
 import { registerContextCommand } from './commands/contextCommand.js'
+import { registerGraphDiffCommand } from './commands/graphDiffCommand.js'
 import { VERSION } from './version.js'
 
 export function createProgram(): Command {
@@ -27,6 +28,7 @@ export function createProgram(): Command {
   registerSliceCommand(program)
   registerSearchCommand(program)
   registerContextCommand(program)
+  registerGraphDiffCommand(program)
 
   return program
 }

@@ -105,6 +105,45 @@ describe('index command', () => {
     expect(paths.some((filePath: string) => filePath.includes('__pycache__'))).toBe(false)
   })
 
+  it('skips its own .my-dev-kit output directory and other .my-dev-kit-* directories by default', () => {
+    const root = createFixture()
+    mkdirSync(join(root, 'src', '.my-dev-kit'), { recursive: true })
+    mkdirSync(join(root, 'src', '.my-dev-kit-web'), { recursive: true })
+    writeFileSync(join(root, 'src', '.my-dev-kit', 'ignored.ts'), 'export const ignoredSelfOutput = 1\n')
+    writeFileSync(join(root, 'src', '.my-dev-kit-web', 'ignored.ts'), 'export const ignoredOtherOutput = 1\n')
+
+    const result = runCli(['index', '--root', root, '--src', 'src', '--out', 'self-ignore-out', '--json'])
+
+    expect(result.status).toBe(0)
+    const symbolIndex = JSON.parse(readFileSync(join(root, 'self-ignore-out', 'symbol-index.json'), 'utf8'))
+    const paths = symbolIndex.files.map((file: { path: string }) => file.path)
+    expect(paths.some((filePath: string) => filePath.includes('.my-dev-kit'))).toBe(false)
+  })
+
+  it('reports an empty preflightWarnings array for a small fixture in both index and dry-run modes', () => {
+    const root = createFixture()
+
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', 'preflight-out', '--json'])
+    expect(indexResult.status).toBe(0)
+    const indexParsed = JSON.parse(indexResult.stdout)
+    expect(indexParsed.preflightWarnings).toEqual([])
+
+    const dryRunResult = runCli(['index', '--root', root, '--src', 'src', '--out', 'preflight-dry-out', '--dry-run', '--json'])
+    expect(dryRunResult.status).toBe(0)
+    const dryRunParsed = JSON.parse(dryRunResult.stdout)
+    expect(dryRunParsed.preflightWarnings).toEqual([])
+  })
+
+  it('supports --src resolving to the project root and still reports a preflightWarnings array in dry-run', () => {
+    const root = createFixture()
+
+    const result = runCli(['index', '--root', root, '--src', '.', '--out', 'broad-root-out', '--dry-run', '--json'])
+
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(Array.isArray(parsed.preflightWarnings)).toBe(true)
+  })
+
   it('applies repeated --exclude values by directory name and relative path prefix', () => {
     const root = createFixture()
     mkdirSync(join(root, 'src', 'generated'), { recursive: true })

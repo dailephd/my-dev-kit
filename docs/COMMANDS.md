@@ -99,6 +99,8 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 - `--dry-run`: scan and report what would be indexed without writing artifacts.
 - `--progress`: print bounded progress diagnostics to stderr.
 - `--call-graph`: write `call-graph.json` using conservative static call analysis when supported.
+- `--incremental`: detect added/changed/removed/unchanged files against internal cache metadata (v1.8.0). See [Incremental indexing](#incremental-indexing-v180) below.
+- `--reset-cache`: clear internal incremental-index cache metadata for `--out` before running (v1.8.0). See [Incremental indexing](#incremental-indexing-v180) below.
 - `--json`: print JSON result to stdout.
 
 ### Default ignored directories
@@ -124,8 +126,59 @@ Default ignored directory names include:
 - `__pycache__`
 - `.venv`
 - `venv`
+- `.my-dev-kit`
+- `.my-dev-kit-*` (any directory name starting with `.my-dev-kit-`, e.g. a custom `--out` directory or a generated smoke-test output folder)
+
+The `.my-dev-kit`/`.my-dev-kit-*` defaults keep `index` from re-scanning its own output directory (or other `my-dev-kit` output directories) on repeated runs.
 
 The `--exclude` flag adds extra directory names or relative path prefixes.
+
+### Large-repo preflight warnings (v1.8.0)
+
+Both a real `index` run and `index --dry-run` compute deterministic preflight warnings from file-discovery counts and report them as a `preflightWarnings` array (`{ code, message }`) in JSON output, and as a `Preflight warnings:` section in human output. Warning order is fixed and does not depend on which warnings fire.
+
+Warning codes:
+
+- `large-file-count`: the number of files eligible for indexing exceeds a static safe-preflight threshold (5000).
+- `broad-source-root`: a `--src` value resolves to the project root itself (e.g. `--src .`) and more than 1000 files were discovered under it.
+
+These are advisories only, based on static file-count evidence. They never fail the command by themselves, and they never claim the run is unsafe or guaranteed to succeed — only that the file count is large enough to be worth a second look before scanning large or broad monorepos. See [Indexing large monorepos](#indexing-large-monorepos) below.
+
+### Incremental indexing (v1.8.0)
+
+`--incremental` performs a real **partial rebuild** for the core artifact pipeline: unchanged files' per-file analysis is reused instead of re-parsed, changed/added files are re-analyzed, removed files are dropped from every affected artifact, and `symbol-index.json`/`code-graph.json` are rebuilt deterministically from the merged result. Partial incremental output for these artifacts is logically equivalent to a clean full `index` run of the same source tree (proven by the equivalence tests in `tests/index/partialRebuild.spec.ts`, which compare normalized partial and full output byte-for-byte after the same edits).
+
+**What is and isn't partially reused:**
+
+- **Reused per-file analysis (`symbol-index.json`, `code-graph.json`):** an unchanged file's symbols/imports/exports/line-count are read back from the previous `symbol-index.json` rather than re-parsed. `graph.fileDeps`/`graph.symbols` (and the code graph built from them) are still recomputed globally across the full merged file set on every partial rebuild, because import/re-export/export-all resolution depends on which files currently exist, not just on the files that changed — a changed or removed file can change what an *unchanged* file's imports resolve to. This keeps output correct and stable file/symbol IDs (`file:<path>`, `symbol:<path>#<name>`) unchanged for files whose content didn't change.
+- **Always regenerated as an artifact fallback (`call-graph.json`):** call-graph extraction re-parses source text directly (it is not derived from the cached per-file analysis), so whenever `--call-graph` is requested during a partial rebuild it is always fully regenerated from every current file's source — this is reported honestly as `cacheMode: "incremental-partial-with-artifact-fallback"` with `partialRebuildFallbackArtifacts: ["call-graph"]`, not silently treated as reused.
+- **Always fully regenerated from the merged index (`data-model.json`, `frontend-semantic.json`, `frontend-reachability.json`, `classification.json`):** these analyzers already run over the complete current `symbol-index.json`/`code-graph.json` on every build, full or partial — they were never per-file-incremental — so a correct partial rebuild of the core pipeline automatically keeps them fully correct and free of stale entries with no analyzer-specific changes needed.
+
+`--incremental` writes and reads an internal `cache-metadata.json` file inside `--out`. It records a config fingerprint (source roots, `--exclude` values, `--call-graph`, `--language`, and the default-ignore rule set) and, per indexed file, a content hash (SHA-256), size, and the two extraction fields not present in the public `symbol-index.json` shape (`reExportSpecifiers`, `exportAllSpecifiers`) needed to safely reuse that file's analysis later. `cache-metadata.json` is internal bookkeeping, not a public semantic artifact — it is not listed in `manifest.json`'s `artifacts` map and is not part of the "Artifacts" list below.
+
+Each `--incremental` run reports a `cache` object (JSON output) and a `Cache mode:`/`Changed files:` section (human output) with one of these modes:
+
+- `incremental-full-initial`: no usable cache existed yet; a full build ran and cache metadata was written.
+- `incremental-full-cache-incompatible`: the existing cache file was missing required fields, unreadable, from an incompatible cache/package/artifact-schema version, or the on-disk index artifacts it referenced were missing; a full build ran and cache metadata was rewritten.
+- `incremental-full-config-changed`: the cache was structurally valid but the config fingerprint changed (different `--src`, `--exclude`, `--call-graph`, `--language`, or default-ignore rules); a full build ran and cache metadata was rewritten. File-level diffing is skipped in this case because the discovered file set may no longer be comparable.
+- `incremental-no-change`: the cache and config fingerprint matched and no file was added, changed, or removed. The existing `manifest.json`/artifacts on disk are reused as-is — no rebuild, no cache rewrite.
+- `incremental-partial`: at least one file was added, changed, or removed, partial-rebuild reuse was safe, and every artifact family was either partially merged or didn't need to be (no `--call-graph` requested).
+- `incremental-partial-with-artifact-fallback`: same as `incremental-partial`, but at least one artifact family listed in `partialRebuildFallbackArtifacts` (currently only ever `call-graph`) was fully regenerated rather than reused.
+- `incremental-change-detected-full-rebuild`: changes were detected, but partial-rebuild reuse was **not** safely possible this run (for example: the previous `symbol-index.json` is missing, unreadable, or from an incompatible schema version) — a full rebuild ran instead, with the reason reported in `invalidationReason`. This is a safety fallback, not the normal path for a healthy cache.
+
+`cache.changedFileSummary` (populated for every mode except `incremental-full-initial`/`incremental-full-cache-incompatible`/`incremental-full-config-changed`, which have no comparable prior baseline) reports `addedCount`/`changedCount`/`removedCount`/`unchangedCount` plus a bounded, alphabetically sorted sample (up to 20 paths) of added/changed/removed files.
+
+`manifest.json` records `indexMode` (`"full"` or `"incremental"`), and, for incremental runs that actually (re)built artifacts, `cacheMode`, `cacheInvalidationReason`, `changedFileSummary`, and `partialRebuildFallbackArtifacts` from that specific build. A `manifest.json` returned by the `incremental-no-change` fast path reflects whichever earlier run actually last produced it, since no rebuild happened on this invocation — see the top-level `cache` field in the command result for what happened on the current invocation.
+
+`--reset-cache` deletes `cache-metadata.json` from `--out` if present; it never touches `manifest.json`, `symbol-index.json`, `code-graph.json`, or any other normal artifact, and it succeeds (reporting `existed: false`) when no cache file exists. `--reset-cache` can be combined with `--incremental`: the cache is cleared first, and the run then proceeds as a safe `incremental-full-initial` build. Used alone (without `--incremental`), `--reset-cache` only clears a stale cache file; the rest of the command runs exactly as it would without the flag.
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cache --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cache --incremental --json
+```
+
+Not implemented: deterministic artifact merge / partial rebuild for `--call-graph` itself (always a full regeneration when requested during a partial rebuild), stable artifact IDs across a full-rebuild fallback (a full rebuild has no reuse guarantee by definition), and `graph-diff`/watch mode/retrieval filtering (separate, later `v1.8.0` batches — see `docs/ROADMAP.md`).
 
 ### Semantic analyzer behavior
 
@@ -186,6 +239,30 @@ npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-de
 npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
 npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --dry-run --json
 ```
+
+### Indexing large monorepos
+
+`index` can be pointed at a subdirectory of a larger monorepo rather than the repository root, which keeps each run scoped and keeps `manifest.json`/`symbol-index.json`/`code-graph.json` sized to the part of the repo actually being worked on:
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src apps/web/src --out apps/web/.my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src packages/shared/src --out packages/shared/.my-dev-kit --json
+```
+
+Before indexing an unfamiliar or large monorepo package, run `--dry-run` first to see file-count estimates and any preflight warnings without writing artifacts:
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src apps/web/src --out apps/web/.my-dev-kit --dry-run --json
+```
+
+Recommendations for large or multi-package repositories:
+
+- prefer one or more specific `--src` paths (e.g. a single package's `src`) over `--src .` at the repository root
+- use `--exclude` for any generated or vendored directories not already covered by the default ignore list
+- use a per-package `--out` (e.g. `apps/web/.my-dev-kit`) so each package's artifacts stay independent
+- re-run `--dry-run` after adding a new package or source root to confirm file counts before a full run
+
+This section documents present-day scoping practices only. It does not describe incremental indexing, cache reuse, watch mode, or graph diff — those remain planned for later `v1.8.0` batches (see `docs/ROADMAP.md`).
 
 ## search
 
@@ -994,6 +1071,67 @@ Both artifacts are compatible with indexes that do not have `classification.json
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 npx @dailephd/my-dev-kit context --index .my-dev-kit --query "add a sibling data model field" --out .my-dev-kit/context-capsule.json --audit-out .my-dev-kit/retrieval-audit-record.json --mode feature-add --max-candidate-files 8 --max-graph-nodes 30 --max-graph-edges 50 --json
 ```
+
+## graph-diff
+
+Compare two existing `my-dev-kit` index output directories and report added, removed, and changed graph/artifact elements. `graph-diff` is a **v1.8.0 Batch 4** command.
+
+`graph-diff` is read-only and JSON-first: it never runs `index`, never modifies either input directory, and never writes any artifact of its own. It compares whatever `manifest.json`/`code-graph.json`/etc. already exist on disk in `--before` and `--after` — including output produced by `index --incremental`'s partial-rebuild path (v1.8.0 Batch 3), which `graph-diff`'s equivalence-based tests rely on for fixtures.
+
+### Usage
+
+```sh
+npx @dailephd/my-dev-kit graph-diff --before <index-dir> --after <index-dir> --json
+```
+
+### Flags
+
+- `--before <index-dir>`: the earlier index artifact directory. Required.
+- `--after <index-dir>`: the later index artifact directory. Required.
+- `--json`: print JSON output. A concise human summary (node/edge/file/symbol counts, manifest/classification summary, warnings) prints instead when `--json` is omitted.
+
+### Required vs. optional artifacts
+
+- Required on both sides: `manifest.json`, `code-graph.json`. A missing or malformed required artifact throws a clear error and exits non-zero (the same `readIndexManifest`/artifact-loading errors `lookup`/`slice`/`view` already produce) — `graph-diff` never guesses or silently skips these.
+- Optional on either side: `symbol-index.json`, `classification.json`, `data-model.json`, `frontend-semantic.json`, `frontend-reachability.json`. Missing or unreadable on one or both sides degrades that section to an "unavailable"/presence-only report plus a warning — never a crash, and never treated as a difference in graph node/edge content.
+- `call-graph.json` is not separately diffed in this batch (out of scope — see `docs/ROADMAP.md`); its content is already reflected in `code-graph.json`'s `calls` edges when `--call-graph` was used.
+
+### Output
+
+JSON output (`reportKind: "my-dev-kit-v1-graph-diff"`) includes:
+
+- `before`/`after`: `{ indexDir, projectRoot }` for each side.
+- `summary`: node/edge/file/symbol added/removed/changed counts.
+- `nodes`/`edges`: `added`/`removed` (compact `{ id, ... }` refs) and `changed` (`{ id, changedFields, before, after }`, where `before`/`after` include only the fields that actually changed — never a full node/edge dump). Node identity is the existing stable `node.id` (`file:<path>`, `symbol:<path>#<name>`); edge identity is the existing stable `edge.id` (already derived from `source`/`kind`/`target`, plus call line for `calls` edges), so a matching id always means the same logical node/edge and any reported field differences are genuine metadata changes.
+- `symbolIndex`: a compact companion to the node diff — `available` plus sorted `filesAdded`/`filesRemoved`/`filesChanged`/`symbolsAdded`/`symbolsRemoved`/`symbolsChanged` path/id lists (no per-file or per-symbol payloads; the node diff already carries field-level detail).
+- `manifest`: `schemaVersionMatch`, `changedFields` (a fixed set of behavior-relevant fields: `projectRoot`, `sourceRoots`, `languages`, `callGraphEnabled`, `artifacts`, `semanticArtifacts`, `summary`, `indexMode`, `cacheMode`, `cacheInvalidationReason`, `changedFileSummary`, `partialRebuildFallbackArtifacts`, `warnings`, `errors` — deliberately excludes `createdAt`, which is never logical), and `analyzerChanges` (per-analyzer status changes by id).
+- `classification`: `available` (`both`/`before-only`/`after-only`/`neither`) plus `added`/`removed`/`changed` classification entry ids (by the classification artifact's own stable `id`), where `changed` reports which of `classifications`/`editGuidance`/`readiness`/`risks`/`uncertainty`/`reason` differ.
+- `semanticArtifacts.dataModel`/`frontendSemantic`/`frontendReachability`: `available` plus a compact summary-count diff (`changedFields`) — a safe, summary-only diff, not a fragile deep per-entry diff, since these artifacts are not built around a single stable per-entry identity the way classification is.
+- `warnings`: human-readable notes about schema-version mismatches and optional-artifact presence differences.
+
+All arrays are sorted deterministically (by id/path); output is otherwise a pure function of the two input directories' contents.
+
+### Exit behavior
+
+- Valid inputs, with or without differences: exit `0`. A no-difference result is a normal, valid outcome, not an error.
+- Invalid arguments (missing `--before`/`--after`), a missing index directory, or a malformed required artifact: exit non-zero with a clear error message.
+- A missing *optional* artifact never causes a non-zero exit; it becomes a warning and an "unavailable" section instead.
+
+### Examples
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-before --json
+# ... make source changes ...
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-after --json
+npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-kit-after --json
+```
+
+### Known limitations
+
+- No `graph-diff --watch` or continuous mode (watch mode is a separate, later `v1.8.0` batch).
+- No search/lookup/slice-style filtering of the diff output (retrieval filtering is a separate, later `v1.8.0` batch).
+- `call-graph.json` has no dedicated diff section of its own in this batch.
+- Semantic-artifact diffs are summary-count-only, not a deep per-field/per-entry diff (classification is the one exception, since it has a stable per-entry id).
 
 ## Bundled examples
 

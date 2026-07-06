@@ -120,6 +120,11 @@ Main fields:
 - `summary`
 - `warnings`
 - `errors`
+- `indexMode` (v1.8.0): `"full"` or `"incremental"` — how this specific build was produced
+- `cacheMode` (v1.8.0, only present on incremental builds that actually (re)built artifacts): one of `incremental-full-initial`, `incremental-full-cache-incompatible`, `incremental-full-config-changed`, `incremental-change-detected-full-rebuild`, `incremental-partial`, `incremental-partial-with-artifact-fallback`
+- `cacheInvalidationReason` (v1.8.0): human-readable reason when `cacheMode` reflects an invalidated/incompatible cache, or when partial-rebuild reuse was not safely possible; `null` otherwise
+- `changedFileSummary` (v1.8.0): added/changed/removed/unchanged counts and bounded samples from the incremental change-detection pass that produced this build; `null` when not applicable (a plain full run, or an incremental run whose cache had no prior baseline to diff against)
+- `partialRebuildFallbackArtifacts` (v1.8.0 Batch 3): artifact families fully regenerated rather than partially reused during a partial rebuild (currently only ever `["call-graph"]`, when `--call-graph` was requested); `[]` outside the two `incremental-partial*` cache modes
 
 ### artifacts
 
@@ -136,6 +141,8 @@ The `semanticArtifacts` object records paths for semantic artifacts:
 - `dataModel` (null when not produced)
 - `dataModelGraph` (null when not produced)
 - `modelViewLineage` (null when not produced)
+- `frontendSemantic` (null when not produced)
+- `frontendReachability` (null when not produced)
 
 A null value means the artifact was not produced in the most recent run. A non-null value is a path relative to the artifact directory.
 
@@ -167,6 +174,10 @@ Top-level summary fields:
 ### Stale artifact behavior
 
 When `index` refreshes the artifact directory, it removes artifacts that were present from a previous run but are not produced in the current run. `manifest.json` always reflects the current artifact state. Consumers should read `manifest.json` to determine which artifacts are available rather than assuming fixed file names are always present.
+
+### cache-metadata.json (internal, v1.8.0)
+
+`index --incremental` writes `cache-metadata.json` inside the output directory. It is **internal indexer bookkeeping, not a public semantic artifact**: it is not listed in `manifest.json`'s `artifacts` map, it is not documented as part of the artifact set below, and its shape is not guaranteed to stay stable across `my-dev-kit` versions the way `manifest.json`/`symbol-index.json`/`code-graph.json` are. It records a config fingerprint and, per file, a SHA-256 content hash, size, and (as of v1.8.0 Batch 3) the `reExportSpecifiers`/`exportAllSpecifiers` extraction fields not present in the public `symbol-index.json` shape — used to detect added/changed/removed/unchanged files and to safely reuse an unchanged file's analysis during a partial rebuild, without re-parsing it. Consumers building on `my-dev-kit` artifacts should read `manifest.json` and the artifacts it references, not `cache-metadata.json`. See [`index` → Incremental indexing](COMMANDS.md#incremental-indexing-v180) in `docs/COMMANDS.md` for behavior details.
 
 ## symbol-index.json
 
@@ -759,6 +770,8 @@ Each result item may include `semanticRoles` and `artifactRefs` when present on 
 Node IDs are deterministic and stable across index runs for the same source root configuration. File node IDs use the `file:<relative-path>` form. Symbol node IDs use the `symbol:<relative-path>#<symbol-name>` form.
 
 ID stability depends on path and symbol name stability. Renaming a file or symbol changes its ID.
+
+This stable ID scheme is what the `graph-diff` command (v1.8.0 Batch 4) relies on to compare two index directories: a matching `node.id`/`edge.id` between a `--before` and `--after` index always means the same logical node/edge, so any remaining field differences are genuine metadata changes rather than an artifact of node/edge re-ordering. `graph-diff`'s own output schema (added/removed/changed nodes and edges, manifest/symbol-index/classification/semantic-summary diffs) is documented in `docs/COMMANDS.md` under `graph-diff`, not here — it is command output, not a persisted index artifact.
 
 ## Schema limitations
 

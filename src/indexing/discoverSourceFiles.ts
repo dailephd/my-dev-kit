@@ -21,7 +21,15 @@ export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
   '__pycache__',
   '.venv',
   'venv',
+  '.my-dev-kit',
 ] as const
+
+/**
+ * Directory name prefixes ignored by default, in addition to the exact
+ * names in DEFAULT_IGNORED_DIRECTORY_NAMES. Covers custom/smoke output
+ * directories such as `.my-dev-kit-web` or `.my-dev-kit-dry-run-smoke`.
+ */
+export const DEFAULT_IGNORED_DIRECTORY_PREFIXES = ['.my-dev-kit-'] as const
 
 const DEFAULT_FILE_EXCLUDE_PATTERNS = ['.d.ts', '.test.', '.spec.']
 const SAMPLE_LIMIT = 20
@@ -108,7 +116,10 @@ export function discoverSourceFiles(options: SourceFileDiscoveryOptions): Source
     onProgress: options.onProgress,
     result: {
       files: [],
-      defaultIgnoredDirectoryNames: [...DEFAULT_IGNORED_DIRECTORY_NAMES],
+      defaultIgnoredDirectoryNames: [
+        ...DEFAULT_IGNORED_DIRECTORY_NAMES,
+        ...DEFAULT_IGNORED_DIRECTORY_PREFIXES.map((prefix) => `${prefix}*`),
+      ],
       userExcludes: (options.userExcludes ?? []).map(normalizePathInput),
       totalFilesDiscovered: 0,
       totalFilesEligibleForIndexing: 0,
@@ -153,7 +164,7 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
         recordSkipped(state, relPath, 'user-exclude')
         continue
       }
-      if (state.defaultIgnoredDirectoryNames.has(entry.name.toLowerCase())) {
+      if (isDefaultIgnoredDirectory(entry.name, state.defaultIgnoredDirectoryNames)) {
         recordSkipped(state, relPath, 'default-ignore')
         continue
       }
@@ -195,6 +206,12 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     trackLargestFile(state.result.largestFiles, { path: relPath, sizeBytes: stat.size })
     maybeEmitProgress(state, currentSourceRoot)
   }
+}
+
+function isDefaultIgnoredDirectory(name: string, exactNames: Set<string>): boolean {
+  const lowerName = name.toLowerCase()
+  if (exactNames.has(lowerName)) return true
+  return DEFAULT_IGNORED_DIRECTORY_PREFIXES.some((prefix) => lowerName.startsWith(prefix))
 }
 
 function recordSkipped(
