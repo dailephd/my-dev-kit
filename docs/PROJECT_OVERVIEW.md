@@ -89,6 +89,8 @@ The `index` command writes:
 - `frontend-semantic.json` — React component, prop, hook, handler, JSX, and test facts, when the frontend analyzer runs on TSX/JSX files
 - `frontend-reachability.json` — static route, browser-storage, and UI-marker reachability facts, when the frontend analyzer runs on TSX/JSX files
 - `classification.json` — conservative static schema/layer classification of files and symbols, whenever the classification analyzer runs (v1.5.0)
+- `android-project.json` — static Android/Gradle project, module, and source-set detection (detection only — Kotlin/Java symbol data lives in `symbol-index.json`/`code-graph.json` instead, as of Batch 2/Batch 3), whenever Android evidence is found under `--root` (v1.9.0 Batch 1)
+- `android-components.json` — conservative static Android component-role detection (Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module) over already-indexed Kotlin/Java top-level symbols, whenever at least one role is detected in an Android project (v1.9.0 Batch 4)
 
 The `data-model` command additionally writes:
 
@@ -166,7 +168,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current v1.8.0 scope:
+Current scope (through v1.9.0 Batch 5):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -184,9 +186,14 @@ Current v1.8.0 scope:
 - incremental indexing cache metadata, changed-file detection, and `--reset-cache` (v1.8.0 Batch 2)
 - partial incremental rebuild for `symbol-index.json`/`code-graph.json`, with honest `call-graph.json` artifact fallback (v1.8.0 Batch 3)
 - deterministic read-only `graph-diff` comparison of two index directories (v1.8.0 Batch 4)
+- static Android/Gradle project, module, and source-set detection producing `android-project.json` — detection only, no Java structural indexing (v1.9.0 Batch 1)
+- conservative static Kotlin structural indexing (`.kt` files under `--src`): package/imports, top-level classes/interfaces/objects/data classes/sealed classes/enums/functions/extension functions/properties, surfaced in `symbol-index.json`/`code-graph.json` — no class-member symbols, no call-graph edges, no Kotlin compiler execution (v1.9.0 Batch 2)
+- conservative static Java structural indexing (`.java` files under `--src`): package/imports (including `static` and wildcard forms), top-level classes/interfaces/enums/records/annotation-type declarations, surfaced in `symbol-index.json`/`code-graph.json` — no method/field/constructor symbols, no call-graph edges, no `javac`/Maven/Gradle execution (v1.9.0 Batch 3)
+- conservative static Android component-role detection over already-indexed Kotlin/Java top-level symbols (14 roles: Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module), producing `android-components.json` plus compact role metadata on the matching `symbol-index.json`/`code-graph.json` symbols — evidence-tiered confidence (annotation/superclass > import > path > name-suffix), never claims manifest declaration or runtime DI/navigation correctness (v1.9.0 Batch 4)
+- hardened and tested retrieval/command compatibility for `index`/`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental` when Android project facts, Kotlin symbols, Java symbols, and Android component roles coexist in one index — no new commands, flags, or artifacts (v1.9.0 Batch 5)
 - warnings for unsupported, ambiguous, or low-confidence patterns
 
-Current v1.8.0 does not claim:
+Current scope does not claim:
 
 - full ORM or schema coverage
 - runtime database behavior
@@ -199,7 +206,7 @@ Current v1.8.0 does not claim:
 - retrieval filtering for search/lookup/slice/source or graph-diff
 - dedicated `call-graph.json` diff output
 - partial non-fallback call-graph rebuild
-- Android, Kotlin, Java, Gradle, manifest, or Compose indexing support
+- Detailed `AndroidManifest.xml` parsing, Gradle dependency-graph/version-catalog resolution, or Compose indexing support (Android/Gradle project-level *detection* exists as of v1.9.0 Batch 1; conservative Kotlin structural indexing exists as of v1.9.0 Batch 2; conservative Java structural indexing exists as of v1.9.0 Batch 3; conservative Android component-role detection exists as of v1.9.0 Batch 4 — all are static, top-level-only, no compiler/Maven/Gradle/runtime execution, no call-graph)
 - an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
 - the v1.7.0 internal retrieval regression suite or a plugin architecture
 

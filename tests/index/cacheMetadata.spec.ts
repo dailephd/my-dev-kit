@@ -18,6 +18,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules', 'dist'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
     }
 
     expect(computeConfigFingerprint(input)).toBe(computeConfigFingerprint(input))
@@ -31,6 +32,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
     })
     const b = computeConfigFingerprint({
       sourceRoots: ['tests', 'src'],
@@ -39,6 +41,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
     })
 
     expect(a).toBe(b)
@@ -51,6 +54,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
     }
     const withCallGraph = computeConfigFingerprint({ ...base, callGraphEnabled: true })
     const withoutCallGraph = computeConfigFingerprint({ ...base, callGraphEnabled: false })
@@ -65,6 +69,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
     }
     const a = computeConfigFingerprint({ ...base, sourceRoots: ['src'] })
     const b = computeConfigFingerprint({ ...base, sourceRoots: ['src', 'lib'] })

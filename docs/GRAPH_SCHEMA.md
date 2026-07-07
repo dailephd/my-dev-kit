@@ -43,6 +43,10 @@ Classification artifact (written by `index` whenever the classification analyzer
 
 - `classification.json`
 
+Android project artifact (written by `index` when static Android/Gradle project evidence is found under `--root`, v1.9.0 Batch 1 — Android/Gradle structure detection only; this artifact itself does not carry Kotlin/Java symbol data, which lives in `symbol-index.json`/`code-graph.json` as of Batch 2/Batch 3):
+
+- `android-project.json`
+
 Artifact flow:
 
 ```text
@@ -54,6 +58,7 @@ index
   -> data-model.json         (when TypeScript model analyzer runs)
   -> data-model-graph.json   (when TypeScript model analyzer runs)
   -> classification.json     (when the classification analyzer runs, v1.5.0)
+  -> android-project.json    (when static Android/Gradle evidence is found under --root, v1.9.0 Batch 1)
 
 data-model --trace-view
   -> model-view-lineage.json
@@ -152,7 +157,7 @@ The `analyzers` array records the status of each analyzer that was invoked.
 
 Each entry includes:
 
-- `id`: analyzer identifier (e.g. `syntax`, `call-graph`, `data-model`, `model-view-lineage`)
+- `id`: analyzer identifier (e.g. `syntax`, `call-graph`, `data-model`, `model-view-lineage`, `classification`, `android-project` (v1.9.0 Batch 1))
 - `status`: one of `not-run`, `complete`, `partial`, `failed`, `skipped`
 - `version`: analyzer version, when recorded
 - `schemaVersion`: schema version of the produced artifact, when applicable
@@ -181,7 +186,7 @@ When `index` refreshes the artifact directory, it removes artifacts that were pr
 
 ## symbol-index.json
 
-`symbol-index.json` records per-file symbol information extracted during indexing.
+`symbol-index.json` records per-file symbol information extracted during indexing. `language` is one of `typescript`, `javascript`, `python`, `kotlin` (v1.9.0 Batch 2), or `java` (v1.9.0 Batch 3) — Kotlin/Java support is conservative static top-level structural indexing only; see `docs/COMMANDS.md` "Kotlin structural indexing" / "Java structural indexing" for what is and isn't extracted.
 
 Top-level fields:
 
@@ -205,7 +210,7 @@ Each file summary may include:
 Each symbol record may include:
 
 - `name`
-- `kind`
+- `kind`: `function`, `class`, `interface`, `type`, `enum`, `const`, `variable`, or `object` (`object` added in v1.9.0 Batch 2 for Kotlin `object`/`companion object` declarations). Java (v1.9.0 Batch 3) reuses this set with no additions: `record` declarations map to `class`, `@interface` annotation-type declarations map to `interface`.
 - `line`
 - `exported`
 - `signature`
@@ -213,6 +218,8 @@ Each symbol record may include:
 - `artifactRefs`
 - `classificationRoles` (v1.5.0)
 - `classificationRefs` (v1.5.0)
+- `androidComponentRoles` (v1.9.0 Batch 4): `[{ role, confidence }]`, only present on Kotlin/Java symbols in an Android project with a detected role
+- `androidComponentRefs` (v1.9.0 Batch 4): pointers back into `android-components.json`
 
 ### semanticRoles on symbols
 
@@ -773,6 +780,28 @@ ID stability depends on path and symbol name stability. Renaming a file or symbo
 
 This stable ID scheme is what the `graph-diff` command (v1.8.0 Batch 4) relies on to compare two index directories: a matching `node.id`/`edge.id` between a `--before` and `--after` index always means the same logical node/edge, so any remaining field differences are genuine metadata changes rather than an artifact of node/edge re-ordering. `graph-diff`'s own output schema (added/removed/changed nodes and edges, manifest/symbol-index/classification/semantic-summary diffs) is documented in `docs/COMMANDS.md` under `graph-diff`, not here — it is command output, not a persisted index artifact.
 
+## android-project.json (v1.9.0 Batch 1)
+
+Artifact kind: `my-dev-kit-v1-android-project`. Written by `index` when static Android/Gradle project evidence is found under `--root`; absent entirely for a non-Android project (not written as an empty/skipped file). Registered in `manifest.json`'s `analyzers` array as `{ id: 'android-project', ... }`, the same registration pattern `classification` uses — there is no dedicated top-level `IndexManifest` field for it.
+
+Top-level fields: `artifactKind`, `schemaVersion` (`"1.0.0"`), `createdAt`, `projectRoot`, `detected`, `confidence` (`"none"`/`"low"`/`"medium"`/`"high"`), `evidence` (sorted paths), `modules` (sorted by `path`), `ignoredGeneratedDirectories` (sorted), `warnings` (sorted), `summary` (`{ moduleCount, appModuleCount, libraryModuleCount, unknownModuleCount }`).
+
+Each module: `id` (`android-module:<path>`), `name`, `path`, `type` (`"app"`/`"library"`/`"unknown"`), `gradleFiles`, `manifestPath`, `sourceSets` (sorted `main` → `test` → `androidTest`, each with `name`/`path`/`manifestPath`/`kotlinRoots`/`javaRoots`/`resourcesPath`/`warnings`), `kotlinSourceRoots`, `javaSourceRoots`, `evidence`, `warnings`.
+
+This is a static detection artifact only: it does not record Kotlin/Java symbols, does not add nodes to `code-graph.json`/`symbol-index.json`, and does not claim the Gradle build succeeds, dependencies resolve, or the manifest is behaviorally valid. Full flag/behavior documentation lives in `docs/COMMANDS.md` under "Android project detection".
+
+## android-components.json (v1.9.0 Batch 4)
+
+Artifact kind: `my-dev-kit-v1-android-components`. Written by `index` only when one or more Android component roles were detected for the already-indexed Kotlin/Java top-level symbols (Batch 2/3) of an already-detected Android project (Batch 1); absent for a non-Android project or an Android project with zero detectable roles. Registered in `manifest.json`'s `analyzers` array as `{ id: 'android-components', ... }`, the same registration pattern `android-project`/`classification` use.
+
+Top-level fields: `artifactKind`, `schemaVersion` (`"1.0.0"`), `createdAt`, `detected`, `components` (sorted by `filePath` → `symbolName` → `role`), `summary` (`{ componentCount, highConfidenceCount, mediumConfidenceCount, lowConfidenceCount, roleCounts }`), `warnings` (sorted).
+
+Each component entry: `id`, `role` (one of `activity`/`fragment`/`view-model`/`service`/`broadcast-receiver`/`content-provider`/`worker`/`repository`/`use-case`/`room-entity`/`room-dao`/`room-database`/`retrofit-service`/`hilt-module`), `confidence` (`"high"`/`"medium"`/`"low"`), `filePath`, `symbolId`, `symbolName`, `sourceLanguage` (`"kotlin"`/`"java"`), `modulePath`, `sourceSet`, `packageName`, `evidence[]` (sorted by evidence-priority then value; each entry has `kind`, `value`, `source`, `confidence`), `warnings[]`.
+
+Compact projection: a detected role also appears as `androidComponentRoles: [{ role, confidence }]` plus `androidComponentRefs` (pointing back into this artifact) directly on the matching symbol in `symbol-index.json` and the matching `symbol`-kind node in `code-graph.json` — the same compact-projection pattern `classificationRoles`/`classificationRefs` already uses. A symbol with no detected role simply omits both fields.
+
+This is a static detection artifact only: it does not claim a component is declared in `AndroidManifest.xml`, that dependency injection resolves correctly, or any compiled/runtime behavior. Full behavior documentation lives in `docs/COMMANDS.md` under "Android component-role detection".
+
 ## Schema limitations
 
 - Symbol end lines are not recorded in `symbol-index.json`.
@@ -784,3 +813,8 @@ This stable ID scheme is what the `graph-diff` command (v1.8.0 Batch 4) relies o
 - Search remains keyword-based. No fuzzy or embedding-based search is available.
 - `view --graph data-model` renders `data-model-graph.json` when it is referenced by `manifest.json`.
 - `view --graph model-view-lineage` renders `model-view-lineage.json` when trace-view has produced and registered it in `manifest.json`.
+- `android-project.json` (v1.9.0 Batch 1) is detection-only: no Android component-role classification, no detailed `AndroidManifest.xml` parsing beyond a path-existence check, no Gradle version-catalog plugin-alias resolution, and no custom Gradle `projectDir` remap support.
+- Kotlin structural indexing (v1.9.0 Batch 2) extracts top-level declarations only (no class-member functions/properties, matching the existing TypeScript/Python top-level-only extraction), has no call-graph support, and resolves imports to a local file only via the common single-declaration-per-file naming convention.
+- Java structural indexing (v1.9.0 Batch 3) has the same shape of limitations as Kotlin: top-level declarations only, no call-graph support, no semantic type resolution or cross-file `extends`/`implements` resolution, and import resolution is a best-effort file-name-matches-type-name heuristic, not a guarantee.
+- Android component-role detection (v1.9.0 Batch 4) only evaluates top-level Kotlin/Java symbols (no method/field/constructor-level evidence); `repository`/`use-case` never exceed `medium` confidence (no annotation/superclass evidence tier exists for them); name-suffix-only matches never exceed `low` confidence; it does not parse `AndroidManifest.xml` contents, resolve Gradle version-catalog aliases, or verify that dependency injection/navigation actually works at runtime.
+- v1.9.0 Batch 5 added no new artifact, schema field, command, or flag — it only added integration tests and a mixed Kotlin/Java Android fixture proving the schemas above (`android-project.json`, `android-components.json`, `androidComponentRoles`/`androidComponentRefs`) remain correct when read together through `search`/`lookup`/`source`/`slice`/`context`/`graph-diff`.

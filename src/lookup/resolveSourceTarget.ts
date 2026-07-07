@@ -28,6 +28,8 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
       evidenceRefs: collectEvidenceRefs(node.semanticRoles),
       classificationRoles: node.classificationRoles,
       classificationRefs: node.classificationRefs,
+      androidComponentRoles: node.androidComponentRoles,
+      androidComponentRefs: node.androidComponentRefs,
       warnings: [],
     }
   }
@@ -55,6 +57,8 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
     evidenceRefs: collectEvidenceRefs(symbol.semanticRoles),
     classificationRoles: symbol.classificationRoles,
     classificationRefs: symbol.classificationRefs,
+    androidComponentRoles: symbol.androidComponentRoles,
+    androidComponentRefs: symbol.androidComponentRefs,
     warnings: ['Symbol location has a start line only; returning a small bounded preview from that line.'],
   }
 }

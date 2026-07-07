@@ -57,6 +57,7 @@ VIEW_IMPLEMENTATION_NOTES.md
 # Docs/generated reports
 docs/DOCUMENTATION_COMPATIBILITY_AUDIT.md
 reports/
+artifacts/
 
 # Local import/scratch folders
 alpha-import/

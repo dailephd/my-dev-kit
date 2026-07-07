@@ -7,6 +7,8 @@ export const DATA_MODEL_GRAPH_FILENAME = 'data-model-graph.json'
 export const FRONTEND_SEMANTIC_FILENAME = 'frontend-semantic.json'
 export const FRONTEND_REACHABILITY_FILENAME = 'frontend-reachability.json'
 export const CLASSIFICATION_FILENAME = 'classification.json'
+export const ANDROID_PROJECT_FILENAME = 'android-project.json'
+export const ANDROID_COMPONENTS_FILENAME = 'android-components.json'
 
 export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
   INDEX_MANIFEST_FILENAME,
@@ -21,6 +23,8 @@ export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
   FRONTEND_SEMANTIC_FILENAME,
   FRONTEND_REACHABILITY_FILENAME,
   CLASSIFICATION_FILENAME,
+  ANDROID_PROJECT_FILENAME,
+  ANDROID_COMPONENTS_FILENAME,
 ] as const
 
 export const MANAGED_INDEX_ARTIFACT_FILENAMES = [

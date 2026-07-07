@@ -3,6 +3,7 @@ import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
+import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
 export type SearchResultKind = 'file' | 'symbol' | 'edge'
@@ -24,6 +25,7 @@ export type SearchMatchField =
   | 'frontendValue'
   | 'classificationRole'
   | 'classificationEditGuidance'
+  | 'androidComponentRole'
 
 export interface SearchMatchReason {
   field: SearchMatchField
@@ -49,6 +51,8 @@ export interface SearchResultItem {
   artifactRefs?: SemanticArtifactRef[]
   classificationRoles?: ClassificationRoleRef[]
   classificationRefs?: SemanticArtifactRef[]
+  androidComponentRoles?: AndroidComponentRoleRef[]
+  androidComponentRefs?: SemanticArtifactRef[]
 }
 
 export interface SearchIndexOptions {

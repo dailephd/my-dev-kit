@@ -22,6 +22,7 @@ export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
   '.venv',
   'venv',
   '.my-dev-kit',
+  '.gradle',
 ] as const
 
 /**
@@ -262,6 +263,8 @@ function incrementLanguageCount(languageCounts: Record<string, number>, relPath:
     ext === '.py' ? 'python' :
     ext === '.ts' || ext === '.tsx' ? 'typescript' :
     ext === '.js' || ext === '.jsx' ? 'javascript' :
+    ext === '.kt' ? 'kotlin' :
+    ext === '.java' ? 'java' :
     'unknown'
   languageCounts[language] = (languageCounts[language] ?? 0) + 1
 }

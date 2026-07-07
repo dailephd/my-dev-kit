@@ -122,6 +122,8 @@ The `index` command writes:
 | `frontend-semantic.json` | Frontend semantic artifact: React components, local components, prop types, hooks, handlers, JSX regions, test blocks, locators, UI strings, and flow relationships, written when the frontend analyzer runs on TSX/JSX files |
 | `frontend-reachability.json` | Frontend reachability artifact (v1.3.0): static route facts, browser storage key facts, UI reachability facts, and cross-domain reachability edges, written when the frontend analyzer runs on TSX/JSX files |
 | `classification.json` | Classification artifact (v1.5.0): conservative static schema/layer classification of files and symbols — category, edit guidance, readiness, risk labels, evidence, and uncertainty — written whenever the classification analyzer runs |
+| `android-project.json` | Android project artifact (v1.9.0 Batch 1): static Android/Gradle project, module, and source-set detection — Kotlin/Java symbol data lives in `symbol-index.json`/`code-graph.json` instead (Batch 2/Batch 3) — written when Android evidence is found under `--root` |
+| `android-components.json` | Android component-role artifact (v1.9.0 Batch 4): conservative static role detection (Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module) over already-indexed Kotlin/Java top-level symbols — written only when at least one role is detected |
 
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
@@ -467,7 +469,7 @@ Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifa
 
 Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
 
-Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; v1.7 adds an internal retrieval regression suite for my-dev-kit's own bounded-context behavior, and v1.8+ continues the scalability roadmap.
+Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; v1.7 adds an internal retrieval regression suite for my-dev-kit's own bounded-context behavior; v1.8 adds indexing scalability (incremental indexing, partial rebuild, and `graph-diff`); v1.9.0 Batch 1 adds a static Android/Gradle project-detection foundation; v1.9.0 Batch 2 adds conservative static Kotlin structural indexing; v1.9.0 Batch 3 adds conservative static Java structural indexing (`.kt` and `.java` files under `--src` now both appear in `symbol-index.json`/`code-graph.json`, searchable/lookup-able/sliceable/retrievable like any other language); v1.9.0 Batch 4 adds conservative static Android component-role detection (Activity/ViewModel/Repository/Room/Retrofit/Hilt, etc.) with compact role metadata on those same symbols and nodes; and v1.9.0 Batch 5 hardens and verifies retrieval/command compatibility (`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental`) for that Android/Kotlin/Java data, with no new commands, flags, or artifacts.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
 

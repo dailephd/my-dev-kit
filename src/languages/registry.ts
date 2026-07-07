@@ -2,6 +2,8 @@ import * as path from 'node:path'
 import type { LanguageAdapter } from './types.js'
 import { TypeScriptAdapter } from './typescript/adapter.js'
 import { PythonAdapter } from './python/adapter.js'
+import { KotlinAdapter } from './kotlin/adapter.js'
+import { JavaAdapter } from './java/adapter.js'
 
 export class LanguageRegistry {
   private readonly adapters: LanguageAdapter[] = []
@@ -27,5 +29,7 @@ export function createDefaultRegistry(): LanguageRegistry {
   const registry = new LanguageRegistry()
   registry.register(new TypeScriptAdapter())
   registry.register(new PythonAdapter())
+  registry.register(new KotlinAdapter())
+  registry.register(new JavaAdapter())
   return registry
 }

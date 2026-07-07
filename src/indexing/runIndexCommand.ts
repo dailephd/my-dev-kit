@@ -50,8 +50,19 @@ import {
   type ClassificationArtifact,
   type CompactClassificationMetadata,
 } from '../classification/index.js'
-import { CLASSIFICATION_FILENAME } from './managedArtifacts.js'
+import { ANDROID_PROJECT_FILENAME, ANDROID_COMPONENTS_FILENAME, CLASSIFICATION_FILENAME } from './managedArtifacts.js'
 import type { IndexAnalyzerStatus } from './manifestTypes.js'
+import { detectAndroidProject } from '../android/detectAndroidProject.js'
+import { ANDROID_PROJECT_SCHEMA_VERSION, type DetectAndroidProjectResult } from '../android/androidProjectTypes.js'
+import {
+  detectAndroidComponents,
+  buildAndroidComponentRefsBySymbolId,
+  applyAndroidComponentsToSymbolIndex,
+  applyAndroidComponentsToCodeGraph,
+  ANDROID_COMPONENTS_SCHEMA_VERSION,
+  type AndroidComponentsArtifact,
+  type CompactAndroidComponentMetadata,
+} from '../android/index.js'
 
 export interface RunIndexCommandOptions {
   root?: string
@@ -98,6 +109,10 @@ export interface RunIndexCommandIndexResult {
     removed: string[]
   }
   preflightWarnings: PreflightWarning[]
+  /** Path to `android-project.json`, or `null` when no Android project evidence was detected (v1.9.0 Batch 1). */
+  androidProjectPath: string | null
+  /** Path to `android-components.json`, or `null` when no Android component roles were detected (v1.9.0 Batch 4). */
+  androidComponentsPath: string | null
   cache: IndexCacheSummary
   cacheReset: CacheResetResult | null
 }
@@ -174,6 +189,13 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
 
   const cacheMetadataPath = toForwardSlash(cacheMetadataPathFor(outputDir))
 
+  // Static Android project/module/source-set detection (v1.9.0 Batch 1).
+  // Runs once per invocation and is reused for both cache fingerprinting and
+  // artifact writing/manifest registration — never re-detected mid-run.
+  // Uses projectRoot (not --src roots), since Gradle/manifest evidence
+  // typically lives outside the indexed source roots.
+  const androidResult = detectAndroidProject({ projectRoot })
+
   if (options.incremental !== true) {
     const built = runFullIndexBuild({
       projectRoot,
@@ -187,6 +209,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
       cacheInvalidationReason: undefined,
       changedFileSummary: undefined,
       partialRebuildFallbackArtifacts: undefined,
+      androidResult,
     })
     return {
       ...built.result,
@@ -211,6 +234,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     commandStartTime,
     cacheReset,
     cacheMetadataPath,
+    androidResult,
   })
 }
 
@@ -227,10 +251,12 @@ interface RunIncrementalIndexParams {
   commandStartTime: number
   cacheReset: CacheResetResult | null
   cacheMetadataPath: string
+  androidResult: DetectAndroidProjectResult
 }
 
 function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommandIndexResult {
-  const { projectRoot, normalizedSourceRoots, options, outputDir, progress, commandStartTime, cacheReset, cacheMetadataPath } = params
+  const { projectRoot, normalizedSourceRoots, options, outputDir, progress, commandStartTime, cacheReset, cacheMetadataPath, androidResult } =
+    params
 
   const configFingerprint = computeConfigFingerprint({
     sourceRoots: normalizedSourceRoots,
@@ -239,6 +265,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     language: options.language ?? null,
     defaultIgnoredDirectoryNames: [...DEFAULT_IGNORED_DIRECTORY_NAMES],
     defaultIgnoredDirectoryPrefixes: [...DEFAULT_IGNORED_DIRECTORY_PREFIXES],
+    androidEvidenceFingerprint: androidResult.evidenceFingerprint,
   })
 
   const cacheRead = readCacheMetadata(outputDir)
@@ -256,6 +283,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       cacheInvalidationReason: invalidationReason,
       changedFileSummary: null,
       partialRebuildFallbackArtifacts: [],
+      androidResult,
     })
     writeMergedCacheMetadata({
       outputDir,
@@ -295,7 +323,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   if (cacheRead.metadata.configFingerprint !== configFingerprint) {
     return fullRebuild(
       'incremental-full-config-changed',
-      'Index configuration changed (source roots, --exclude values, --call-graph, --language, or default ignore rules).'
+      'Index configuration changed (source roots, --exclude values, --call-graph, --language, default ignore rules, or detected Android project/module/source-set evidence).'
     )
   }
 
@@ -354,6 +382,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
         cacheInvalidationReason: null,
         changedFileSummary,
         partialRebuildFallbackArtifacts,
+        androidResult,
       })
 
       writeMergedCacheMetadata({
@@ -393,6 +422,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       cacheInvalidationReason: eligibility.reason,
       changedFileSummary,
       partialRebuildFallbackArtifacts: [],
+      androidResult,
     })
     writeMergedCacheMetadata({
       outputDir,
@@ -464,6 +494,8 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     analyzers: existingManifest.analyzers,
     managedArtifacts: { removed: [] },
     preflightWarnings,
+    androidProjectPath: resolveAndroidProjectPathFromManifest(existingManifest, outputDir),
+    androidComponentsPath: resolveAndroidComponentsPathFromManifest(existingManifest, outputDir),
     cache: {
       requested: true,
       mode: 'incremental-no-change',
@@ -489,6 +521,20 @@ function tryReadExistingManifest(outputDir: string): IndexManifest | null {
   } catch {
     return null
   }
+}
+
+function resolveAndroidProjectPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-project')
+}
+
+function resolveAndroidComponentsPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-components')
+}
+
+function resolveAnalyzerArtifactPathFromManifest(manifest: IndexManifest, outputDir: string, analyzerId: string): string | null {
+  const analyzer = manifest.analyzers?.find((entry) => entry.id === analyzerId)
+  const artifactPath = analyzer?.artifacts?.[0]?.path
+  return artifactPath ? toForwardSlash(path.join(outputDir, artifactPath)) : null
 }
 
 function writeMergedCacheMetadata(params: {
@@ -527,6 +573,7 @@ interface RunFullIndexBuildParams {
   cacheInvalidationReason: string | null | undefined
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
+  androidResult: DetectAndroidProjectResult
 }
 
 interface RunFullIndexBuildResult {
@@ -585,6 +632,7 @@ interface FinishIndexBuildParams {
   cacheInvalidationReason: string | null | undefined
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
+  androidResult: DetectAndroidProjectResult
 }
 
 function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandIndexResult, 'cache' | 'cacheReset'> {
@@ -603,6 +651,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     cacheInvalidationReason,
     changedFileSummary,
     partialRebuildFallbackArtifacts,
+    androidResult,
   } = params
 
   const warnings: string[] = []
@@ -663,20 +712,34 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const classifiedSymbolIndex = applyClassificationToSymbolIndex(enrichedSymbolIndex, classificationRefsBySymbolId)
   const classifiedCodeGraph = applyClassificationToCodeGraph(enrichedCodeGraph, classificationRefsBySymbolId)
 
+  const androidAnalyzerStatus = buildAndroidAnalyzerStatus(androidResult)
+
+  const { androidComponents, androidComponentsAnalyzerStatus } = runAndroidComponentsAnalyzer({
+    symbolIndex: classifiedSymbolIndex,
+    androidProject: androidResult.artifact,
+    projectRoot,
+    createdAt,
+  })
+  const androidComponentRefsBySymbolId = androidComponents
+    ? buildAndroidComponentRefsBySymbolId(androidComponents.components, ANDROID_COMPONENTS_FILENAME)
+    : new Map<string, CompactAndroidComponentMetadata>()
+  const roledSymbolIndex = applyAndroidComponentsToSymbolIndex(classifiedSymbolIndex, androidComponentRefsBySymbolId)
+  const roledCodeGraph = applyAndroidComponentsToCodeGraph(classifiedCodeGraph, androidComponentRefsBySymbolId)
+
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
     languages,
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: callGraph !== null,
-    symbolIndex: classifiedSymbolIndex,
-    codeGraph: classifiedCodeGraph,
+    symbolIndex: roledSymbolIndex,
+    codeGraph: roledCodeGraph,
     warnings,
     errors,
     createdAt,
     semanticArtifacts: semanticResult.semanticArtifacts,
     analyzers: replaceAnalyzerStatuses(
-      [...(baseManifest.analyzers ?? []), classificationAnalyzerStatus],
+      [...(baseManifest.analyzers ?? []), classificationAnalyzerStatus, androidAnalyzerStatus, androidComponentsAnalyzerStatus],
       semanticResult.analyzers
     ),
     indexMode,
@@ -695,14 +758,16 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   writeIndexArtifacts({
     outputDir,
     manifest,
-    symbolIndex: classifiedSymbolIndex,
-    codeGraph: classifiedCodeGraph,
+    symbolIndex: roledSymbolIndex,
+    codeGraph: roledCodeGraph,
     callGraph,
     classification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
     frontendSemantic: semanticResult.frontendResult.artifact,
     frontendReachability: semanticResult.frontendReachabilityResult.artifact,
+    androidProject: androidResult.artifact.detected ? androidResult.artifact : null,
+    androidComponents: androidComponents && androidComponents.detected ? androidComponents : null,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -739,6 +804,12 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
       removed: refreshResult.removed,
     },
     preflightWarnings,
+    androidProjectPath: androidResult.artifact.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_PROJECT_FILENAME))
+      : null,
+    androidComponentsPath: androidComponents && androidComponents.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_COMPONENTS_FILENAME))
+      : null,
   }
 }
 
@@ -834,6 +905,140 @@ function runClassificationAnalyzer(options: RunClassificationAnalyzerOptions): {
         status: 'failed',
         version: CLASSIFICATION_SCHEMA_VERSION,
         schemaVersion: CLASSIFICATION_SCHEMA_VERSION,
+        artifacts: [],
+        warningCount: 0,
+        errorCount: 1,
+        summary: { errorMessage: error instanceof Error ? error.message : String(error) },
+      },
+    }
+  }
+}
+
+/**
+ * Registers Android project detection (v1.9.0 Batch 1) via the same
+ * analyzer-registry pattern `classification` uses, rather than a new
+ * top-level manifest field. Never `'failed'`: static evidence-gathering has
+ * no real failure mode short of an I/O error, which `detectAndroidProject()`
+ * already degrades to "no evidence found" rather than throwing.
+ */
+function buildAndroidAnalyzerStatus(androidResult: DetectAndroidProjectResult): IndexAnalyzerStatus {
+  const { artifact } = androidResult
+  const status: IndexAnalyzerStatus['status'] = !artifact.detected
+    ? 'skipped'
+    : artifact.confidence === 'high'
+      ? 'complete'
+      : 'partial'
+
+  return {
+    id: 'android-project',
+    status,
+    version: ANDROID_PROJECT_SCHEMA_VERSION,
+    schemaVersion: ANDROID_PROJECT_SCHEMA_VERSION,
+    artifacts: artifact.detected
+      ? [{ name: 'androidProject', path: ANDROID_PROJECT_FILENAME, artifactKind: 'my-dev-kit-v1-android-project' }]
+      : [],
+    warningCount: artifact.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected: artifact.detected,
+      confidence: artifact.confidence,
+      moduleCount: artifact.summary.moduleCount,
+    },
+  }
+}
+
+interface RunAndroidComponentsAnalyzerOptions {
+  symbolIndex: SymbolIndex
+  androidProject: DetectAndroidProjectResult['artifact']
+  projectRoot: string
+  createdAt: string
+}
+
+/**
+ * Registers Android component-role detection (v1.9.0 Batch 4) via the same
+ * analyzer-registry pattern classification/android-project already use.
+ * Skipped entirely (no detection run, no artifact) when Android project
+ * evidence itself was not detected — component roles only make sense in the
+ * context of an already-detected Android project. Reports 'failed' rather
+ * than throwing if detection construction fails (mirrors the classification
+ * analyzer's failure-mode contract), since detection reads already-indexed
+ * source files from disk for Retrofit-service body evidence and that read
+ * can fail even though the rest of the index run succeeded.
+ */
+function runAndroidComponentsAnalyzer(options: RunAndroidComponentsAnalyzerOptions): {
+  androidComponents: AndroidComponentsArtifact | null
+  androidComponentsAnalyzerStatus: IndexAnalyzerStatus
+} {
+  if (!options.androidProject.detected) {
+    return {
+      androidComponents: null,
+      androidComponentsAnalyzerStatus: {
+        id: 'android-components',
+        status: 'skipped',
+        version: ANDROID_COMPONENTS_SCHEMA_VERSION,
+        schemaVersion: ANDROID_COMPONENTS_SCHEMA_VERSION,
+        artifacts: [],
+        warningCount: 0,
+        errorCount: 0,
+        summary: { detected: false, componentCount: 0 },
+      },
+    }
+  }
+
+  try {
+    const { artifact } = detectAndroidComponents({
+      symbolIndex: options.symbolIndex,
+      androidProject: options.androidProject,
+      projectRoot: options.projectRoot,
+      createdAt: options.createdAt,
+    })
+
+    if (artifact.components.length === 0) {
+      return {
+        androidComponents: artifact,
+        androidComponentsAnalyzerStatus: {
+          id: 'android-components',
+          status: 'skipped',
+          version: ANDROID_COMPONENTS_SCHEMA_VERSION,
+          schemaVersion: ANDROID_COMPONENTS_SCHEMA_VERSION,
+          artifacts: [],
+          warningCount: 0,
+          errorCount: 0,
+          summary: { detected: false, componentCount: 0 },
+        },
+      }
+    }
+
+    const allWeakOnly = artifact.components.every((component) => component.confidence === 'low')
+    return {
+      androidComponents: artifact,
+      androidComponentsAnalyzerStatus: {
+        id: 'android-components',
+        status: allWeakOnly ? 'partial' : 'complete',
+        version: ANDROID_COMPONENTS_SCHEMA_VERSION,
+        schemaVersion: ANDROID_COMPONENTS_SCHEMA_VERSION,
+        artifacts: [
+          { name: 'androidComponents', path: ANDROID_COMPONENTS_FILENAME, artifactKind: 'my-dev-kit-v1-android-components' },
+        ],
+        warningCount: artifact.warnings.length,
+        errorCount: 0,
+        summary: {
+          detected: true,
+          componentCount: artifact.summary.componentCount,
+          highConfidenceCount: artifact.summary.highConfidenceCount,
+          mediumConfidenceCount: artifact.summary.mediumConfidenceCount,
+          lowConfidenceCount: artifact.summary.lowConfidenceCount,
+        },
+      },
+    }
+  } catch (error) {
+    return {
+      androidComponents: null,
+      androidComponentsAnalyzerStatus: {
+        id: 'android-components',
+        status: 'failed',
+        version: ANDROID_COMPONENTS_SCHEMA_VERSION,
+        schemaVersion: ANDROID_COMPONENTS_SCHEMA_VERSION,
         artifacts: [],
         warningCount: 0,
         errorCount: 1,

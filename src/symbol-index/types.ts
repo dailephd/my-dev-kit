@@ -11,6 +11,7 @@
 
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
+import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -24,7 +25,7 @@ export const ARTIFACT_MAIN = 'symbol-index.json'
 export const ARTIFACT_CALL_GRAPH = 'symbol-index.call-graph.json'
 
 /** Supported source language labels. */
-export type SourceLanguage = 'typescript' | 'javascript' | 'python'
+export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' | 'java'
 
 /** Classification of a symbol declaration. */
 export type SymbolKind =
@@ -35,6 +36,8 @@ export type SymbolKind =
   | 'enum'
   | 'const'
   | 'variable'
+  /** Kotlin `object`/`companion object` declarations: a singleton/namespace, not cleanly a `class`. */
+  | 'object'
 
 // ---------------------------------------------------------------------------
 // Symbol index types
@@ -72,6 +75,9 @@ export interface SymbolDefinition {
   artifactRefs?: SemanticArtifactRef[]
   classificationRoles?: ClassificationRoleRef[]
   classificationRefs?: SemanticArtifactRef[]
+  /** Android component roles detected for this symbol (v1.9.0 Batch 4). Only ever present on Kotlin/Java symbols in an Android project. */
+  androidComponentRoles?: AndroidComponentRoleRef[]
+  androidComponentRefs?: SemanticArtifactRef[]
 }
 
 /**
@@ -190,6 +196,8 @@ export interface GraphSymbolRecord {
   artifactRefs?: SemanticArtifactRef[]
   classificationRoles?: ClassificationRoleRef[]
   classificationRefs?: SemanticArtifactRef[]
+  androidComponentRoles?: AndroidComponentRoleRef[]
+  androidComponentRefs?: SemanticArtifactRef[]
 }
 
 /**

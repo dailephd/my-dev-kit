@@ -10,8 +10,12 @@ import {
   type FrontendReachabilityArtifact,
 } from '../frontend-reachability/index.js'
 import type { ClassificationArtifact } from '../classification/classificationTypes.js'
+import type { AndroidProjectArtifact } from '../android/androidProjectTypes.js'
+import type { AndroidComponentsArtifact } from '../android/androidComponentTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import {
+  ANDROID_PROJECT_FILENAME,
+  ANDROID_COMPONENTS_FILENAME,
   CALL_GRAPH_FILENAME,
   CLASSIFICATION_FILENAME,
   CODE_GRAPH_FILENAME,
@@ -34,6 +38,8 @@ export interface WriteIndexArtifactsOptions {
   frontendSemantic?: FrontendSemanticArtifact | null
   frontendReachability?: FrontendReachabilityArtifact | null
   classification?: ClassificationArtifact | null
+  androidProject?: AndroidProjectArtifact | null
+  androidComponents?: AndroidComponentsArtifact | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
@@ -61,6 +67,12 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
   }
   if (options.classification) {
     writeJson(path.join(options.outputDir, CLASSIFICATION_FILENAME), options.classification)
+  }
+  if (options.androidProject) {
+    writeJson(path.join(options.outputDir, ANDROID_PROJECT_FILENAME), options.androidProject)
+  }
+  if (options.androidComponents) {
+    writeJson(path.join(options.outputDir, ANDROID_COMPONENTS_FILENAME), options.androidComponents)
   }
 }
 

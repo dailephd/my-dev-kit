@@ -181,6 +181,116 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cach
 
 Not implemented: deterministic artifact merge / partial rebuild for `--call-graph` itself (always a full regeneration when requested during a partial rebuild), stable artifact IDs across a full-rebuild fallback (a full rebuild has no reuse guarantee by definition), and `graph-diff`/watch mode/retrieval filtering (separate, later `v1.8.0` batches — see `docs/ROADMAP.md`).
 
+### Android project detection (v1.9.0 Batch 1)
+
+Every `index` run performs **static** Android/Gradle project detection against `--root` (not `--src` — Gradle/manifest files typically live outside the indexed source roots). This is a **detection foundation only**: it identifies project/module/source-set structure so later `v1.9.0` batches can add Kotlin/Java structural indexing on top of it. There is no new CLI flag — detection always runs automatically and degrades to "not detected" with zero side effects for a non-Android project.
+
+**What is statically detected:**
+
+- Project-level Gradle/Android evidence: `settings.gradle(.kts)`, root `build.gradle(.kts)`, `gradlew`/`gradlew.bat`, `gradle/libs.versions.toml`, and any `AndroidManifest.xml`.
+- Gradle modules: parsed conservatively from `settings.gradle(.kts)` `include(...)` declarations (both Groovy multi-arg and Kotlin-DSL repeated-call forms), plus the conventional single-module `app/` folder and a root-as-module case when the root build file itself carries Android plugin evidence.
+- Module type (`app`/`library`/`unknown`): inferred from the literal presence of the `com.android.application` or `com.android.library` plugin-id substrings in that module's build file text. `org.jetbrains.kotlin.android`/`kotlin-android` are recorded as corroborating evidence but do not by themselves determine `app`/`library`.
+- Source sets (`main`, `test`, `androidTest`) and their `src/<set>/kotlin`, `src/<set>/java` roots: existence-based only (this detection step never opens a `.kt`/`.java` file; that happens separately, in Kotlin/Java structural indexing — see below).
+- `AndroidManifest.xml` presence at `<module>/src/main/AndroidManifest.xml` (a path-existence check only — the manifest's contents are never parsed).
+
+**What is explicitly not claimed** (static-analysis boundary): the Gradle build succeeding, dependencies resolving, plugin configuration being semantically valid, the app launching, an emulator/runtime property, or any Kotlin/Java symbol/component information. Detection never executes Gradle, never runs `gradlew`, never downloads or resolves dependencies, and never builds a Kotlin/Groovy AST — `settings.gradle`/`build.gradle` scanning is a conservative regex-based substring search, not a real parser. Version-catalog plugin aliases (`alias(libs.plugins.android.application)`) are not resolved to a concrete plugin id in this batch, and custom Gradle `project(...).projectDir` remaps are not honored — both are documented limitations, not defects.
+
+**Output**: when any Android evidence is found, `index` writes `android-project.json` (schema below) and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-project', status, artifacts: [...] }` — the same registration pattern `classification` already uses, not a new top-level manifest field. `status` is `'skipped'` (no evidence at all — the default for every non-Android project), `'partial'` (low/medium confidence, warnings present), or `'complete'` (high confidence: a module with clear plugin evidence and a found manifest). It is never `'failed'`. The JSON command result also exposes a top-level `androidProjectPath` (the artifact's path, or `null` when nothing was detected).
+
+**Default ignores**: `.gradle` is now a default-ignored directory name. `build` was already default-ignored (since v1.8.0 Batch 1) and, because default ignores match by directory name at any recursion depth, this already excludes `app/build`, `library/build`, `build/generated`, `build/intermediates`, `build/tmp`, and `build/kotlin` with no additional configuration.
+
+**Incremental indexing**: `index --incremental`'s config fingerprint now also covers detected Android structure (an `androidEvidenceFingerprint` derived from the built `android-project.json` itself, not raw file hashes). Editing `settings.gradle`, a module's `build.gradle(.kts)`, or an `AndroidManifest.xml` in a way that changes what is *detected* invalidates the cache (`incremental-full-config-changed`) and re-runs detection; an edit that doesn't change any detected fact (e.g. bumping a dependency version) correctly does not invalidate the cache. `--reset-cache`, the `incremental-no-change` fast path, and stale-artifact cleanup (a stale `android-project.json` is removed the same way a stale `classification.json` is, when re-indexing a now-non-Android project root into the same `--out`) all continue to work unchanged.
+
+**graph-diff**: `graph-diff` never enumerates the index directory's contents, so `android-project.json` sitting alongside the other artifacts is inert to it. The existing generic `manifest.analyzerChanges` diff (compares `manifest.analyzers[]` by id) automatically reports an `android-project` status change between two indexes with no `graph-diff`-specific code for this artifact.
+
+**Batch 1 does not implement** (deferred to later `v1.9.0` batches): Kotlin/Java structural symbol indexing (both are now implemented — see "Kotlin structural indexing" and "Java structural indexing" below), Android component-role detection (now implemented — see "Android component-role detection" below), Room/Retrofit/Hilt/Dagger detection, a detailed Gradle project model or dependency graph, a detailed `AndroidManifest.xml` artifact (package name/permissions/components), an Android resources or navigation artifact, Compose semantic retrieval, and Android build/emulator/APK/AAB/Play-Store/security/release validation of any kind.
+
+### Kotlin structural indexing (v1.9.0 Batch 2)
+
+`.kt` files under a requested `--src` root are indexed the same way `.ts`/`.js`/`.py` files already are — no new flag, no new command. A conservative, deterministic, **regex/line-based** extractor (not the Kotlin compiler, not a real grammar parser) scans each file and records:
+
+- the file's package declaration and import specifiers (including wildcard imports, e.g. `com.example.util.*`)
+- top-level `class`, `data class`, `sealed class`, `interface`, `sealed interface`/`fun interface`, `object`, and `enum class` declarations
+- top-level functions, including extension functions (`fun String.toSlug()`)
+- top-level `val`/`var` properties
+
+**Only top-level declarations become symbols** — this matches the existing TypeScript adapter (`ts.forEachChild(sourceFile, ...)`, direct children only) and Python adapter (`tree.body`, top-level statements only): neither language extracts class members as separate symbol-index entries today, so Kotlin member functions/properties are not either. Building a member-symbol model for Kotlin alone would be a parallel, inconsistent architecture rather than reuse of the existing one.
+
+**Modifiers, `suspend`, extension receivers, annotations, and `Flow`/`StateFlow` usage are not new fields** — they are all visible through the existing `signature` text (the trimmed declaration line, capped at 120 characters, with any immediately-preceding `@Annotation` line(s) prepended), the same choice the Python adapter already made for decorators (computed, then folded into signature text rather than persisted as a dedicated field). `Flow`/`StateFlow` type usage is additionally visible through the file's `imports` list when the corresponding `kotlinx.coroutines.flow.*` type is imported.
+
+Symbol kinds reuse the existing cross-language set (`class`, `interface`, `enum`, `function`, `const` for `val`, `variable` for `var`) plus one new kind, `object`, added because a Kotlin `object`/`companion object` (a singleton/namespace) doesn't map cleanly onto `class` without losing information.
+
+**Import resolution**: `import com.example.foo.Bar` resolves to a local file only via the common single-top-level-declaration-per-file convention (`<packageDir>/Bar.kt`) — Kotlin does not enforce file-name-matches-declaration-name the way Java does, so this is a best-effort heuristic. A wildcard import, or a package directory containing multiple top-level declarations per file, correctly resolves to no target file rather than guessing.
+
+**Call-graph extraction is not implemented for Kotlin** (`supportsCallGraph: false`): Kotlin's trailing-lambda call syntax (`foo { ... }`) makes regex-based call-site detection too unreliable to be worth the false-positive risk. `--call-graph` continues to work normally for TypeScript/JavaScript/Python files in the same run; Kotlin files simply contribute no call-graph edges.
+
+**Existing commands work unchanged**: because Kotlin files/symbols land in the same `symbol-index.json`/`code-graph.json` artifacts, `search`, `lookup`, `slice`, and `source` all work on Kotlin file/symbol nodes with zero new flags or selectors.
+
+**Source-root boundary preserved**: Kotlin source-root detection recorded in `android-project.json` (Batch 1) is informational only — it does not expand or override `--src`. A `.kt` file is indexed only when it falls under a source root the user explicitly passed via `--src`, exactly like every other language.
+
+**Not implemented in Batch 2** (deferred): Java structural indexing (now implemented — see "Java structural indexing" below), Android component-role detection, Compose semantic retrieval, member function/property symbols, call-graph edges for Kotlin, and any Android build/emulator/runtime/security validation.
+
+### Java structural indexing (v1.9.0 Batch 3)
+
+`.java` files under a requested `--src` root are indexed the same way `.ts`/`.js`/`.py`/`.kt` files already are — no new flag, no new command. A conservative, deterministic, **regex/line-based** extractor (not `javac`, not a real grammar parser, no Maven/Gradle execution) scans each file, mirroring the Kotlin adapter's design (Batch 2) almost exactly, and records:
+
+- the file's package declaration and import specifiers, including `static` imports and wildcard imports (`import com.example.util.*;`, `import static com.example.Util.helper;`) — static-ness is not preserved as separate metadata (no dedicated field for it, same choice made for Kotlin), the qualified name is still captured
+- top-level `class`, `interface`, `enum`, `record`, and annotation type (`@interface`) declarations
+
+**Only top-level declarations become symbols** — same rule as Kotlin (Batch 2) and the existing TypeScript/Python adapters: no language extracts class members (methods, fields, constructors) as separate symbol-index entries today, so Java doesn't either.
+
+**Modifiers (`abstract`/`final`/`static`/`sealed`/`non-sealed`), `extends`/`implements` targets, and annotations are not new fields** — all visible through the existing `signature` text (the trimmed declaration line, capped at 120 characters, with any immediately-preceding `@Annotation` line(s) prepended), the same choice made for Kotlin and Python.
+
+**Symbol kinds reuse the existing set with zero additions**: `class` (including `record` declarations — the `record` keyword remains visible via `signature`), `interface` (including annotation-type declarations, `@interface Foo` — an annotation type is technically a specialized interface at the JVM level), `enum`. No Java-only `SymbolKind` was needed.
+
+**Import resolution**: `import com.example.foo.Bar;` resolves to a local file via the file-name-matches-public-type-name convention Java enforces (`<packageDir>/Bar.java`) — still a best-effort heuristic, not semantic verification. A wildcard or static-wildcard import (`import com.example.*;`, `import static com.example.Util.*;`) correctly resolves to no target file rather than guessing.
+
+**Call-graph extraction is not implemented for Java** (`supportsCallGraph: false`), matching the Kotlin decision — out of scope for this batch regardless of reliability.
+
+**Existing commands work unchanged**: `search`, `lookup`, `slice`, and `source` all work on Java file/symbol nodes with zero new flags, since Java symbols land in the same `symbol-index.json`/`code-graph.json` artifacts as every other language.
+
+**Source-root boundary preserved**: Java source-root detection recorded in `android-project.json` (Batch 1) is informational only — a `.java` file is indexed only when it falls under a source root the user explicitly passed via `--src`.
+
+**Not implemented in Batch 3** (deferred): method/field/constructor symbols, call-graph edges for Java, semantic type resolution, cross-file `extends`/`implements` resolution, Maven/Gradle model parsing, Android component-role detection (now implemented — see "Android component-role detection" below), Compose semantic retrieval.
+
+### Android component-role detection (v1.9.0 Batch 4)
+
+Every `index` run of an Android project (i.e. one where Android evidence was already detected per Batch 1) also runs **conservative static** component-role detection over the Kotlin/Java top-level symbols already indexed (Batch 2/3). No new flag, no new command — detection runs automatically and is inert (no artifact written, nothing added to any symbol) for a non-Android project or a project with zero detectable roles.
+
+**Detected roles**: `activity`, `fragment`, `view-model`, `service`, `broadcast-receiver`, `content-provider`, `worker`, `repository`, `use-case`, `room-entity`, `room-dao`, `room-database`, `retrofit-service`, `hilt-module`.
+
+**Evidence priority** (strongest first): explicit annotation (e.g. `@Entity`, `@Dao`, `@Module`) → explicit superclass/interface name (e.g. `extends AppCompatActivity`, Kotlin `: ViewModel()`) → import → package/path hint → naming suffix (weakest — e.g. a class merely named `...Activity`). Each detected role carries a `confidence` (`high`/`medium`/`low`) and an `evidence[]` list; **name-suffix-only matches are always capped at `low` confidence and always carry a warning** — a class is never called "high confidence" just because of how it's named. `repository` and `use-case` have no strong (annotation/superclass) evidence tier at all in this batch, so they never exceed `medium`.
+
+Only Retrofit-service detection needs to look inside the symbol's body (HTTP method annotations like `@GET`/`@POST` live on methods, not on the interface declaration line) — a small, bounded, brace-depth-scanned re-read of the already-indexed file (capped at 400 lines) is used for that one case only; every other role is evaluated purely from data already in `symbol-index.json` (`signature` text, `imports`, symbol name, file path).
+
+**What is explicitly not claimed**: that a component is declared in `AndroidManifest.xml` (this batch never parses manifest contents), that dependency injection actually wires up correctly, that navigation or runtime reachability holds, or any compiled/runtime behavior. Role detection never executes Gradle, Kotlin, or Java compilation.
+
+**Output**: when one or more roles are detected, `index` writes `android-components.json` and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-components', status, artifacts: [...] }` — the same registration pattern `android-project`/`classification` already use. `status` is `'skipped'` (no Android evidence at all, or Android evidence exists but zero roles were detected — no file is written either way), `'partial'` (every detected role is `low` confidence), or `'complete'` (at least one role is `medium`/`high` confidence). It is `'failed'` only on an unexpected exception during detection (e.g. a source-file read error), mirroring the `classification` analyzer's failure-mode contract.
+
+**Compact metadata on existing artifacts**: a detected role also becomes a compact `androidComponentRoles`/`androidComponentRefs` pair directly on the matching symbol in `symbol-index.json` (`files[].symbols[]` and `graph.symbols[]`) and on the matching `symbol`-kind node in `code-graph.json` — the exact same "compact projection + artifact ref" pattern `classificationRoles`/`classificationRefs` already uses. This is why `search`, `lookup`, `slice`, and `source` all pick up role metadata with zero new flags or selectors: `search` indexes the compact role label as a searchable field (so queries like `ViewModel`, `Repository`, `Room Entity`, `Retrofit`, `Hilt` return the relevant symbols); `lookup`'s returned node object (and a convenience top-level `androidComponentRoles`/`androidComponentRefs` pair) include it; `slice` preserves it on every node it returns; `source` copies it onto the `SourceSlice` result the same way it already does for `classificationRoles`/`classificationRefs`.
+
+**Source-root boundary preserved**: detection only ever reads files that are already part of the indexed `symbolIndex` (i.e. under a requested `--src` root) — it never scans additional Kotlin/Java source roots that Batch 1's Android detection may have recorded in `android-project.json`.
+
+**Not implemented in Batch 4** (deferred): method/field/constructor-level role evidence (matches the Batch 2/3 top-level-only precedent), a detailed `AndroidManifest.xml`-based component registry, Compose semantic retrieval, Room/Retrofit/Hilt *semantic* wiring validation, and any Android build/emulator/runtime/security validation.
+
+### Retrieval and command compatibility hardening (v1.9.0 Batch 5)
+
+Batch 5 adds no new command, flag, or artifact. It hardens and verifies that `index`, `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff` (including `--incremental`) all behave correctly when Android project facts, Kotlin symbols, Java symbols, and Android component roles coexist in a single index — not just when each is exercised on its own fixture, as Batches 1–4 mostly did. A dedicated mixed Kotlin/Java Android fixture (`tests/fixtures/android/mixed-kotlin-java-app`) plus integration tests confirm: role metadata attaches only to role-bearing symbols and never leaks onto plain Kotlin/Java symbols in the same index; `context` capsules can surface Android/Kotlin/Java candidates for task-like queries while staying bounded; and `graph-diff` reports added/changed Kotlin and Java nodes, including Android role-metadata changes, with no dedicated Android/Kotlin/Java diff section. `context` and `graph-diff` needed no code changes — both were already fully generic with respect to Android/Kotlin/Java data.
+
+#### android-project.json shape
+
+- `artifactKind`: `"my-dev-kit-v1-android-project"`, `schemaVersion`: `"1.0.0"`.
+- `detected`, `confidence` (`"none"`/`"low"`/`"medium"`/`"high"`).
+- `evidence`: sorted list of relative evidence file/directory paths.
+- `modules[]`: sorted by `path`; each has `id`, `name`, `path`, `type` (`"app"`/`"library"`/`"unknown"`), `gradleFiles`, `manifestPath`, `sourceSets[]` (sorted `main` → `test` → `androidTest`), `kotlinSourceRoots`, `javaSourceRoots`, `evidence`, `warnings`.
+- `ignoredGeneratedDirectories`: sorted list of `build`/`.gradle` directories actually found under any detected module.
+- `warnings`: sorted; ambiguous plugin evidence, a missing manifest, or a declared-but-not-found module all produce a warning rather than a crash.
+- `summary`: `{ moduleCount, appModuleCount, libraryModuleCount, unknownModuleCount }`.
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src app/src/main --out .my-dev-kit --json
+```
+
 ### Semantic analyzer behavior
 
 After indexing, `index` runs semantic analyzers. The TypeScript model analyzer runs on TypeScript and TSX source and produces `data-entity` and `data-field` semantic roles for exported interfaces, type aliases, and classes that qualify as data models.
@@ -230,6 +340,14 @@ When the frontend analyzer processes TSX/JSX files:
 Always, when the classification analyzer runs successfully (regardless of whether TSX/JSX or data-model output exists):
 
 - `classification.json` (v1.5.0)
+
+When static Android/Gradle project evidence is found under `--root` (v1.9.0 Batch 1 — project/module/source-set detection only; Kotlin/Java symbol indexing itself happens through the normal `--src`-driven indexing pipeline described above, not this artifact):
+
+- `android-project.json`
+
+When at least one Android component role is detected among already-indexed Kotlin/Java top-level symbols (v1.9.0 Batch 4):
+
+- `android-components.json`
 
 ### Examples
 

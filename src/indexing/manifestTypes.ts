@@ -56,6 +56,8 @@ export type IndexAnalyzerId =
   | 'frontend-semantic'
   | 'frontend-reachability'
   | 'classification'
+  | 'android-project'
+  | 'android-components'
   | (string & {})
 
 export type IndexAnalyzerStatusValue = 'not-run' | 'complete' | 'partial' | 'failed' | 'skipped'

@@ -2,6 +2,7 @@ import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraph
 import type { SemanticArtifactRef, SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
 import type { IndexManifest } from '../indexing/manifestTypes.js'
 import type { ClassificationEntry, ClassificationRoleRef } from '../classification/classificationTypes.js'
+import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
 import {
   findClassificationEntryByTargetId,
   loadClassificationArtifact,
@@ -18,6 +19,8 @@ export interface LookupNodeResult {
   evidenceRefs?: SemanticEvidenceRef[]
   classificationRoles?: ClassificationRoleRef[]
   classificationRefs?: SemanticArtifactRef[]
+  androidComponentRoles?: AndroidComponentRoleRef[]
+  androidComponentRefs?: SemanticArtifactRef[]
   /** Full ClassificationEntry detail, resolved from classification.json only when `resolveClassification` is requested. */
   classificationDetail?: ClassificationEntry | null
   incomingEdges: CodeGraphEdge[]
@@ -70,6 +73,8 @@ export function lookupNode(options: {
     classificationRoles: emptyToUndefined(node.classificationRoles),
     classificationRefs: emptyToUndefined(node.classificationRefs),
     ...(classificationDetail !== undefined ? { classificationDetail } : {}),
+    androidComponentRoles: emptyToUndefined(node.androidComponentRoles),
+    androidComponentRefs: emptyToUndefined(node.androidComponentRefs),
     incomingEdges,
     outgoingEdges,
     neighbors,

@@ -23,6 +23,7 @@ const WEIGHTS = {
   frontendValue: 14,
   classificationRole: 7,
   classificationEditGuidance: 3,
+  androidComponentRole: 7,
 } as const
 
 const EDGE_WEIGHTS = {
@@ -174,6 +175,7 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
   if (node.exported && node.symbolName) fields.push(field('export', node.symbolName, WEIGHTS.export))
   fields.push(...semanticFields(node.semanticRoles, node.artifactRefs))
   fields.push(...classificationFields(node.classificationRoles))
+  fields.push(...androidComponentFields(node.androidComponentRoles))
 
   return {
     item: {
@@ -186,6 +188,8 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
       artifactRefs: node.artifactRefs,
       classificationRoles: node.classificationRoles,
       classificationRefs: node.classificationRefs,
+      androidComponentRoles: node.androidComponentRoles,
+      androidComponentRefs: node.androidComponentRefs,
     },
     fields,
   }
@@ -218,6 +222,7 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
   fields.push(...semanticFields(symbol.semanticRoles, symbol.artifactRefs))
   fields.push(...classificationFields(symbol.classificationRoles))
+  fields.push(...androidComponentFields(symbol.androidComponentRoles))
 
   return {
     item: {
@@ -230,6 +235,8 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
       artifactRefs: symbol.artifactRefs,
       classificationRoles: symbol.classificationRoles,
       classificationRefs: symbol.classificationRefs,
+      androidComponentRoles: symbol.androidComponentRoles,
+      androidComponentRefs: symbol.androidComponentRefs,
     },
     fields,
   }
@@ -307,6 +314,17 @@ function classificationFields(
   for (const role of classificationRoles ?? []) {
     fields.push(field('classificationRole', role.role, WEIGHTS.classificationRole))
     fields.push(field('classificationEditGuidance', role.editGuidance, WEIGHTS.classificationEditGuidance))
+  }
+  return fields
+}
+
+/** Mirrors classificationFields() for the compact androidComponentRoles projection (role label only - searchable). */
+function androidComponentFields(
+  androidComponentRoles: CodeGraphNode['androidComponentRoles'] | SymbolDefinition['androidComponentRoles']
+): SearchCandidateField[] {
+  const fields: SearchCandidateField[] = []
+  for (const role of androidComponentRoles ?? []) {
+    fields.push(field('androidComponentRole', role.role, WEIGHTS.androidComponentRole))
   }
   return fields
 }

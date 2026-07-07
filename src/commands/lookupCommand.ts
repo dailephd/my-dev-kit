@@ -79,6 +79,9 @@ export function registerLookupCommand(program: Command): void {
       if (result.classificationRoles?.length) {
         console.log(`Classification: ${result.classificationRoles.map((role) => role.role).join(', ')}`)
       }
+      if (result.androidComponentRoles?.length) {
+        console.log(`Android roles: ${result.androidComponentRoles.map((role) => `${role.role} (${role.confidence})`).join(', ')}`)
+      }
     })
 }
 

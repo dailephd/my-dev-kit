@@ -95,6 +95,14 @@ export interface ConfigFingerprintInput {
   language: string | null
   defaultIgnoredDirectoryNames: string[]
   defaultIgnoredDirectoryPrefixes: string[]
+  /**
+   * Fingerprint of Android project/module/source-set detection facts
+   * (v1.9.0 Batch 1), so a Gradle/manifest edit that changes what was
+   * statically detected invalidates the cache even though those files live
+   * outside `--src`. A `null` project (no Android evidence at all) still
+   * contributes a stable, constant fingerprint value.
+   */
+  androidEvidenceFingerprint: string
 }
 
 /**
@@ -110,6 +118,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     language: input.language,
     defaultIgnoredDirectoryNames: [...input.defaultIgnoredDirectoryNames].sort(),
     defaultIgnoredDirectoryPrefixes: [...input.defaultIgnoredDirectoryPrefixes].sort(),
+    androidEvidenceFingerprint: input.androidEvidenceFingerprint,
   }
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
 }

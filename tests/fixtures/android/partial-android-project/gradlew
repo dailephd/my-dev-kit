@@ -1,0 +1,4 @@
+#!/bin/sh
+# Minimal placeholder gradlew script for static-detection fixture purposes only.
+# This fixture intentionally does not include a real Gradle wrapper jar.
+echo "gradlew placeholder"

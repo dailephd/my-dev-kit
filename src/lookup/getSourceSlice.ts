@@ -30,6 +30,8 @@ export function getSourceSlice(options: {
   classificationRoles?: SourceSlice['classificationRoles']
   classificationRefs?: SourceSlice['classificationRefs']
   classificationSummary?: SourceSlice['classificationSummary']
+  androidComponentRoles?: SourceSlice['androidComponentRoles']
+  androidComponentRefs?: SourceSlice['androidComponentRefs']
   warnings?: string[]
 }): SourceSlice {
   validateLineRange(options.startLine, options.endLine, options.maxLines)
@@ -77,6 +79,8 @@ export function getSourceSlice(options: {
     classificationRoles: emptyToUndefined(options.classificationRoles),
     classificationRefs: emptyToUndefined(options.classificationRefs),
     ...(options.classificationSummary !== undefined ? { classificationSummary: options.classificationSummary } : {}),
+    androidComponentRoles: emptyToUndefined(options.androidComponentRoles),
+    androidComponentRefs: emptyToUndefined(options.androidComponentRefs),
     warnings: options.warnings ?? [],
     continuationCursor: cursor,
   }

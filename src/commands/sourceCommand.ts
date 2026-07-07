@@ -167,6 +167,8 @@ export function registerSourceCommand(program: Command): void {
           target.filePath,
           target.symbolName
         ),
+        androidComponentRoles: target.androidComponentRoles,
+        androidComponentRefs: target.androidComponentRefs,
         warnings: target.warnings,
       })
 
@@ -573,6 +575,8 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
       symTarget.filePath,
       symTarget.symbolName
     ),
+    androidComponentRoles: symTarget.androidComponentRoles,
+    androidComponentRefs: symTarget.androidComponentRefs,
     warnings,
   })
 
