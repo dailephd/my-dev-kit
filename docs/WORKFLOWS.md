@@ -2,6 +2,15 @@
 
 Practical usage workflows for my-dev-kit. For the full flag reference, see [COMMANDS.md](COMMANDS.md). For artifact and schema details, see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md).
 
+## Ecosystem docs first
+
+For any task involving my-dev-kit, my-dev-kit-orchestrator, my-dev-kit-lab, coding-agent workflows, prompt templates, release workflows, audits, experiments, or documentation reconciliation, inspect the local ecosystem docs first:
+
+- `docs/ecosystem/TOOL_ECOSYSTEM_REFERENCE.txt`
+- `docs/ecosystem/WORKFLOW_PROMPT_ASSEMBLY_RULES.txt`
+
+These files define the shared tool boundaries, command expectations, and prompt assembly rules for the local ecosystem.
+
 ## Overview
 
 The recommended usage pattern:
@@ -247,6 +256,61 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<s
 - Use `lookup --depth 1` first. Increase depth only when the immediate graph neighborhood is insufficient.
 - Use `slice --depth 1` or `slice --depth 2` depending on context size.
 - Use line-range source retrieval when symbol retrieval is too broad or incomplete.
+
+---
+
+## Workflow 6: Source continuation and local dependency expansion (v1.4.0)
+
+When the initial bounded preview is not enough, continue reading or expand to same-file dependencies instead of reading the whole file.
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --continue
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --include-local-deps --format numbered
+```
+
+JSON output includes a `continuationCursor` (`nextStartLine`, `previousEndLine`, `exhausted`, `reason`). Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer. Expansion (`--include-imports`, `--include-local-types`, `--include-props`, `--include-local-components`, `--include-local-deps`) is static-analysis only: direct, same-file dependencies — no cross-file closure, no runtime tracing.
+
+## Workflow 7: Data-model and model-to-view lineage inspection
+
+```sh
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --entity User --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --json
+npx @dailephd/my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+```
+
+`trace-view` is conservative static evidence only: direct transformation functions, direct view-model assignments, direct component prop assignments, and direct JSX rendering where field identity remains explicit. It does not claim route-aware reachability, browser-state behavior, or runtime rendering behavior.
+
+## Workflow 8: Context capsule and retrieval audit (v1.6.0)
+
+Produce a bounded, deterministic context capsule for a task-like query, with an optional full retrieval audit trail:
+
+```sh
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<task description>" --mode feature-add --out context-capsule.json --json
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<task description>" --out context-capsule.json --audit-out retrieval-audit-record.json --json
+```
+
+`--mode` is one of `general` (default), `feature-add`, or `subsystem`, and adjusts candidate ranking deterministically. Use `--no-source` to suppress source slices/bundles while retaining graph and metadata evidence. The capsule never embeds a raw graph or artifact dump — evidence is bounded and reason-tagged. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for the full schema.
+
+## Workflow 9: Compare two index snapshots with graph-diff (v1.8.0)
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-before --json
+# ... make source changes ...
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-after --json
+npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-kit-after --json
+```
+
+`graph-diff` never runs `index` and never modifies either input directory; it reports added/removed/changed nodes, edges, and artifact metadata using each artifact's existing stable IDs. Exit code is `0` for any valid comparison (with or without differences).
+
+## Workflow 10: Index and retrieve Android/Kotlin/Java projects (v1.9.0)
+
+```sh
+npx @dailephd/my-dev-kit index --root . --src app/src/main/java --src app/src/main/kotlin --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "ViewModel" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+```
+
+`.kt` and `.java` files under `--src` are indexed like any other language — no new flags. When Android project evidence (`settings.gradle(.kts)`, `AndroidManifest.xml`, source-set layout) is found under `--root`, `index` also writes `android-project.json`, and when Android component roles (Activity, Fragment, ViewModel, Service, Repository, Room entities/DAOs, Retrofit services, Hilt modules, and others) are detected on indexed Kotlin/Java symbols, `index` writes `android-components.json` and attaches compact `androidComponentRoles`/`androidComponentRefs` metadata usable through `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff`. This is conservative static evidence only: it never executes Gradle, javac, or the Kotlin compiler, and does not validate Android runtime behavior, manifest registration, Compose semantics, or Android security posture.
 
 ---
 

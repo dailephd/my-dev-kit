@@ -39,6 +39,11 @@ Lineage artifact (written in `data-model --trace-view` mode):
 
 - `model-view-lineage.json`
 
+Context artifacts (written by the `context` command, v1.6.0):
+
+- `context-capsule.json`
+- `retrieval-audit-record.json` (optional, written when `--audit-out` is requested)
+
 Classification artifact (written by `index` whenever the classification analyzer runs, v1.5.0):
 
 - `classification.json`
@@ -771,6 +776,24 @@ Main fields:
 - `warnings`
 
 Each result item may include `semanticRoles` and `artifactRefs` when present on the matched node or symbol.
+
+## context-capsule.json (v1.6.0)
+
+Written by the `context` command as a bounded, local, deterministic query-to-context artifact for downstream planning workflows. Schema version `"1.0.0"`.
+
+Top-level fields (see `src/context/types.ts` `ContextCapsule` for the authoritative shape): `schemaVersion`, `generatedAt`, `tool` (`{ name, version }`), `request` (`{ originalQuery, normalizedQuery, mode, requestedOutputPath }`), `index` (`{ indexPath, manifestPath, manifestSchemaVersion?, projectRoot?, artifactRefs }`), `limits`, `requiredContext`/`optionalSupportContext`/`droppedContext` (bounded `ContextEntry`/`DroppedContextEntry` lists), `warnings`, `contextAdequacy` (`{ status, summary, assumptions, gaps }`), `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, `sourceControl`.
+
+`mode` is one of `general`, `feature-add`, or `subsystem`, and adjusts candidate ranking deterministically (`modeEffects`). Source evidence can be suppressed with `--no-source` (`selectedSource`/`selectedSourceBundles` become empty, `sourceControl.enabled` is `false`). Candidate files/nodes and selected graph nodes carry the same `semanticRoles`/`artifactRefs`/`classificationRoles`/`classificationRefs` fields used elsewhere in the artifact family. `conflicts` records conservative static edit-guidance conflicts (`status: 'conflict'`) backed by existing classification evidence; `status: 'none'` when no conflict is detected.
+
+The context capsule never embeds a raw graph or artifact dump — all evidence is bounded and reason-tagged (`reasons`, `droppedReason`, `warnings` fields throughout).
+
+## retrieval-audit-record.json (v1.6.0, optional)
+
+Written by the `context` command only when `--audit-out` is requested. Schema version `"1.0.0"`.
+
+Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVersion`, `generatedAt`, `tool`, `request`, `index` (`{ indexPath, manifestPath }`), `steps` (ordered `AuditStep[]`), `fallbacks`, `fullFileReadRecommendations`, `warnings`, `contextAdequacy`.
+
+Each `AuditStep` records `id`, `kind` (one of a fixed `AuditStepKind` set covering validation, manifest loading, query normalization, ranking, focus selection, graph/source selection, pruning, and conflict detection), `description`, `inputs`, `outputs`, `status` (`ok`/`skipped`/`failed`), and `warnings`. The record provides a full, ordered trail of how a context capsule was assembled, for auditing and debugging retrieval behavior — it is deterministic and does not itself claim runtime or LLM behavior.
 
 ## Stable node IDs and compatibility
 

@@ -118,6 +118,15 @@ Final v1.8.0 release line: safer large-repo indexing ergonomics, incremental ind
 - Re-verified package contents with `npm pack --dry-run`; generated `.my-dev-kit*` folders, workflow reports, and other private/generated artifacts remain excluded from the published package
 - No new CLI commands, flags, persisted artifact schemas, Android support, release audit, security validation, or publishing behavior
 
+## 1.7.0 - 2026-07-05
+
+Added an internal retrieval regression suite for my-dev-kit's own bounded-context retrieval behavior. No new public CLI commands, flags, or artifact schemas.
+
+- Added `src/retrievalRegression/runRetrievalRegression.ts` and the `benchmark:retrieval` npm script, driven by a versioned regression config (`benchmarks/retrieval/v1.7/core.json`)
+- Added deterministic regression scenarios exercising `search`, `lookup`, `slice`, and `source` against known fixture indexes, with pass/fail assertions on expected candidates and bounded output shape
+- Added `--fail-on-regression` support so the retrieval regression suite can gate local validation runs
+- This is a development/validation tool for my-dev-kit itself, not a new user-facing retrieval capability; the public command surface (`index`, `search`, `lookup`, `source`, `slice`, `view`, `data-model`) is unchanged from v1.6.0
+
 ## 1.6.1 - 2026-07-04
 
 Repository-hygiene patch release: no source, CLI, or artifact-contract changes.

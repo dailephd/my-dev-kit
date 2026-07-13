@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "description": "Machine-readable structural preservation requirements for my-dev-kit documentation. Checked names/headings/versions, not exact prose. Extend by adding entries, never by silently removing them (see docs/DOCUMENTATION_PRESERVATION_POLICY.md).",
+  "roadmap": {
+    "path": "docs/ROADMAP.md",
+    "requiredVersionHeadings": [
+      "## Version 1.0.0",
+      "## Version 1.0.x",
+      "## Version 1.1.0",
+      "## Version 1.2.0",
+      "## Version 1.3.0",
+      "## Version 1.4.0",
+      "## Version 1.5.0",
+      "## Version 1.6.0",
+      "## Version 1.7.0",
+      "## Version 1.8.0",
+      "## Version 1.9.0",
+      "## Version 1.10.0",
+      "## Version 1.11.0",
+      "## Version 1.12.0",
+      "## Version 1.13.0",
+      "## Version 1.14.0",
+      "## Version 2.0.0"
+    ],
+    "requiredOrder": [
+      "1.0.0", "1.0.x", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0",
+      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "2.0.0"
+    ],
+    "forbiddenVersionRangeSubstitutions": [
+      "1.10.0-1.13.0", "1.10.0 - 1.13.0", "1.10-1.13", "v1.10.0-v1.13.0", "v1.10-v1.13"
+    ],
+    "requiredStructuralSections": [
+      "## Overview",
+      "## Product principles",
+      "## Ecosystem integration notes",
+      "## Long-term direction"
+    ],
+    "androidVersionScopeKeywords": {
+      "1.9.0": ["Android project detection", "Kotlin", "Java", "component"],
+      "1.10.0": ["Gradle", "manifest", "resource", "navigation"],
+      "1.11.0": ["Compose", "UI-test"],
+      "1.12.0": ["architecture classification", "data-flow"],
+      "1.13.0": ["benchmark", "examples", "documentation"]
+    }
+  },
+  "readme": {
+    "path": "README.md",
+    "requiredPillarKeywords": [
+      "Local codebase graph indexing",
+      "does not call an LLM",
+      "## Installation",
+      "## Commands",
+      "## Generated artifacts",
+      "Graph-Guided Symbol Retrieval",
+      "docs/WORKFLOWS.md",
+      "## Design boundaries",
+      "## Limitations",
+      "## Support the project",
+      "## Bug reports",
+      "## License"
+    ]
+  },
+  "projectOverview": {
+    "path": "docs/PROJECT_OVERVIEW.md",
+    "requiredSections": [
+      "## What this project is",
+      "## Purpose",
+      "## Current release scope",
+      "## Public commands"
+    ]
+  },
+  "architecture": {
+    "paths": ["docs/ARCHITECTURE.md", "docs/GRAPH_SCHEMA.md"],
+    "requiredDomainKeywords": [
+      "Language adapter layer",
+      "Kotlin",
+      "Java",
+      "Android detection layer",
+      "Android component-role layer",
+      "Incremental indexing and cache layer",
+      "Graph comparison layer",
+      "Context artifacts",
+      "context-capsule.json",
+      "retrieval-audit-record.json",
+      "Classification artifact",
+      "Frontend semantic artifact",
+      "Data-model layer",
+      "Model-to-view lineage layer"
+    ]
+  },
+  "commands": {
+    "path": "docs/COMMANDS.md",
+    "requiredCommandFamilies": [
+      "index", "search", "lookup", "source", "slice", "view", "data-model", "context", "graph-diff"
+    ]
+  },
+  "workflows": {
+    "path": "docs/WORKFLOWS.md",
+    "requiredWorkflowFamilies": [
+      "Index a TypeScript or JavaScript project",
+      "Index a Python project",
+      "Graph-Guided Symbol Retrieval",
+      "Generate graph visualization",
+      "Source continuation and local dependency expansion",
+      "Data-model and model-to-view lineage",
+      "Context capsule and retrieval audit",
+      "graph-diff",
+      "Android/Kotlin/Java"
+    ]
+  },
+  "release": {
+    "path": "docs/RELEASE.md",
+    "requiredSections": [
+      "## Before release",
+      "## Public documentation audit",
+      "## Validate locally",
+      "## Inspect package contents",
+      "## Test the packed tarball",
+      "## Publish to npm",
+      "## Verify the published package",
+      "## Release record",
+      "## Automation status"
+    ],
+    "requiredSafetyPhrase": "explicitly authorized the publish step"
+  },
+  "changelog": {
+    "path": "CHANGELOG.md",
+    "requiredVersionHeadings": [
+      "## 1.0.0", "## 1.1.0", "## 1.2.0", "## 1.3.0", "## 1.4.0", "## 1.5.0",
+      "## 1.6.0", "## 1.6.1", "## 1.7.0", "## 1.8.0", "## 1.9.0"
+    ]
+  },
+  "security": {
+    "path": "docs/SECURITY.md",
+    "requiredBoundaryKeywords": [
+      "Classification security notes",
+      "Context capsule and retrieval audit security notes",
+      "Graph-diff security notes",
+      "Android, Kotlin, and Java security notes"
+    ]
+  }
+}
