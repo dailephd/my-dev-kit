@@ -96,6 +96,52 @@ npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --tra
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
 
+## Graph-Guided Symbol Retrieval for LLM workflows
+
+The recommended usage pattern for feeding bounded context to an LLM or coding agent is `search` → `lookup` → `slice` → `source`: narrow to a candidate with `search`, inspect the exact node and its relationships with `lookup`, pull a bounded neighborhood with `slice` when more relationship context is needed, then retrieve the bounded source text for the symbols that matter.
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "user" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<node-id>" --format numbered
+```
+
+Compact prompt template for pasting the retrieved output into an LLM or coding-agent prompt:
+
+```text
+Task: <describe the change>
+Repository context (from my-dev-kit, local static analysis only):
+<paste search/lookup/slice/source JSON or numbered output here>
+Instructions: use only the context above; do not assume behavior outside it.
+```
+
+For the full set of retrieval workflows (index → manifest → artifacts, search → lookup → slice → source with continuation and local expansion, data-model/lineage, context capsules, graph-diff, and Android/Kotlin/Java retrieval), see [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
+
+## Graph visualization example
+
+Render the code graph and open it as an image:
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format svg --out .my-dev-kit/graph.svg
+npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit/graph.png
+```
+
+DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
+
+## v1.9.0 highlights
+
+Version 1.9.0 starts Android support with conservative static Android project detection, Kotlin and Java structural indexing, Android component-role detection, and retrieval compatibility through the existing local artifact workflow:
+
+- static Android/Gradle project, module, and source-set detection, written to `android-project.json`
+- conservative static Kotlin structural indexing for `.kt` files under indexed source roots
+- conservative static Java structural indexing for `.java` files under indexed source roots
+- conservative static Android component-role detection (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module), written to `android-components.json`
+- Android component-role metadata surfaced through the existing `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff` commands
+
+v1.9.0 does not execute Gradle, javac, the Kotlin compiler, Android builds, emulators, APK/AAB inspection, or Play Store workflows, and does not validate Android runtime behavior, dependency-injection correctness, manifest registration validity, Compose semantics, Android navigation, Android resources, or Android security posture. See [docs/ROADMAP.md](docs/ROADMAP.md) for the planned v1.10.0-v1.13.0 Android work (Gradle/manifest/resources/navigation, Compose semantics, architecture/data-flow, benchmarks/examples/docs).
+
 ## v1.8.0 highlights
 
 Version 1.8.0 adds the final indexing-ergonomics and comparison work shipped in Batches 1 through 4:

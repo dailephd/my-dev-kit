@@ -113,6 +113,28 @@ Managed artifact refresh removes only files from within the artifact directory t
 
 Warnings are used instead of broad inference when static evidence is incomplete.
 
+### Classification security notes (v1.5.0)
+
+The `classification` analyzer keeps the same security posture as the other semantic analyzers: it runs as part of `index`, reads only already-indexed project files, performs no runtime execution, and never claims database or browser behavior. `classification.json` is a detailed artifact written to the artifact directory and is subject to the same artifact path containment as `data-model.json` and other semantic artifacts. Low-confidence classifications are marked `possible`/`unknown` with an explanatory warning rather than silently rounded to a higher-confidence category.
+
+### Context capsule and retrieval audit security notes (v1.6.0)
+
+The `context` command reads only artifacts already present in the selected index directory and writes bounded output to `--out` (and, when requested, `--audit-out`). Both output paths are resolved and validated the same way other artifact writes are — writes stay confined to the location the caller specifies; `context` does not write to `manifest.projectRoot` or any location outside the paths the caller passed. A context capsule never embeds a raw graph or artifact dump; all included evidence is bounded, capped, and reason-tagged, which limits how much source or structural detail a single capsule can expose relative to the underlying index.
+
+### Graph-diff security notes (v1.8.0)
+
+`graph-diff --before <dir> --after <dir>` opens both index directories strictly read-only: it never runs `index` and never writes to either input directory. Artifact reads from each directory go through the same manifest-relative path containment used elsewhere (`readIndexManifest`/`resolveArtifactPath`); a crafted `manifest.json` in either `--before` or `--after` cannot cause a read outside that directory.
+
+### Android, Kotlin, and Java security notes (v1.9.0)
+
+Android project detection (`android-project.json`) uses file existence and conservative text-substring evidence only. Per the detector's own design boundary: it "executes Gradle" — never; "resolves dependencies" — never; "parses Kotlin/Java symbols" — never. It never invokes the Gradle wrapper, a Gradle daemon, or any build tooling, and it never executes arbitrary Groovy/Kotlin-DSL code found in `build.gradle(.kts)`/`settings.gradle(.kts)` files — those files are read as plain text with regex-based substring matching, not parsed or evaluated as code.
+
+The Kotlin (`.kt`) and Java (`.java`) language adapters extract top-level declarations using conservative, deterministic, line/regex-based parsing — not the Kotlin compiler, not `javac`, and not any JVM execution. They are subject to the same `--src` source-root path containment as the TypeScript, JavaScript, and Python adapters: only files under a requested `--src` root are read, and Batch 1's detected Android Kotlin/Java source roots are informational only and never expand or override `--src`.
+
+Android component-role detection (`android-components.json`) reads only symbol data already present in `symbolIndex` from the same indexing run, with one bounded exception: Retrofit-service detection re-reads the already-indexed source file up to a fixed 400-line cap to inspect HTTP-method annotations on interface methods. This re-read is bounded, confined to files already inside the indexed project root, and does not follow any path derived from artifact content.
+
+None of the v1.9.0 Android/Kotlin/Java work executes Gradle, `javac`, the Kotlin compiler, an Android build, an emulator, or any Android runtime; it does not inspect APK/AAB files and does not perform Android security validation.
+
 ## User responsibilities for private repositories
 
 Index, data-model, and lineage artifacts can contain sensitive structural metadata such as:

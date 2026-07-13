@@ -2,7 +2,7 @@
 
 ## System goal
 
-my-dev-kit provides deterministic, offline code graph indexing, semantic enrichment, bounded source retrieval, React/TSX and frontend-test indexing, downstream data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
+my-dev-kit provides deterministic, offline code graph indexing, semantic enrichment, bounded source retrieval, React/TSX and frontend-test indexing, downstream data-model extraction, conservative static model-to-view lineage, incremental indexing with read-only graph comparison, bounded context-capsule retrieval, and conservative static Android project/component detection with Kotlin and Java structural indexing, for TypeScript, JavaScript, Python, Kotlin, and Java projects.
 
 The system produces local JSON artifacts that can be inspected, searched, sliced, rendered, and reused by developers or coding agents. It does not run a server, call LLMs, call external APIs, execute user source code, or modify source files.
 
@@ -31,9 +31,25 @@ CLI entry: src/cli.ts
   +-- view command        -> Graph view layer (code/data-model/lineage/frontend-semantic graph artifacts)
   |
   +-- data-model command  -> Data-model inspection and regeneration layer
-                           -> data-model.json
-                           -> data-model-graph.json
-                           -> model-view-lineage.json (trace-view mode)
+  |                        -> data-model.json
+  |                        -> data-model-graph.json
+  |                        -> model-view-lineage.json (trace-view mode)
+  |
+  +-- context command     -> Context capsule layer (v1.6.0)
+  |                        -> context-capsule.json
+  |                        -> retrieval-audit-record.json (optional, --audit-out)
+  |
+  +-- graph-diff command  -> Graph comparison layer (v1.8.0)
+                           -> deterministic, read-only comparison of two index directories
+```
+
+`index` also runs, as of v1.9.0, static Android project detection and Kotlin/Java structural indexing:
+
+```text
+  index command (continued)
+    -> Android detection layer  -> android-project.json (when Android evidence found)
+    -> Kotlin/Java adapters     -> symbol-index.json / code-graph.json (participate like any language)
+    -> Android component-role layer -> android-components.json (when roles detected)
 ```
 
 ```mermaid
@@ -130,6 +146,44 @@ Classification is static and conservative: categories are only assigned when fil
 
 `classification.json` absence (an older index, or a classification analyzer failure) does not change any other artifact's shape or values, and does not break `search`/`lookup`/`slice`/`source` — this mirrors how `frontend-semantic.json`/`frontend-reachability.json` absence is already handled.
 
+### Context artifacts (v1.6.0)
+
+- `context-capsule.json` — a bounded, local, deterministic query-to-context artifact: query plan, ranked candidates, single-seed focus selection, bounded graph/source evidence, semantic/classification/artifact-reference summaries, retention/pruning, required/optional/dropped context, context adequacy, conservative conflict detection, mode effects, and source-control metadata
+- `retrieval-audit-record.json` — optional, written with `--audit-out`: an ordered audit trail of every retrieval step, fallbacks, warnings, and full-file-read recommendations
+
+Both are written by the `context` command, layered on top of existing index/search/lookup/slice/source/data-model/classification retrieval — no new indexing pipeline. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for the full field-level schema.
+
+### Incremental indexing and cache layer (v1.8.0)
+
+- `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules, plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry
+- `index --incremental` compares the current file set against `cache-metadata.json` and reuses unchanged files' analysis for a partial rebuild of `symbol-index.json`/`code-graph.json`; `call-graph.json` is always fully regenerated during a partial rebuild (reported via `manifest.json`'s `partialRebuildFallbackArtifacts`)
+- `index --reset-cache` deletes only `cache-metadata.json`, never other artifacts
+- `manifest.json` records `indexMode`, `cacheMode`, `cacheInvalidationReason`, and `changedFileSummary` on relevant builds
+
+### Graph comparison layer (v1.8.0)
+
+Files:
+
+- `src/graph-diff/` (or the module implementing `graph-diff`; see `src/commands/` for the command entry point)
+
+`graph-diff --before <index-dir> --after <index-dir>` performs a deterministic, read-only comparison of two existing index directories using each artifact's existing stable node/edge IDs. It never runs `index` and never writes to either input directory. It compares `manifest.json`/`code-graph.json` (required) and `symbol-index.json`/`classification.json`/`data-model.json`/`frontend-semantic.json`/`frontend-reachability.json` (optional, degrading to a warning when absent from either side).
+
+### Android detection layer (v1.9.0 Batch 1)
+
+Files:
+
+- `src/android/detectAndroidProject.ts` (and related `src/android/` files)
+
+Runs on every `index` against `--root` (no new flag): conservative, regex-based `settings.gradle(.kts)` module parsing, root/module `build.gradle(.kts)` Android plugin-id substring evidence, `AndroidManifest.xml` path existence, and `main`/`test`/`androidTest` source-set existence. Writes `android-project.json` only when Android evidence is found; a non-Android project is unaffected (`status: 'skipped'`, no file written). This layer never executes Gradle and never parses Kotlin/Java symbols itself — symbol extraction is the language adapter layer's responsibility (see Language adapter layer, below).
+
+### Android component-role layer (v1.9.0 Batch 4)
+
+Files:
+
+- `src/android/` component-role detection module(s)
+
+Runs after Kotlin/Java structural indexing (Batches 2/3) and Android project detection (Batch 1). Detects 14 conservative static roles (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module) for already-indexed Kotlin/Java top-level symbols, using an evidence-priority order (annotation > superclass/interface > import > package/path hint > naming suffix). Writes `android-components.json` only when at least one role is detected, and embeds compact `androidComponentRoles`/`androidComponentRefs` on the corresponding `SymbolDefinition`/`GraphSymbolRecord`/`CodeGraphNode` entries — the same compact-projection-plus-artifact-ref pattern `classificationRoles`/`classificationRefs` established. Does not read Gradle, does not execute a compiler, and does not guarantee manifest registration, dependency-injection correctness, or navigation correctness.
+
 ## CLI layer
 
 Files:
@@ -139,7 +193,7 @@ Files:
 
 The CLI layer registers the public command surface with `commander`.
 
-Public commands:
+Public commands (nine):
 
 - `index`
 - `search`
@@ -148,6 +202,8 @@ Public commands:
 - `slice`
 - `view`
 - `data-model`
+- `context` (v1.6.0)
+- `graph-diff` (v1.8.0)
 
 The CLI layer owns command registration, option parsing, input validation, output-format selection, error presentation, and process exit behavior. It does not own indexing, extraction, builder logic, graph traversal, source retrieval, or lineage construction logic.
 
@@ -194,6 +250,8 @@ Current analyzers:
 - `frontend-semantic` — React/TSX and frontend-test extraction, produces `frontend-semantic.json`
 - `frontend-reachability` — static route/storage-key/UI-reachability facts, produces `frontend-reachability.json` (v1.3.0), runs when `.tsx`/`.jsx` files are found
 - `classification` — conservative static schema/layer classification of files and symbols, produces `classification.json` (v1.5.0), runs after the analyzers above so their output is available as evidence
+- `android-project` — static Android/Gradle project, module, and source-set detection, produces `android-project.json` (v1.9.0 Batch 1), runs against `--root` on every `index`
+- `android-components` — conservative static Android component-role detection over already-indexed Kotlin/Java symbols, produces `android-components.json` (v1.9.0 Batch 4), runs after Kotlin/Java structural indexing
 
 Analyzer output feeds two paths:
 
@@ -228,8 +286,12 @@ Main files:
 - `registry.ts`
 - `typescript/adapter.ts`
 - `python/adapter.ts`
+- `kotlin/adapter.ts` (v1.9.0 Batch 2)
+- `java/adapter.ts` (v1.9.0 Batch 3)
 
-The default registry supports TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`, and Python for `.py`.
+The default registry supports TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`; Python for `.py`; Kotlin for `.kt` (v1.9.0 Batch 2); and Java for `.java` (v1.9.0 Batch 3).
+
+The Kotlin and Java adapters are conservative, deterministic, line/regex-based extractors (not the Kotlin compiler or `javac`), matching the TypeScript/Python precedent: top-level declarations only (classes, interfaces, objects, enums, records, annotation types, top-level functions/properties), no member-symbol model, no call-graph support (`supportsCallGraph: false`), and a best-effort single-declaration-per-file import resolution heuristic. See [ROADMAP.md](ROADMAP.md) Version 1.9.0 for full batch-by-batch detail.
 
 ## Symbol index layer
 
@@ -346,9 +408,9 @@ All extracted facts are evidence of what the static analyzer found in the source
 
 Each artifact layer has its own node and edge ID space. This separation is intentional: it keeps the structural artifacts small and allows consumers to load only what they need.
 
-### Future boundary
+### Reachability boundary (current, v1.3.0)
 
-Route-aware retrieval (v1.3), browser-state tracing (v1.3), and UI reachability analysis (v1.3) are not part of the current frontend analyzer. The current analyzer extracts static structure from source files only.
+Route-aware retrieval, browser-storage tracing, and UI reachability analysis shipped in v1.3.0 as a separate `frontend-reachability.json` artifact (see the Frontend reachability layer notes above and [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md)). They are conservative static evidence only: they record what the source text contains and do not execute the application, run a browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
 ## Data-model layer
 
@@ -487,10 +549,9 @@ Current boundaries:
 
 - It does not execute user project code.
 - It does not infer complete runtime behavior.
-- It does not provide route-aware tracing (planned for v1.3).
-- It does not provide browser-state tracing (planned for v1.3).
-- It does not provide UI reachability analysis (planned for v1.3).
-- It does not provide source continuation retrieval (planned for v1.4).
+- It provides route-aware, browser-storage, and UI-reachability *static evidence* (v1.3.0) — it does not prove runtime route reachability, browser-state behavior, or UI visibility.
+- It provides bounded source continuation and local-dependency-expansion retrieval (v1.4.0) — see the Search, lookup, source, slice, and view layers section.
+- It provides conservative static Android/Kotlin/Java structural indexing and Android component-role detection (v1.9.0) — it does not execute Gradle, javac, the Kotlin compiler, Android builds, emulators, APK/AAB inspection, or Play Store workflows, and does not validate Android runtime behavior, dependency-injection correctness, manifest registration validity, Compose semantics, Android navigation, Android resources, or Android security posture. See [ROADMAP.md](ROADMAP.md) for the planned v1.10.0-v1.13.0 Android work.
 - It does not perform semantic similarity search.
 - It does not use embeddings.
 - It does not call LLMs.

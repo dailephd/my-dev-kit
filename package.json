@@ -1,7 +1,7 @@
 {
   "name": "@dailephd/my-dev-kit",
   "version": "1.9.0",
-  "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static lineage for TypeScript, JavaScript, and Python projects.",
+  "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, conservative static lineage, and conservative static Android project/component detection for TypeScript, JavaScript, Python, Kotlin, and Java projects.",
   "type": "module",
   "bin": {
     "my-dev-kit": "dist/cli.js"
@@ -38,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:security": "vitest run tests/security",
-    "verify": "npm run typecheck && npm run test && npm run build",
+    "docs:check": "tsx scripts/docs/checkDocs.ts",
+    "verify": "npm run typecheck && npm run test && npm run build && npm run docs:check",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepack": "npm run build",
     "benchmark:retrieval": "tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit/retrieval-regression --fail-on-regression"

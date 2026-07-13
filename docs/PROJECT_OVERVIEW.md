@@ -2,7 +2,7 @@
 
 ## What this project is
 
-my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, and Python codebases, inspecting their structure, retrieving bounded source context, generating semantic and data-model artifacts, and tracing supported static model-to-view lineage.
+my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, Python, Kotlin, and Java codebases, inspecting their structure, retrieving bounded source context, generating semantic and data-model artifacts, tracing supported static model-to-view lineage, and detecting Android project structure and component roles from conservative static evidence.
 
 It runs offline and works through file-based JSON artifacts. It does not require a server, does not call external APIs, does not call language models, and does not modify source files.
 
@@ -23,9 +23,9 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.8.0 supports:
+Version 1.9.0 supports:
 
-- indexing TypeScript, JavaScript, and Python source roots
+- indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
 - building a typed code graph of file and symbol nodes
 - generating an optional static call graph
@@ -59,6 +59,10 @@ Version 1.8.0 supports:
 - `index --reset-cache` for clearing only incremental cache metadata
 - partial incremental rebuild for `symbol-index.json` and `code-graph.json`, with stable unchanged file/symbol IDs and honest `call-graph.json` full-regeneration fallback
 - `graph-diff` for deterministic, read-only comparison of two existing index directories
+- static Android/Gradle project, module, and source-set detection, written to `android-project.json` (v1.9.0 Batch 1)
+- conservative static Kotlin and Java structural indexing for `.kt`/`.java` files under indexed source roots, participating in `symbol-index.json`/`code-graph.json` like any other language (v1.9.0 Batch 2/3)
+- conservative static Android component-role detection (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module), written to `android-components.json` (v1.9.0 Batch 4)
+- Android component-role metadata surfaced through `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff`, with `--incremental` compatibility (v1.9.0 Batch 5)
 
 ## Public commands
 

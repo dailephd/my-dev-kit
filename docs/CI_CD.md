@@ -155,6 +155,10 @@ Expected GitHub Actions behavior:
 
 If no compatible Python interpreter is available, Python files are skipped with a warning. The index command should still complete instead of failing the entire run.
 
+## Android/Kotlin/Java support in CI (v1.9.0)
+
+Android project detection, Kotlin structural indexing, and Java structural indexing require no additional CI toolchain. Detection and extraction are conservative, static, regex/text-based analysis — they never invoke Gradle, `javac`, the Kotlin compiler, or an Android build/emulator. No JDK, Android SDK, or Gradle installation is required on CI runners to exercise `.kt`/`.java` indexing or Android component-role detection.
+
 ## Graphviz behavior in CI
 
 DOT graph output does not require Graphviz.
