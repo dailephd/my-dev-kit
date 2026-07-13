@@ -1,0 +1,8 @@
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material">
+        <item name="android:colorPrimary">@color/brand_primary</item>
+    </style>
+    <declare-styleable name="CombinedView">
+        <attr name="combinedLabel" format="string" />
+    </declare-styleable>
+</resources>

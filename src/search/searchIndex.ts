@@ -24,6 +24,7 @@ const WEIGHTS = {
   classificationRole: 7,
   classificationEditGuidance: 3,
   androidComponentRole: 7,
+  androidMetadata: 6,
 } as const
 
 const EDGE_WEIGHTS = {
@@ -81,8 +82,11 @@ function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph, fronten
   const nodesById = new Map(codeGraph.nodes.map((node) => [node.id, node]))
 
   for (const node of codeGraph.nodes) {
-    if (!isSearchableNode(node)) continue
-    mergeCandidate(candidates, nodeCandidate(node))
+    if (isSearchableNode(node)) {
+      mergeCandidate(candidates, nodeCandidate(node))
+    } else if (isAndroidGraphNode(node)) {
+      mergeCandidate(candidates, androidNodeCandidate(node))
+    }
   }
 
   for (const file of symbolIndex.files) {
@@ -164,6 +168,11 @@ function isSearchableNode(node: CodeGraphNode): node is CodeGraphNode & { kind: 
   return node.kind === 'file' || node.kind === 'symbol'
 }
 
+/** `android-*` node kinds are eligible for generic `search --query`/`context` candidate ranking (v1.10.0 Batch 6), reusing the same generic search engine rather than a second retrieval path. */
+function isAndroidGraphNode(node: CodeGraphNode): boolean {
+  return node.kind.startsWith('android-')
+}
+
 function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): SearchCandidate {
   const fields: SearchCandidateField[] = [
     field('nodeId', node.id, WEIGHTS.nodeId),
@@ -190,6 +199,31 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
       classificationRefs: node.classificationRefs,
       androidComponentRoles: node.androidComponentRoles,
       androidComponentRefs: node.androidComponentRefs,
+    },
+    fields,
+  }
+}
+
+/** Compact candidate for a Batch 5 `android-*` code-graph node: label + androidMetadata values only, never a full artifact record (v1.10.0 Batch 6). */
+function androidNodeCandidate(node: CodeGraphNode): SearchCandidate {
+  const fields: SearchCandidateField[] = [
+    field('nodeId', node.id, WEIGHTS.nodeId),
+    field('label', node.label, WEIGHTS.label),
+  ]
+  if (node.path) fields.push(field('path', node.path, WEIGHTS.path))
+  for (const value of Object.values(node.androidMetadata ?? {})) {
+    if (typeof value === 'string' && value.length > 0) fields.push(field('androidMetadata', value, WEIGHTS.androidMetadata))
+  }
+
+  return {
+    item: {
+      kind: node.kind,
+      id: node.id,
+      label: node.label,
+      path: node.path,
+      nodeId: node.id,
+      androidArtifactId: node.androidArtifactId,
+      androidMetadata: node.androidMetadata,
     },
     fields,
   }

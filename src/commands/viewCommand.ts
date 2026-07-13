@@ -4,6 +4,9 @@ import {
   adaptCodeGraph,
   adaptDataModelGraph,
   adaptModelViewLineageGraph,
+  adaptAndroidModuleGraph,
+  adaptAndroidManifestGraph,
+  adaptAndroidNavigationGraph,
   type GraphArtifactSelection,
 } from '../graph/adaptGraphArtifact.js'
 import {
@@ -33,7 +36,7 @@ export function registerViewCommand(program: Command): void {
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
-    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability>', 'graph artifact to render', 'code')
+    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -116,6 +119,9 @@ function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
   if (graph === 'route') return adaptRouteGraph(artifact as FrontendReachabilityArtifact)
   if (graph === 'browser-storage') return adaptBrowserStorageGraph(artifact as FrontendReachabilityArtifact)
   if (graph === 'ui-reachability') return adaptUiReachabilityGraph(artifact as FrontendReachabilityArtifact)
+  if (graph === 'android-module') return adaptAndroidModuleGraph(artifact as CodeGraph)
+  if (graph === 'android-manifest') return adaptAndroidManifestGraph(artifact as CodeGraph)
+  if (graph === 'android-navigation') return adaptAndroidNavigationGraph(artifact as CodeGraph)
   return adaptFrontendTestGraph(artifact as FrontendSemanticArtifact)
 }
 
@@ -130,10 +136,13 @@ function parseGraph(value: string): GraphArtifactSelection {
     value === 'frontend-test' ||
     value === 'route' ||
     value === 'browser-storage' ||
-    value === 'ui-reachability'
+    value === 'ui-reachability' ||
+    value === 'android-module' ||
+    value === 'android-manifest' ||
+    value === 'android-navigation'
   ) return value
   throw new Error(
-    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test, route, browser-storage, ui-reachability.`
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test, route, browser-storage, ui-reachability, android-module, android-manifest, android-navigation.`
   )
 }
 

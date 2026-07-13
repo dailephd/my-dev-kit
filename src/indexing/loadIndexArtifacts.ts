@@ -69,7 +69,9 @@ export function readRequiredJson<T>(filePath: string, label: string): T {
 }
 
 function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: GraphArtifactSelection): string {
-  if (graph === 'code') return resolved.artifactPaths.codeGraph
+  if (graph === 'code' || graph === 'android-module' || graph === 'android-manifest' || graph === 'android-navigation') {
+    return resolved.artifactPaths.codeGraph
+  }
   if (graph === 'data-model') {
     if (!resolved.semanticArtifactPaths.dataModelGraph) {
       throw new Error(
@@ -107,7 +109,9 @@ function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: Gr
 }
 
 function viewGraphLabel(graph: GraphArtifactSelection): string {
-  if (graph === 'code') return 'code graph'
+  if (graph === 'code' || graph === 'android-module' || graph === 'android-manifest' || graph === 'android-navigation') {
+    return 'code graph'
+  }
   if (graph === 'data-model') return 'data-model graph'
   if (graph === 'model-view-lineage') return 'model-view-lineage graph'
   if (graph === 'route' || graph === 'browser-storage' || graph === 'ui-reachability') {

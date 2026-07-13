@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Combined App</string>
+    <string-array name="tab_titles">
+        <item>Home</item>
+        <item>Settings</item>
+    </string-array>
+    <plurals name="item_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+</resources>

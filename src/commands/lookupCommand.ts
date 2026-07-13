@@ -9,6 +9,11 @@ import {
   buildReachabilityLookupResult,
   type ReachabilityLookupResult,
 } from '../frontend-reachability/index.js'
+import {
+  loadAndroidGraphData,
+  buildAndroidComponentLookupResult,
+  type AndroidComponentLookupResult,
+} from '../android/index.js'
 
 interface LookupCommandOptions {
   index: string
@@ -16,6 +21,7 @@ interface LookupCommandOptions {
   route?: string
   storageKey?: string
   ui?: string
+  androidComponent?: string
   depth: number
   json?: boolean
   resolveClassification?: boolean
@@ -30,6 +36,7 @@ export function registerLookupCommand(program: Command): void {
     .option('--route <path>', 'look up a frontend-reachability route fact')
     .option('--storage-key <key>', 'look up a frontend-reachability browser-storage key fact')
     .option('--ui <value>', 'look up a frontend-reachability UI marker fact')
+    .option('--android-component <name>', 'look up an Android manifest component (exact FQCN, raw manifest name, or simple name)')
     .option('--depth <n>', 'traversal depth', parseInteger, 1)
     .option(
       '--resolve-classification',
@@ -54,8 +61,24 @@ export function registerLookupCommand(program: Command): void {
         return
       }
 
+      if (options.androidComponent !== undefined) {
+        if (options.node !== undefined) {
+          throw new Error('--android-component cannot be combined with --node.')
+        }
+        const graphData = loadAndroidGraphData(options.index)
+        const result = buildAndroidComponentLookupResult(graphData, options.androidComponent)
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2))
+          return
+        }
+        printAndroidComponentLookupResult(result)
+        return
+      }
+
       if (!options.node) {
-        throw new Error('The lookup command requires --node <node-id> (or --route, --storage-key, or --ui).')
+        throw new Error(
+          'The lookup command requires --node <node-id> (or --route, --storage-key, --ui, or --android-component).'
+        )
       }
       const artifacts = loadLookupArtifacts(options.index)
       const result = lookupNode({
@@ -83,6 +106,25 @@ export function registerLookupCommand(program: Command): void {
         console.log(`Android roles: ${result.androidComponentRoles.map((role) => `${role.role} (${role.confidence})`).join(', ')}`)
       }
     })
+}
+
+function printAndroidComponentLookupResult(result: AndroidComponentLookupResult): void {
+  console.log(`Android component lookup: ${result.query}`)
+  console.log(`Status: ${result.status}`)
+  for (const warning of result.warnings) console.log(`Warning: ${warning}`)
+  if (result.status === 'ambiguous') {
+    for (const candidate of result.candidates) {
+      console.log(`- ${candidate.graphNodeId} (${candidate.matchKind}, ${candidate.kind})`)
+    }
+    return
+  }
+  if (result.status === 'found' && result.detail) {
+    console.log(`Component: ${result.detail.graphNodeId} (${result.detail.componentKind ?? 'unknown'})`)
+    console.log(`Resolved name: ${result.detail.resolvedName ?? 'unresolved'}`)
+    console.log(`Source class candidates: ${result.detail.sourceClassCandidates.length}`)
+    console.log(`Intent filters: ${result.detail.intentFilterIds.length}`)
+    console.log(`Permission edges: ${result.detail.permissionEdges.length}`)
+  }
 }
 
 function printReachabilityLookupResult(result: ReachabilityLookupResult): void {

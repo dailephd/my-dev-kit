@@ -13,6 +13,12 @@ import {
   buildReachabilitySearchResult,
   type ReachabilitySearchResult,
 } from '../frontend-reachability/index.js'
+import {
+  loadAndroidGraphData,
+  resolveAndroidSelectorMode,
+  buildAndroidSearchResult,
+  type AndroidSearchResult,
+} from '../android/index.js'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -26,6 +32,10 @@ export function registerSearchCommand(program: Command): void {
     .option('--route <path>', 'search frontend-reachability route facts')
     .option('--storage-key <key>', 'search frontend-reachability browser-storage key facts')
     .option('--ui <value>', 'search frontend-reachability UI marker facts')
+    .option('--android-route <route>', 'search Android navigation/Compose route evidence (exact match)')
+    .option('--permission <name>', 'search Android permission declarations and references (exact match)')
+    .option('--resource <name>', 'search Android resource definitions (canonical "type/name", "@type/name", or bare name)')
+    .option('--android-component <name>', 'search Android manifest components (exact FQCN, raw manifest name, or simple name)')
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
     .action((options: SearchCommandOptions) => {
@@ -46,8 +56,27 @@ export function registerSearchCommand(program: Command): void {
         return
       }
 
+      const androidMode = resolveAndroidSelectorMode(options)
+      if (androidMode) {
+        if (options.query !== undefined) {
+          throw new Error(
+            'The Android selector flags (--android-route, --permission, --resource, --android-component) cannot be combined with --query.'
+          )
+        }
+        const graphData = loadAndroidGraphData(options.index)
+        const result = buildAndroidSearchResult(graphData, androidMode.mode, androidMode.query)
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2))
+          return
+        }
+        printAndroidSearchResult(result)
+        return
+      }
+
       if (!options.query) {
-        throw new Error('The search command requires --query <text> (or --route, --storage-key, or --ui).')
+        throw new Error(
+          'The search command requires --query <text> (or --route, --storage-key, --ui, --android-route, --permission, --resource, or --android-component).'
+        )
       }
       const resolved = readIndexManifest(options.index)
       const result = searchIndex({
@@ -73,6 +102,10 @@ interface SearchCommandOptions {
   route?: string
   storageKey?: string
   ui?: string
+  androidRoute?: string
+  permission?: string
+  resource?: string
+  androidComponent?: string
   limit: number
   json?: boolean
 }
@@ -87,6 +120,15 @@ function printReachabilitySearchResult(result: ReachabilitySearchResult): void {
   console.log(`Results: ${result.summary.resultCount}, related edges: ${result.summary.edgeCount}`)
   for (const [index, item] of result.results.entries()) {
     console.log(`${index + 1}. [${item.factKind}] ${item.label} (${item.confidence}) - ${item.id}`)
+  }
+}
+
+function printAndroidSearchResult(result: AndroidSearchResult): void {
+  console.log(`Android search (${result.mode}): ${result.query}`)
+  console.log(`Results: ${result.summary.resultCount}`)
+  for (const [index, item] of result.results.entries()) {
+    console.log(`${index + 1}. [${item.kind}] ${item.matchKind}: ${item.label} - ${item.graphNodeId}`)
+    if (item.path) console.log(`   ${item.path}${item.line ? `:${item.line}` : ''}`)
   }
 }
 

@@ -560,6 +560,8 @@ React/TSX facts extracted by the frontend analyzer are conservative static evide
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
 
+For the current v1.10.0 scope, Android support includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. It remains local and static: no Gradle execution or dependency resolution; Android build, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; runtime navigation/intent/deep-link proof; or full Compose semantics.
+
 ## Runtime and artifact-size considerations
 
 The main artifacts (`symbol-index.json`, `code-graph.json`) carry compact semantic metadata rather than full role detail. Compact metadata uses short arrays with role names, confidence, and artifact references. Full detail is in the separate semantic artifacts.

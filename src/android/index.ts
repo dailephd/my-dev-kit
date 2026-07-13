@@ -1,5 +1,145 @@
 export { detectAndroidProject, type DetectAndroidProjectOptions } from './detectAndroidProject.js'
-export { parseGradleIncludes, detectAndroidPluginType, hasKotlinAndroidPluginEvidence } from './parseGradleEvidence.js'
+export {
+  parseGradleIncludes,
+  detectAndroidPluginType,
+  hasKotlinAndroidPluginEvidence,
+  classifyAndroidGradleModuleType,
+  parseSettingsEvidence,
+  parseAllPlugins,
+  parseAllDependencies,
+  parseAndroidBlock,
+  parseVersionCatalogToml,
+} from './parseGradleEvidence.js'
+export { buildAndroidGradleProject, type BuildAndroidGradleProjectOptions } from './buildAndroidGradleProject.js'
+export {
+  ANDROID_GRADLE_ARTIFACT_KIND,
+  ANDROID_GRADLE_SCHEMA_VERSION,
+  ANDROID_GRADLE_FILENAME,
+  type AndroidGradleArtifact,
+  type AndroidGradleModule,
+  type AndroidGradleSettingsEvidence,
+  type AndroidGradlePlugin,
+  type AndroidGradleDependency,
+  type AndroidGradleAndroidBlock,
+  type AndroidGradleBuildType,
+  type AndroidGradleProductFlavor,
+  type AndroidGradleSourceSetOverride,
+  type AndroidGradleVersionCatalog,
+  type AndroidGradleValue,
+  type AndroidGradleSummary,
+  type BuildAndroidGradleProjectResult,
+} from './androidGradleTypes.js'
+export { discoverAndroidManifests, type ManifestDiscoveryCandidate } from './discoverAndroidManifests.js'
+export { parseAndroidManifest, resolveNameAgainstManifestPackage } from './parseAndroidManifest.js'
+export { buildAndroidManifestProject, type BuildAndroidManifestProjectOptions } from './buildAndroidManifestProject.js'
+export {
+  ANDROID_MANIFEST_ARTIFACT_KIND,
+  ANDROID_MANIFEST_SCHEMA_VERSION,
+  ANDROID_MANIFEST_FILENAME,
+  type AndroidManifestArtifact,
+  type AndroidManifestFileRecord,
+  type AndroidManifestApplicationEvidence,
+  type AndroidManifestComponentEvidence,
+  type AndroidManifestComponentKind,
+  type AndroidManifestIntentFilterEvidence,
+  type AndroidManifestLauncherCandidate,
+  type AndroidManifestDeepLinkCandidate,
+  type AndroidManifestPermissionEvidence,
+  type AndroidManifestDeclaredPermissionEvidence,
+  type AndroidManifestUsesFeatureEvidence,
+  type AndroidManifestMetadataEvidence,
+  type AndroidManifestAttributeValue,
+  type AndroidManifestResourceReference,
+  type ResolvedComponentName,
+  type ExportedState,
+  type BuildAndroidManifestProjectResult,
+} from './androidManifestTypes.js'
+export { discoverAndroidResourceDirectories } from './discoverAndroidResourceDirectories.js'
+export { parseResourceDirectoryName } from './parseResourceDirectoryName.js'
+export { parseAndroidValuesResource } from './parseAndroidValuesResource.js'
+export { parseAndroidResourceXmlFile } from './parseAndroidResourceFile.js'
+export { buildAndroidResourceProject, type BuildAndroidResourceProjectOptions } from './buildAndroidResourceProject.js'
+export {
+  ANDROID_RESOURCES_ARTIFACT_KIND,
+  ANDROID_RESOURCES_SCHEMA_VERSION,
+  ANDROID_RESOURCES_FILENAME,
+  type AndroidResourcesArtifact,
+  type AndroidResourceDirectory,
+  type AndroidResourceFile,
+  type AndroidResourceDefinition,
+  type AndroidResourceFileDefinition,
+  type AndroidResourceLayout,
+  type AndroidResourceIdDefinition,
+  type AndroidResourceReference,
+  type AndroidResourceFileProviderPathEntry,
+  type AndroidNetworkSecurityRecord,
+  type AndroidResourceBaseType,
+  type AndroidResourceType,
+  type AndroidResourceQualifiers,
+  type BuildAndroidResourceProjectResult,
+} from './androidResourceTypes.js'
+export { buildAndroidNavigationXmlModel } from './buildAndroidNavigationXmlModel.js'
+export {
+  buildAndroidArtifactRelationships,
+  type BuildAndroidArtifactRelationshipsOptions,
+  type BuildAndroidArtifactRelationshipsResult,
+} from './buildAndroidArtifactRelationships.js'
+export {
+  loadAndroidGraphData,
+  resolveAndroidRouteCandidates,
+  resolveAndroidPermissionCandidates,
+  findPermissionReferers,
+  parseResourceSelector,
+  resolveAndroidResourceCandidates,
+  resolveAndroidComponentCandidates,
+  resolveAndroidSelectorMode,
+  resolveAndroidCandidates,
+  buildAndroidSearchResult,
+  buildAndroidComponentLookupResult,
+  type AndroidGraphData,
+  type AndroidCandidateBase,
+  type AndroidRouteMatchKind,
+  type AndroidRouteCandidate,
+  type AndroidPermissionMatchKind,
+  type AndroidPermissionCandidate,
+  type ParsedResourceSelector,
+  type AndroidResourceMatchKind,
+  type AndroidResourceCandidate,
+  type AndroidComponentMatchKind,
+  type AndroidComponentCandidate,
+  type AndroidSelectorMode,
+  type AndroidSelectorFlags,
+  type AndroidSearchResultItem,
+  type AndroidSearchResult,
+  type AndroidComponentLookupCandidateSummary,
+  type AndroidComponentLookupDetail,
+  type AndroidComponentLookupResult,
+} from './androidRetrieval.js'
+export { buildComposeNavigationRoutes } from './buildComposeNavigationRoutes.js'
+export {
+  buildAndroidNavigationProject,
+  buildAndroidNavigationXmlEvidenceFingerprint,
+  type BuildAndroidNavigationProjectOptions,
+} from './buildAndroidNavigationProject.js'
+export {
+  ANDROID_NAVIGATION_ARTIFACT_KIND,
+  ANDROID_NAVIGATION_SCHEMA_VERSION,
+  ANDROID_NAVIGATION_FILENAME,
+  type AndroidNavigationArtifact,
+  type AndroidNavigationFile,
+  type AndroidNavigationGraph,
+  type AndroidNavigationDestination,
+  type AndroidNavigationDestinationKind,
+  type AndroidNavigationAction,
+  type AndroidNavigationArgument,
+  type AndroidNavigationDeepLink,
+  type AndroidNavigationInclude,
+  type AndroidComposeRoute,
+  type AndroidComposeScreenCandidate,
+  type ComposeRouteEvidenceKind,
+  type ComposeNavigationBuilder,
+  type BuildAndroidNavigationProjectResult,
+} from './androidNavigationTypes.js'
 export {
   ANDROID_PROJECT_ARTIFACT_KIND,
   ANDROID_PROJECT_SCHEMA_VERSION,

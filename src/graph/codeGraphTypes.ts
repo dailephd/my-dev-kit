@@ -5,7 +5,32 @@ import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.j
 
 export const CODE_GRAPH_SCHEMA_VERSION = '1.0.0'
 
-export type CodeGraphNodeKind = 'file' | 'symbol' | 'frontend-fact'
+export type CodeGraphNodeKind =
+  | 'file'
+  | 'symbol'
+  | 'frontend-fact'
+  | 'android-module'
+  | 'android-source-set'
+  | 'android-manifest-file'
+  | 'android-manifest-component'
+  | 'android-intent-filter'
+  | 'android-permission'
+  | 'android-resource-file'
+  | 'android-resource-definition'
+  | 'android-navigation-graph'
+  | 'android-navigation-destination'
+  | 'android-navigation-action'
+  | 'android-navigation-deep-link'
+  | 'android-compose-route'
+
+/** Which Batch 1-4 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
+export type AndroidArtifactId =
+  | 'android-project'
+  | 'android-components'
+  | 'android-gradle'
+  | 'android-manifest'
+  | 'android-resources'
+  | 'android-navigation'
 
 export type CodeGraphEdgeKind =
   | 'defines'
@@ -15,6 +40,23 @@ export type CodeGraphEdgeKind =
   | 'calls'
   | 'related-to'
   | ReactFlowRelationshipKind
+  | 'module-contains-source-set'
+  | 'manifest-declares-component'
+  | 'manifest-component-resolves-to-source'
+  | 'component-has-intent-filter'
+  | 'component-uses-permission'
+  | 'manifest-uses-permission'
+  | 'resource-defined-in-file'
+  | 'source-references-resource'
+  | 'navigation-graph-contains-destination'
+  | 'navigation-destination-has-action'
+  | 'navigation-action-targets-destination'
+  | 'navigation-action-pop-up-to-destination'
+  | 'navigation-graph-includes-graph'
+  | 'navigation-destination-has-deep-link'
+  | 'manifest-deep-link-matches-navigation-deep-link'
+  | 'navigation-destination-resolves-to-screen'
+  | 'compose-route-resolves-to-screen'
 
 export interface CodeGraphNode {
   id: string
@@ -35,6 +77,16 @@ export interface CodeGraphNode {
   classificationRefs?: SemanticArtifactRef[]
   androidComponentRoles?: AndroidComponentRoleRef[]
   androidComponentRefs?: SemanticArtifactRef[]
+  /** Which Android artifact backs this compact node, for `android-*` node kinds only (v1.10.0 Batch 5). */
+  androidArtifactId?: AndroidArtifactId
+  /** The artifact-local stable entity ID this node was projected from (usually identical to `id`, kept separate for clarity). */
+  androidEntityId?: string
+  /** `android-project.json` module ID, for `android-*` node kinds scoped to a module. */
+  androidModuleId?: string
+  /** Synthetic `<modulePath>#<sourceSetName>` identity, for `android-*` node kinds scoped to a source set. */
+  androidSourceSetId?: string
+  /** Compact, entity-specific evidence (e.g. destination kind, resource type/name, permission name) — never a full artifact record. */
+  androidMetadata?: Record<string, string | number | boolean | null>
 }
 
 export interface CodeGraphEdge {

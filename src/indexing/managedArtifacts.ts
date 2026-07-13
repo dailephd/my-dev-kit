@@ -9,6 +9,10 @@ export const FRONTEND_REACHABILITY_FILENAME = 'frontend-reachability.json'
 export const CLASSIFICATION_FILENAME = 'classification.json'
 export const ANDROID_PROJECT_FILENAME = 'android-project.json'
 export const ANDROID_COMPONENTS_FILENAME = 'android-components.json'
+export const ANDROID_GRADLE_FILENAME = 'android-gradle.json'
+export const ANDROID_MANIFEST_FILENAME = 'android-manifest.json'
+export const ANDROID_RESOURCES_FILENAME = 'android-resources.json'
+export const ANDROID_NAVIGATION_FILENAME = 'android-navigation.json'
 
 export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
   INDEX_MANIFEST_FILENAME,
@@ -25,6 +29,10 @@ export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
   CLASSIFICATION_FILENAME,
   ANDROID_PROJECT_FILENAME,
   ANDROID_COMPONENTS_FILENAME,
+  ANDROID_GRADLE_FILENAME,
+  ANDROID_MANIFEST_FILENAME,
+  ANDROID_RESOURCES_FILENAME,
+  ANDROID_NAVIGATION_FILENAME,
 ] as const
 
 export const MANAGED_INDEX_ARTIFACT_FILENAMES = [

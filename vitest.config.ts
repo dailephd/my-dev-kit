@@ -7,5 +7,8 @@ export default defineConfig({
     exclude: ['tests/**/fixtures/**'],
     testTimeout: 20000,
     hookTimeout: 20000,
+    // CLI-heavy integration suites launch real Node processes. Cap file workers to
+    // avoid CPU contention turning otherwise-valid 20s tests into false timeouts.
+    maxWorkers: 4,
   },
 })

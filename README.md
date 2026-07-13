@@ -1,6 +1,6 @@
 # my-dev-kit
 
-Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, and conservative static model-to-view lineage for TypeScript, JavaScript, and Python projects.
+Local codebase graph indexing, local-first deterministic semantic enrichment, and bounded source retrieval for TypeScript, JavaScript, Python, Kotlin, Java, and supported Android projects.
 
 ## Overview
 
@@ -130,17 +130,31 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## v1.9.0 highlights
+## v1.10.0 implementation status
 
-Version 1.9.0 starts Android support with conservative static Android project detection, Kotlin and Java structural indexing, Android component-role detection, and retrieval compatibility through the existing local artifact workflow:
+The repository's v1.10.0 implementation is complete, its documentation is reconciled, and its implementation-completeness audit has passed. It has not been published; pre-release readiness is the next separate workflow.
+
+v1.10.0 extends the v1.9.0 Android foundation with conservative static Gradle, manifest, resource, navigation, relationship, retrieval, context, and graph-view evidence:
 
 - static Android/Gradle project, module, and source-set detection, written to `android-project.json`
 - conservative static Kotlin structural indexing for `.kt` files under indexed source roots
 - conservative static Java structural indexing for `.java` files under indexed source roots
 - conservative static Android component-role detection (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module), written to `android-components.json`
 - Android component-role metadata surfaced through the existing `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff` commands
+- static Gradle project evidence in `android-gradle.json`; static manifest, resource, and navigation evidence in `android-manifest.json`, `android-resources.json`, and `android-navigation.json`
+- compact Android relationship nodes and conservative candidate edges enriching `code-graph.json` (there is no `android-relationships.json`)
+- exact Android route, permission, resource, and component retrieval through the existing `search`, `lookup`, `source`, `slice`, `context`, and `view` commands
 
-v1.9.0 does not execute Gradle, javac, the Kotlin compiler, Android builds, emulators, APK/AAB inspection, or Play Store workflows, and does not validate Android runtime behavior, dependency-injection correctness, manifest registration validity, Compose semantics, Android navigation, Android resources, or Android security posture. See [docs/ROADMAP.md](docs/ROADMAP.md) for the planned v1.10.0-v1.13.0 Android work (Gradle/manifest/resources/navigation, Compose semantics, architecture/data-flow, benchmarks/examples/docs).
+For example:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-route home --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --permission android.permission.CAMERA --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.example.MainActivity --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --format dot
+```
+
+This is static evidence, not runtime proof. my-dev-kit does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; prove runtime route, intent, or deep-link dispatch; provide full Compose semantic retrieval; or provide Android architecture classification or data-flow retrieval. See [docs/COMMANDS.md](docs/COMMANDS.md) for exact selector behavior and [docs/ROADMAP.md](docs/ROADMAP.md) for deferred v1.11.0-v1.13.0 work.
 
 ## v1.8.0 highlights
 
@@ -171,11 +185,18 @@ The `index` command writes:
 | `android-project.json` | Android project artifact (v1.9.0 Batch 1): static Android/Gradle project, module, and source-set detection — Kotlin/Java symbol data lives in `symbol-index.json`/`code-graph.json` instead (Batch 2/Batch 3) — written when Android evidence is found under `--root` |
 | `android-components.json` | Android component-role artifact (v1.9.0 Batch 4): conservative static role detection (Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module) over already-indexed Kotlin/Java top-level symbols — written only when at least one role is detected |
 
+| `android-gradle.json` | Static Gradle settings, module, plugin, dependency, SDK, build-type, product-flavor, source-set, and version-catalog evidence; unsupported dynamic expressions remain warnings |
+| `android-manifest.json` | Static source-set manifest declarations, components, permissions, features, intent filters, deep-link and launcher candidates, metadata, and resource references; no manifest merging |
+| `android-resources.json` | Static resource directories, qualifiers, values/layout/file resources, IDs, references, and FileProvider/network-security records; no overlay selection or binary decoding |
+| `android-navigation.json` | Static XML navigation graphs and narrow Compose route evidence, including destinations, actions, arguments, includes, deep links, candidates, and direct screen candidates; no runtime reachability proof |
+
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
 Compact semantic roles (`semanticRoles`/`artifactRefs`) and compact classification roles (`classificationRoles`/`classificationRefs`) on symbol-index symbols and code-graph nodes link back to their respective detailed artifacts. The data-model, frontend semantic, and classification artifacts remain separate from `code-graph.json`, each with its own node/entry ID space.
 
 `view` renders `code-graph.json` by default. Use `--graph data-model` or `--graph model-view-lineage` for data-model graphs. Use `--graph react-component`, `--graph react-flow`, `--graph react-prop-event-flow`, or `--graph frontend-test` for frontend semantic graphs. Graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
+
+Android relationships enrich `code-graph.json` directly. Use `--graph android-module`, `--graph android-manifest`, or `--graph android-navigation` to render bounded views of real Android graph nodes and edges.
 
 ## Semantic integration
 

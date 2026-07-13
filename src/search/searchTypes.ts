@@ -1,4 +1,4 @@
-import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import type { CodeGraph, CodeGraphEdge, CodeGraphNode, CodeGraphNodeKind } from '../graph/codeGraphTypes.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
@@ -6,7 +6,7 @@ import type { ClassificationRoleRef } from '../classification/classificationType
 import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
-export type SearchResultKind = 'file' | 'symbol' | 'edge'
+export type SearchResultKind = 'file' | 'symbol' | 'edge' | CodeGraphNodeKind
 
 export type SearchMatchField =
   | 'path'
@@ -26,6 +26,7 @@ export type SearchMatchField =
   | 'classificationRole'
   | 'classificationEditGuidance'
   | 'androidComponentRole'
+  | 'androidMetadata'
 
 export interface SearchMatchReason {
   field: SearchMatchField
@@ -53,6 +54,9 @@ export interface SearchResultItem {
   classificationRefs?: SemanticArtifactRef[]
   androidComponentRoles?: AndroidComponentRoleRef[]
   androidComponentRefs?: SemanticArtifactRef[]
+  /** Compact Batch 5 evidence for `android-*` node kinds only (v1.10.0 Batch 6) - never a full artifact record. */
+  androidArtifactId?: string
+  androidMetadata?: Record<string, string | number | boolean | null>
 }
 
 export interface SearchIndexOptions {

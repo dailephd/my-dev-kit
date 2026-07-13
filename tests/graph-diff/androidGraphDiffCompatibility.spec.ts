@@ -97,10 +97,22 @@ describe('graph-diff Android compatibility', () => {
 
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
-    // Android project detection is not part of code-graph nodes/edges; a
-    // plugin-type change alone produces no node/edge diff (proves graph-diff
-    // stays inert to android-project.json content specifically).
+    // As of v1.10.0 Batch 5, android-project.json's module type is projected
+    // onto a compact `android-module` code-graph node (androidMetadata.moduleType),
+    // so a plugin-type change is now visible as exactly one changed node —
+    // no node is added or removed, since the module itself still exists.
+    // (Before Batch 5, android-project.json contributed nothing to
+    // code-graph.json at all, so this same edit produced zero node changes.)
     expect(parsed.summary.nodesAdded).toBe(0)
-    expect(parsed.summary.nodesChanged).toBe(0)
+    expect(parsed.summary.nodesChanged).toBe(1)
+    expect(parsed.nodes.changed).toEqual([
+      {
+        id: 'android-module:app',
+        kind: 'android-module',
+        changedFields: ['androidMetadata'],
+        before: { androidMetadata: { moduleType: 'app' } },
+        after: { androidMetadata: { moduleType: 'library' } },
+      },
+    ])
   })
 })
