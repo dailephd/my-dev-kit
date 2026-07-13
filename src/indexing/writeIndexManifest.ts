@@ -12,10 +12,18 @@ import {
 import type { ClassificationArtifact } from '../classification/classificationTypes.js'
 import type { AndroidProjectArtifact } from '../android/androidProjectTypes.js'
 import type { AndroidComponentsArtifact } from '../android/androidComponentTypes.js'
+import type { AndroidGradleArtifact } from '../android/androidGradleTypes.js'
+import type { AndroidManifestArtifact } from '../android/androidManifestTypes.js'
+import type { AndroidResourcesArtifact } from '../android/androidResourceTypes.js'
+import type { AndroidNavigationArtifact } from '../android/androidNavigationTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import {
   ANDROID_PROJECT_FILENAME,
   ANDROID_COMPONENTS_FILENAME,
+  ANDROID_GRADLE_FILENAME,
+  ANDROID_MANIFEST_FILENAME,
+  ANDROID_RESOURCES_FILENAME,
+  ANDROID_NAVIGATION_FILENAME,
   CALL_GRAPH_FILENAME,
   CLASSIFICATION_FILENAME,
   CODE_GRAPH_FILENAME,
@@ -40,6 +48,10 @@ export interface WriteIndexArtifactsOptions {
   classification?: ClassificationArtifact | null
   androidProject?: AndroidProjectArtifact | null
   androidComponents?: AndroidComponentsArtifact | null
+  androidGradle?: AndroidGradleArtifact | null
+  androidManifest?: AndroidManifestArtifact | null
+  androidResources?: AndroidResourcesArtifact | null
+  androidNavigation?: AndroidNavigationArtifact | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
@@ -73,6 +85,18 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
   }
   if (options.androidComponents) {
     writeJson(path.join(options.outputDir, ANDROID_COMPONENTS_FILENAME), options.androidComponents)
+  }
+  if (options.androidGradle) {
+    writeJson(path.join(options.outputDir, ANDROID_GRADLE_FILENAME), options.androidGradle)
+  }
+  if (options.androidManifest) {
+    writeJson(path.join(options.outputDir, ANDROID_MANIFEST_FILENAME), options.androidManifest)
+  }
+  if (options.androidResources) {
+    writeJson(path.join(options.outputDir, ANDROID_RESOURCES_FILENAME), options.androidResources)
+  }
+  if (options.androidNavigation) {
+    writeJson(path.join(options.outputDir, ANDROID_NAVIGATION_FILENAME), options.androidNavigation)
   }
 }
 

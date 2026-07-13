@@ -148,8 +148,13 @@ function toCandidateFile(entry: PenalizedResult, retained: boolean, droppedReaso
   }
 }
 
+/** Node kinds eligible for the generic node-candidate pool: source-backed `file`/`symbol` plus Batch 5's compact `android-*` artifact-backed graph nodes (v1.10.0 Batch 6) - reuses the exact same scoring/penalty/mode-adjustment pipeline as file/symbol candidates, never a separate ranking model. */
+function isEligibleNodeKind(kind: string): boolean {
+  return kind === 'file' || kind === 'symbol' || kind.startsWith('android-')
+}
+
 export function rankCandidateNodes(input: RankingInput, mode: ContextCapsuleMode = 'general'): CandidateNode[] {
-  const nodeResults = input.results.filter((result) => result.kind === 'file' || result.kind === 'symbol')
+  const nodeResults = input.results.filter((result) => isEligibleNodeKind(result.kind))
   const base = nodeResults.map(applyGenericFilePenalty)
   const strongestDirectory = directoryOf([...base].sort((a, b) => b.baseScore - a.baseScore || a.result.id.localeCompare(b.result.id))[0]?.result.path)
   const penalized = base.map((entry) => applyModeAdjustment(entry, mode, strongestDirectory))
@@ -160,7 +165,7 @@ export function rankCandidateNodes(input: RankingInput, mode: ContextCapsuleMode
 
 function toCandidateNode(entry: PenalizedResult): CandidateNode {
   const { result, score, penaltyReasons } = entry
-  const kind = result.kind === 'symbol' ? 'symbol' : 'file'
+  const kind = result.kind === 'symbol' ? 'symbol' : result.kind.startsWith('android-') ? result.kind : 'file'
   return {
     nodeId: result.nodeId ?? result.id,
     kind,
@@ -175,6 +180,8 @@ function toCandidateNode(entry: PenalizedResult): CandidateNode {
     ...(result.artifactRefs ? { artifactRefs: result.artifactRefs } : {}),
     ...(result.classificationRoles ? { classificationRoles: result.classificationRoles } : {}),
     ...(result.classificationRefs ? { classificationRefs: result.classificationRefs } : {}),
+    ...(result.androidArtifactId ? { androidArtifactId: result.androidArtifactId } : {}),
+    ...(result.androidMetadata ? { androidMetadata: result.androidMetadata } : {}),
     retained: true,
   }
 }

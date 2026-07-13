@@ -302,15 +302,24 @@ npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-
 
 `graph-diff` never runs `index` and never modifies either input directory; it reports added/removed/changed nodes, edges, and artifact metadata using each artifact's existing stable IDs. Exit code is `0` for any valid comparison (with or without differences).
 
-## Workflow 10: Index and retrieve Android/Kotlin/Java projects (v1.9.0)
+## Workflow 10: Index and retrieve Android/Kotlin/Java projects (v1.10.0)
 
 ```sh
 npx @dailephd/my-dev-kit index --root . --src app/src/main/java --src app/src/main/kotlin --out .my-dev-kit --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --query "ViewModel" --limit 20 --json
 npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-route home --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --permission android.permission.CAMERA --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --resource string/app_name --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.example.MainActivity --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --android-route home --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --android-component com.example.MainActivity --depth 2 --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --format dot
 ```
 
 `.kt` and `.java` files under `--src` are indexed like any other language — no new flags. When Android project evidence (`settings.gradle(.kts)`, `AndroidManifest.xml`, source-set layout) is found under `--root`, `index` also writes `android-project.json`, and when Android component roles (Activity, Fragment, ViewModel, Service, Repository, Room entities/DAOs, Retrofit services, Hilt modules, and others) are detected on indexed Kotlin/Java symbols, `index` writes `android-components.json` and attaches compact `androidComponentRoles`/`androidComponentRefs` metadata usable through `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff`. This is conservative static evidence only: it never executes Gradle, javac, or the Kotlin compiler, and does not validate Android runtime behavior, manifest registration, Compose semantics, or Android security posture.
+
+Android projects additionally produce `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` when the applicable static evidence exists. Android artifact-backed nodes and candidate relationships enrich the existing `code-graph.json`; there is no `android-relationships.json`. Android selectors use exact matching and preserve ambiguity; route/resource source is bounded, binary resources are not decoded, and `android-module`, `android-manifest`, and `android-navigation` views render real graph edges only. This remains static analysis: it does not build Android projects, resolve dependencies, merge manifests, select resources, prove runtime behavior, provide full Compose semantics, or perform Android security validation.
 
 ---
 

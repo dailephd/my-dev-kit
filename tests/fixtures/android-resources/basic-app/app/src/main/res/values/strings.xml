@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Resources App</string>
+    <string name="greeting">Hello, @string/app_name</string>
+</resources>

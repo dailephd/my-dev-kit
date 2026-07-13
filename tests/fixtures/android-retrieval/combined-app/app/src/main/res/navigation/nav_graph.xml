@@ -1,0 +1,41 @@
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment"
+    route="home_graph">
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.example.combined.MainActivity"
+        route="home">
+        <argument
+            android:name="userId"
+            app:argType="string"
+            android:defaultValue="anonymous" />
+        <action
+            android:id="@+id/action_home_to_details"
+            app:destination="@id/detailsFragment"
+            app:popUpTo="@id/homeFragment"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_home_to_missing"
+            app:destination="@id/doesNotExistDestination" />
+        <deepLink app:uri="https://example.com/details" />
+    </fragment>
+    <fragment
+        android:id="@+id/detailsFragment"
+        android:name="com.example.combined.MainActivity" />
+    <dialog
+        android:id="@+id/settingsDialog"
+        android:name="com.example.combined.SettingsActivity" />
+    <widgetPane
+        android:id="@+id/customWidget" />
+    <navigation
+        android:id="@+id/nestedGraph"
+        app:startDestination="@id/nestedHome"
+        route="nested_home_graph">
+        <fragment
+            android:id="@+id/nestedHome"
+            android:name="com.example.combined.MainActivity" />
+    </navigation>
+    <include app:graph="@navigation/nav_graph_included" />
+</navigation>

@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
 import { addFrontendRelationshipsToCodeGraph } from '../graph/addFrontendRelationshipsToCodeGraph.js'
+import { addAndroidRelationshipsToCodeGraph } from '../graph/addAndroidRelationshipsToCodeGraph.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { buildIndex, type BuildIndexProgressEvent, type FileExtractionMeta } from '../symbol-index/builder.js'
 import type { CallGraph, SymbolIndex } from '../symbol-index/types.js'
@@ -50,7 +51,15 @@ import {
   type ClassificationArtifact,
   type CompactClassificationMetadata,
 } from '../classification/index.js'
-import { ANDROID_PROJECT_FILENAME, ANDROID_COMPONENTS_FILENAME, CLASSIFICATION_FILENAME } from './managedArtifacts.js'
+import {
+  ANDROID_PROJECT_FILENAME,
+  ANDROID_COMPONENTS_FILENAME,
+  ANDROID_GRADLE_FILENAME,
+  ANDROID_MANIFEST_FILENAME,
+  ANDROID_RESOURCES_FILENAME,
+  ANDROID_NAVIGATION_FILENAME,
+  CLASSIFICATION_FILENAME,
+} from './managedArtifacts.js'
 import type { IndexAnalyzerStatus } from './manifestTypes.js'
 import { detectAndroidProject } from '../android/detectAndroidProject.js'
 import { ANDROID_PROJECT_SCHEMA_VERSION, type DetectAndroidProjectResult } from '../android/androidProjectTypes.js'
@@ -60,8 +69,23 @@ import {
   applyAndroidComponentsToSymbolIndex,
   applyAndroidComponentsToCodeGraph,
   ANDROID_COMPONENTS_SCHEMA_VERSION,
+  buildAndroidGradleProject,
+  ANDROID_GRADLE_SCHEMA_VERSION,
+  buildAndroidManifestProject,
+  ANDROID_MANIFEST_SCHEMA_VERSION,
+  buildAndroidResourceProject,
+  ANDROID_RESOURCES_SCHEMA_VERSION,
+  buildAndroidNavigationProject,
+  buildAndroidNavigationXmlEvidenceFingerprint,
+  ANDROID_NAVIGATION_SCHEMA_VERSION,
+  buildAndroidArtifactRelationships,
   type AndroidComponentsArtifact,
   type CompactAndroidComponentMetadata,
+  type BuildAndroidGradleProjectResult,
+  type BuildAndroidManifestProjectResult,
+  type BuildAndroidResourceProjectResult,
+  type BuildAndroidNavigationProjectResult,
+  type BuildAndroidArtifactRelationshipsResult,
 } from '../android/index.js'
 
 export interface RunIndexCommandOptions {
@@ -113,6 +137,14 @@ export interface RunIndexCommandIndexResult {
   androidProjectPath: string | null
   /** Path to `android-components.json`, or `null` when no Android component roles were detected (v1.9.0 Batch 4). */
   androidComponentsPath: string | null
+  /** Path to `android-gradle.json`, or `null` when no detailed Gradle evidence was detected (v1.10.0 Batch 1). */
+  androidGradlePath: string | null
+  /** Path to `android-manifest.json`, or `null` when no AndroidManifest.xml evidence was detected (v1.10.0 Batch 2). */
+  androidManifestPath: string | null
+  /** Path to `android-resources.json`, or `null` when no Android resource evidence was detected (v1.10.0 Batch 3). */
+  androidResourcesPath: string | null
+  /** Path to `android-navigation.json`, or `null` when no Android navigation evidence was detected (v1.10.0 Batch 4). */
+  androidNavigationPath: string | null
   cache: IndexCacheSummary
   cacheReset: CacheResetResult | null
 }
@@ -196,6 +228,32 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   // typically lives outside the indexed source roots.
   const androidResult = detectAndroidProject({ projectRoot })
 
+  // Detailed static Gradle project model (v1.10.0 Batch 1). Extends the
+  // v1.9.0 module/source-set detection above with plugins, dependencies,
+  // `android {}` configuration, and version-catalog evidence. Computed once
+  // per invocation for the same reasons as `androidResult`.
+  const androidGradleResult = buildAndroidGradleProject({ projectRoot, androidProject: androidResult.artifact })
+
+  // Detailed static Android manifest model (v1.10.0 Batch 2). Discovers and
+  // parses AndroidManifest.xml files using the module/source-set model above
+  // plus Batch 1's Gradle namespace/custom-manifest-path evidence. Computed
+  // once per invocation for the same reasons as androidResult/androidGradleResult.
+  const androidManifestResult = buildAndroidManifestProject({
+    projectRoot,
+    androidProject: androidResult.artifact,
+    androidGradle: androidGradleResult.artifact,
+  })
+
+  // Detailed static Android resource model (v1.10.0 Batch 3). Discovers and
+  // indexes res/ directories using the module/source-set model above plus
+  // Batch 1's Gradle resource-directory evidence. Computed once per
+  // invocation for the same reasons as the other Android builders.
+  const androidResourcesResult = buildAndroidResourceProject({
+    projectRoot,
+    androidProject: androidResult.artifact,
+    androidGradle: androidGradleResult.artifact,
+  })
+
   if (options.incremental !== true) {
     const built = runFullIndexBuild({
       projectRoot,
@@ -210,6 +268,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
       changedFileSummary: undefined,
       partialRebuildFallbackArtifacts: undefined,
       androidResult,
+      androidGradleResult,
+      androidManifestResult,
+      androidResourcesResult,
     })
     return {
       ...built.result,
@@ -235,6 +296,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     cacheReset,
     cacheMetadataPath,
     androidResult,
+    androidGradleResult,
+    androidManifestResult,
+    androidResourcesResult,
   })
 }
 
@@ -252,11 +316,26 @@ interface RunIncrementalIndexParams {
   cacheReset: CacheResetResult | null
   cacheMetadataPath: string
   androidResult: DetectAndroidProjectResult
+  androidGradleResult: BuildAndroidGradleProjectResult
+  androidManifestResult: BuildAndroidManifestProjectResult
+  androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
 function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommandIndexResult {
-  const { projectRoot, normalizedSourceRoots, options, outputDir, progress, commandStartTime, cacheReset, cacheMetadataPath, androidResult } =
-    params
+  const {
+    projectRoot,
+    normalizedSourceRoots,
+    options,
+    outputDir,
+    progress,
+    commandStartTime,
+    cacheReset,
+    cacheMetadataPath,
+    androidResult,
+    androidGradleResult,
+    androidManifestResult,
+    androidResourcesResult,
+  } = params
 
   const configFingerprint = computeConfigFingerprint({
     sourceRoots: normalizedSourceRoots,
@@ -266,6 +345,13 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     defaultIgnoredDirectoryNames: [...DEFAULT_IGNORED_DIRECTORY_NAMES],
     defaultIgnoredDirectoryPrefixes: [...DEFAULT_IGNORED_DIRECTORY_PREFIXES],
     androidEvidenceFingerprint: androidResult.evidenceFingerprint,
+    androidGradleEvidenceFingerprint: androidGradleResult.evidenceFingerprint,
+    androidManifestEvidenceFingerprint: androidManifestResult.evidenceFingerprint,
+    androidResourcesEvidenceFingerprint: androidResourcesResult.evidenceFingerprint,
+    androidNavigationXmlEvidenceFingerprint: buildAndroidNavigationXmlEvidenceFingerprint({
+      projectRoot,
+      androidResources: androidResourcesResult.artifact,
+    }),
   })
 
   const cacheRead = readCacheMetadata(outputDir)
@@ -284,6 +370,9 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       changedFileSummary: null,
       partialRebuildFallbackArtifacts: [],
       androidResult,
+      androidGradleResult,
+      androidManifestResult,
+      androidResourcesResult,
     })
     writeMergedCacheMetadata({
       outputDir,
@@ -383,6 +472,9 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
         changedFileSummary,
         partialRebuildFallbackArtifacts,
         androidResult,
+        androidGradleResult,
+        androidManifestResult,
+        androidResourcesResult,
       })
 
       writeMergedCacheMetadata({
@@ -423,6 +515,9 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       changedFileSummary,
       partialRebuildFallbackArtifacts: [],
       androidResult,
+      androidGradleResult,
+      androidManifestResult,
+      androidResourcesResult,
     })
     writeMergedCacheMetadata({
       outputDir,
@@ -496,6 +591,10 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     preflightWarnings,
     androidProjectPath: resolveAndroidProjectPathFromManifest(existingManifest, outputDir),
     androidComponentsPath: resolveAndroidComponentsPathFromManifest(existingManifest, outputDir),
+    androidGradlePath: resolveAndroidGradlePathFromManifest(existingManifest, outputDir),
+    androidManifestPath: resolveAndroidManifestPathFromManifest(existingManifest, outputDir),
+    androidResourcesPath: resolveAndroidResourcesPathFromManifest(existingManifest, outputDir),
+    androidNavigationPath: resolveAndroidNavigationPathFromManifest(existingManifest, outputDir),
     cache: {
       requested: true,
       mode: 'incremental-no-change',
@@ -529,6 +628,22 @@ function resolveAndroidProjectPathFromManifest(manifest: IndexManifest, outputDi
 
 function resolveAndroidComponentsPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
   return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-components')
+}
+
+function resolveAndroidGradlePathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-gradle')
+}
+
+function resolveAndroidManifestPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-manifest')
+}
+
+function resolveAndroidResourcesPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-resources')
+}
+
+function resolveAndroidNavigationPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-navigation')
 }
 
 function resolveAnalyzerArtifactPathFromManifest(manifest: IndexManifest, outputDir: string, analyzerId: string): string | null {
@@ -574,6 +689,9 @@ interface RunFullIndexBuildParams {
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
   androidResult: DetectAndroidProjectResult
+  androidGradleResult: BuildAndroidGradleProjectResult
+  androidManifestResult: BuildAndroidManifestProjectResult
+  androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
 interface RunFullIndexBuildResult {
@@ -633,6 +751,9 @@ interface FinishIndexBuildParams {
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
   androidResult: DetectAndroidProjectResult
+  androidGradleResult: BuildAndroidGradleProjectResult
+  androidManifestResult: BuildAndroidManifestProjectResult
+  androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
 function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandIndexResult, 'cache' | 'cacheReset'> {
@@ -652,6 +773,9 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     changedFileSummary,
     partialRebuildFallbackArtifacts,
     androidResult,
+    androidGradleResult,
+    androidManifestResult,
+    androidResourcesResult,
   } = params
 
   const warnings: string[] = []
@@ -713,6 +837,9 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const classifiedCodeGraph = applyClassificationToCodeGraph(enrichedCodeGraph, classificationRefsBySymbolId)
 
   const androidAnalyzerStatus = buildAndroidAnalyzerStatus(androidResult)
+  const androidGradleAnalyzerStatus = buildAndroidGradleAnalyzerStatus(androidGradleResult)
+  const androidManifestAnalyzerStatus = buildAndroidManifestAnalyzerStatus(androidManifestResult)
+  const androidResourcesAnalyzerStatus = buildAndroidResourcesAnalyzerStatus(androidResourcesResult)
 
   const { androidComponents, androidComponentsAnalyzerStatus } = runAndroidComponentsAnalyzer({
     symbolIndex: classifiedSymbolIndex,
@@ -726,6 +853,44 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const roledSymbolIndex = applyAndroidComponentsToSymbolIndex(classifiedSymbolIndex, androidComponentRefsBySymbolId)
   const roledCodeGraph = applyAndroidComponentsToCodeGraph(classifiedCodeGraph, androidComponentRefsBySymbolId)
 
+  // Detailed static Android navigation model (v1.10.0 Batch 4). Computed
+  // here — not alongside the other three Android builders at the top of
+  // runIndexCommand — because its Compose-route evidence needs the
+  // already-built symbol index (mirrors how android-components, Batch 4 of
+  // v1.9.0, is computed inside this same finishing pipeline for the same
+  // reason). The XML-navigation portion was already fingerprinted early
+  // (see androidNavigationXmlEvidenceFingerprint in the config fingerprint)
+  // and is safely recomputed here from the same static evidence.
+  const androidNavigationResult = buildAndroidNavigationProject({
+    projectRoot,
+    androidProject: androidResult.artifact,
+    androidGradle: androidGradleResult.artifact,
+    androidResources: androidResourcesResult.artifact,
+    symbolIndex: roledSymbolIndex,
+    createdAt,
+  })
+  const androidNavigationAnalyzerStatus = buildAndroidNavigationAnalyzerStatus(androidNavigationResult)
+
+  // Android artifact relationships (v1.10.0 Batch 5). Connects all six
+  // Android artifacts into the existing code-graph architecture — compact
+  // artifact-backed nodes plus deterministic relationship edges, merged
+  // additively into `roledCodeGraph`. Computed last among the Android
+  // builders since it consumes every other Android artifact plus the fully
+  // role-enriched symbol index. No new top-level artifact is produced; this
+  // only enriches `code-graph.json` and reports status via the existing
+  // analyzer-registry convention (`android-relationships`).
+  const androidRelationships = buildAndroidArtifactRelationships({
+    projectRoot,
+    androidProject: androidResult.artifact,
+    androidGradle: androidGradleResult.artifact,
+    androidManifest: androidManifestResult.artifact,
+    androidResources: androidResourcesResult.artifact,
+    androidNavigation: androidNavigationResult.artifact,
+    symbolIndex: roledSymbolIndex,
+  })
+  const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
+  const androidRelationshipsAnalyzerStatus = buildAndroidRelationshipsAnalyzerStatus(androidResult, androidRelationships)
+
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -733,13 +898,23 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: callGraph !== null,
     symbolIndex: roledSymbolIndex,
-    codeGraph: roledCodeGraph,
+    codeGraph: relationshipCodeGraph,
     warnings,
     errors,
     createdAt,
     semanticArtifacts: semanticResult.semanticArtifacts,
     analyzers: replaceAnalyzerStatuses(
-      [...(baseManifest.analyzers ?? []), classificationAnalyzerStatus, androidAnalyzerStatus, androidComponentsAnalyzerStatus],
+      [
+        ...(baseManifest.analyzers ?? []),
+        classificationAnalyzerStatus,
+        androidAnalyzerStatus,
+        androidComponentsAnalyzerStatus,
+        androidGradleAnalyzerStatus,
+        androidManifestAnalyzerStatus,
+        androidResourcesAnalyzerStatus,
+        androidNavigationAnalyzerStatus,
+        androidRelationshipsAnalyzerStatus,
+      ],
       semanticResult.analyzers
     ),
     indexMode,
@@ -759,7 +934,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     outputDir,
     manifest,
     symbolIndex: roledSymbolIndex,
-    codeGraph: roledCodeGraph,
+    codeGraph: relationshipCodeGraph,
     callGraph,
     classification,
     dataModel: semanticResult.dataModelResult.dataModel,
@@ -768,6 +943,10 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     frontendReachability: semanticResult.frontendReachabilityResult.artifact,
     androidProject: androidResult.artifact.detected ? androidResult.artifact : null,
     androidComponents: androidComponents && androidComponents.detected ? androidComponents : null,
+    androidGradle: androidGradleResult.artifact.detected ? androidGradleResult.artifact : null,
+    androidManifest: androidManifestResult.artifact.detected ? androidManifestResult.artifact : null,
+    androidResources: androidResourcesResult.artifact.detected ? androidResourcesResult.artifact : null,
+    androidNavigation: androidNavigationResult.artifact.detected ? androidNavigationResult.artifact : null,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -809,6 +988,18 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
       : null,
     androidComponentsPath: androidComponents && androidComponents.detected
       ? toForwardSlash(path.join(outputDir, ANDROID_COMPONENTS_FILENAME))
+      : null,
+    androidGradlePath: androidGradleResult.artifact.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_GRADLE_FILENAME))
+      : null,
+    androidManifestPath: androidManifestResult.artifact.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_MANIFEST_FILENAME))
+      : null,
+    androidResourcesPath: androidResourcesResult.artifact.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_RESOURCES_FILENAME))
+      : null,
+    androidNavigationPath: androidNavigationResult.artifact.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_NAVIGATION_FILENAME))
       : null,
   }
 }
@@ -943,6 +1134,153 @@ function buildAndroidAnalyzerStatus(androidResult: DetectAndroidProjectResult): 
       detected: artifact.detected,
       confidence: artifact.confidence,
       moduleCount: artifact.summary.moduleCount,
+    },
+  }
+}
+
+/**
+ * Registers detailed Gradle project evidence (v1.10.0 Batch 1) via the same
+ * analyzer-registry pattern `android-project` uses. Never `'failed'`: like
+ * `detectAndroidProject`, `buildAndroidGradleProject` degrades unreadable or
+ * dynamic evidence to warnings rather than throwing.
+ */
+function buildAndroidGradleAnalyzerStatus(androidGradleResult: BuildAndroidGradleProjectResult): IndexAnalyzerStatus {
+  const { artifact } = androidGradleResult
+  const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+
+  return {
+    id: 'android-gradle',
+    status,
+    version: ANDROID_GRADLE_SCHEMA_VERSION,
+    schemaVersion: ANDROID_GRADLE_SCHEMA_VERSION,
+    artifacts: artifact.detected
+      ? [{ name: 'androidGradle', path: ANDROID_GRADLE_FILENAME, artifactKind: 'my-dev-kit-v1-android-gradle' }]
+      : [],
+    warningCount: artifact.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected: artifact.detected,
+      moduleCount: artifact.summary.moduleCount,
+      versionCatalogFileCount: artifact.summary.versionCatalogFileCount,
+    },
+  }
+}
+
+/**
+ * Registers detailed Android manifest evidence (v1.10.0 Batch 2) via the
+ * same analyzer-registry pattern `android-gradle` uses. Never `'failed'`:
+ * a malformed manifest degrades to a bounded per-file warning (see
+ * `parseAndroidManifest`'s `parsingStatus: 'malformed'` record) rather than
+ * throwing, mirroring `android-gradle`'s conservative failure-mode contract.
+ */
+function buildAndroidManifestAnalyzerStatus(androidManifestResult: BuildAndroidManifestProjectResult): IndexAnalyzerStatus {
+  const { artifact } = androidManifestResult
+  const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+
+  return {
+    id: 'android-manifest',
+    status,
+    version: ANDROID_MANIFEST_SCHEMA_VERSION,
+    schemaVersion: ANDROID_MANIFEST_SCHEMA_VERSION,
+    artifacts: artifact.detected
+      ? [{ name: 'androidManifest', path: ANDROID_MANIFEST_FILENAME, artifactKind: 'my-dev-kit-v1-android-manifest' }]
+      : [],
+    warningCount: artifact.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected: artifact.detected,
+      manifestFileCount: artifact.summary.manifestFileCount,
+      componentCount: artifact.summary.componentCount,
+    },
+  }
+}
+
+/**
+ * Registers detailed Android resource evidence (v1.10.0 Batch 3) via the
+ * same analyzer-registry pattern `android-manifest` uses. Never `'failed'`:
+ * a malformed individual resource XML file degrades to a bounded per-file
+ * warning rather than throwing, mirroring the conservative failure-mode
+ * contract every other Android analyzer already has.
+ */
+function buildAndroidResourcesAnalyzerStatus(androidResourcesResult: BuildAndroidResourceProjectResult): IndexAnalyzerStatus {
+  const { artifact } = androidResourcesResult
+  const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+
+  return {
+    id: 'android-resources',
+    status,
+    version: ANDROID_RESOURCES_SCHEMA_VERSION,
+    schemaVersion: ANDROID_RESOURCES_SCHEMA_VERSION,
+    artifacts: artifact.detected
+      ? [{ name: 'androidResources', path: ANDROID_RESOURCES_FILENAME, artifactKind: 'my-dev-kit-v1-android-resources' }]
+      : [],
+    warningCount: artifact.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected: artifact.detected,
+      resourceFileCount: artifact.summary.resourceFileCount,
+      valueResourceCount: artifact.summary.valueResourceCount,
+    },
+  }
+}
+
+/**
+ * Registers detailed Android navigation evidence (v1.10.0 Batch 4) via the
+ * same analyzer-registry pattern `android-resources` uses. Never `'failed'`:
+ * a malformed navigation XML file degrades to a bounded per-file warning
+ * (mirroring `android-resources`), and unsupported Compose route syntax
+ * degrades to a per-route warning rather than an invented route.
+ */
+function buildAndroidNavigationAnalyzerStatus(androidNavigationResult: BuildAndroidNavigationProjectResult): IndexAnalyzerStatus {
+  const { artifact } = androidNavigationResult
+  const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+
+  return {
+    id: 'android-navigation',
+    status,
+    version: ANDROID_NAVIGATION_SCHEMA_VERSION,
+    schemaVersion: ANDROID_NAVIGATION_SCHEMA_VERSION,
+    artifacts: artifact.detected
+      ? [{ name: 'androidNavigation', path: ANDROID_NAVIGATION_FILENAME, artifactKind: 'my-dev-kit-v1-android-navigation' }]
+      : [],
+    warningCount: artifact.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected: artifact.detected,
+      xmlGraphCount: artifact.summary.xmlGraphCount,
+      composeRouteCount: artifact.summary.composeRouteCount,
+    },
+  }
+}
+
+/**
+ * Registers Android artifact-relationship enrichment (v1.10.0 Batch 5) via
+ * the same analyzer-registry pattern the other five Android analyzers use.
+ * Unlike them, this analyzer produces no new top-level artifact file — it
+ * only enriches `code-graph.json` — so its `artifacts` list is always
+ * empty; `summary` reports the enrichment size instead. Never `'failed'`:
+ * `buildAndroidArtifactRelationships` degrades unresolved/ambiguous
+ * evidence to an omitted edge or a warning, never an exception.
+ */
+function buildAndroidRelationshipsAnalyzerStatus(
+  androidResult: DetectAndroidProjectResult,
+  relationships: BuildAndroidArtifactRelationshipsResult
+): IndexAnalyzerStatus {
+  const detected = androidResult.artifact.detected && (relationships.nodes.length > 0 || relationships.edges.length > 0)
+  const status: IndexAnalyzerStatus['status'] = !detected ? 'skipped' : relationships.warnings.length > 0 ? 'partial' : 'complete'
+
+  return {
+    id: 'android-relationships',
+    status,
+    version: '1.0.0',
+    schemaVersion: '1.0.0',
+    artifacts: [],
+    warningCount: relationships.warnings.length,
+    errorCount: 0,
+    summary: {
+      detected,
+      addedNodeCount: relationships.nodes.length,
+      addedEdgeCount: relationships.edges.length,
     },
   }
 }

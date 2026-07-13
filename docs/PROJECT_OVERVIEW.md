@@ -2,7 +2,7 @@
 
 ## What this project is
 
-my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, Python, Kotlin, and Java codebases, inspecting their structure, retrieving bounded source context, generating semantic and data-model artifacts, tracing supported static model-to-view lineage, and detecting Android project structure and component roles from conservative static evidence.
+my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, Python, Kotlin, Java, and supported Android projects; inspecting their structure; retrieving bounded source context; generating semantic and data-model artifacts; tracing supported static model-to-view lineage; and producing conservative Android Gradle, manifest, resource, navigation, and graph relationship evidence.
 
 It runs offline and works through file-based JSON artifacts. It does not require a server, does not call external APIs, does not call language models, and does not modify source files.
 
@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.9.0 supports:
+The v1.10.0 implementation is complete, documentation is reconciled, and the implementation-completeness audit has passed. Pre-release readiness and publication remain separate work. It supports:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -63,6 +63,12 @@ Version 1.9.0 supports:
 - conservative static Kotlin and Java structural indexing for `.kt`/`.java` files under indexed source roots, participating in `symbol-index.json`/`code-graph.json` like any other language (v1.9.0 Batch 2/3)
 - conservative static Android component-role detection (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module), written to `android-components.json` (v1.9.0 Batch 4)
 - Android component-role metadata surfaced through `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff`, with `--incremental` compatibility (v1.9.0 Batch 5)
+- static Android Gradle evidence for settings, modules, plugins, dependencies, SDK/configuration, source sets, and version catalogs in `android-gradle.json`
+- static Android manifest evidence for application/components/permissions/features/intent filters/metadata and launcher/deep-link candidates in `android-manifest.json`
+- static Android resource evidence for source sets, qualifiers, values/layout/file resources, IDs, references, and FileProvider/network-security records in `android-resources.json`
+- static Android XML navigation and narrow Compose route evidence in `android-navigation.json`
+- compact Android artifact-backed nodes and conservative candidate edges in the unified `code-graph.json`, with no parallel graph or `android-relationships.json`
+- exact Android route, permission, resource, and component selectors through existing `search`, `lookup`, `source`, `slice`, context, and Android module/manifest/navigation graph views
 
 ## Public commands
 
@@ -195,10 +201,12 @@ Current scope (through v1.9.0 Batch 5):
 - conservative static Java structural indexing (`.java` files under `--src`): package/imports (including `static` and wildcard forms), top-level classes/interfaces/enums/records/annotation-type declarations, surfaced in `symbol-index.json`/`code-graph.json` — no method/field/constructor symbols, no call-graph edges, no `javac`/Maven/Gradle execution (v1.9.0 Batch 3)
 - conservative static Android component-role detection over already-indexed Kotlin/Java top-level symbols (14 roles: Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module), producing `android-components.json` plus compact role metadata on the matching `symbol-index.json`/`code-graph.json` symbols — evidence-tiered confidence (annotation/superclass > import > path > name-suffix), never claims manifest declaration or runtime DI/navigation correctness (v1.9.0 Batch 4)
 - hardened and tested retrieval/command compatibility for `index`/`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental` when Android project facts, Kotlin symbols, Java symbols, and Android component roles coexist in one index — no new commands, flags, or artifacts (v1.9.0 Batch 5)
+- static Android Gradle/manifest/resource/navigation artifacts, unified Android graph relationships, exact Android retrieval selectors, Android-aware context, and Android graph views (v1.10.0 Batches 1-7)
 - warnings for unsupported, ambiguous, or low-confidence patterns
 
 Current scope does not claim:
 
+- Android build execution, dependency resolution, manifest merging, runtime resource selection, runtime intent/deep-link/route proof, full Compose semantic retrieval, Android architecture classification, Android data-flow retrieval, Android UI-test indexing, or Android security validation
 - full ORM or schema coverage
 - runtime database behavior
 - runtime React rendering behavior

@@ -203,7 +203,7 @@ Every `index` run performs **static** Android/Gradle project detection against `
 
 **graph-diff**: `graph-diff` never enumerates the index directory's contents, so `android-project.json` sitting alongside the other artifacts is inert to it. The existing generic `manifest.analyzerChanges` diff (compares `manifest.analyzers[]` by id) automatically reports an `android-project` status change between two indexes with no `graph-diff`-specific code for this artifact.
 
-**Batch 1 does not implement** (deferred to later `v1.9.0` batches): Kotlin/Java structural symbol indexing (both are now implemented — see "Kotlin structural indexing" and "Java structural indexing" below), Android component-role detection (now implemented — see "Android component-role detection" below), Room/Retrofit/Hilt/Dagger detection, a detailed Gradle project model or dependency graph, a detailed `AndroidManifest.xml` artifact (package name/permissions/components), an Android resources or navigation artifact, Compose semantic retrieval, and Android build/emulator/APK/AAB/Play-Store/security/release validation of any kind.
+**Batch 1 does not implement** (deferred to later batches): Kotlin/Java structural symbol indexing (both are now implemented — see "Kotlin structural indexing" and "Java structural indexing" below), Android component-role detection (now implemented — see "Android component-role detection" below), Room/Retrofit/Hilt/Dagger detection, a detailed Gradle project model or dependency graph (now implemented — see "Detailed Gradle project evidence" below), a detailed `AndroidManifest.xml` artifact (package name/permissions/components), an Android resources or navigation artifact, Compose semantic retrieval, and Android build/emulator/APK/AAB/Play-Store/security/release validation of any kind.
 
 ### Kotlin structural indexing (v1.9.0 Batch 2)
 
@@ -272,6 +272,116 @@ Only Retrofit-service detection needs to look inside the symbol's body (HTTP met
 **Source-root boundary preserved**: detection only ever reads files that are already part of the indexed `symbolIndex` (i.e. under a requested `--src` root) — it never scans additional Kotlin/Java source roots that Batch 1's Android detection may have recorded in `android-project.json`.
 
 **Not implemented in Batch 4** (deferred): method/field/constructor-level role evidence (matches the Batch 2/3 top-level-only precedent), a detailed `AndroidManifest.xml`-based component registry, Compose semantic retrieval, Room/Retrofit/Hilt *semantic* wiring validation, and any Android build/emulator/runtime/security validation.
+
+### Detailed Gradle project evidence (v1.10.0 Batch 1)
+
+Every `index` run of a project with Gradle/Android evidence (per Batch 1's v1.9.0 detection) also runs a **detailed, static, conservative** Gradle-evidence pass over the same modules — settings files, build-file plugins/dependencies/`android {}` configuration, and version catalogs. No new flag, no new command: it runs automatically and writes nothing for a project with zero qualifying Gradle evidence. It extends the existing `src/android/parseGradleEvidence.ts` module (the same regex/brace-scanning parser `detectAndroidProject` already uses for module/plugin-type detection) rather than introducing a second Gradle scanner.
+
+**What is statically detected, per module**: applied plugins (`id("...")`, `id '...'`, `alias(libs.plugins.*)`, `apply plugin: "..."`, `apply(plugin = "...")`), dependency declarations (`implementation`/`api`/`testImplementation`/`kapt`/`ksp`/etc., classified as external-module/project/version-catalog-alias/platform/file/unknown), and `android {}` configuration — `namespace`, `compileSdk`, `applicationId`, `minSdk`, `targetSdk`, `versionCode`, `versionName`, `testInstrumentationRunner`, `buildFeatures`, `buildTypes`, `productFlavors`, `flavorDimensions`, and statically-visible `sourceSets` overrides (`manifest.srcFile`, `java.srcDirs`, `kotlin.srcDirs`, `res.srcDirs`, `assets.srcDirs`, `aidl.srcDirs`). At the project level: `rootProject.name`, `include(...)` module declarations (reusing Batch 1's parser), `includeBuild(...)`, `project(...).projectDir` remaps, and `gradle/libs.versions.toml` (`versions`/`libraries`/`bundles`/`plugins`, including `version.ref` indirection).
+
+**What is explicitly not claimed**: any value is only recorded when it is a literal Gradle expresses statically (a quoted string, an integer, `true`/`false`). Anything computed — a variable reference, a function call, `project.property(...)`, string concatenation — is preserved as raw source text with `resolved: false` and a warning, never guessed at. The parser never executes Gradle, never runs `gradlew`, never resolves dependencies against a repository (local or remote), and never computes the final merged build-type × product-flavor variant configuration.
+
+**Output**: when any detailed Gradle evidence is found, `index` writes `android-gradle.json` (schema below) and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-gradle', status, artifacts: [...] }` — the same registration pattern `android-project`/`android-components` already use. `status` is `'skipped'` (no Gradle evidence at all), `'partial'` (evidence found but at least one warning), or `'complete'` (no warnings). It is never `'failed'`: unreadable or dynamic evidence degrades to a warning, the same contract `android-project.json` already has. The JSON command result also exposes a top-level `androidGradlePath`.
+
+**Incremental indexing**: `index --incremental`'s config fingerprint now also covers an `androidGradleEvidenceFingerprint` (derived from the built `android-gradle.json` itself), alongside Batch 1's existing `androidEvidenceFingerprint`. Any settings/build/version-catalog file edit that changes detected Gradle evidence invalidates the cache (`incremental-full-config-changed`) and regenerates `android-gradle.json` in full — there is no partial per-module Gradle rebuild in this batch. Stale-artifact cleanup, `--reset-cache`, and the `incremental-no-change` fast path all work the same way they already do for `android-project.json`.
+
+**Batch 1 does not implement** (deferred to later `v1.10.0` batches): `AndroidManifest.xml` parsing (now implemented — see "Detailed Android manifest evidence" below), an Android resources or navigation artifact, Android route/permission/resource retrieval selectors, Android module/manifest/navigation graph views, Compose semantic retrieval, and any Android build/emulator/APK/AAB/security validation.
+
+#### android-gradle.json shape
+
+- `artifactKind`: `"my-dev-kit-v1-android-gradle"`, `schemaVersion`: `"1.0.0"`.
+- `detected`, `filesExamined` (sorted), `settings` (nullable), `modules[]` (sorted by `directory`), `versionCatalogs[]` (sorted by `file`), `warnings[]` (sorted), `summary`.
+- Each module: `id`, `gradlePath`, `directory`, `buildFile`, `dsl`, `moduleType`, `sourceSetRefs[]`, `plugins[]`, `android` (nullable), `dependencies[]`, `warnings[]`.
+- See `docs/GRAPH_SCHEMA.md`'s `android-gradle.json` section for the full field list, including the `AndroidGradleValue<T>` resolved/unresolved shape shared by every SDK/config field.
+
+### Detailed Android manifest evidence (v1.10.0 Batch 2)
+
+Every `index` run of a project with detected Android modules also discovers and parses `AndroidManifest.xml` files — default source-set locations (`src/main`, `src/debug`, `src/release`, product-flavor/build-type names, `src/test`, `src/androidTest`) plus any statically-visible custom manifest path from Batch 1's Gradle evidence (`sourceSets["<name>"].manifest.srcFile(...)`). No new flag, no new command: it runs automatically and writes nothing when zero manifest files are discovered. A bounded, non-executing XML parser (`src/android/xml/parseXml.ts`, hand-written rather than a new runtime dependency — the repository's TOML parser from Batch 1 made the same call) backs `src/android/parseAndroidManifest.ts` (per-file parsing) and `src/android/discoverAndroidManifests.ts` (discovery), orchestrated by `src/android/buildAndroidManifestProject.ts`.
+
+**Manifest merging is never simulated.** Every discovered manifest — including duplicate declarations across `main`/`debug`/flavor source sets — is parsed and preserved as its own independent record. There is no "effective" or "winning" manifest computed anywhere.
+
+**What is statically detected, per manifest**: `package`, `versionCode`/`versionName`, `sharedUserId`, `installLocation`, `uses-sdk`; `uses-permission`/`uses-permission-sdk-23` (with `maxSdkVersion`); declared `<permission>` (with `protectionLevel`); `uses-feature` (with `required`/`glEsVersion`); the `<application>` declaration and its attributes (`allowBackup`, `debuggable`, `networkSecurityConfig`, `usesCleartextTraffic`, etc.); `activity`/`activity-alias`/`service`/`receiver`/`provider` components with `exported` state, process/permission attributes, and provider `authorities`/`grant-uri-permission`/`path-permission` evidence; `intent-filter`/`action`/`category`/`data` evidence; `meta-data` at both application and component level (including FileProvider-style `android.support.FILE_PROVIDER_PATHS` references). Component names in `.Name`, `Name`, or `com.example.Name` form are resolved against the manifest's own `package` attribute first, falling back to the Gradle `namespace` only when no `package` attribute exists — never against `applicationId`, and never invented when neither base is available (left unresolved with a warning instead).
+
+**Launcher and deep-link candidates** are identified only from direct static intent-filter evidence (`MAIN`+`LAUNCHER`, `VIEW`+`BROWSABLE`+`<data>`) and always carry a warning that manifest merging, aliases, enabled state, and build-variant selection are not evaluated — neither claims the app actually launches through that component or that a URI is reachable in a built variant.
+
+**What is explicitly not claimed**: an effective `exported` value computed from Android-version/manifest-merging rules; that a resource reference (`@string/...`, `@xml/...`) resolves to any particular value (preserved as a structured, unresolved reference — `android-resources.json`, Batch 3, indexes resource *definitions* but does not link back to these manifest references either, since that cross-artifact relationship is Batch 5's); that a deep link is reachable, that domain verification (`assetlinks.json`) succeeds, or any other runtime behavior. XML parsing never executes code and never fetches anything over the network.
+
+**Output**: when any manifest evidence is found, `index` writes `android-manifest.json` (schema below) and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-manifest', status, artifacts: [...] }` — the same registration pattern `android-gradle`/`android-project` already use. `status` is `'skipped'` (no manifest files at all), `'partial'` (evidence found but at least one warning — including a malformed manifest, which produces a bounded per-file warning rather than crashing the run), or `'complete'` (no warnings). It is never `'failed'`. The JSON command result also exposes a top-level `androidManifestPath`.
+
+**Incremental indexing**: `index --incremental`'s config fingerprint now also covers an `androidManifestEvidenceFingerprint`, alongside Batch 1's `androidEvidenceFingerprint`/`androidGradleEvidenceFingerprint`. Any manifest add/edit/delete, Gradle namespace change, or custom-manifest-path change invalidates the cache and regenerates `android-manifest.json` in full — there is no partial per-manifest rebuild in this batch. Stale-artifact cleanup, `--reset-cache`, and the `incremental-no-change` fast path all work the same way they already do for `android-gradle.json`.
+
+**Batch 2 does not implement** (deferred to later `v1.10.0` batches): resource XML parsing/resolution (now implemented — see "Detailed Android resource evidence" below), `android-navigation.json`, a broad declaration-to-source relationship graph, and any Android retrieval selector or graph view.
+
+#### android-manifest.json shape
+
+- `artifactKind`: `"my-dev-kit-v1-android-manifest"`, `schemaVersion`: `"1.0.0"`.
+- `detected`, `filesExamined[]` (sorted), `manifests[]`, `applications[]`, `components[]`, `intentFilters[]`, `launcherCandidates[]`, `deepLinkCandidates[]`, `permissions[]`, `declaredPermissions[]`, `usesFeatures[]`, `metadata[]`, `warnings[]` (sorted), `summary`.
+- Each manifest record: `id`, `path`, `moduleId`, `gradlePath`, `sourceSet`, `discoverySource` (`"default-convention"`/`"gradle-override"`), `packageAttr`, `gradleNamespace`, `applicationId`, `parsingStatus` (`"parsed"`/`"malformed"`), `warnings[]`, `counts`.
+- See `docs/GRAPH_SCHEMA.md`'s `android-manifest.json` section for the full field list, including the `AndroidManifestAttributeValue` and `ResolvedComponentName` shapes shared across components/application/permissions.
+
+### Detailed Android resource evidence (v1.10.0 Batch 3)
+
+Every `index` run of a project with detected Android modules also discovers and indexes `res/` resource directories — default source-set locations (`src/main/res`, `src/debug/res`, `src/release/res`, product-flavor/build-type names, `src/test/res`, `src/androidTest/res`) plus any statically-visible custom resource directory from Batch 1's Gradle evidence (`sourceSets["<name>"].res.srcDirs(...)`). No new flag, no new command: it runs automatically and writes nothing when zero resource files are discovered. Reuses the bounded XML parser Batch 2 added (`src/android/xml/parseXml.ts`, additively extended with an element `text` field — zero change to Batch 2 manifest-parsing behavior) via `src/android/parseAndroidValuesResource.ts` (`values*` XML) and `src/android/parseAndroidResourceFile.ts` (layouts, generic file-based XML, FileProvider paths, network-security config), with discovery in `src/android/discoverAndroidResourceDirectories.ts` and qualifier parsing in `src/android/parseResourceDirectoryName.ts`, orchestrated by `src/android/buildAndroidResourceProject.ts`.
+
+**Resource merging, overlay precedence, and device-configuration matching are never simulated.** Every qualified directory (`values`, `values-es`, `values-night`, `layout-land`, `drawable-hdpi`, ...) across every source set is indexed and preserved independently; duplicate logical resource names across qualifiers/source sets are never collapsed, and no runtime winner is ever selected.
+
+**What is statically detected**: value resources (`string`, `color`, `style`, `bool`, `integer`, `dimen`, `fraction`, `plurals`, `string-array`/`integer-array`/`array`, explicit-type `item`, `attr`, `declare-styleable`) from `values*` XML; file-based resources (layouts, drawables, mipmaps, generic `xml/`, menus, anims/animators, color-state-lists, fonts, raw files, navigation graphs — the last recorded only as a generic file resource, with no navigation semantics); layout structure (root element, declared `@+id/` IDs, `@id/`/`@android:id/` references, `<include>` layout references, `<fragment>` class names); resource references in every recognized form (`@type/name`, `@+id/name`, `@id/name`, `?attr/name`, `@android:...`, `@package:type/name`, `@null`/`@empty`); FileProvider `<paths>` path declarations; and `<network-security-config>` structure (`base-config`/`domain-config`/`domain`/`trust-anchors`/`certificates`/`pin-set`/`pin`/`debug-overrides`).
+
+**Candidate-target enumeration, never resolution**: every reference's `candidateTargetIds[]` lists every statically-known local definition sharing its logical resource key — all matches are preserved, none is selected as "the" target; a framework reference or a reference with no local candidate is left with an empty list, which is expected rather than an error.
+
+**What is explicitly not claimed**: an effective/merged resource value across qualifiers; a resolved style/theme inheritance chain; binary resource content (bitmaps/fonts are indexed by path/qualifier/extension only — never decoded, never rendered); that a FileProvider path is filesystem-safe; that a network-security pin/certificate is valid; or any runtime resource-selection behavior. XML parsing never executes code, resource compilation (`aapt`/`aapt2`) never runs, and no network access is required.
+
+**Output**: when any resource evidence is found, `index` writes `android-resources.json` (schema below) and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-resources', status, artifacts: [...] }` — the same registration pattern `android-manifest`/`android-gradle` already use. `status` is `'skipped'` (no resource files at all), `'partial'` (evidence found but at least one warning — including a malformed individual XML file, which produces a bounded per-file warning rather than crashing the run), or `'complete'` (no warnings). It is never `'failed'`. The JSON command result also exposes a top-level `androidResourcesPath`.
+
+**Incremental indexing**: `index --incremental`'s config fingerprint now also covers an `androidResourcesEvidenceFingerprint`, alongside the other three Android fingerprints. Because binary resource files contribute no parsed content to the artifact JSON, their fingerprint additionally folds in a per-file content hash so editing a binary file's bytes (without touching its path) still invalidates the cache. Any resource add/edit/delete or custom Gradle resource-directory change regenerates `android-resources.json` in full — there is no partial per-file rebuild in this batch. Stale-artifact cleanup, `--reset-cache`, and the `incremental-no-change` fast path all work the same way they already do for `android-manifest.json`.
+
+**Batch 3 does not implement** (deferred to later `v1.10.0` batches): `android-navigation.json` (navigation destination/action/argument extraction — now implemented, see "Detailed Android navigation evidence" below), manifest-to-resource or source-to-resource cross-artifact relationships, resource resolution/compilation, and any Android retrieval selector or graph view.
+
+#### android-resources.json shape
+
+- `artifactKind`: `"my-dev-kit-v1-android-resources"`, `schemaVersion`: `"1.0.0"`.
+- `detected`, `filesExamined[]` (sorted), `resourceDirectories[]`, `resourceFiles[]`, `valueDefinitions[]`, `fileDefinitions[]`, `layouts[]`, `idDefinitions[]`, `references[]`, `fileProviderPaths[]`, `networkSecurityRecords[]`, `warnings[]` (sorted), `summary`.
+- Each resource directory/file/definition carries `moduleId`, `sourceSet`, and a `qualifiers` object (`AndroidResourceQualifiers`) parsed from the directory name.
+- See `docs/GRAPH_SCHEMA.md`'s `android-resources.json` section for the full field list, including the `AndroidResourceKey` logical-key shape and candidate-target reference behavior.
+
+### Detailed Android navigation evidence (v1.10.0 Batch 4)
+
+Every `index` run of a project with Android navigation resources or supported Compose navigation source also indexes `res/navigation/*.xml` graphs and narrowly-recognized static Compose route calls. No new flag, no new command: it runs automatically and writes nothing when neither exists. XML evidence reuses Batch 3's already-discovered `navigation`-type resource-file records (`src/android/buildAndroidNavigationXmlModel.ts`, no independent directory rescan) and the shared bounded XML parser, additively extended with `findNamespacePrefixForUri` for the `app`/`tools` namespaces — zero change to Batch 2/3 parsing behavior. Compose evidence (`src/android/buildComposeNavigationRoutes.ts`) runs over already-indexed Kotlin/Java files, the same integration point `android-components.json` (v1.9.0 Batch 4) uses for evidence beyond `symbol-index.json`.
+
+**XML and Compose evidence are two clearly separated evidence kinds, never auto-linked.** This batch never infers that an XML destination and a Compose route represent "the same" screen from name/string similarity — only Batch 5's cross-artifact relationship work may establish that, and only from explicit static evidence.
+
+**What is statically detected in XML**: nested `<navigation>` graphs; `fragment`/`activity`/`dialog` destinations (any other element name is preserved conservatively as a `custom` destination, with a warning — never silently dropped); `<action>` (`app:destination`/`app:popUpTo` candidates, `popUpToInclusive`/`popUpToSaveState`/`launchSingleTop`/`restoreState`, animation references); `<argument>` (`argType`, `nullable`, classified `defaultValue`: literal/resource-reference/null/unresolved); `<deepLink>` (URI pattern with parsed scheme/host and placeholder detection — never linked to `android-manifest.json`); and `<include>` (candidate target graphs by logical resource key). Every candidate lookup (start destination, action targets, include targets) enumerates **all** statically-matching definitions — never a single selected winner, never source-set/qualifier overlay precedence, never a merged "effective" included graph.
+
+**What is statically detected in Compose**: this is **not** a Compose semantic analyzer. Only `composable(...)`, `navigation(...)`, `dialog(...)`, `activity(...)`, and `NavHost(...)`'s `startDestination` are recognized, and only three route forms are resolved: a direct string literal, a same-file `const val` string constant, or a generic type-route argument (`composable<HomeRoute>`, labeled `type-safe-route`). String interpolation, concatenation, function-call results, and cross-file constants are always left `unresolved-recognized-call` with a warning — never invented. A **direct screen candidate** is recorded only when a route's content lambda is exactly one top-level PascalCase call with no `if`/`when`/`for`/`while`/`try` anywhere in the body; ambiguous content still produces a route record but no screen candidate.
+
+**What is explicitly not claimed**: that a start destination, action target, popUpTo target, or include target resolves to one specific definition at runtime; that a deep link is reachable; that navigation graphs compose into one runtime graph; or any Compose recomposition/state/NavController-call-tracing behavior. Gradle, Android build tools, and application code are never executed; no network access is required.
+
+**Output**: when any navigation evidence is found, `index` writes `android-navigation.json` (schema below) and registers it in `manifest.json`'s `analyzers` array as `{ id: 'android-navigation', status, artifacts: [...] }` — the same registration pattern the other three Android analyzers use. `status` is `'skipped'` (no evidence at all), `'partial'` (evidence found but at least one warning — including a malformed navigation XML file, which produces a bounded per-file warning rather than crashing the run), or `'complete'` (no warnings). It is never `'failed'`. The JSON command result also exposes a top-level `androidNavigationPath`.
+
+**Incremental indexing**: `index --incremental`'s config fingerprint now also covers an `androidNavigationXmlEvidenceFingerprint` (the XML portion only, computed early like the other three Android fingerprints — navigation XML isn't tracked by the normal `--src` changed-file mechanism). The Compose-route portion has no separate fingerprint: Kotlin/Java changes are already covered by the standard changed-file mechanism, which re-runs the pipeline stage that recomputes Compose route evidence fresh whenever a relevant source file changes. Any navigation XML add/edit/delete or custom Gradle resource-directory change regenerates the XML portion in full — there is no partial per-file/per-graph rebuild in this batch.
+
+**Batch 4 does not implement** (deferred to later batches): manifest-to-navigation deep-link relationships, navigation-to-resource or destination-to-source relationships, route-to-screen graph edges, full Compose semantic indexing (composable trees, state, recomposition, `NavController` call tracing), and any Android retrieval selector or graph view. Manifest/navigation/resource/source relationship linking is implemented in Batch 5, below; retrieval selectors/graph views remain planned for Batch 6.
+
+#### android-navigation.json shape
+
+- `artifactKind`: `"my-dev-kit-v1-android-navigation"`, `schemaVersion`: `"1.0.0"`.
+- `detected`, `filesExamined[]` (sorted), `navigationFiles[]`, `graphs[]`, `destinations[]`, `actions[]`, `arguments[]`, `xmlDeepLinks[]`, `includes[]`, `composeRoutes[]`, `screenCandidates[]`, `warnings[]` (sorted), `summary`.
+- Each graph/destination/action/argument/deep-link/include record carries `moduleId`, `sourceSet`, `qualifiers`, `file`, and candidate-target ID arrays (never a single resolved target).
+- See `docs/GRAPH_SCHEMA.md`'s `android-navigation.json` section for the full field list, including the Compose `evidenceKind`/`builder` classification and direct-screen-candidate contract.
+
+### Android artifact relationships (v1.10.0 Batch 5)
+
+Every `index` run of a project with Android evidence also connects the six Android artifacts (`android-project.json`, `android-components.json`, `android-gradle.json`, `android-manifest.json`, `android-resources.json`, `android-navigation.json`) through compact static graph relationships. **No new flag, no new command, no new artifact file** — `src/android/buildAndroidArtifactRelationships.ts` runs at the end of the same index-finishing pipeline stage `android-components.json`/Compose route extraction already use, and its output is merged additively into the existing `code-graph.json` (`src/graph/addAndroidRelationshipsToCodeGraph.ts`), the same merge-by-`id` pattern `addFrontendRelationshipsToCodeGraph.ts` already uses.
+
+**What is added**: `android-module`, `android-source-set`, `android-manifest-file`, `android-manifest-component`, `android-intent-filter`, `android-permission`, `android-resource-file`, `android-resource-definition`, `android-navigation-graph`, `android-navigation-destination`, `android-navigation-action`, `android-navigation-deep-link`, and `android-compose-route` node kinds, connected by `module-contains-source-set`, `manifest-declares-component`, `manifest-component-resolves-to-source`, `component-has-intent-filter`, `component-uses-permission`/`manifest-uses-permission`, `resource-defined-in-file`, `source-references-resource`, `navigation-graph-contains-destination`, `navigation-destination-has-action`, `navigation-action-targets-destination`/`navigation-action-pop-up-to-destination`, `navigation-graph-includes-graph`, `navigation-destination-has-deep-link`, `manifest-deep-link-matches-navigation-deep-link`, `navigation-destination-resolves-to-screen`, and `compose-route-resolves-to-screen` edge kinds. Every node reuses its owning artifact's existing stable ID; every source-side edge endpoint reuses the existing `symbol`- or `file`-kind node — Kotlin/Java class nodes are never duplicated.
+
+**Matching is always exact and always enumerated**: manifest-component-to-class and Compose-route-to-screen resolution use exact fully-qualified/top-level-declaration names only (never fuzzy or simple-name matching); `manifest-deep-link-matches-navigation-deep-link` requires exact scheme/host/port/path equality (a manifest `pathPrefix`/`pathPattern` or a navigation deep link with a placeholder is always a non-match); and every one-to-many static match (multiple candidate classes, resource definitions, navigation targets, or screen functions) produces one edge per candidate — never a single selected runtime winner. No security verdict is ever produced from permission or exported-component relationships.
+
+**Output**: no new file. Registered in `manifest.json`'s `analyzers` array as `{ id: 'android-relationships', status, artifacts: [] }` (empty `artifacts`, since it enriches `code-graph.json` in place). `status` is `'skipped'` (no Android evidence at all), `'partial'` (relationships built but at least one warning), or `'complete'` (no warnings). `summary.addedNodeCount`/`summary.addedEdgeCount` report how much was added.
+
+**Incremental indexing**: no dedicated fingerprint. Relationships are recomputed fresh whenever the index-finishing pipeline runs, which already happens on any upstream Android evidence fingerprint change (`androidEvidenceFingerprint`, `androidGradleEvidenceFingerprint`, `androidManifestEvidenceFingerprint`, `androidResourcesEvidenceFingerprint`, `androidNavigationXmlEvidenceFingerprint`) or any tracked Kotlin/Java source change via the standard `--src` changed-file mechanism. Because the finishing pipeline always rebuilds the code graph from scratch before this merge step, stale relationship nodes/edges from removed evidence never persist — there is no separate cleanup pass. `graph-diff` required zero code changes: it already diffs `CodeGraph.nodes`/`.edges` purely by `id` equality, so added/removed/changed Android relationships are reported the same way any other code-graph change is.
+
+**Batch 5 does not implement** (deferred to later batches): any new retrieval selector, graph view, or CLI flag for these relationships (Batch 6's scope); runtime reachability, effective permission enforcement, or deep-link resolution proof.
 
 ### Retrieval and command compatibility hardening (v1.9.0 Batch 5)
 
@@ -348,6 +458,26 @@ When static Android/Gradle project evidence is found under `--root` (v1.9.0 Batc
 When at least one Android component role is detected among already-indexed Kotlin/Java top-level symbols (v1.9.0 Batch 4):
 
 - `android-components.json`
+
+When detailed static Gradle evidence (settings, build-file plugins/dependencies/`android {}` config, or version catalogs) is found under `--root` (v1.10.0 Batch 1 — extends `android-project.json`'s module set with detailed, conservative Gradle evidence):
+
+- `android-gradle.json`
+
+When one or more `AndroidManifest.xml` files are discovered for a detected Android module (v1.10.0 Batch 2 — each source-set manifest parsed and preserved independently, with no merging):
+
+- `android-manifest.json`
+
+When one or more `res/` resource files are discovered for a detected Android module (v1.10.0 Batch 3 — each qualified source-set resource directory indexed independently, with no merge/overlay simulation):
+
+- `android-resources.json`
+
+When one or more `res/navigation/*.xml` graphs or narrowly-supported static Compose navigation routes are discovered (v1.10.0 Batch 4 — XML and Compose evidence kept as separate arrays, with no cross-artifact linking):
+
+- `android-navigation.json`
+
+When Android evidence is detected (v1.10.0 Batch 5 — no new artifact file; `code-graph.json` above is additively enriched in place with compact Android relationship nodes/edges connecting the artifacts listed above):
+
+- (enriches `code-graph.json`; registered in `manifest.json` as `{ id: 'android-relationships', artifacts: [] }`)
 
 ### Examples
 
@@ -456,6 +586,30 @@ Missing-artifact behavior: when `frontend-reachability.json` is absent, the resu
 
 Static-analysis limitation: these selectors read static evidence from `frontend-reachability.json`. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
+### Android selectors (v1.10.0 Batch 6)
+
+`search` accepts four Android selectors, each mutually exclusive with `--query`, with the reachability selectors, and with each other. All four read Batch 5's compact `android-*` nodes/edges directly from `code-graph.json` — no new artifact, no second search index. Matching is exact only (never fuzzy, never case-folded); every one-to-many match returns every candidate.
+
+- `--android-route <route>`: exact match against XML navigation destination/graph routes and IDs, and Compose routes — a resolved route string (string literal or same-file `const val`, matched via `resolvedRoute`) or a direct type-safe route (`composable<RouteType>(...)`, matched via its own `typeRouteName`, e.g. `--android-route "RouteType"`; v1.10.0 Batch 7 correction). A dynamic/unresolved Compose route expression never matches (it has neither `resolvedRoute` nor `typeRouteName`).
+- `--permission <name>`: exact match against a permission name — both locally `<permission>`-declared permissions (`matchKind: "declared-permission"`) and permissions only referenced (`<uses-permission>`, `android:permission`/`readPermission`/`writePermission`, or a framework permission with no local declaration; `matchKind: "permission-reference"`). No `android.permission.` prefix is ever inferred. Each result includes `referers`: the components/manifest files statically referencing it.
+- `--resource <name>`: a canonical `type/name` or `@type/name` selector matches exactly one logical resource key (every qualified/source-set duplicate is returned as a separate candidate — never one merged/overlay-selected value); a bare name (no `/`) matches every resource type sharing that name, preserving type ambiguity.
+- `--android-component <name>`: exact match, tried in order per candidate — resolved fully-qualified class name (`matchKind: "resolved-fqcn"`), then raw manifest name including dot-prefixed/unqualified forms (`matchKind: "raw-manifest-name"`), then exact simple class name (`matchKind: "simple-name"`, deliberately ambiguity-prone: every component whose resolved class ends in `.<name>` is returned). Each result includes `sourceClassCandidates`: exact Kotlin/Java class node IDs from Batch 5's `manifest-component-resolves-to-source` edges.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-route "home" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --permission "android.permission.CAMERA" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --resource "string/app_name" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-component "com.example.MainActivity" --json
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-android-search-result`, with `mode`, `query`, `results[]` (each carrying `graphNodeId`, `androidArtifactId`, `androidEntityId`, `kind`, `matchKind`, `matchedValue`, `moduleId`, `sourceSetId`, `path`, `line`, `androidMetadata`), `warnings`, and a `summary.resultCount`.
+
+No-match behavior: zero exact matches returns `status: "ok"` with an empty `results` array and exits 0 — never an error, never a fuzzy fallback.
+
+Static-analysis limitation: these selectors read static graph evidence only. They never claim a component is active at runtime, a permission is granted or enforced, a route is reachable, or a resource definition is the runtime-selected value.
+
 ### Examples
 
 ```sh
@@ -465,6 +619,10 @@ npx @dailephd/my-dev-kit search --index .my-dev-kit --query "data-entity User" -
 npx @dailephd/my-dev-kit search --index .my-dev-kit --route "/workspaces/new" --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --storage-key "workspace-editor-draft.v1" --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --ui "workspace-editor-empty-state" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-route "home" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --permission "android.permission.CAMERA" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --resource "string/app_name" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-component "com.example.MainActivity" --json
 ```
 
 ## lookup
@@ -539,6 +697,24 @@ JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-lookup-resul
 Missing-artifact behavior: when `frontend-reachability.json` is absent, `status` is `missing-artifact` with a warning and exit 0. A selector that matches no fact returns `not-found` at exit 0.
 
 Static-analysis limitation: results are static evidence only. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
+### Android component selector (v1.10.0 Batch 6)
+
+`lookup --android-component <name>` uses the same exact-match resolver as `search --android-component` (resolved FQCN, then raw manifest name, then simple name), mutually exclusive with `--node`.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component "com.example.MainActivity" --json
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-android-component-lookup-result`, with `status` of `found`, `not-found`, or `ambiguous`.
+
+- `found` (exactly one exact candidate): `detail` includes the manifest component's graph node ID, kind, raw/resolved names, module/source-set, manifest file and source location, static `exported`/`exportedExplicit` state, `sourceClassCandidates` (exact Kotlin/Java classes), `intentFilterIds`, `permissionEdges`, and `deepLinkMatchIds` (Batch 5's `manifest-deep-link-matches-navigation-deep-link` targets).
+- `not-found` (zero exact candidates): `detail` is `null`, exit 0.
+- `ambiguous` (more than one exact candidate, e.g. two components sharing a simple class name in different packages): `detail` is `null` and `candidates[]` lists every candidate's graph node ID, match kind, module, source set, and raw/resolved names — no candidate is ever chosen automatically.
+
+Static-analysis limitation: this does not claim the component is registered, reachable, or exported at runtime, and produces no security verdict from permission or exported-state evidence.
 
 ## source
 
@@ -654,6 +830,27 @@ JSON behavior: output `artifactKind` is `my-dev-kit-v1-reachability-source-resul
 Missing-artifact behavior: when `frontend-reachability.json` is absent, the result is empty with a warning and exit 0.
 
 Static-analysis limitation: source blocks are located from static source refs. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
+
+### Android selectors (v1.10.0 Batch 6)
+
+`source` accepts `--android-route <route>` and `--resource <name>`, each mutually exclusive with the other retrieval modes. Both resolve through the same exact-match resolvers as `search`, then retrieve a bounded excerpt using `node.path`/`node.line` already recorded on the Batch 5 code-graph node — no reparsing of the repository to rediscover the route/resource.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --android-route "home" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --resource "string/app_name" --json
+```
+
+JSON behavior: output `artifactKind` is `my-dev-kit-v1-android-source-result`, with `status` of `ok`, `not-found`, or `ambiguous`.
+
+- `ok` (exactly one exact candidate): `result` includes the graph node ID, match kind, module/source-set, `androidMetadata`, and either a bounded `slice` (a small window starting at the node's declaration line, capped by `--max-lines`) or, for a binary resource (`.png`/`.jpg`/`.ttf`/etc.), `binary: true` with no `slice` — binary contents are never decoded or displayed as text.
+- `not-found`: `result` is `null`, exit 0.
+- `ambiguous` (e.g. a resource defined in both `values/` and `values-es/`, or a route/resource with no single exact match): `result` is `null` and `candidates[]` lists every exact match's graph node ID, match kind, kind, and path — `source` never picks `main` over a flavor/qualifier, never picks one density/locale, and never selects a runtime winner.
+
+For an XML element (navigation destination/graph/action/deep-link), the excerpt is the surrounding element only, not the whole file. For a Compose route, the excerpt is a bounded window around the builder call, not the whole file.
+
+Static-analysis limitation: excerpts are static source at a recorded declaration line — not proof of runtime reachability, not a resolved effective resource value, and not a merged manifest.
 
 ### Semantic metadata propagation
 
@@ -862,6 +1059,25 @@ Missing-artifact behavior: when `frontend-reachability.json` is absent, the resu
 
 Static-analysis limitation: the subgraph is built from static reachability edges. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
+### Android selectors (v1.10.0 Batch 6)
+
+`slice` accepts `--android-route <route>` and `--android-component <name>`, each mutually exclusive with `--node`. Both resolve a unique root through the same exact-match resolvers as `search`/`lookup`, then run the **existing** `sliceGraph` traversal against `code-graph.json` unchanged — depth/direction/edge-kind/JSON-output behavior is identical to `--node`, since a resolved Android node is just another `code-graph.json` node.
+
+Syntax:
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --android-route "home" --depth 2 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --android-component "com.example.MainActivity" --depth 2 --json
+```
+
+Root resolution behavior:
+
+- Exactly one exact candidate: the slice runs normally, with an added top-level `androidSelector: { mode, query, matchKind }` field in JSON output.
+- Zero exact candidates: prints `{ status: "not-found", ... }` (JSON) or an equivalent human message, exit 0 — no slice is built.
+- More than one exact candidate (e.g. a component simple-name collision): prints `{ status: "ambiguous", candidates: [...] }` listing every candidate's graph node ID and match kind — no candidate is chosen and no slice is built.
+
+Because the traversal is the unmodified `sliceGraph` engine, a route slice naturally includes real Batch 5 edges like `navigation-destination-resolves-to-screen`/`compose-route-resolves-to-screen`, and a component slice naturally includes `manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission` — never invented edges.
+
 ## view
 
 Render graph artifacts as DOT, SVG, or PNG. By default, `view` renders `code-graph.json`.
@@ -875,7 +1091,7 @@ npx @dailephd/my-dev-kit view --index <artifact-dir> --graph <selection> --forma
 ### Flags
 
 - `--index <dir>`: index artifact directory.
-- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability>`: graph artifact to render. Defaults to `code`.
+- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation>`: graph artifact to render. Defaults to `code`.
 - `--format <dot|svg|png>`: output format.
 - `--out <path>`: output path.
 - `--edge-style <semantic|labeled|minimal>`: edge visualization style.
@@ -896,8 +1112,13 @@ Supported `--graph` values:
 - `route` (v1.3.0): renders the route reachability graph from `frontend-reachability.json`. Nodes: route, component, UI marker. Edges: `route-serves-component`, `route-reaches-ui`.
 - `browser-storage` (v1.3.0): renders the browser storage graph from `frontend-reachability.json`. Nodes: storage key, component, UI marker. Edges: `component-uses-storage`, `storage-gates-ui`.
 - `ui-reachability` (v1.3.0): renders the full UI reachability graph from `frontend-reachability.json`. Nodes: route, component, storage key, UI marker. Edges: all cross-domain reachability edge kinds.
+- `android-module` (v1.10.0 Batch 6): renders the manifest-referenced `code-graph.json`, filtered to `android-module`/`android-source-set` nodes plus every node with a matching `androidModuleId`, expanded one hop across actual edges to pull in connected exact Kotlin/Java classes. Same artifact as `code`, different node/edge filter — not a new artifact.
+- `android-manifest` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-manifest-file`/`android-manifest-component`/`android-intent-filter`/`android-permission` nodes, expanded across actual `manifest-declares-component`/`manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission`/`manifest-uses-permission`/`manifest-deep-link-matches-navigation-deep-link` edges only. Every manifest XML attribute is not rendered as a node; candidate deep-link matches remain labeled as candidates, never a confirmed runtime link.
+- `android-navigation` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-navigation-graph`/`android-navigation-destination`/`android-navigation-action`/`android-navigation-deep-link`/`android-compose-route` nodes, expanded across actual `navigation-*`/`compose-route-resolves-to-screen`/`manifest-deep-link-matches-navigation-deep-link` edges only. Never simulates a runtime navigation-graph merge and never selects one action target — every static candidate stays a separate edge.
 
 `--graph` is optional. The default is `code`.
+
+The three Android graph modes (`android-module`, `android-manifest`, `android-navigation`) render `code-graph.json` itself (the same artifact `--graph code` renders) filtered to the relevant Batch 5 `android-*` node/edge subset — they require no additional manifest-referenced artifact, and behave like `--graph code` on a non-Android project (an empty bounded graph: zero Android nodes, zero Android edges, exit 0 — not an error).
 
 The three reachability graph modes (`route`, `browser-storage`, `ui-reachability`) require `manifest.json` to reference `frontendReachability`. When `frontend-reachability.json` is absent, `view` reports an error and exits non-zero (unlike `search`/`lookup`/`slice`/`source`, which return a graceful empty result at exit 0). These graphs record static evidence only; they do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
@@ -1173,6 +1394,14 @@ npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <
 - `contextAdequacy.status` reflects candidate/focus/graph/source/metadata sufficiency and explicit conflicts. `--no-source` becomes a listed assumption rather than a retrieval failure. A detected static conflict uses `context conflict found and user or upstream stage decision required`.
 
 `retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, and `contextAdequacy`. The final ordered sequence contains the Batch 3 generation steps plus `apply-mode-ranking-adjustment`, `skip-source-evidence`, and `detect-context-conflicts`. Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
+
+### Android integration (v1.10.0 Batch 6)
+
+`context` has no new Android-specific command or flag. It becomes Android-aware for a normal query because Batch 5's compact `android-*` code-graph nodes are now eligible for the exact same generic candidate pool `search --query` already ranks: a query like `"Where is the home route defined and which screen handles it?"` can rank an `android-navigation-destination` node above unrelated files, select it as `focus`, expand `selectedGraph` across real Batch 5 relationships (e.g. `navigation-destination-resolves-to-screen` pulling in the exact Kotlin/Java screen class), and attach a bounded source excerpt for it in `selectedSource.slices` — using the same ranking, graph-expansion, and source-selection code paths as any file/symbol candidate, not a second ranking model.
+
+`candidateNodes[].kind` may now be a compact `android-*` kind (in addition to `file`/`symbol`); such entries additionally carry `androidArtifactId`/`androidMetadata` when present. `retrieval-audit-record.json`'s existing `run-search` step already records Android candidate selection/scoring, since it is the same generic search step used for every query — no separate Android audit step or file was added.
+
+Static-analysis limitation: an Android node selected into a capsule is static evidence only — the same boundaries documented for `search`/`lookup`/`source`/`slice`'s Android selectors apply (no runtime component/route/permission claims).
 
 Both artifacts are compatible with indexes that do not have `classification.json` registered.
 

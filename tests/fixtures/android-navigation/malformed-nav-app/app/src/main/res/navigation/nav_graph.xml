@@ -1,0 +1,3 @@
+<navigation xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/g">
+    <fragment android:id="@+id/f">
+</navigation>

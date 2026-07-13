@@ -228,7 +228,8 @@ export interface CandidateFile {
 
 export interface CandidateNode {
   nodeId: string
-  kind: 'file' | 'symbol'
+  /** `file`/`symbol` for source-backed candidates; a compact `android-*` kind (v1.10.0 Batch 6) for Batch 5 artifact-backed graph nodes made eligible for the same generic ranking. */
+  kind: 'file' | 'symbol' | string
   label: string
   filePath?: string
   score: number
@@ -240,6 +241,9 @@ export interface CandidateNode {
   artifactRefs?: SemanticArtifactRef[]
   classificationRoles?: ClassificationRoleRef[]
   classificationRefs?: SemanticArtifactRef[]
+  /** Compact Batch 5 evidence for `android-*` candidates only - never a full artifact record. */
+  androidArtifactId?: string
+  androidMetadata?: Record<string, string | number | boolean | null>
   retained: boolean
   droppedReason?: string
 }

@@ -12,6 +12,13 @@ import {
   buildReachabilitySliceResult,
   type ReachabilitySliceResult,
 } from '../frontend-reachability/index.js'
+import {
+  loadAndroidGraphData,
+  resolveAndroidSelectorMode,
+  resolveAndroidRouteCandidates,
+  resolveAndroidComponentCandidates,
+  type AndroidCandidateBase,
+} from '../android/index.js'
 
 export function registerSliceCommand(program: Command): void {
   program
@@ -22,6 +29,8 @@ export function registerSliceCommand(program: Command): void {
     .option('--route <path>', 'slice around a frontend-reachability route fact')
     .option('--storage-key <key>', 'slice around a frontend-reachability browser-storage key fact')
     .option('--ui <value>', 'slice around a frontend-reachability UI marker fact')
+    .option('--android-route <route>', 'slice around a uniquely-resolved Android route (exact match)')
+    .option('--android-component <name>', 'slice around a uniquely-resolved Android manifest component (exact match)')
     .option('--include-tests', 'include test evidence refs (reachability slice only)')
     .option('--include-storage', 'include storage key facts in route/UI reachability slice')
     .option('--include-ui', 'include UI marker facts in route reachability slice')
@@ -58,14 +67,72 @@ export function registerSliceCommand(program: Command): void {
           'The --include-tests, --include-storage, and --include-ui flags are only valid with --route, --storage-key, or --ui.'
         )
       }
-      if (!options.node) {
-        throw new Error('The slice command requires --node <node-id> (or --route, --storage-key, or --ui).')
+
+      const androidMode = resolveAndroidSelectorMode({ androidRoute: options.androidRoute, androidComponent: options.androidComponent })
+      let androidSelector: { mode: 'android-route' | 'android-component'; query: string; matchKind: string } | undefined
+      let focusNodeId: string
+
+      if (androidMode) {
+        if (options.node !== undefined) {
+          throw new Error('The Android selector flags (--android-route, --android-component) cannot be combined with --node.')
+        }
+        const graphData = loadAndroidGraphData(options.index)
+        const candidates: AndroidCandidateBase[] =
+          androidMode.mode === 'android-route'
+            ? resolveAndroidRouteCandidates(graphData, androidMode.query)
+            : resolveAndroidComponentCandidates(graphData, androidMode.query)
+
+        if (candidates.length === 0) {
+          const result = {
+            artifactKind: 'my-dev-kit-v1-android-slice-result' as const,
+            version: '1.0.0' as const,
+            mode: androidMode.mode,
+            query: androidMode.query,
+            status: 'not-found' as const,
+            candidates: [] as Array<{ graphNodeId: string; matchKind: string; kind: string }>,
+            warnings: [`No exact Android ${androidMode.mode === 'android-route' ? 'route' : 'component'} match for "${androidMode.query}".`],
+          }
+          if (options.json) console.log(JSON.stringify(result, null, 2))
+          else console.log(`Android slice (${result.mode}): ${result.status} - ${result.warnings.join(' ')}`)
+          return
+        }
+        if (candidates.length > 1) {
+          const result = {
+            artifactKind: 'my-dev-kit-v1-android-slice-result' as const,
+            version: '1.0.0' as const,
+            mode: androidMode.mode,
+            query: androidMode.query,
+            status: 'ambiguous' as const,
+            candidates: candidates.map((c) => ({ graphNodeId: c.graphNodeId, matchKind: c.matchKind, kind: c.kind })),
+            warnings: [`Multiple exact Android matches for "${androidMode.query}"; no candidate was selected.`],
+          }
+          if (options.json) console.log(JSON.stringify(result, null, 2))
+          else {
+            console.log(`Android slice (${result.mode}): ambiguous`)
+            for (const c of result.candidates) console.log(`- ${c.graphNodeId} (${c.matchKind})`)
+          }
+          return
+        }
+        focusNodeId = candidates[0]!.graphNodeId
+        androidSelector = {
+          mode: androidMode.mode as 'android-route' | 'android-component',
+          query: androidMode.query,
+          matchKind: candidates[0]!.matchKind,
+        }
+      } else {
+        if (!options.node) {
+          throw new Error(
+            'The slice command requires --node <node-id> (or --route, --storage-key, --ui, --android-route, or --android-component).'
+          )
+        }
+        focusNodeId = options.node
       }
+
       const artifacts = loadLookupArtifacts(options.index)
       const includeEdgeKinds = selectedReactFlowKinds(options)
       const core = sliceGraph({
         graph: artifacts.codeGraph,
-        focusNodeId: options.node,
+        focusNodeId,
         depth: options.depth,
         direction: options.direction,
         includeEdgeKinds,
@@ -75,7 +142,7 @@ export function registerSliceCommand(program: Command): void {
         version: '1.0.0',
         createdAt: new Date().toISOString(),
         indexDir: options.index,
-        focusNodeId: options.node,
+        focusNodeId,
         depth: options.depth,
         direction: options.direction,
         nodes: core.nodes,
@@ -88,7 +155,7 @@ export function registerSliceCommand(program: Command): void {
         warnings: core.warnings,
       }
       const writtenPath = options.out ? writeGraphSlice(options.out, slice) : null
-      const result = { ...slice, outputPath: writtenPath }
+      const result = { ...slice, ...(androidSelector ? { androidSelector } : {}), outputPath: writtenPath }
       if (options.json) {
         console.log(JSON.stringify(result, null, 2))
         return
@@ -104,6 +171,8 @@ interface SliceCommandOptions {
   route?: string
   storageKey?: string
   ui?: string
+  androidRoute?: string
+  androidComponent?: string
   includeTests?: boolean
   includeStorage?: boolean
   includeUi?: boolean

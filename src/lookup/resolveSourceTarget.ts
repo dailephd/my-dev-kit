@@ -33,8 +33,38 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
       warnings: [],
     }
   }
+  if (ANDROID_LINE_RETRIEVABLE_KINDS.has(node.kind) && node.path) {
+    const startLine = node.line ?? 1
+    const window = Math.max(1, Math.min(maxLines, ANDROID_DEFAULT_WINDOW))
+    return {
+      mode: 'node',
+      filePath: node.path,
+      startLine,
+      endLine: startLine + window - 1,
+      warnings: [
+        'Android artifact-backed node retrieval returns a bounded excerpt near the declaration line, not the full file and not a proven runtime range.',
+      ],
+    }
+  }
+
   throw new Error('Node is not a source-retrievable file or symbol node.')
 }
+
+/** `android-*` node kinds whose Batch 5 code-graph projection carries a `path`/`line` pointing at their own static declaration (v1.10.0 Batch 6). Module/source-set/permission nodes are excluded: they have no single retrievable declaration site. */
+const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
+  'android-manifest-file',
+  'android-manifest-component',
+  'android-intent-filter',
+  'android-resource-file',
+  'android-resource-definition',
+  'android-navigation-graph',
+  'android-navigation-destination',
+  'android-navigation-action',
+  'android-navigation-deep-link',
+  'android-compose-route',
+])
+
+const ANDROID_DEFAULT_WINDOW = 12
 
 export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, symbolName: string, maxLines: number): SourceTarget {
   const file = symbolIndex.files.find((candidate) => candidate.path === normalize(filePath))

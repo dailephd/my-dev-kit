@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.componentapp">
+    <application>
+        <activity android:name=".MainActivity" android:exported="true" />
+        <activity-alias
+            android:name=".MainAlias"
+            android:targetActivity=".MainActivity"
+            android:exported="false" />
+        <service
+            android:name=".SyncService"
+            android:process=":sync"
+            android:enabled="true"
+            android:exported="false" />
+        <receiver android:name=".BootReceiver" android:enabled="true" android:exported="true" />
+        <provider
+            android:name=".AppProvider"
+            android:authorities="com.example.componentapp.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="provider.config" android:value="default" />
+        </provider>
+    </application>
+</manifest>

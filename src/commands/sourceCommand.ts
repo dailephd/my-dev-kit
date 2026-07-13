@@ -31,6 +31,14 @@ import {
   buildReachabilitySourceResult,
   type ReachabilitySourceResult,
 } from '../frontend-reachability/index.js'
+import {
+  loadAndroidGraphData,
+  resolveAndroidSelectorMode,
+  resolveAndroidRouteCandidates,
+  resolveAndroidResourceCandidates,
+  type AndroidCandidateBase,
+  type AndroidGraphData,
+} from '../android/index.js'
 import { buildSourceBundle } from '../source/sourceBundle.js'
 import { renderSourceBundle } from '../source/renderSourceBundle.js'
 import type { IndexManifest } from '../indexing/manifestTypes.js'
@@ -50,6 +58,8 @@ export function registerSourceCommand(program: Command): void {
     .option('--route <path>', 'retrieve source for a frontend-reachability route fact')
     .option('--storage-key <key>', 'retrieve source for a frontend-reachability browser-storage key fact')
     .option('--ui <value>', 'retrieve source for a frontend-reachability UI marker fact')
+    .option('--android-route <route>', 'retrieve bounded source for a uniquely-resolved Android route (exact match)')
+    .option('--resource <name>', 'retrieve bounded source for a uniquely-resolved Android resource definition')
     .option('--file <path>', 'file path')
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
@@ -83,6 +93,12 @@ export function registerSourceCommand(program: Command): void {
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
         handleReachabilitySource(this, options, reachabilityMode)
+        return
+      }
+
+      const androidMode = resolveAndroidSelectorMode({ androidRoute: options.androidRoute, resource: options.resource })
+      if (androidMode) {
+        handleAndroidSource(options, androidMode as { mode: 'android-route' | 'resource'; query: string })
         return
       }
 
@@ -692,6 +708,194 @@ function emitSourceResult(result: SourceSlice, format: SourceOutputFormat | unde
   process.stdout.write(rendered)
 }
 
+const ANDROID_BINARY_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ttf', '.otf', '.so', '.mp3', '.mp4', '.ogg', '.wav', '.zip',
+])
+
+interface AndroidSourceResultItem {
+  graphNodeId: string
+  matchKind: string
+  kind: string
+  path?: string
+  line?: number
+  moduleId?: string
+  sourceSetId?: string
+  androidMetadata?: Record<string, string | number | boolean | null>
+  binary: boolean
+  slice?: SourceSlice
+  warnings: string[]
+}
+
+interface AndroidSourceResult {
+  artifactKind: 'my-dev-kit-v1-android-source-result'
+  version: '1.0.0'
+  mode: 'android-route' | 'resource'
+  query: string
+  status: 'ok' | 'not-found' | 'ambiguous'
+  result: AndroidSourceResultItem | null
+  candidates: Array<{ graphNodeId: string; matchKind: string; kind: string; path?: string }>
+  warnings: string[]
+}
+
+function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode: 'android-route' | 'resource'; query: string }): void {
+  for (const [flag, present] of [
+    ['--node', options.node !== undefined],
+    ['--file', options.file !== undefined],
+    ['--symbol', options.symbol !== undefined],
+    ['--contains', options.contains !== undefined],
+    ['--react-region', options.reactRegion !== undefined],
+    ['--start', options.start !== undefined],
+    ['--end', options.end !== undefined],
+    ['--continue-from', options.continueFrom !== undefined],
+    ['--continue', options.continue === true],
+  ] as const) {
+    if (present) {
+      throw new Error(`--android-route/--resource cannot be combined with ${flag}.`)
+    }
+  }
+
+  const graphData = loadAndroidGraphData(options.index)
+  const resolved = readIndexManifest(options.index)
+  const candidates: AndroidCandidateBase[] =
+    androidMode.mode === 'android-route'
+      ? resolveAndroidRouteCandidates(graphData, androidMode.query)
+      : resolveAndroidResourceCandidates(graphData, androidMode.query)
+
+  const wantsJson = options.json || options.format === 'json'
+  const format = resolveFormat(options)
+
+  if (candidates.length === 0) {
+    const result: AndroidSourceResult = {
+      artifactKind: 'my-dev-kit-v1-android-source-result',
+      version: '1.0.0',
+      mode: androidMode.mode,
+      query: androidMode.query,
+      status: 'not-found',
+      result: null,
+      candidates: [],
+      warnings: [`No exact Android ${androidMode.mode === 'android-route' ? 'route' : 'resource'} match for "${androidMode.query}".`],
+    }
+    emitAndroidSourceResult(result, wantsJson, options)
+    return
+  }
+
+  if (candidates.length > 1) {
+    const result: AndroidSourceResult = {
+      artifactKind: 'my-dev-kit-v1-android-source-result',
+      version: '1.0.0',
+      mode: androidMode.mode,
+      query: androidMode.query,
+      status: 'ambiguous',
+      result: null,
+      candidates: candidates.map((c) => ({ graphNodeId: c.graphNodeId, matchKind: c.matchKind, kind: c.kind, path: c.path })),
+      warnings: [`Multiple exact Android matches for "${androidMode.query}"; no candidate was selected.`],
+    }
+    emitAndroidSourceResult(result, wantsJson, options)
+    return
+  }
+
+  const candidate = candidates[0]!
+  const item = buildAndroidSourceResultItem(graphData, resolved.manifest.projectRoot, options.index, candidate, options.maxLines)
+  const result: AndroidSourceResult = {
+    artifactKind: 'my-dev-kit-v1-android-source-result',
+    version: '1.0.0',
+    mode: androidMode.mode,
+    query: androidMode.query,
+    status: 'ok',
+    result: item,
+    candidates: [],
+    warnings: [],
+  }
+  emitAndroidSourceResult(result, wantsJson, options)
+}
+
+function buildAndroidSourceResultItem(
+  graphData: AndroidGraphData,
+  projectRoot: string,
+  indexDir: string,
+  candidate: AndroidCandidateBase,
+  maxLines: number
+): AndroidSourceResultItem {
+  const base = {
+    graphNodeId: candidate.graphNodeId,
+    matchKind: candidate.matchKind,
+    kind: candidate.kind,
+    path: candidate.path,
+    line: candidate.line,
+    moduleId: candidate.moduleId,
+    sourceSetId: candidate.sourceSetId,
+    androidMetadata: candidate.androidMetadata,
+  }
+
+  if (!candidate.path) {
+    return { ...base, binary: false, warnings: ['No source file path is available for this Android node.'] }
+  }
+
+  const extension = candidate.path.slice(candidate.path.lastIndexOf('.')).toLowerCase()
+  if (ANDROID_BINARY_EXTENSIONS.has(extension)) {
+    return {
+      ...base,
+      binary: true,
+      warnings: ['This is a binary Android resource; contents are not decoded. Only file path and metadata are returned.'],
+    }
+  }
+
+  const startLine = candidate.line ?? 1
+  const window = Math.max(1, Math.min(maxLines, 12))
+  try {
+    const slice = getSourceSlice({
+      indexDir,
+      projectRoot,
+      filePath: candidate.path,
+      startLine,
+      endLine: startLine + window - 1,
+      maxLines,
+      mode: 'line-range',
+      warnings: ['Static evidence only: this is a bounded excerpt, not proof of runtime reachability.'],
+    })
+    return { ...base, binary: false, slice, warnings: [] }
+  } catch (error) {
+    return { ...base, binary: false, warnings: [(error as Error).message] }
+  }
+}
+
+function emitAndroidSourceResult(result: AndroidSourceResult, wantsJson: boolean, options: SourceCommandOptions): void {
+  if (wantsJson) {
+    const rendered = JSON.stringify(result, null, 2) + '\n'
+    if (options.out) {
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote Android source result to ${writtenPath}`)
+      return
+    }
+    process.stdout.write(rendered)
+    return
+  }
+
+  const lines: string[] = []
+  lines.push(`Android source (${result.mode}): ${result.query}`)
+  lines.push(`Status: ${result.status}`)
+  for (const warning of result.warnings) lines.push(`Warning: ${warning}`)
+  if (result.status === 'ambiguous') {
+    for (const candidate of result.candidates) lines.push(`- ${candidate.graphNodeId} (${candidate.matchKind})`)
+  } else if (result.status === 'ok' && result.result) {
+    lines.push(`${result.result.graphNodeId} (${result.result.kind})`)
+    if (result.result.path) lines.push(`${result.result.path}${result.result.line ? `:${result.result.line}` : ''}`)
+    if (result.result.binary) {
+      lines.push('[binary resource: contents not decoded]')
+    } else if (result.result.slice) {
+      lines.push(result.result.slice.content)
+    }
+    for (const warning of result.result.warnings) lines.push(`Warning: ${warning}`)
+  }
+  const rendered = lines.join('\n') + '\n'
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote Android source to ${writtenPath}`)
+    return
+  }
+  process.stdout.write(rendered)
+}
+
 const REACHABILITY_SOURCE_DEFAULT_CONTEXT = 10
 
 function handleReachabilitySource(
@@ -795,6 +999,8 @@ interface SourceCommandOptions {
   route?: string
   storageKey?: string
   ui?: string
+  androidRoute?: string
+  resource?: string
   file?: string
   start?: number
   end?: number

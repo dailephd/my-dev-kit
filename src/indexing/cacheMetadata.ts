@@ -103,6 +103,45 @@ export interface ConfigFingerprintInput {
    * contributes a stable, constant fingerprint value.
    */
   androidEvidenceFingerprint: string
+  /**
+   * Fingerprint of detailed Gradle evidence (v1.10.0 Batch 1: plugins,
+   * dependencies, `android {}` configuration, version catalogs), so a Gradle
+   * file edit that doesn't change v1.9.0 module/source-set detection (and
+   * therefore wouldn't change `androidEvidenceFingerprint`) still invalidates
+   * the cache when it changes what `android-gradle.json` would contain.
+   */
+  androidGradleEvidenceFingerprint: string
+  /**
+   * Fingerprint of detailed Android manifest evidence (v1.10.0 Batch 2:
+   * discovered manifest files, applications, components, permissions,
+   * intent filters), so a manifest add/edit/delete, a custom Gradle
+   * manifest-path change, or a Gradle namespace change (any of which change
+   * what `android-manifest.json` would contain) invalidates the cache even
+   * when neither `androidEvidenceFingerprint` nor
+   * `androidGradleEvidenceFingerprint` alone would catch it.
+   */
+  androidManifestEvidenceFingerprint: string
+  /**
+   * Fingerprint of detailed Android resource evidence (v1.10.0 Batch 3:
+   * resource directories, value/file resource definitions, layouts, IDs,
+   * references, FileProvider paths, network-security config), so a
+   * resource add/edit/delete or a custom Gradle resource-directory change
+   * invalidates the cache even when the other three Android fingerprints
+   * wouldn't catch it.
+   */
+  androidResourcesEvidenceFingerprint: string
+  /**
+   * Fingerprint of the XML-navigation portion of Android navigation
+   * evidence (v1.10.0 Batch 4: `res/navigation/*.xml` graphs, destinations,
+   * actions, arguments, deep links, includes). Computed early — like the
+   * other three Android fingerprints — because navigation XML files aren't
+   * tracked by the normal `--src` changed-file mechanism. The Compose
+   * route portion of `android-navigation.json` deliberately has no
+   * separate fingerprint: it's computed from already-indexed Kotlin/Java
+   * files inside the same pipeline stage that already re-runs whenever a
+   * relevant `--src` file changes.
+   */
+  androidNavigationXmlEvidenceFingerprint: string
 }
 
 /**
@@ -119,6 +158,10 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     defaultIgnoredDirectoryNames: [...input.defaultIgnoredDirectoryNames].sort(),
     defaultIgnoredDirectoryPrefixes: [...input.defaultIgnoredDirectoryPrefixes].sort(),
     androidEvidenceFingerprint: input.androidEvidenceFingerprint,
+    androidGradleEvidenceFingerprint: input.androidGradleEvidenceFingerprint,
+    androidManifestEvidenceFingerprint: input.androidManifestEvidenceFingerprint,
+    androidResourcesEvidenceFingerprint: input.androidResourcesEvidenceFingerprint,
+    androidNavigationXmlEvidenceFingerprint: input.androidNavigationXmlEvidenceFingerprint,
   }
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
 }

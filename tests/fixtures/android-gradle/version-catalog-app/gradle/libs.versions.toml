@@ -1,0 +1,15 @@
+[versions]
+coreKtx = "1.13.0"
+agp = "8.5.0"
+
+[libraries]
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+material = "com.google.android.material:material:1.11.0"
+malformed-entry = { name = "no-group-or-module" }
+
+[bundles]
+compose = ["core-ktx", "material"]
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+malformed-plugin = { version.ref = "agp" }
