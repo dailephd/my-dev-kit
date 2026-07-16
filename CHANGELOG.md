@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### 1.10.1 Batch 1 (in progress; not released)
+### 1.10.1 Batch 1 (implemented; not released)
 
 Batch 1 establishes the additive request and role **contracts** only — no role-specific retrieval behavior yet.
 
@@ -11,9 +11,9 @@ Batch 1 establishes the additive request and role **contracts** only — no role
 - CLI flags and request-file fields normalize into one internal request (`src/context/contextRequestNormalization.ts`): equivalent duplicate values are accepted, conflicting values fail clearly, and unsupported schema majors/unknown roles/unknown evidence kinds/invalid limits/malformed JSON/missing files all fail with a diagnostic naming the field and file.
 - `focusFiles`, `focusSymbols`, `changedFiles`, `changedSymbols`, `upstreamArtifactRefs`, `testResponsibilityRefs`, `requestedEvidenceKinds`, `limits`, `beforeIndex`, and `afterIndex` are validated, normalized (deduplicated and sorted where arrays), and preserved, but are **not yet operational** — supplying them cannot change retrieval output. They are reported by name in the new `contextCapsule.deferredRequestFields` field and as capsule/audit warnings, never silently dropped.
 - The context capsule's `request` object gained `role` and `requestFilePath` (both `null` for legacy invocations); the capsule gained `deferredRequestFields: string[]`. No other capsule or retrieval-audit schema field changed, and no schema major changed.
-- Role-specific candidate providers, ranking, graph expansion, changed-surface analysis, test-infrastructure discovery, responsibility mapping, freshness, and evidence groups remain planned for later 1.10.1 batches (see below).
+- At the Batch 1 boundary, role-specific retrieval remained deferred; Batches 2-4 below subsequently implemented ranking, changed-surface analysis, evidence groups, test-infrastructure discovery, responsibility mapping, adequacy, freshness, truncation, fallback, and provenance.
 
-### 1.10.1 Batch 2 (in progress; not released)
+### 1.10.1 Batch 2 (implemented; not released)
 
 Batch 2 operationalizes the Batch 1 contracts: the `context` command now generates and ranks candidates differently per `ContextRole`, and consumes the previously-deferred focus/changed-surface request fields. No new artifact, search engine, ranking pipeline, or graph-diff implementation was added — all of this is additive to the existing `context` pipeline (`src/context/candidateRanking.ts`'s output is now passed through a new additive layer, `src/context/roleCandidates.ts`).
 
@@ -24,9 +24,9 @@ Batch 2 operationalizes the Batch 1 contracts: the `context` command now generat
 - `focusFiles`, `focusSymbols`, `changedFiles`, `changedSymbols`, `beforeIndex`, `afterIndex`, and `requestedEvidenceKinds` are removed from `contextCapsule.deferredRequestFields` now that they are operational. `limits`, `testResponsibilityRefs`, and `upstreamArtifactRefs` remain deferred.
 - The context capsule and retrieval audit both gained an additive `roleContext` object (operational role, resolved focus, merged changed surface, requested/unsupported evidence kinds, warnings); `CandidateFile`/`CandidateNode` gained additive, optional ranking-adjustment metadata (`roleScoreAdjustment`, `contextRole`, `focusMatch`, `changedSurfaceMatch`, `changedStatus`). No existing capsule/audit field changed meaning, and the schema major did not change.
 - Ranking stays deterministic: role/focus/changed-surface adjustments never bypass `--max-candidate-files`, `--max-graph-nodes`/`--max-graph-edges`, or `--max-source-slices`; ties still break on stable candidate ID/path.
-- Evidence groups, test-infrastructure discovery, test-responsibility mapping, adequacy/freshness verdicts, and provenance/truncation reporting remain planned for later 1.10.1 batches.
+- At the Batch 2 boundary, evidence groups and the remaining adequacy/freshness work were deferred; Batches 3-4 below subsequently implemented them.
 
-### 1.10.1 Batch 3 (in progress; not released)
+### 1.10.1 Batch 3 (implemented; not released)
 
 Batch 3 transforms the Batch 2 role-aware ranked candidates into deterministic, bounded, stage-usable evidence groups, and adds conservative discovery of existing test infrastructure. No new context engine, ranking pipeline, index artifact, or graph implementation was added — evidence grouping (`src/context/evidenceGroups.ts`) and test-infrastructure discovery (`src/context/testInfrastructureDiscovery.ts`) are additive layers reusing Batch 2's ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model.
 
@@ -39,7 +39,7 @@ Batch 3 transforms the Batch 2 role-aware ranked candidates into deterministic, 
 - Every group enforces a deterministic per-group cap with sort-before-truncate ordering; `evidenceGroups[].limit/availableCount/usedCount/truncated/droppedCount` and the capsule-level `groupTruncation` rollup make every cap and drop auditable. The retrieval audit gained `build-evidence-groups`, `discover-test-infrastructure`, and `derive-test-commands` steps (additive; no existing audit step changed).
 - Test-responsibility mapping, final role-specific adequacy verdicts, and freshness classification remain planned for Batch 4.
 
-### 1.10.1 Batch 4 (in progress; not released)
+### 1.10.1 Batch 4 (implemented; not released)
 
 Batch 4 completes the stage-specific bounded context contract: deterministic test-responsibility mapping, role-specific adequacy, freshness classification, explicit budget/truncation reporting, auditable full-file fallback, and end-to-end evidence provenance. No new context engine, ranking pipeline, evidence-group builder, test-infrastructure discovery, artifact family, or capsule/audit — everything here reads and extends what Batches 1-3 already produce.
 
@@ -52,12 +52,12 @@ Batch 4 completes the stage-specific bounded context contract: deterministic tes
 - The retrieval audit gained `map-responsibilities`, `classify-freshness`, `apply-budget`, `evaluate-adequacy`, and `record-provenance` steps (additive; no existing audit step changed), and now carries the real computed `responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance` alongside `contextAdequacy`. Earlier-batch correction: the retrieval audit's `contextAdequacy` was previously never passed through from the capsule's real computed verdict (a hardcoded Batch 1 stub was always written instead); this batch fixes that narrow defect as part of wiring the same verdict through consistently.
 - All Batch 4 additions are additive to the schema `1.0.0` context capsule and retrieval audit; no existing field changed meaning, no schema major changed, and legacy (no-role) requests are unaffected beyond the new fields being present in their empty/neutral form.
 
-### Planned for 1.10.1 (later batches)
+### 1.10.1 release status
 
-This is an approved documentation plan, not a completed implementation or release. v1.10.1 is not yet released or published. Remaining work for later batches:
+The scoped v1.10.1 implementation and cross-batch documentation reconciliation are complete, but v1.10.1 is not yet released or published. Remaining work is release validation and a separate, explicitly authorized publication workflow:
 
-- final cross-batch documentation reconciliation and compatibility-gate validation across the full v1.10.1 surface
-- broader release/publication readiness (out of scope for every batch above)
+- complete the pre-release compatibility, security, package-safety, code-rot, and cross-platform gate
+- run publication only through a later explicit publication workflow if that gate passes
 
 Workflow catalog semantics, prompt assembly, stage progression, and `WorkflowInstructionPacket` remain owned by my-dev-kit-orchestrator v1.2.1. Strategy evaluation remains owned by my-dev-kit-lab v0.4.3. v1.10.1 does not add native orchestrator automation, LLM mapping/ranking, source editing, test writing, security validation, a shared schema package, or release automation.
 
