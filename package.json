@@ -46,6 +46,10 @@
   },
   "license": "MIT",
   "author": "dailephd LLC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dailephd/my-dev-kit.git"
+  },
   "dependencies": {
     "commander": "^12.1.0",
     "typescript": "^5.9.3"
