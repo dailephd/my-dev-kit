@@ -132,7 +132,7 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 ## v1.10.0 implementation status
 
-The repository's v1.10.0 implementation is complete, its documentation is reconciled, and its implementation-completeness audit has passed. It has not been published; pre-release readiness is the next separate workflow.
+The repository's v1.10.0 implementation is complete, its documentation is reconciled, its implementation-completeness audit has passed, and `@dailephd/my-dev-kit@1.10.0` is published.
 
 v1.10.0 extends the v1.9.0 Android foundation with conservative static Gradle, manifest, resource, navigation, relationship, retrieval, context, and graph-view evidence:
 
@@ -155,6 +155,26 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --f
 ```
 
 This is static evidence, not runtime proof. my-dev-kit does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; prove runtime route, intent, or deep-link dispatch; provide full Compose semantic retrieval; or provide Android architecture classification or data-flow retrieval. See [docs/COMMANDS.md](docs/COMMANDS.md) for exact selector behavior and [docs/ROADMAP.md](docs/ROADMAP.md) for deferred v1.11.0-v1.13.0 work.
+
+## Planned v1.10.1: stage-specific bounded repository context
+
+**Status: In progress for v1.10.1; not published.** v1.10.1 is a bounded patch after the published v1.10.0 baseline. It extends the existing `context` command and context artifacts rather than introduce a second context engine or move work from v1.11.0 and later. **Batch 1** (implemented, not yet published) added the `ContextRole` and `ContextRequest` contracts, `context --request <path>`/`--role <role>`, and deterministic CLI/request-file normalization. **Batch 2** (implemented, not yet published) made `role`, `focusFiles`/`focusSymbols`, and `changedFiles`/`changedSymbols`/`beforeIndex`/`afterIndex` operational, changing candidate ranking per role. **Batch 3** (implemented, not yet published) added deterministic, bounded `evidenceGroups` per role plus conservative test-infrastructure/test-command discovery (related tests, fixtures, factories, mocks, setup files, test configuration, package scripts, exact test commands). **Batch 4** (implemented, not yet published) completed the contract: deterministic test-responsibility mapping (`testResponsibilityRefs`), role-specific adequacy verdicts, freshness (`fresh`/`stale`/`unknown`) classification, explicit budget/truncation reporting, bounded auditable full-file fallback, and evidence provenance — see [docs/COMMANDS.md](docs/COMMANDS.md). v1.10.1 as a whole remains unpublished; final cross-batch documentation reconciliation is planned for a later batch.
+
+The planned patch separates three repository-evidence roles that have different freshness and evidence needs:
+
+- **architecture** - locate likely owners, extension points, public contracts, graph neighbors, and architecture tests; answers "Where should the behavior live?"
+- **implementation** - refresh immediately before production editing and retrieve exact owners, callers/callees, validators, constants, defaults, errors, serializers, schemas, compatibility surfaces, and closest tests; answers "What current code must change or be preserved?"
+- **test-implementation** - refresh after production changes and focus on changed files/symbols, failure and side-effect boundaries, related tests, fixtures, factories, mocks, setup, configuration, commands, and explicit test-responsibility mappings; answers "How should approved test responsibilities be implemented against final production code?"
+
+Candidate v1.10.1 behavior includes an additive structured `ContextRequest`, conceptually accepted through `context --request <request.json>`, plus focus files/symbols, caller-provided changed files/symbols, before/after index identities, graph-diff evidence, role-specific evidence groups, adequacy, freshness (`fresh`, `stale`, or `unknown`), truncation, unresolved evidence, and selection provenance. All names and syntax in this paragraph are planned and subject to implementation inspection. Existing `context` syntax and its `general`, `feature-add`, and `subsystem` modes remain compatible; role is a separate concept.
+
+Ownership stays narrow:
+
+- `my-dev-kit` owns deterministic local indexing and bounded repository-evidence retrieval, capsules, and retrieval audits.
+- `my-dev-kit-orchestrator` v1.2.1 owns workflow/stage/command/rule/report-contract IDs, workflow dependency resolution, `WorkflowInstructionPacket`, TaskState, prompt assembly, stage order, lifecycle, judge handling, and manual stage freshness rules. The current orchestrator does not automatically run my-dev-kit; initial integration is prompt-guided.
+- `my-dev-kit-lab` v0.4.3 owns controlled strategy evaluation, evidence recall/irrelevant inclusion, responsibility-mapping completeness, provenance/determinism/truncation evaluation, immutable targets, reports, plots, security validation, and code-rot auditing. It is not a production retrieval runtime.
+
+The patch must remain bounded, deterministic, inspectable, and honest: nonempty output is not automatically adequate; an existing index is not automatically fresh; free-form test prose is not automatically mapped; and every truncation or full-file fallback must be reported. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/COMMANDS.md](docs/COMMANDS.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the approved planning detail.
 
 ## v1.8.0 highlights
 

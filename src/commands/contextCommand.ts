@@ -19,6 +19,17 @@ import { detectContextConflicts } from '../context/conflictDetection.js'
 import { DEFAULT_MAX_SOURCE_SLICES } from '../context/sourceSelection.js'
 import { loadClassificationArtifact } from '../classification/resolveClassificationForCommands.js'
 import { searchIndex } from '../search/searchIndex.js'
+import { loadContextRequestFile, normalizeContextRequest } from '../context/contextRequestNormalization.js'
+import { resolveFocusIntake } from '../context/focusResolution.js'
+import { buildChangedSurface } from '../context/changedSurface.js'
+import { applyRoleAwareCandidates } from '../context/roleCandidates.js'
+import { buildEvidenceGroups } from '../context/evidenceGroups.js'
+import { normalizeResponsibilityRefs, buildResponsibilityMappings } from '../context/responsibilityMapping.js'
+import { classifyFreshness } from '../context/contextFreshness.js'
+import { buildBudget, buildTruncation } from '../context/contextBudget.js'
+import { buildFullFileFallbacks, type FullFileFallbackCandidate } from '../context/fullFileFallback.js'
+import { evaluateRoleAdequacy } from '../context/contextRoleAdequacy.js'
+import { buildProvenanceRecords, buildChangedSurfaceProvenance, mergeProvenanceRecords } from '../context/contextProvenance.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
@@ -26,12 +37,10 @@ import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import type {
   AuditStep,
   ContextCapsuleLimits,
-  ContextCapsuleMode,
   ContextEntry,
   DroppedContextEntry,
 } from '../context/types.js'
 
-const VALID_MODES: ContextCapsuleMode[] = ['general', 'feature-add', 'subsystem']
 const SEARCH_INTERNAL_LIMIT = 50
 
 interface ContextCommandOptions {
@@ -40,6 +49,8 @@ interface ContextCommandOptions {
   out?: string
   auditOut?: string
   mode: string
+  role?: string
+  request?: string
   maxCandidateFiles?: number
   maxSourceSlices?: number
   maxGraphNodes?: number
@@ -62,35 +73,65 @@ export function registerContextCommand(program: Command): void {
     .option('--out <path>', 'context capsule output path')
     .option('--audit-out <path>', 'retrieval audit record output path')
     .option('--mode <mode>', 'general, feature-add, or subsystem', 'general')
+    .option('--role <role>', 'stage-specific context role: architecture, implementation, or test-implementation')
+    .option('--request <path>', 'structured ContextRequest JSON file; merges with other flags (additive, v1.10.1)')
     .option('--max-candidate-files <n>', 'cap retained candidate files', parsePositiveInt)
     .option('--max-source-slices <n>', 'cap selected source slices around the focus and graph neighborhood', parsePositiveInt)
     .option('--max-graph-nodes <n>', 'cap selected graph nodes around the focus', parsePositiveInt)
     .option('--max-graph-edges <n>', 'cap selected graph edges around the focus', parsePositiveInt)
     .option('--no-source', 'disable bounded source slices and source bundles')
     .option('--json', 'print JSON output')
-    .action((options: ContextCommandOptions) => {
-      validateOptions(options)
-
-      const mode = options.mode as ContextCapsuleMode
-      const limits: ContextCapsuleLimits = {
+    .action((options: ContextCommandOptions, command: Command) => {
+      const cliLimits: ContextCapsuleLimits = {
         maxCandidateFiles: options.maxCandidateFiles ?? null,
         maxSourceSlices: options.maxSourceSlices ?? null,
         maxGraphNodes: options.maxGraphNodes ?? null,
         maxGraphEdges: options.maxGraphEdges ?? null,
       }
 
+      const loadedRequest = options.request ? loadContextRequestFile(options.request) : null
+
+      const normalized = normalizeContextRequest({
+        cli: {
+          query: options.query,
+          queryExplicit: options.query !== undefined,
+          index: options.index,
+          indexExplicit: command.getOptionValueSource('index') === 'cli',
+          mode: options.mode,
+          modeExplicit: command.getOptionValueSource('mode') === 'cli',
+          role: options.role,
+          roleExplicit: options.role !== undefined,
+          out: options.out,
+          outExplicit: options.out !== undefined,
+          auditOut: options.auditOut,
+          auditOutExplicit: options.auditOut !== undefined,
+        },
+        limits: cliLimits,
+        loaded: loadedRequest,
+      })
+
+      const mode = normalized.mode
+      const limits = normalized.limits
+
       const steps: AuditStep[] = []
       steps.push({
         id: 'step-validate-inputs',
         kind: 'validate-inputs',
         description: 'Validated required and optional command inputs.',
-        inputs: { index: options.index, mode, out: options.out ?? null, auditOut: options.auditOut ?? null },
+        inputs: {
+          index: normalized.index,
+          mode,
+          out: normalized.out,
+          auditOut: normalized.auditOut ?? null,
+          role: normalized.role,
+          requestFilePath: normalized.requestFilePath,
+        },
         outputs: {},
         status: 'ok',
         warnings: [],
       })
 
-      const resolved = readIndexManifest(options.index)
+      const resolved = readIndexManifest(normalized.index)
       steps.push({
         id: 'step-load-manifest',
         kind: 'load-manifest',
@@ -104,12 +145,12 @@ export function registerContextCommand(program: Command): void {
       const symbolIndex = readRequiredJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, 'symbol index')
       const codeGraph = readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph')
 
-      const queryPlan = buildQueryPlan({ originalQuery: options.query!, mode })
+      const queryPlan = buildQueryPlan({ originalQuery: normalized.query, mode })
       steps.push({
         id: 'step-normalize-query',
         kind: 'normalize-query',
         description: 'Normalized the query string.',
-        inputs: { originalQuery: options.query! },
+        inputs: { originalQuery: normalized.query },
         outputs: { normalizedQuery: queryPlan.normalizedQuery },
         status: 'ok',
         warnings: [],
@@ -135,7 +176,7 @@ export function registerContextCommand(program: Command): void {
         warnings: rankingInput.warnings,
       })
 
-      const candidateFiles = rankCandidateFiles(rankingInput, limits.maxCandidateFiles, mode)
+      let candidateFiles = rankCandidateFiles(rankingInput, limits.maxCandidateFiles, mode)
       steps.push({
         id: 'step-rank-candidate-files',
         kind: 'rank-candidate-files',
@@ -149,7 +190,7 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
-      const candidateNodes = rankCandidateNodes(rankingInput, mode)
+      let candidateNodes = rankCandidateNodes(rankingInput, mode)
       steps.push({
         id: 'step-rank-candidate-nodes',
         kind: 'rank-candidate-nodes',
@@ -170,6 +211,89 @@ export function registerContextCommand(program: Command): void {
         status: mode === 'general' ? 'skipped' : 'ok',
         warnings: modeEffects.warnings,
       })
+
+      // --- v1.10.1 Batch 2: role-aware candidate generation and changed-surface ranking ---
+
+      const focusIntake = resolveFocusIntake({
+        focusFiles: normalized.focusFiles,
+        focusSymbols: normalized.focusSymbols,
+        symbolIndex,
+        codeGraph,
+      })
+      steps.push({
+        id: 'step-resolve-focus',
+        kind: 'resolve-focus',
+        description: 'Resolved explicit focusFiles/focusSymbols against the active index.',
+        inputs: { focusFileCount: normalized.focusFiles.length, focusSymbolCount: normalized.focusSymbols.length },
+        outputs: {
+          unresolvedFocusFileCount: focusIntake.unresolvedFocusFiles.length,
+          unresolvedFocusSymbolCount: focusIntake.unresolvedFocusSymbols.length,
+          ambiguousFocusSymbolCount: focusIntake.ambiguousFocusSymbols.length,
+        },
+        status: normalized.focusFiles.length + normalized.focusSymbols.length > 0 ? 'ok' : 'skipped',
+        warnings: focusIntake.warnings,
+      })
+
+      const changedSurface = buildChangedSurface({
+        changedFiles: normalized.changedFiles,
+        changedSymbols: normalized.changedSymbols,
+        beforeIndex: normalized.beforeIndex,
+        afterIndex: normalized.afterIndex,
+      })
+      steps.push({
+        id: 'step-merge-changed-surface',
+        kind: 'merge-changed-surface',
+        description: 'Merged caller-supplied changedFiles/changedSymbols with an optional beforeIndex/afterIndex graph diff.',
+        inputs: {
+          changedFileCount: normalized.changedFiles.length,
+          changedSymbolCount: normalized.changedSymbols.length,
+          beforeIndex: normalized.beforeIndex,
+          afterIndex: normalized.afterIndex,
+          diffRequested: changedSurface.diffRequested,
+        },
+        outputs: {
+          mergedFileCount: changedSurface.files.length,
+          mergedSymbolCount: changedSurface.symbols.length,
+          conflictCount: changedSurface.conflicts.length,
+        },
+        status: changedSurface.available || changedSurface.diffRequested ? 'ok' : 'skipped',
+        warnings: [...changedSurface.warnings, ...changedSurface.conflicts],
+      })
+
+      const roleRanked = applyRoleAwareCandidates({
+        role: normalized.role,
+        candidateFiles,
+        candidateNodes,
+        focusIntake,
+        changedSurface,
+        requestedEvidenceKinds: normalized.requestedEvidenceKinds,
+        codeGraph,
+        maxCandidateFiles: limits.maxCandidateFiles,
+      })
+      candidateFiles = roleRanked.candidateFiles
+      candidateNodes = roleRanked.candidateNodes
+      steps.push({
+        id: 'step-apply-role-ranking',
+        kind: 'apply-role-ranking',
+        description: 'Applied role-aware ranking adjustments and bounded focus/changed-surface candidate injection.',
+        inputs: { role: normalized.role },
+        outputs: {
+          candidateFileCount: candidateFiles.length,
+          candidateNodeCount: candidateNodes.length,
+          unsupportedRequestedEvidenceKindCount: roleRanked.unsupportedRequestedEvidenceKinds.length,
+        },
+        status: normalized.role ? 'ok' : 'skipped',
+        warnings: roleRanked.warnings,
+      })
+
+      const roleContext = {
+        role: normalized.role,
+        focus: focusIntake,
+        changedSurface,
+        requestedEvidenceKinds: normalized.requestedEvidenceKinds,
+        unsupportedRequestedEvidenceKinds: roleRanked.unsupportedRequestedEvidenceKinds,
+        warnings: [...focusIntake.warnings, ...changedSurface.warnings, ...changedSurface.conflicts, ...roleRanked.warnings],
+      }
 
       const focus = selectPrimaryFocus(candidateNodes)
       steps.push({
@@ -253,6 +377,70 @@ export function registerContextCommand(program: Command): void {
           droppedCandidateCount: retention.droppedCandidateCount,
         },
         status: 'ok',
+        warnings: [],
+      })
+
+      // --- v1.10.1 Batch 3: evidence groups and bounded test-infrastructure discovery ---
+      // (Distinct from the "Batch 3" comment below, which refers to the older v1.6 source-
+      // evidence batch numbering; this section is new in v1.10.1.)
+
+      const repoRoot = symbolIndex.repoRoot
+      const evidenceResult = buildEvidenceGroups({
+        role: normalized.role,
+        candidateFiles,
+        candidateNodes,
+        focusIntake,
+        changedSurface,
+        requestedEvidenceKinds: normalized.requestedEvidenceKinds,
+        codeGraph,
+        symbolIndex,
+        selectedGraph,
+        repoRoot,
+      })
+      steps.push({
+        id: 'step-build-evidence-groups',
+        kind: 'build-evidence-groups',
+        description: 'Constructed deterministic, bounded, role-scoped evidence groups from role-ranked candidates, the selected graph neighborhood, and the changed-surface model.',
+        inputs: { role: normalized.role },
+        outputs: {
+          groupCount: evidenceResult.groups.length,
+          selectedOwnerCount: evidenceResult.selectedOwners.length,
+          selectedContractCount: evidenceResult.selectedContracts.length,
+          selectedTestCount: evidenceResult.selectedTests.length,
+        },
+        status: normalized.role ? 'ok' : 'skipped',
+        warnings: evidenceResult.warnings,
+      })
+      steps.push({
+        id: 'step-discover-test-infrastructure',
+        kind: 'discover-test-infrastructure',
+        description: 'Discovered bounded, conservative evidence of existing related tests, fixtures, factories, mocks, setup files, and test configuration.',
+        inputs: {
+          requestedTestInfrastructure: normalized.requestedEvidenceKinds.includes('test-infrastructure'),
+        },
+        outputs: {
+          relatedTestCount: evidenceResult.testInfrastructure.relatedTests.length,
+          fixtureCount: evidenceResult.testInfrastructure.fixtures.length,
+          factoryCount: evidenceResult.testInfrastructure.factories.length,
+          mockCount: evidenceResult.testInfrastructure.mocks.length,
+          setupFileCount: evidenceResult.testInfrastructure.setupFiles.length,
+          testConfigurationCount: evidenceResult.testInfrastructure.testConfigurations.length,
+        },
+        status: evidenceResult.testInfrastructure.testConfigurations.length > 0 || evidenceResult.testInfrastructure.relatedTests.length > 0 || evidenceResult.testInfrastructure.unresolved.length > 0 ? 'ok' : 'skipped',
+        warnings: evidenceResult.testInfrastructure.warnings,
+      })
+      steps.push({
+        id: 'step-derive-test-commands',
+        kind: 'derive-test-commands',
+        description: 'Derived grounded, targeted test commands (or reported them unresolved) from package.json scripts and discovered related tests.',
+        inputs: {
+          requestedTestCommands: normalized.requestedEvidenceKinds.includes('test-commands'),
+        },
+        outputs: {
+          testCommandCount: evidenceResult.testInfrastructure.testCommands.length,
+          packageScriptCount: evidenceResult.testInfrastructure.packageScripts.length,
+        },
+        status: evidenceResult.testInfrastructure.testCommands.length > 0 ? 'ok' : 'skipped',
         warnings: [],
       })
 
@@ -368,10 +556,10 @@ export function registerContextCommand(program: Command): void {
         warnings: semanticSummary.warnings,
       })
 
-      const classificationArtifact = loadClassificationArtifact(options.index, resolved.manifest)
+      const classificationArtifact = loadClassificationArtifact(normalized.index, resolved.manifest)
       const classificationSummary = buildClassificationSummary({
         classificationArtifact,
-        indexDir: options.index,
+        indexDir: normalized.index,
         manifest: resolved.manifest,
         focus,
         selectedGraph,
@@ -477,11 +665,208 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
+      // --- v1.10.1 Batch 4: responsibility mapping, role adequacy, freshness, budget,
+      // truncation, full-file fallback, and provenance ---
+
+      const changedSymbolItems = changedSurface.symbols.map((s) => ({
+        id: s.symbolId,
+        itemKind: 'symbol' as const,
+        symbolId: s.symbolId,
+        nodeId: s.symbolId,
+        ...(s.filePath ? { path: s.filePath, sourceLocation: { filePath: s.filePath } } : {}),
+        relationship: s.status,
+        basis: `changed-surface (${s.provenance})`,
+        provenance: s.provenance,
+      }))
+      const focusSymbolItems = focusIntake.focusSymbols
+        .filter((entry) => entry.resolved && !entry.ambiguous)
+        .flatMap((entry) => entry.matchedNodeIds)
+        .map((nodeId) => {
+          const node = codeGraph.nodes.find((n) => n.id === nodeId)
+          return {
+            id: nodeId,
+            itemKind: 'symbol' as const,
+            symbolId: nodeId,
+            nodeId,
+            ...(node?.path ? { path: node.path, sourceLocation: { filePath: node.path } } : {}),
+            relationship: 'explicit-focus-symbol',
+            basis: 'caller-supplied focusSymbols entry',
+            provenance: 'request',
+          }
+        })
+
+      const responsibilityInputs = normalizeResponsibilityRefs(normalized.testResponsibilityRefs)
+      const requestedResponsibilityMappings = normalized.requestedEvidenceKinds.includes('responsibility-mappings')
+      const responsibilityMappings = buildResponsibilityMappings({
+        role: normalized.role,
+        responsibilityInputs,
+        hasSuppliedResponsibilities: normalized.testResponsibilityRefs.length > 0,
+        requestedResponsibilityMappings,
+        evidenceGroups: evidenceResult.groups,
+        selectedOwners: evidenceResult.selectedOwners,
+        selectedContracts: evidenceResult.selectedContracts,
+        selectedTests: evidenceResult.selectedTests,
+        testInfrastructure: evidenceResult.testInfrastructure,
+        changedSymbolItems,
+        focusSymbolItems,
+        limit: normalized.requestLimits?.responsibilityMappings ?? null,
+      })
+      steps.push({
+        id: 'step-map-responsibilities',
+        kind: 'map-responsibilities',
+        description: 'Built deterministic responsibility-to-evidence mappings from testResponsibilityRefs and existing role-aware evidence.',
+        inputs: {
+          responsibilityCount: normalized.testResponsibilityRefs.length,
+          requestedResponsibilityMappings,
+        },
+        outputs: {
+          mappedCount: responsibilityMappings.mappings.filter((m) => m.mappingStatus === 'mapped').length,
+          partiallyMappedCount: responsibilityMappings.mappings.filter((m) => m.mappingStatus === 'partially-mapped').length,
+          unmappedCount: responsibilityMappings.mappings.filter((m) => m.mappingStatus === 'unmapped').length,
+          unknownResponsibilityCount: responsibilityMappings.unknownResponsibilityIds.length,
+        },
+        status: responsibilityMappings.operational ? 'ok' : 'skipped',
+        warnings: responsibilityMappings.warnings,
+      })
+
+      const freshness = classifyFreshness({
+        role: normalized.role,
+        activeIndexPath: normalized.index,
+        beforeIndexPath: normalized.beforeIndex,
+        afterIndexPath: normalized.afterIndex,
+        diffRequested: changedSurface.diffRequested,
+        changedSurface,
+        repoRoot,
+      })
+      steps.push({
+        id: 'step-classify-freshness',
+        kind: 'classify-freshness',
+        description: 'Classified context freshness (fresh/stale/unknown) from active-index, before/after-index, and changed-surface evidence.',
+        inputs: { diffRequested: changedSurface.diffRequested },
+        outputs: { state: freshness.state },
+        status: 'ok',
+        warnings: freshness.warnings,
+      })
+
+      const budget = buildBudget({
+        legacyLimits: limits,
+        requestLimits: normalized.requestLimits,
+        retention,
+        selectedSource,
+        selectedSourceBundles,
+        evidenceGroups: evidenceResult.groups,
+        groupTruncation: evidenceResult.groupTruncation,
+        responsibilityMappings,
+      })
+      const truncation = buildTruncation({
+        evidenceGroups: evidenceResult.groups,
+        groupTruncation: evidenceResult.groupTruncation,
+        responsibilityMappings,
+      })
+      steps.push({
+        id: 'step-apply-budget',
+        kind: 'apply-budget',
+        description: 'Reported declared-vs-used limit usage and explicit truncation/required-evidence-loss.',
+        inputs: {},
+        outputs: { truncatedGroupCount: truncation.records.length, characterBudgetTruncated: budget.characters?.truncated ?? false },
+        status: 'ok',
+        warnings: [...budget.warnings, ...truncation.warnings],
+      })
+
+      // Full-file fallback candidates: contract/validator/error evidence a responsibility
+      // mapping relied on whose file is not already covered by a selected source slice.
+      const coveredFilePaths = new Set(selectedSource.slices.map((s) => s.filePath))
+      const fallbackCandidatesByPath = new Map<string, FullFileFallbackCandidate>()
+      for (const mapping of responsibilityMappings.mappings) {
+        if (mapping.mappingStatus === 'mapped') continue
+        for (const item of [...mapping.contracts, ...mapping.validators, ...mapping.errors]) {
+          if (!item.path || coveredFilePaths.has(item.path)) continue
+          const existing = fallbackCandidatesByPath.get(item.path)
+          fallbackCandidatesByPath.set(item.path, {
+            filePath: item.path,
+            reason: `Contract/validator/error evidence for responsibility "${mapping.responsibilityId}" was not covered by any bounded source slice.`,
+            requestedEvidenceKind: 'contracts',
+            responsibilityIdsAffected: [...new Set([...(existing?.responsibilityIdsAffected ?? []), mapping.responsibilityId])].sort(),
+          })
+        }
+      }
+      const fullFileFallback = buildFullFileFallbacks({
+        role: normalized.role,
+        repoRoot,
+        candidates: [...fallbackCandidatesByPath.values()],
+        alreadyCoveredFilePaths: coveredFilePaths,
+        limit: normalized.requestLimits?.fullFileFallbacks,
+      })
+
+      const roleAdequacy = evaluateRoleAdequacy({
+        role: normalized.role,
+        baseAdequacy: contextAdequacy,
+        evidenceGroups: evidenceResult.groups,
+        selectedOwners: evidenceResult.selectedOwners,
+        selectedContracts: evidenceResult.selectedContracts,
+        selectedTests: evidenceResult.selectedTests,
+        testInfrastructure: evidenceResult.testInfrastructure,
+        changedSurface,
+        requestedEvidenceKindsRequireTestInfra: normalized.requestedEvidenceKinds.includes('test-infrastructure'),
+        requestedEvidenceKindsRequireTestCommands: normalized.requestedEvidenceKinds.includes('test-commands'),
+        responsibilityMappings,
+        freshness,
+        truncation,
+      })
+      steps.push({
+        id: 'step-evaluate-adequacy',
+        kind: 'evaluate-adequacy',
+        description: 'Evaluated role-specific adequacy, extending the existing contextAdequacy verdict without replacing it.',
+        inputs: { role: normalized.role },
+        outputs: { status: roleAdequacy.status, blockingConditionCount: roleAdequacy.blockingConditions.length },
+        status: normalized.role ? 'ok' : 'skipped',
+        warnings: roleAdequacy.warnings,
+      })
+
+      const provenance = mergeProvenanceRecords([
+        buildProvenanceRecords([
+          { items: evidenceResult.selectedOwners, role: normalized.role, requestField: null, derivedByModule: 'evidenceGroups.ts' },
+          { items: evidenceResult.selectedContracts, role: normalized.role, requestField: null, derivedByModule: 'evidenceGroups.ts' },
+          { items: evidenceResult.selectedTests, role: normalized.role, requestField: null, derivedByModule: 'evidenceGroups.ts' },
+          { items: evidenceResult.testInfrastructure.relatedTests, role: normalized.role, requestField: null, derivedByModule: 'testInfrastructureDiscovery.ts' },
+        ]),
+        buildChangedSurfaceProvenance(changedSurface, normalized.role),
+        ...responsibilityMappings.mappings.map((m) => m.provenance),
+      ])
+      steps.push({
+        id: 'step-record-provenance',
+        kind: 'record-provenance',
+        description: 'Merged deterministic, deduplicated evidence provenance across owners, contracts, tests, changed surface, and responsibility mappings.',
+        inputs: {},
+        outputs: { provenanceRecordCount: provenance.length },
+        status: 'ok',
+        warnings: [],
+      })
+
       const capsule = buildContextCapsule({
         resolved,
-        originalQuery: options.query!,
+        originalQuery: normalized.query,
         mode,
-        requestedOutputPath: options.out!,
+        requestedOutputPath: normalized.out,
+        role: normalized.role,
+        requestFilePath: normalized.requestFilePath,
+        deferredRequestFields: normalized.deferredFields,
+        requestWarnings: [...normalized.warnings, ...roleContext.warnings, ...evidenceResult.warnings],
+        roleContext,
+        evidenceGroups: evidenceResult.groups,
+        selectedOwners: evidenceResult.selectedOwners,
+        selectedContracts: evidenceResult.selectedContracts,
+        selectedTests: evidenceResult.selectedTests,
+        testInfrastructure: evidenceResult.testInfrastructure,
+        unresolvedItems: evidenceResult.unresolvedItems,
+        groupTruncation: evidenceResult.groupTruncation,
+        responsibilityMappings,
+        roleAdequacy,
+        freshness,
+        budget,
+        truncation,
+        fullFileFallback,
+        provenance,
         limits,
         queryPlan,
         candidateFiles,
@@ -513,36 +898,51 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
-      const writtenCapsulePath = writeContextCapsule(options.out!, capsule)
+      const writtenCapsulePath = writeContextCapsule(normalized.out, capsule)
       steps.push({
         id: 'step-write-context-capsule',
         kind: 'write-context-capsule',
         description: 'Wrote the context capsule artifact.',
-        inputs: { outputPath: options.out! },
+        inputs: { outputPath: normalized.out },
         outputs: { writtenPath: writtenCapsulePath },
         status: 'ok',
         warnings: [],
       })
 
       let writtenAuditPath: string | null = null
-      if (options.auditOut) {
+      if (normalized.auditOut) {
         const auditRecord = buildRetrievalAuditRecord({
           resolved,
           request: capsule.request,
+          warnings: [...normalized.warnings, ...roleContext.warnings, ...evidenceResult.warnings],
+          roleContext,
+          // v1.10.1 Batch 4: pass the real computed adequacy/responsibility/freshness/budget/
+          // truncation/fallback/provenance through to the audit record. (Narrow earlier-batch
+          // defect fix: `contextAdequacy` was previously never passed here, so the audit
+          // record's contextAdequacy was always a hardcoded Batch-1 stub regardless of the
+          // capsule's real verdict; see final report section 44.22.)
+          contextAdequacy: capsule.contextAdequacy,
+          responsibilityMappings: capsule.responsibilityMappings,
+          roleAdequacy: capsule.roleAdequacy,
+          freshness: capsule.freshness,
+          budget: capsule.budget,
+          truncation: capsule.truncation,
+          fullFileFallback: capsule.fullFileFallback,
+          provenance: capsule.provenance,
           steps: [
             ...steps,
             {
               id: 'step-write-retrieval-audit-record',
               kind: 'write-retrieval-audit-record',
               description: 'Wrote the retrieval audit record artifact.',
-              inputs: { outputPath: options.auditOut },
+              inputs: { outputPath: normalized.auditOut },
               outputs: {},
               status: 'ok',
               warnings: [],
             },
           ],
         })
-        writtenAuditPath = writeRetrievalAuditRecord(options.auditOut, auditRecord)
+        writtenAuditPath = writeRetrievalAuditRecord(normalized.auditOut, auditRecord)
       }
 
       if (options.json) {
@@ -757,17 +1157,6 @@ function runSearch(options: {
     return { status: 'ok', results: result.results, warnings: [] }
   } catch (error) {
     return { status: 'search-failed', results: [], warnings: [`Search failed: ${(error as Error).message}`] }
-  }
-}
-
-function validateOptions(options: ContextCommandOptions): void {
-  if (!options.index) throw new Error('The context command requires --index <dir>.')
-  if (!options.query || options.query.trim() === '') {
-    throw new Error('The context command requires --query <text>.')
-  }
-  if (!options.out) throw new Error('The context command requires --out <path>.')
-  if (!VALID_MODES.includes(options.mode as ContextCapsuleMode)) {
-    throw new Error(`Invalid --mode "${options.mode}". Expected one of: ${VALID_MODES.join(', ')}.`)
   }
 }
 

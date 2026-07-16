@@ -153,6 +153,53 @@ Classification is static and conservative: categories are only assigned when fil
 
 Both are written by the `context` command, layered on top of existing index/search/lookup/slice/source/data-model/classification retrieval — no new indexing pipeline. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for the full field-level schema.
 
+### Planned stage-role context architecture (v1.10.1)
+
+**Status: implemented in the working tree, not yet released or published.** Batches 1-4 below are implemented (not published). Batch 1 added the `ContextRole`/`ContextRequest` contracts; Batch 2 operationalized role-aware candidate ranking, focus resolution, and changed-surface merging (`src/context/contextRoles.ts`, `src/context/roleCandidates.ts`, `src/context/focusResolution.ts`, `src/context/changedSurface.ts`); Batch 3 added deterministic, bounded evidence-group construction and conservative test-infrastructure/test-command discovery (`src/context/evidenceGroups.ts`, `src/context/testInfrastructureDiscovery.ts`, `src/context/evidenceClassification.ts`) as the "internal role registry" extension point this section anticipated; Batch 4 completed the contract described below with deterministic responsibility mapping, role-specific adequacy, freshness classification, budget/truncation reporting, bounded full-file fallback, and evidence provenance (`src/context/responsibilityMapping.ts`, `src/context/contextRoleAdequacy.ts`, `src/context/contextFreshness.ts`, `src/context/contextBudget.ts`, `src/context/fullFileFallback.ts`, `src/context/contextProvenance.ts`). See `docs/COMMANDS.md`'s "v1.10.1 Batch 1/2/3/4" sections for the as-built contract. v1.10.1 extends the existing context pipeline rather than adding a new command family, context index, graph, serializer family, or public plugin system; it remains unreleased and unpublished (no version bump, no compatibility-gate/release validation performed by any batch so far).
+
+Batch 3's evidence-group builder (`src/context/evidenceGroups.ts`) is the internal extension point anticipated below: one bounded, additive layer that organizes Batch 2's already-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model into named, capped, auditable groups. Because the existing indexer excludes `.test.`/`.spec.` paths from the symbol index/code graph by default, `src/context/testInfrastructureDiscovery.ts` cannot rely on graph edges to find test files; it instead performs a bounded, read-only directory walk (reusing the indexer's own ignored-directory list) plus a lightweight, bounded, regex-based import-specifier scan restricted to test-shaped files — not a second index, and never code execution/evaluation of the scanned file.
+
+Batch 4 reads Batch 2/3's output rather than re-deriving evidence: `responsibilityMapping.ts` groups caller-supplied `testResponsibilityRefs` IDs against changed/focus symbols and Batch 3's evidence groups/test-infrastructure summary; `contextRoleAdequacy.ts` extends (never replaces) the existing Batch 1 `contextAdequacy` verdict with role-specific required/missing/blocking conditions; `contextFreshness.ts` classifies `fresh`/`stale`/`unknown` from whether the active index matches a supplied `beforeIndex`/`afterIndex`, with a read-only, optional, never-throwing `git rev-parse HEAD` read as informational-only evidence (the index manifest does not record a repository commit to compare it against — recording one would be a new artifact-family decision out of Batch 4 scope); `contextBudget.ts` reports declared-vs-used `ContextRequestLimits` usage and rolls up truncation (critical-first for responsibility mappings, so a required/critical drop is distinguishable from an optional/noncritical one); `fullFileFallback.ts` extends the existing source-selection/continuation model with one bounded, capped, auditable whole-file read (counts only, never content) for evidence no selected source slice covered; `contextProvenance.ts` classifies and deduplicates evidence-item provenance into stable categories without duplicating any evidence payload.
+
+Current ownership that the patch must preserve:
+
+- `src/commands/contextCommand.ts` parses context options and coordinates search, focus, graph, source, capsule, and retrieval-audit output.
+- `src/context/types.ts` owns the current `ContextCapsuleRequest`, capsule, and audit types. The current request contains the original/normalized query, mode, and requested output path; it has no stage role or changed-surface contract.
+- `src/context/candidateRanking.ts` and `src/search/rankSearchResults.ts` own deterministic ranking and stable tie-breaking. There is no candidate-provider registry today.
+- `src/context/graphFocus.ts` owns focus/ambiguity; `src/context/graphSelection.ts` and `src/graph/sliceGraph.ts` own capped deterministic expansion.
+- `src/context/sourceSelection.ts` and `src/context/sourceBundles.ts` own bounded ranges, continuation, dependency bundles, and skipped-source warnings.
+- `src/context/contextCapsule.ts` and `src/context/retrievalAuditRecord.ts` own schema `1.0.0` serialization.
+- `src/graph-diff/buildSymbolIndexDiff.ts` owns sorted before/after file and symbol differences.
+- Existing indexing, manifest, fingerprint, cache, and partial-rebuild modules remain the only index architecture.
+
+The planned `ContextRequest` is an additive my-dev-kit-owned validation/normalization contract. Candidate fields include `schemaVersion`, role, query, index/root, focus files/symbols, changed files/symbols, before/after indexes, upstream artifact references, test-responsibility references, requested evidence kinds, limits, and output paths. Exact types and names remain subject to implementation inspection. Existing CLI flags and a planned request file normalize into one request with deterministic conflict rules.
+
+Role is orthogonal to the current `general`, `feature-add`, and `subsystem` mode. A candidate internal role registry may specify providers, evidence kinds, ranking adjustments, graph/source limits, required groups, adequacy checks, and warnings for:
+
+- architecture: ownership, extension points, public contracts, structural neighbors, architecture tests;
+- implementation: exact owners/source, callers/callees, validators/constants/defaults/limits/errors, schemas/serializers/command parsing, compatibility surfaces, closest tests;
+- test-implementation: changed production files/symbols, graph diff, validators/errors/side effects, tests, fixtures/factories/mocks/setup/configuration/scripts/commands, and responsibility mappings.
+
+This registry is internal composition over the existing pipeline, not the v2.0.0 public plugin architecture. Candidate providers must feed the existing ranking/graph/source pipeline; they must not create parallel selection engines.
+
+Selected evidence is planned to be grouped by purpose: ownership, dependencies, contracts, validation/error/output boundaries, changed surface, related tests, test infrastructure/commands, and responsibility mappings. The role-specific adequacy evaluator checks required groups. Nonempty context is not sufficient by itself: unresolved ownership makes architecture context conditional or inadequate; missing owner/source/contracts makes implementation context inadequate; missing changed surface, related tests/infrastructure, or critical responsibility mappings makes test context inadequate.
+
+Freshness is evidence, not an assumption. Where available, the capsule/audit should record index/manifest identity, refresh time, repository commit/state identity, before/after indexes, and changed files/symbols. Candidate states are fresh, stale, and unknown, subject to current naming conventions. Index existence alone yields no freshness proof.
+
+Test-responsibility mapping is deterministic only for caller-supplied stable responsibility IDs and explicit evidence. Planned mappings connect a responsibility to production symbols/contracts, a test location/helper, oracle evidence, a verification command, status, and unresolved reason. Free-form prose is never silently treated as a complete mapping, and my-dev-kit does not generate test assertions.
+
+Capsule and audit changes are optional additions to the current schema `1.0.0` shapes. Candidate capsule additions include role/request summaries, evidence groups, changed surface, owners/contracts/tests/infrastructure, mappings, adequacy, unresolved items, truncation, and provenance. Candidate audit additions include candidates/scores, inclusion/exclusion reasons, graph/source ranges, fallback, budget use, unresolved evidence, freshness, and before/after changed surfaces. Major schema changes require separate approval.
+
+Repository-evidence budgets remain explicit count/graph/source/output bounds. Exact model-token accounting is not current or planned for this patch. Full-file fallback remains exceptional, capped, justified, and audited. Identical inputs must yield stable paths, ordering, selection, warnings, adequacy, truncation, capsule, and audit without filesystem-order dependence.
+
+Cross-repository boundary:
+
+- my-dev-kit owns repository indexing/evidence, role retrieval, repository budgets, adequacy/freshness evidence, changed-surface mapping, capsules, and audits.
+- my-dev-kit-orchestrator v1.2.1 owns workflow catalogs/IDs, exact workflow resolution, instruction budgets, `WorkflowInstructionPacket`, TaskState, prompt assembly, stage order/lifecycle, judge/correction behavior, manual freshness policy, and publication authorization. It does not currently execute my-dev-kit automatically.
+- my-dev-kit-lab v0.4.3 owns controlled strategy evaluation, evidence-recall/irrelevant-inclusion/mapping/provenance/determinism metrics, immutable targets, reporting, security validation, and code-rot auditing. It is not part of production context generation.
+
+Workflow-catalog semantics, native context stages, prompt assembly, automatic agent execution, LLM ranking/mapping, source/test editing, security validation, shared schema packaging, and public plugin architecture are explicit v1.10.1 non-goals.
+
 ### Incremental indexing and cache layer (v1.8.0)
 
 - `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules, plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry

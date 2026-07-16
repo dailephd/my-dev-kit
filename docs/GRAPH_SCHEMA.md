@@ -828,6 +828,18 @@ Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVer
 
 Each `AuditStep` records `id`, `kind` (one of a fixed `AuditStepKind` set covering validation, manifest loading, query normalization, ranking, focus selection, graph/source selection, pruning, and conflict detection), `description`, `inputs`, `outputs`, `status` (`ok`/`skipped`/`failed`), and `warnings`. The record provides a full, ordered trail of how a context capsule was assembled, for auditing and debugging retrieval behavior — it is deterministic and does not itself claim runtime or LLM behavior.
 
+### Planned additive context schema evolution (v1.10.1)
+
+**Planned; not part of the current schema contract.** v1.10.1 intends to preserve the existing schema `"1.0.0"` fields and no-role behavior while adding optional role-specific repository evidence. A major schema change is not approved.
+
+Candidate capsule additions include `contextRole`, `requestSummary`, `focus`, `evidenceGroups`, `changedSurface`, `selectedOwners`, `selectedContracts`, `selectedTests`, `testInfrastructure`, `responsibilityMappings`, `adequacy`, `warnings`, `unresolvedItems`, `truncation`, and `provenance`. Existing `contextAdequacy` remains compatible while an implementation determines whether any new structured adequacy field is an additive view or an extension of the existing contract.
+
+Candidate audit additions include role/query, candidate sources/scores, selection and exclusion reasons, graph expansion, source ranges, full-file fallbacks, budget use/limit, unresolved evidence, stale-index warnings, before/after index identities, and changed files/symbols. These are structured summaries of the existing retrieval process, not a second audit record.
+
+Role-specific adequacy must distinguish nonempty from sufficient output. Architecture requires a plausible owner or explicit unresolved-owner evidence; implementation requires owner/source/contracts; test-implementation requires changed production evidence, related test infrastructure, and required responsibility mappings. Missing critical evidence must remain unresolved and reduce adequacy.
+
+Freshness is planned as evidence-backed fresh/stale/unknown state, with final names subject to current conventions. Index existence alone cannot establish freshness. Deterministic serialization must preserve stable paths/order and report all truncation and bounded full-file fallback. Exact model-token accounting is not part of this schema plan.
+
 ## Stable node IDs and compatibility
 
 Node IDs are deterministic and stable across index runs for the same source root configuration. File node IDs use the `file:<relative-path>` form. Symbol node IDs use the `symbol:<relative-path>#<symbol-name>` form.

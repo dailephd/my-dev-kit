@@ -240,6 +240,16 @@ my-dev-kit does not provide:
 
 `my-dev-kit-lab` owns release and security validation. It answers whether a release candidate is safe to ship, whether package contents and dependencies are acceptable, and whether external release gates passed. It should not replace product-specific retrieval-quality assertions inside `my-dev-kit`.
 
+### Planned v1.10.1 ecosystem boundary
+
+For the planned stage-role context patch, `my-dev-kit` continues to own only deterministic indexing and bounded repository-evidence retrieval: request validation, architecture/implementation/test-implementation roles, candidates/ranking/graph/source selection, repository-evidence budgets, changed-surface and graph-diff intake, test-infrastructure discovery, responsibility-to-evidence mapping, adequacy/freshness, capsules, audits, and deterministic serialization.
+
+my-dev-kit-orchestrator v1.2.1 owns workflow catalogs and IDs, exact workflow dependency resolution, `WorkflowInstructionPacket`, TaskState, prompt assembly, stage order, lifecycle, manual freshness policy, correction/judge behavior, and publication authorization. The current orchestrator does not automatically run my-dev-kit; initial integration remains prompt-guided.
+
+my-dev-kit-lab v0.4.3 owns controlled strategy evaluation, context size, explicit required-evidence recall, irrelevant inclusion, mapping/provenance/truncation/inadequacy/determinism evaluation, target immutability, reports/plots/screenshots, security validation, and code-rot auditing. It must not become a production context or workflow runtime.
+
+my-dev-kit does not own workflow-stage progression, prompt assembly, judge interpretation, agent execution, publication, source/test editing, security validation, or workflow-catalog semantics in v1.10.1. Static repository evidence never proves runtime behavior.
+
 ## Current limitations
 
 - Symbol records include start lines but not complete end-line bounds.

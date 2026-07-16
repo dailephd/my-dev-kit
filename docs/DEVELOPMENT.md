@@ -184,6 +184,31 @@ If a more explicit validation sequence is needed, run:
     npm run build
     npm run verify
 
+### Planned v1.10.1 context validation
+
+**Planning only.** The later v1.10.1 implementation should use the actual current commands below; this documentation does not create new npm scripts:
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run test:security
+npm run build
+npm run docs:check
+npm run verify
+npm run benchmark:retrieval
+npm pack --dry-run
+npm run dev -- --help
+npm run dev -- context --help
+npx vitest run tests/context
+npx vitest run tests/graph-diff
+npx vitest run tests/indexing
+```
+
+New tests should cover request-file normalization/validation, all three roles, role/mode independence, providers/ranking/stable ties, before/after changed surfaces, evidence groups, responsibility mapping, role adequacy, fresh/stale/unknown evidence, caps/truncation/full-file fallback, existing artifact/command compatibility, canonical repeated runs, and Windows/Linux/macOS paths.
+
+Required smoke scenarios are the existing context command; each planned role; structured request input; JSON parsing; capsule/audit inspection; before/after indexes; missing evidence; a tiny budget; and stale or unknown context. Exact model-token accounting must not be asserted. No dedicated npm scripts for these categories exist yet.
+
 ## Local CLI smoke test
 
 After building, run a basic TypeScript smoke test:
