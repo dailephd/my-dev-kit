@@ -321,7 +321,7 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --f
 
 Android projects additionally produce `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` when the applicable static evidence exists. Android artifact-backed nodes and candidate relationships enrich the existing `code-graph.json`; there is no `android-relationships.json`. Android selectors use exact matching and preserve ambiguity; route/resource source is bounded, binary resources are not decoded, and `android-module`, `android-manifest`, and `android-navigation` views render real graph edges only. This remains static analysis: it does not build Android projects, resolve dependencies, merge manifests, select resources, prove runtime behavior, provide full Compose semantics, or perform Android security validation.
 
-## Workflow 11: Planned stage-role context refresh (v1.10.1)
+## Workflow 11: Stage-role context refresh (v1.10.1)
 
 **Status: Planned; no v1.10.1 flags or automatic orchestrator integration are implemented yet.** The operational design uses the existing index/context architecture at three different points rather than reusing one early packet for every stage.
 
