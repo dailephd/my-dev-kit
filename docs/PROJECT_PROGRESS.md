@@ -8,9 +8,9 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version in progress: v1.10.1
 
-Version 1.10.1 is not yet published. It is a bounded patch on the v1.10.0 baseline that extends the `context` command with deterministic, role-specific repository-evidence retrieval (`ContextRole`: `architecture`/`implementation`/`test-implementation`) and honest bounded evidence reporting. See `docs/ROADMAP.md`'s "Version 1.10.1" section for the full plan; this section only tracks what has actually landed in the working tree so far.
+Version 1.10.1 is implemented and release-prepared but not published. It is a bounded patch on the v1.10.0 baseline that extends the `context` command with deterministic, role-specific repository-evidence retrieval (`ContextRole`: `architecture`, `implementation`, and `test-implementation`) and honest bounded evidence reporting. See the "Version 1.10.1" section of [ROADMAP.md](ROADMAP.md) for the plan; this document records current status only.
 
-### Implementation stages completed in the working tree (uncommitted)
+### Implemented scope
 
 1. **Request and role contracts** — `ContextRole` type, structured schema-versioned `ContextRequest` JSON contract, `context --request <path>` / `context --role <role>`, deterministic CLI/request-file normalization and conflict handling, structural validation of every optional field, and full legacy compatibility for pre-1.10.1 `context` invocations. See `src/context/contextRequestNormalization.ts`, `src/context/types.ts`, `src/context/contextRoles.ts`.
 2. **Role-aware candidates and ranking** — role-specific candidate priorities for all three roles, `focusFiles`/`focusSymbols` resolution, `changedFiles`/`changedSymbols` and `beforeIndex`/`afterIndex` graph-diff-based changed-surface merging, `requestedEvidenceKinds` prioritization, additive `roleContext` capsule/audit fields. See `src/context/focusResolution.ts`, `src/context/changedSurface.ts`, `src/context/roleCandidates.ts`.
@@ -18,13 +18,16 @@ Version 1.10.1 is not yet published. It is a bounded patch on the v1.10.0 baseli
 4. **Responsibility mapping, adequacy, freshness, and provenance** — `responsibilityMapping.ts` (mapped/partially-mapped/unmapped/not-applicable statuses, criticality, duplicate/unknown-ID handling), `contextRoleAdequacy.ts` (role-specific adequacy verdicts, not just nonempty-evidence checks), `contextFreshness.ts` (fresh/stale/unknown classification), `contextBudget.ts` (limits reporting, truncation, full-file fallback via `fullFileFallback.ts`), `contextProvenance.ts` (deterministic evidence provenance classification).
 5. **CLI integration** — `src/commands/contextCommand.ts` wires `--request`/`--role` into the existing `context` command pipeline; `src/context/contextCapsule.ts` and `src/context/retrievalAuditRecord.ts` carry the additive schema fields.
 
-### Validation results as of the last verification pass
+### Release-readiness evidence
 
 - `npm run typecheck` — passing.
+- `npm run build`, `npm run docs:check`, and `npm run verify` — passing.
+- `npm test` — 1,785/1,785 tests passing across 159 test files.
 - `npx vitest run tests/context` — 218/218 tests passing across 23 test files.
-- `npm run docs:check` — passing.
+- `npm run test:security` — 60/60 tests passing across 5 test files.
 - `npm run benchmark:retrieval` — PASS, 6/6 tasks.
 - `npm pack --dry-run` — clean; 30 files reported; no fixtures, indexes, or credentials included.
+- GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x for the exact release candidate.
 
 ### Known implementation facts worth tracking precisely
 
@@ -32,16 +35,14 @@ Version 1.10.1 is not yet published. It is a bounded patch on the v1.10.0 baseli
 - `limits.evidenceGroupEntries` is **reporting-only** — the field is validated, normalized, and reported alongside real usage/availability/drop counts in `budget.limits[]`, but the actual per-group truncation caps come from fixed internal values in `src/context/evidenceGroups.ts` (for example owners = 3 or 5 depending on role, contracts = 10). The declared request-level value does not override those internal caps. This is documented in `docs/ROADMAP.md` as an intentional reporting boundary, not a gap.
 - Files that merely match a naming convention (for example a file named similarly to "builder" or "factory") are intentionally excluded from evidence groups and test-infrastructure discovery unless backed by graph, import, or classification evidence. This is a deliberate conservative boundary.
 
-### Remaining work before v1.10.1 can be published
+### Remaining work before publication
 
-- Final CLI help-text and cross-platform smoke validation pass (candidate batch 5 in the roadmap's dependency ordering).
-- A release-readiness pass (version bump confirmation, changelog finalization, package publication) — out of scope for documentation-only work.
-- No production code, test code, or package version was changed as part of the Batch 6 documentation-reconciliation pass; see `reports/v1.10.1-batch-6-documentation-reconciliation.md` for that pass's details.
+- Run a separate, explicitly authorized publication workflow.
+- Do not treat implementation, editorial, or release-readiness evidence as publication authorization.
 
 ## Where to look next
 
-- Product plans and future version scope: `docs/ROADMAP.md`
-- Command-level behavior and flags: `docs/COMMANDS.md`
-- Schema/artifact field reference: `docs/GRAPH_SCHEMA.md`
-- Release history: `CHANGELOG.md`
-- Batch-level implementation reports: `reports/`
+- Product plans and future version scope: [ROADMAP.md](ROADMAP.md)
+- Command-level behavior and flags: [COMMANDS.md](COMMANDS.md)
+- Schema and artifact fields: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md)
+- Release history: [CHANGELOG.md](../CHANGELOG.md)

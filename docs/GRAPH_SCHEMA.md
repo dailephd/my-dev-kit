@@ -828,17 +828,17 @@ Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVer
 
 Each `AuditStep` records `id`, `kind` (one of a fixed `AuditStepKind` set covering validation, manifest loading, query normalization, ranking, focus selection, graph/source selection, pruning, and conflict detection), `description`, `inputs`, `outputs`, `status` (`ok`/`skipped`/`failed`), and `warnings`. The record provides a full, ordered trail of how a context capsule was assembled, for auditing and debugging retrieval behavior — it is deterministic and does not itself claim runtime or LLM behavior.
 
-### Planned additive context schema evolution (v1.10.1)
+### Additive context schema evolution (v1.10.1)
 
-**Planned; not part of the current schema contract.** v1.10.1 intends to preserve the existing schema `"1.0.0"` fields and no-role behavior while adding optional role-specific repository evidence. A major schema change is not approved.
+Version 1.10.1 preserves schema `"1.0.0"` and legacy no-role behavior while adding structured, role-specific repository evidence. It does not introduce a schema-major change.
 
-Candidate capsule additions include `contextRole`, `requestSummary`, `focus`, `evidenceGroups`, `changedSurface`, `selectedOwners`, `selectedContracts`, `selectedTests`, `testInfrastructure`, `responsibilityMappings`, `adequacy`, `warnings`, `unresolvedItems`, `truncation`, and `provenance`. Existing `contextAdequacy` remains compatible while an implementation determines whether any new structured adequacy field is an additive view or an extension of the existing contract.
+The capsule additively records `roleContext`, `evidenceGroups`, `selectedOwners`, `selectedContracts`, `selectedTests`, `testInfrastructure`, `responsibilityMappings`, `roleAdequacy`, `freshness`, `budget`, `truncation`, `fullFileFallback`, and `provenance`. The existing `contextAdequacy` field remains readable and retains its established meaning.
 
-Candidate audit additions include role/query, candidate sources/scores, selection and exclusion reasons, graph expansion, source ranges, full-file fallbacks, budget use/limit, unresolved evidence, stale-index warnings, before/after index identities, and changed files/symbols. These are structured summaries of the existing retrieval process, not a second audit record.
+The retrieval audit carries the same computed role, responsibility, adequacy, freshness, budget, truncation, fallback, and provenance evidence. Its ordered steps also record candidate selection, changed-surface intake, evidence grouping, test-infrastructure discovery, responsibility mapping, freshness classification, budget application, adequacy evaluation, and provenance recording. This remains one retrieval audit, not a parallel artifact family.
 
-Role-specific adequacy must distinguish nonempty from sufficient output. Architecture requires a plausible owner or explicit unresolved-owner evidence; implementation requires owner/source/contracts; test-implementation requires changed production evidence, related test infrastructure, and required responsibility mappings. Missing critical evidence must remain unresolved and reduce adequacy.
+Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner and relevant contract or extension-point evidence. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
 
-Freshness is planned as evidence-backed fresh/stale/unknown state, with final names subject to current conventions. Index existence alone cannot establish freshness. Deterministic serialization must preserve stable paths/order and report all truncation and bounded full-file fallback. Exact model-token accounting is not part of this schema plan.
+Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
 
 ## Stable node IDs and compatibility
 

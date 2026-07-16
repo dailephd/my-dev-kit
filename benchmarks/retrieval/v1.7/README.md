@@ -28,8 +28,8 @@ added the execution core; Batch 3 adds assertion-based regression judgment.
   dependency, or package-content validation.
 - Not a hosted or public benchmark service.
 - Not wired into `npm run verify` or CI. It remains a separate maintainer
-  check because it is heavier than unit validation and the broader test
-  suite has known unrelated timeout flakiness.
+  check because it exercises repeated indexing and context subprocesses
+  beyond normal unit validation.
 - Not a performance benchmark, historical baseline comparison, security
   check, release gate, package audit, browser/runtime check, or LLM
   evaluation.

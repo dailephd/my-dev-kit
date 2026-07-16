@@ -75,6 +75,8 @@ Supported languages:
 - TypeScript
 - JavaScript
 - Python
+- Kotlin
+- Java
 
 Supported source extensions:
 
@@ -83,6 +85,8 @@ Supported source extensions:
 - `.js`
 - `.jsx`
 - `.py`
+- `.kt`
+- `.java`
 
 ### Usage
 
@@ -94,7 +98,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 
 - `--root <path>`: project root. Source roots and output paths are resolved relative to this path.
 - `--src <path>`: source root to index, relative to `--root`. May be repeated. Required.
-- `--language <language>`: language hint. Supported values are `typescript`, `javascript`, and `python`. When omitted, language is inferred from file extensions.
+- `--language <language>`: language hint. Supported values are `typescript`, `javascript`, and `python`. Kotlin and Java are discovered from `.kt` and `.java` extensions; they are not separate `--language` values. When omitted, language is inferred from file extensions.
 - `--out <dir>`: output directory for index artifacts, relative to `--root`. Defaults to `.my-dev-kit`.
 - `--exclude <path-or-name>`: directory name or relative path prefix to exclude. May be repeated. This is path/name based, not glob based.
 - `--dry-run`: scan and report what would be indexed without writing artifacts.
@@ -179,7 +183,7 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cach
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cache --incremental --json
 ```
 
-Not implemented: deterministic artifact merge / partial rebuild for `--call-graph` itself (always a full regeneration when requested during a partial rebuild), stable artifact IDs across a full-rebuild fallback (a full rebuild has no reuse guarantee by definition), and `graph-diff`/watch mode/retrieval filtering (separate, later `v1.8.0` batches — see `docs/ROADMAP.md`).
+Not implemented: deterministic artifact merge or partial rebuild for `--call-graph` itself (it is fully regenerated during a partial rebuild), stable artifact IDs across a full-rebuild fallback, watch mode, and retrieval filtering. The separate `graph-diff` command is implemented; see [graph-diff](#graph-diff) below.
 
 ### Android project detection (v1.9.0 Batch 1)
 
@@ -511,7 +515,7 @@ Recommendations for large or multi-package repositories:
 - use a per-package `--out` (e.g. `apps/web/.my-dev-kit`) so each package's artifacts stay independent
 - re-run `--dry-run` after adding a new package or source root to confirm file counts before a full run
 
-This section documents present-day scoping practices only. It does not describe incremental indexing, cache reuse, watch mode, or graph diff — those remain planned for later `v1.8.0` batches (see `docs/ROADMAP.md`).
+This section documents large-repository scoping practices. Incremental indexing, cache reuse, and `graph-diff` are implemented elsewhere in this reference. Watch mode remains deferred; see [ROADMAP.md](ROADMAP.md).
 
 ## search
 
@@ -1457,7 +1461,7 @@ npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --role 
 
 Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major, an unknown role/evidence kind, an invalid field type, and invalid `limits` all fail before any capsule or audit file is written — there is no partial output on a validation failure.
 
-**Not yet implemented in Batch 1 (implemented in later batches below):** role-specific candidate providers/ranking/graph expansion (implemented in Batch 2), changed-surface/graph-diff execution (implemented in Batch 2), evidence groups and test-infrastructure/test-command discovery (implemented in Batch 3, below), responsibility mapping, role-specific adequacy, and freshness (`fresh`/`stale`/`unknown`) evaluation (all implemented in Batch 4, below). `testResponsibilityRefs` and `limits` were deferred as of Batch 1 (validated, normalized, and reported as deferred, with no effect on retrieval) and became operational in Batch 4.
+**Batch 1 boundary:** role-aware ranking and changed-surface intake arrived in Batch 2; evidence groups and test-infrastructure discovery arrived in Batch 3; responsibility mapping, role adequacy, freshness, and operational responsibility limits arrived in Batch 4. `testResponsibilityRefs` and `limits` were validated but deferred in Batch 1 and are operational in the final v1.10.1 implementation.
 
 ### v1.10.1 Batch 2: role-aware candidate generation and changed-surface ranking
 
@@ -1470,7 +1474,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 - **Additive metadata only.** `candidateFiles[]`/`candidateNodes[]` gained optional `roleScoreAdjustment`, `contextRole`, `focusMatch`, `changedSurfaceMatch`, and `changedStatus` fields (absent for legacy candidates). The capsule and retrieval audit both gained an additive `roleContext` object (`role`, `focus`, `changedSurface`, `requestedEvidenceKinds`, `unsupportedRequestedEvidenceKinds`, `warnings`). No existing field's meaning changed, and the schema major did not change.
 - **Ranking stays deterministic and bounded.** Role/focus/changed-surface adjustments never bypass `--max-candidate-files`, `--max-graph-nodes`/`--max-graph-edges`, or `--max-source-slices`; ties still break on stable candidate ID/path, never insertion order.
 
-**Not yet implemented (planned for later v1.10.1 batches):** `evidenceGroups`/test-infrastructure discovery (implemented in Batch 3, below); test-responsibility mapping, role-specific adequacy, freshness (`fresh`/`stale`/`unknown`) evaluation, and the `limits` contract (implemented in Batch 4, below).
+**Batch 2 boundary:** evidence groups and test-infrastructure discovery followed in Batch 3; responsibility mapping, role adequacy, freshness, and the final limits contract followed in Batch 4.
 
 ### v1.10.1 Batch 3: evidence groups and bounded test-infrastructure discovery
 
@@ -1484,7 +1488,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 - **`requestedEvidenceKinds` `test-infrastructure` and `test-commands` are now operational** (previously deferred in Batch 2): requesting either prioritizes and exposes the matching evidence for any role, including `architecture`/`implementation`. `responsibility-mappings` remains the only `requestedEvidenceKinds` value still reported in `roleContext.unsupportedRequestedEvidenceKinds`.
 - **Additive audit steps.** The retrieval audit gained `build-evidence-groups`, `discover-test-infrastructure`, and `derive-test-commands` steps between `record-retained-and-dropped-context` and `derive-source-targets`; no existing audit step's meaning changed.
 
-**Not yet implemented in Batch 3 (implemented in Batch 4, below):** test-responsibility mapping, role-specific adequacy verdicts, freshness (`fresh`/`stale`/`unknown`) evaluation, and the final `limits` contract.
+**Batch 3 boundary:** Batch 4 completed test-responsibility mapping, role-specific adequacy, freshness, and the final limits contract.
 
 ### v1.10.1 Batch 4: responsibility mapping, adequacy, freshness, budget/truncation, full-file fallback, and provenance
 
@@ -1499,7 +1503,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 - **`provenance[]`** deterministically classifies and deduplicates every owner/contract/test/changed-surface/responsibility-mapping evidence item into a stable category (`caller-changed-file`, `graph-diff`, `code-graph`, `import-scan`, `test-configuration`, `package-json`, etc.) with a deterministic ID. Evidence appearing via more than one source merges its provenance (preserving every distinct relationship basis) rather than duplicating the evidence item.
 - **Additive audit steps.** The retrieval audit gained `map-responsibilities`, `classify-freshness`, `apply-budget`, `evaluate-adequacy`, and `record-provenance` steps after `update-context-adequacy`; no existing audit step's meaning changed. The retrieval audit now also carries the real computed `contextAdequacy`/`responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance` (earlier-batch correction: the audit's `contextAdequacy` was previously never passed through from the capsule's real verdict — a hardcoded Batch 1 stub was always written instead — fixed as part of this batch's wiring).
 
-**Not yet implemented:** LLM-based mapping/adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain permanently out of scope for `context`. Final cross-batch documentation reconciliation for the full v1.10.1 surface is planned for a later batch; v1.10.1 remains unpublished.
+**Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope. Version 1.10.1 remains unpublished.
 
 ## graph-diff
 

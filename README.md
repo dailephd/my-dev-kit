@@ -1,10 +1,10 @@
 # my-dev-kit
 
-Local codebase graph indexing, local-first deterministic semantic enrichment, and bounded source retrieval for TypeScript, JavaScript, Python, Kotlin, Java, and supported Android projects.
+my-dev-kit is a local-first CLI for indexing a codebase, exploring its graph, and retrieving bounded source evidence. It supports TypeScript, JavaScript, Python, Kotlin, Java, and supported Android project structures without editing source files or sending project data to an external service.
 
 ## Overview
 
-my-dev-kit helps you navigate a local project by building deterministic artifacts for files, symbols, frontend structures, and supported data models, and by enriching those artifacts with compact semantic role metadata. You can search the code graph including semantic roles, inspect exact nodes with semantic context, retrieve bounded source, search for exact strings and repeated literals, retrieve React component regions, trace local prop and event flows, generate data-model artifacts, inspect exact entities and fields, and trace supported static model-to-view paths.
+Local codebase graph indexing produces deterministic, inspectable artifacts for files, symbols, frontend structures, supported data models, and Android static evidence. Use those artifacts to search the code graph, inspect exact nodes, retrieve focused source, trace supported static relationships, and prepare bounded context for downstream tools.
 
 Everything runs locally. my-dev-kit does not call an LLM, make network requests, connect to a database, or edit source files.
 
@@ -96,6 +96,8 @@ npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --tra
 
 See [docs/COMMANDS.md](docs/COMMANDS.md) for the full flag reference.
 
+For a guided introduction, see [docs/QUICKSTART.md](docs/QUICKSTART.md). The [example workflows](examples/README.md) provide small projects that you can run from a cloned repository.
+
 ## Graph-Guided Symbol Retrieval for LLM workflows
 
 The recommended usage pattern for feeding bounded context to an LLM or coding agent is `search` → `lookup` → `slice` → `source`: narrow to a candidate with `search`, inspect the exact node and its relationships with `lookup`, pull a bounded neighborhood with `slice` when more relationship context is needed, then retrieve the bounded source text for the symbols that matter.
@@ -130,9 +132,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## v1.10.0 implementation status
+## Latest release: v1.10.0
 
-The repository's v1.10.0 implementation is complete, its documentation is reconciled, its implementation-completeness audit has passed, and `@dailephd/my-dev-kit@1.10.0` is published.
+`@dailephd/my-dev-kit@1.10.0` is the latest published release.
 
 v1.10.0 extends the v1.9.0 Android foundation with conservative static Gradle, manifest, resource, navigation, relationship, retrieval, context, and graph-view evidence:
 
@@ -156,9 +158,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --f
 
 This is static evidence, not runtime proof. my-dev-kit does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; prove runtime route, intent, or deep-link dispatch; provide full Compose semantic retrieval; or provide Android architecture classification or data-flow retrieval. See [docs/COMMANDS.md](docs/COMMANDS.md) for exact selector behavior and [docs/ROADMAP.md](docs/ROADMAP.md) for deferred v1.11.0-v1.13.0 work.
 
-## v1.10.1: stage-specific bounded repository context
+## In release preparation: v1.10.1
 
-**Status: Implemented for v1.10.1; not published.** v1.10.1 is a bounded patch after the published v1.10.0 baseline. It extends the existing `context` command and context artifacts rather than introducing a second context engine or moving work from v1.11.0 and later. It adds the `ContextRole` and `ContextRequest` contracts, `context --request <path>`/`--role <role>`, deterministic CLI/request-file normalization, role-aware evidence, changed-surface intake, evidence groups, responsibility mapping, adequacy, freshness, bounded fallback/truncation reporting, and provenance. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 is implemented and release-prepared but not published. This bounded patch extends the existing `context` command and artifacts. It adds `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 
@@ -175,17 +177,6 @@ Ownership stays narrow:
 - `my-dev-kit-lab` v0.4.3 owns controlled strategy evaluation, evidence recall/irrelevant inclusion, responsibility-mapping completeness, provenance/determinism/truncation evaluation, immutable targets, reports, plots, security validation, and code-rot auditing. It is not a production retrieval runtime.
 
 The patch remains bounded, deterministic, inspectable, and honest: nonempty output is not automatically adequate; an existing index is not automatically fresh; free-form test prose is not automatically mapped; and every truncation or full-file fallback is reported. See [docs/ROADMAP.md](docs/ROADMAP.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/COMMANDS.md](docs/COMMANDS.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the planning and command detail.
-
-## v1.8.0 highlights
-
-Version 1.8.0 adds the final indexing-ergonomics and comparison work shipped in Batches 1 through 4:
-
-- deterministic large-repo preflight warnings and `.my-dev-kit`/`.my-dev-kit-*` self-ignore during indexing
-- `index --incremental` and `index --reset-cache`, with internal `cache-metadata.json` bookkeeping
-- real partial rebuild for `symbol-index.json` and `code-graph.json`, with honest full-regeneration fallback for `call-graph.json`
-- `graph-diff` for deterministic, read-only comparison of two existing index directories
-
-Deferred from the implemented v1.8.0 release work: watch mode, retrieval filtering, a dedicated `call-graph.json` diff section, and non-fallback partial call-graph rebuild. See [docs/ROADMAP.md](docs/ROADMAP.md) for the exact status split.
 
 ## Generated artifacts
 
@@ -204,7 +195,6 @@ The `index` command writes:
 | `classification.json` | Classification artifact (v1.5.0): conservative static schema/layer classification of files and symbols — category, edit guidance, readiness, risk labels, evidence, and uncertainty — written whenever the classification analyzer runs |
 | `android-project.json` | Android project artifact (v1.9.0 Batch 1): static Android/Gradle project, module, and source-set detection — Kotlin/Java symbol data lives in `symbol-index.json`/`code-graph.json` instead (Batch 2/Batch 3) — written when Android evidence is found under `--root` |
 | `android-components.json` | Android component-role artifact (v1.9.0 Batch 4): conservative static role detection (Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module) over already-indexed Kotlin/Java top-level symbols — written only when at least one role is detected |
-
 | `android-gradle.json` | Static Gradle settings, module, plugin, dependency, SDK, build-type, product-flavor, source-set, and version-catalog evidence; unsupported dynamic expressions remain warnings |
 | `android-manifest.json` | Static source-set manifest declarations, components, permissions, features, intent filters, deep-link and launcher candidates, metadata, and resource references; no manifest merging |
 | `android-resources.json` | Static resource directories, qualifiers, values/layout/file resources, IDs, references, and FileProvider/network-security records; no overlay selection or binary decoding |
@@ -513,8 +503,8 @@ my-dev-kit is a local, deterministic read-only CLI tool. It does not:
 - execute user application code
 - connect to databases
 - claim runtime React or browser-state behavior
-- claim route-aware reachability analysis
-- claim UI visibility analysis
+- prove route reachability at runtime
+- prove UI visibility at runtime
 
 All React/TSX and frontend-test analysis is conservative static extraction from source text. The frontend semantic artifact records what the static analyzer found in the source; it does not prove what the application renders at runtime.
 
@@ -548,17 +538,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.5.0 adds conservative static schema/layer classification: files and symbols are classified into categories (canonical type, database model, view model, UI-only state, test fixture, generated file, configuration file, command handler, analyzer, validator, and more), each with edit guidance, a readiness state, additive risk labels, evidence, and an uncertainty tier. Classification is written to a `classification.json` artifact, registered in `manifest.json`, and surfaced as compact `classificationRoles`/`classificationRefs` through `search`, `lookup`, `slice`, and `source` — the same two-tier detailed-artifact-plus-compact-refs pattern already used by the data-model and frontend-semantic layers. Classification is static only: it never claims runtime, browser, or database behavior, and an absent `classification.json` (an older index) never changes existing command output.
-
-Version 1.4.0 adds source continuation and bounded local dependency expansion. Once you find the right symbol or component, you can continue reading past the initial preview or expand to include the same-file types, props, helpers, and constants it directly depends on — all bounded, with reasons for every included block.
-
-Version 1.3.0 added frontend reachability: a `frontend-reachability.json` artifact linking static route, browser-storage, and UI-marker facts, plus `--route`/`--storage-key`/`--ui` selectors and `route`/`browser-storage`/`ui-reachability` graph views.
-
-Version 1.2.0 added React/TSX and frontend-test indexing, exact source string retrieval, React region retrieval, local component-tree prop/event-flow retrieval, and four frontend semantic graph views.
-
-Version 1.6 adds orchestrator-ready context capsules and retrieval audit records; v1.7 adds an internal retrieval regression suite for my-dev-kit's own bounded-context behavior; v1.8 adds indexing scalability (incremental indexing, partial rebuild, and `graph-diff`); v1.9.0 Batch 1 adds a static Android/Gradle project-detection foundation; v1.9.0 Batch 2 adds conservative static Kotlin structural indexing; v1.9.0 Batch 3 adds conservative static Java structural indexing (`.kt` and `.java` files under `--src` now both appear in `symbol-index.json`/`code-graph.json`, searchable/lookup-able/sliceable/retrievable like any other language); v1.9.0 Batch 4 adds conservative static Android component-role detection (Activity/ViewModel/Repository/Room/Retrofit/Hilt, etc.) with compact role metadata on those same symbols and nodes; and v1.9.0 Batch 5 hardens and verifies retrieval/command compatibility (`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental`) for that Android/Kotlin/Java data, with no new commands, flags, or artifacts.
-
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the full roadmap.
+Version 1.10.1 is the current release-prepared patch. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

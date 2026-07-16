@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-The v1.10.0 implementation is complete, documentation is reconciled, and the implementation-completeness audit has passed. Pre-release readiness and publication remain separate work. It supports:
+Version 1.10.0 is the latest published release. Version 1.10.1 is implemented and release-prepared but not published. The current repository supports:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -69,6 +69,8 @@ The v1.10.0 implementation is complete, documentation is reconciled, and the imp
 - static Android XML navigation and narrow Compose route evidence in `android-navigation.json`
 - compact Android artifact-backed nodes and conservative candidate edges in the unified `code-graph.json`, with no parallel graph or `android-relationships.json`
 - exact Android route, permission, resource, and component selectors through existing `search`, `lookup`, `source`, `slice`, context, and Android module/manifest/navigation graph views
+- structured `ContextRequest` files and the `architecture`, `implementation`, and `test-implementation` context roles
+- role-aware evidence groups, changed-surface intake, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance
 
 ## Public commands
 
@@ -101,6 +103,12 @@ The `index` command writes:
 - `classification.json` — conservative static schema/layer classification of files and symbols, whenever the classification analyzer runs (v1.5.0)
 - `android-project.json` — static Android/Gradle project, module, and source-set detection (detection only — Kotlin/Java symbol data lives in `symbol-index.json`/`code-graph.json` instead, as of Batch 2/Batch 3), whenever Android evidence is found under `--root` (v1.9.0 Batch 1)
 - `android-components.json` — conservative static Android component-role detection (Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module) over already-indexed Kotlin/Java top-level symbols, whenever at least one role is detected in an Android project (v1.9.0 Batch 4)
+- `android-gradle.json` — static Gradle project, module, plugin, dependency, source-set, and version-catalog evidence when applicable
+- `android-manifest.json` — static manifest declarations and candidates without manifest merging
+- `android-resources.json` — static resource definitions, references, qualifiers, and security-related resource records without runtime overlay selection
+- `android-navigation.json` — static XML navigation and bounded Compose route evidence without runtime reachability proof
+
+The `context` command writes `context-capsule.json` and, when requested, `retrieval-audit-record.json`. These are bounded retrieval outputs, not index artifacts registered in `manifest.json`.
 
 The `data-model` command additionally writes:
 
@@ -178,7 +186,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current scope (through v1.9.0 Batch 5):
+Current scope (through the release-prepared v1.10.1 candidate):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -218,7 +226,6 @@ Current scope does not claim:
 - retrieval filtering for search/lookup/slice/source or graph-diff
 - dedicated `call-graph.json` diff output
 - partial non-fallback call-graph rebuild
-- Detailed `AndroidManifest.xml` parsing, Gradle dependency-graph/version-catalog resolution, or Compose indexing support (Android/Gradle project-level *detection* exists as of v1.9.0 Batch 1; conservative Kotlin structural indexing exists as of v1.9.0 Batch 2; conservative Java structural indexing exists as of v1.9.0 Batch 3; conservative Android component-role detection exists as of v1.9.0 Batch 4 — all are static, top-level-only, no compiler/Maven/Gradle/runtime execution, no call-graph)
 - an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
 - the v1.7.0 internal retrieval regression suite or a plugin architecture
 
@@ -240,9 +247,9 @@ my-dev-kit does not provide:
 
 `my-dev-kit-lab` owns release and security validation. It answers whether a release candidate is safe to ship, whether package contents and dependencies are acceptable, and whether external release gates passed. It should not replace product-specific retrieval-quality assertions inside `my-dev-kit`.
 
-### Planned v1.10.1 ecosystem boundary
+### v1.10.1 ecosystem boundary
 
-For the planned stage-role context patch, `my-dev-kit` continues to own only deterministic indexing and bounded repository-evidence retrieval: request validation, architecture/implementation/test-implementation roles, candidates/ranking/graph/source selection, repository-evidence budgets, changed-surface and graph-diff intake, test-infrastructure discovery, responsibility-to-evidence mapping, adequacy/freshness, capsules, audits, and deterministic serialization.
+For the implemented stage-role context patch, `my-dev-kit` continues to own only deterministic indexing and bounded repository-evidence retrieval: request validation, architecture/implementation/test-implementation roles, candidates/ranking/graph/source selection, repository-evidence budgets, changed-surface and graph-diff intake, test-infrastructure discovery, responsibility-to-evidence mapping, adequacy/freshness, capsules, audits, and deterministic serialization.
 
 my-dev-kit-orchestrator v1.2.1 owns workflow catalogs and IDs, exact workflow dependency resolution, `WorkflowInstructionPacket`, TaskState, prompt assembly, stage order, lifecycle, manual freshness policy, correction/judge behavior, and publication authorization. The current orchestrator does not automatically run my-dev-kit; initial integration remains prompt-guided.
 
@@ -275,12 +282,13 @@ Support is appreciated, but not required. The project remains usable under its p
 
 ## Documentation map
 
-- `README.md` - install, quickstart, and release-level feature summary
-- `COMMANDS.md` - full command and flag reference
-- `GRAPH_SCHEMA.md` - artifact formats, node IDs, edge kinds, semantic roles, and downstream artifact structure
-- `ARCHITECTURE.md` - internal subsystem structure and design boundaries
-- `WORKFLOWS.md` - practical usage workflows and graph-guided retrieval
-- `SECURITY.md` - security model, path boundaries, subprocess behavior, and audit notes
-- `DEVELOPMENT.md` - source-repository setup, tests, build, and local package testing
-- `RELEASE.md` - manual npm release checklist
-- `ROADMAP.md` - implemented features and planned improvements
+- [README.md](../README.md) - installation, quickstart, and release-level feature summary
+- [QUICKSTART.md](QUICKSTART.md) - guided first-use workflow
+- [COMMANDS.md](COMMANDS.md) - full command and flag reference
+- [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) - artifact formats, node IDs, edge kinds, semantic roles, and downstream artifact structure
+- [ARCHITECTURE.md](ARCHITECTURE.md) - internal subsystem structure and design boundaries
+- [WORKFLOWS.md](WORKFLOWS.md) - practical usage workflows and graph-guided retrieval
+- [SECURITY.md](SECURITY.md) - security model, path boundaries, subprocess behavior, and audit notes
+- [DEVELOPMENT.md](DEVELOPMENT.md) - source-repository setup, tests, build, and local package testing
+- [RELEASE.md](RELEASE.md) - manual npm release checklist
+- [ROADMAP.md](ROADMAP.md) - version plans and explicit deferrals
