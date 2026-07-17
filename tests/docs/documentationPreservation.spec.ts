@@ -282,14 +282,13 @@ describe('documentation preservation checker', () => {
       expect(plan).toContain('my-dev-kit-orchestrator')
       expect(plan).toContain('my-dev-kit-lab')
       expect(progress).toContain('## Current version in progress: v1.10.1')
-      expect(progress).toContain('Version 1.10.1 is not yet published')
+      expect(progress).toContain('Version 1.10.1 is implemented and release-prepared but not published')
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain('v1.10.1: stage-specific bounded repository context')
-      expect(readme).toContain('Status: Implemented for v1.10.1; not published')
+      expect(readme).toContain('## In release preparation: v1.10.1')
+      expect(readme).toContain('Version 1.10.1 is implemented and release-prepared but not published')
       expect(commands).toContain('v1.10.1 Batch 1: request-file and context-role contracts')
-      expect(commands).toContain('Not yet implemented (planned for later v1.10.1 batches)')
       expect(workflows).toContain('Stage-role context refresh')
       expect(workflows).toContain('does not automatically run my-dev-kit')
       expect(architecture).toContain('Workflow-catalog semantics')
