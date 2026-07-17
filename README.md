@@ -132,9 +132,11 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.10.0
+## Latest release: v1.10.2
 
-`@dailephd/my-dev-kit@1.10.0` is the latest published release.
+`@dailephd/my-dev-kit@1.10.2` is the latest published release. v1.10.2 is a documentation-only corrective patch that replaces stale release-state wording from the v1.10.1 package. Runtime and CLI behavior are unchanged from v1.10.1.
+
+### Android capability introduced in v1.10.0
 
 v1.10.0 extends the v1.9.0 Android foundation with conservative static Gradle, manifest, resource, navigation, relationship, retrieval, context, and graph-view evidence:
 
@@ -158,9 +160,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --f
 
 This is static evidence, not runtime proof. my-dev-kit does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; prove runtime route, intent, or deep-link dispatch; provide full Compose semantic retrieval; or provide Android architecture classification or data-flow retrieval. See [docs/COMMANDS.md](docs/COMMANDS.md) for exact selector behavior and [docs/ROADMAP.md](docs/ROADMAP.md) for deferred v1.11.0-v1.13.0 work.
 
-## In release preparation: v1.10.1
+## Stage-specific bounded context retrieval
 
-Version 1.10.1 is implemented and release-prepared but not published. This bounded patch extends the existing `context` command and artifacts. It adds `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. These context roles and contracts remain the current behavior in v1.10.2; the v1.10.2 patch changes documentation only. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 
@@ -538,7 +540,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.10.1 is the current release-prepared patch. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.10.2 is the latest release and is a documentation-only correction to v1.10.1. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

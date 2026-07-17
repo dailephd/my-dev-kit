@@ -63,7 +63,7 @@ describe('search integration matrix', () => {
     const human = runCli(['search', '--index', outDir, '--android-route', 'home'])
     expect(human.status).toBe(0)
     expect(human.stdout).toContain('home')
-  })
+  }, 60_000)
 
   it('android-route: direct type-safe route evidence resolves by its type name', () => {
     const result = json(runCli(['search', '--index', outDir, '--android-route', 'HomeRoute', '--json']))

@@ -74,7 +74,21 @@ Documentation should not include:
 
 Internal development notes may mention implementation details, but public package documentation should describe the actual v1 CLI product.
 
-Distinguish published-baseline examples from local release-candidate examples. Examples that reference the published npm package (`npx @dailephd/my-dev-kit@<published-version> ...`) confirm the currently published baseline; they are not a substitute for exercising the local release candidate. Use `node dist/cli.js ...` (or the locally packed/installed tarball binary) for release-candidate validation in the sections below, and reserve the `npx @dailephd/my-dev-kit@<version>` form for the "Verify the published package" step after publishing.
+Distinguish published-baseline examples from local release-candidate examples. Examples that reference the published npm package (`npx @dailephd/my-dev-kit@<published-version> ...`) confirm the previously published baseline; they are not a substitute for exercising the local release candidate. Use `node dist/cli.js ...` (or the locally packed/installed tarball binary) for release-candidate validation before publication. After publication, use only the read-only queries in "Verify the published package."
+
+## Final document state gate
+
+The release pull request intentionally contains final post-publication wording because the exact commit merged into `main` will be tagged, used for the GitHub Release, packed, and published to npm. Do not merge transitional release-state wording and plan to correct it after publication.
+
+Before creating the release pull request, verify all of these conditions on the release branch:
+
+- README.md identifies the target version as the latest release or uses final publication-neutral wording.
+- README.md does not identify the previous version as the latest release.
+- Current-version documentation does not say the target is in preparation, unpublished, not released, or pending publication.
+- CHANGELOG.md contains a finalized, dated section for the target version rather than leaving it under Unreleased.
+- ROADMAP.md contains no per-batch implementation log; it remains a plan of version goals, capabilities, dependencies, exclusions, ordering, and acceptance criteria.
+
+Run repository-wide tracked-Markdown searches for transitional wording as part of this gate. Repeat this same checklist on the pushed release branch, merged `main`, annotated tag, and the README and changelog extracted from the actual npm tarball. Stop the release if any surface differs or contains stale wording.
 
 ## Validate locally
 
@@ -232,15 +246,22 @@ If the example directory names differ from examples/basic-ts or examples/basic-p
 
 ## Repository release gates
 
-Before npm publication, complete the repository release gates:
+Complete the repository release gates in this order:
 
-1. Push the release branch normally and open the required pull request.
-2. Require the Linux, Windows, and macOS CI jobs to pass for the exact candidate commit.
-3. Merge through the repository's normal review process.
-4. Create the version tag from the verified release commit and push that tag without force.
-5. Create the GitHub Release from the same tag, using the matching changelog entry as release notes.
+1. Finalize documentation, including the final document state gate above.
+2. Validate the release branch, including the full local checks, stale-wording search, and package inspection.
+3. Push the release branch.
+4. Create the release pull request containing final post-publication documentation.
+5. Require all release-PR CI checks to pass for the exact candidate commit.
+6. Merge the release pull request into `main` through the repository's normal review process.
+7. Require all merge-triggered `main` CI checks to pass and re-run the final document state gate on merged `main`.
+8. Create and push the annotated version tag from that verified `main` commit, then verify the tagged documentation.
+9. Create the GitHub Release from the same tag, using the matching finalized changelog entry as release notes.
+10. Create the actual npm tarball and verify release-branch, merged-main, annotated-tag, GitHub Release, package metadata, packaged README, and packaged changelog parity; remove the tarball afterward.
+11. Run `npm publish --access public` as the final state-changing command.
+12. Run read-only verification only.
 
-Stop if the merged commit, tag, GitHub Release, package metadata, or validated candidate differ. npm publication is the final state-changing release step.
+The pushed release branch, merged `main`, annotated tag, GitHub Release, and npm tarball must resolve to the same release commit and final documentation. Stop if the commit, documentation, package metadata, or validated candidate differ. Do not edit files, pack, install, build, test, commit, push, tag, merge, or create/edit a release after npm publication.
 
 ## Publish to npm
 
@@ -270,25 +291,24 @@ This confirms the prior baseline is intact; it is not a substitute for validatin
 
 ## Verify the published package
 
-After publishing, verify the package from npm.
+After publishing, use read-only registry, GitHub, and Git queries only.
 
-    npm info @dailephd/my-dev-kit
-    npm install -g @dailephd/my-dev-kit
-    my-dev-kit --help
-    my-dev-kit --version
+    npm view @dailephd/my-dev-kit@<version> version
+    npm view @dailephd/my-dev-kit version
+    npm view @dailephd/my-dev-kit dist-tags --json
+    npm view @dailephd/my-dev-kit versions --json
+    gh release view v<version>
+    git tag --list "v<version>"
+    git ls-remote --tags origin "v<version>"
+    git status --short --untracked-files=all
 
 Confirm:
 
 - npm reports the intended release version
-- my-dev-kit --help shows the expected command list
-- my-dev-kit --version prints the intended release version
-- the package installs without using the local tarball
-
-Optionally run the same example indexing smoke tests against the published package.
-
-After verification, uninstall the global package if it is not needed locally.
-
-    npm uninstall -g @dailephd/my-dev-kit
+- the latest dist-tag points to the intended release version
+- the GitHub Release and local/remote tag exist
+- the working tree remains clean
+- no state-changing command ran after npm publication
 
 ## Release record
 
