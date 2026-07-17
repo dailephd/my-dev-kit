@@ -155,7 +155,7 @@ Both are written by the `context` command, layered on top of existing index/sear
 
 ### Stage-role context architecture (v1.10.1)
 
-**Status: implemented and release-prepared, but not published.** Version 1.10.1 adds `ContextRole` and `ContextRequest`, role-aware ranking, focus and changed-surface resolution, evidence groups, test-infrastructure discovery, responsibility mapping, role adequacy, freshness, budget and truncation reporting, bounded full-file fallback, and provenance. These additions extend the existing context pipeline; they do not introduce another command family, index, graph, serializer family, or public plugin system. See the v1.10.1 sections in [COMMANDS.md](COMMANDS.md) for the command contract.
+**Status: shipped in v1.10.1.** Version 1.10.1 added `ContextRole` and `ContextRequest`, role-aware ranking, focus and changed-surface resolution, evidence groups, test-infrastructure discovery, responsibility mapping, role adequacy, freshness, budget and truncation reporting, bounded full-file fallback, and provenance. These additions extend the existing context pipeline; they do not introduce another command family, index, graph, serializer family, or public plugin system. v1.10.2 changes documentation only; the context architecture and behavior are unchanged. See the v1.10.1 sections in [COMMANDS.md](COMMANDS.md) for the command contract.
 
 Batch 3's evidence-group builder (`src/context/evidenceGroups.ts`) is the internal extension point anticipated below: one bounded, additive layer that organizes Batch 2's already-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model into named, capped, auditable groups. Because the existing indexer excludes `.test.`/`.spec.` paths from the symbol index/code graph by default, `src/context/testInfrastructureDiscovery.ts` cannot rely on graph edges to find test files; it instead performs a bounded, read-only directory walk (reusing the indexer's own ignored-directory list) plus a lightweight, bounded, regex-based import-specifier scan restricted to test-shaped files — not a second index, and never code execution/evaluation of the scanned file.
 
@@ -607,7 +607,7 @@ React/TSX facts extracted by the frontend analyzer are conservative static evide
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
 
-For the current v1.10.0 scope, Android support includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. It remains local and static: no Gradle execution or dependency resolution; Android build, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; runtime navigation/intent/deep-link proof; or full Compose semantics.
+Android support introduced through v1.10.0 includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. It remains local and static in v1.10.2: no Gradle execution or dependency resolution; Android build, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; runtime navigation/intent/deep-link proof; or full Compose semantics.
 
 ## Runtime and artifact-size considerations
 

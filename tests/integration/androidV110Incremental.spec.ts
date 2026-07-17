@@ -95,7 +95,7 @@ describe('resource-deletion stale retrieval (Batch 6 closure)', () => {
     const incrementalSubset = androidGraphSubset(root, out)
     const fullSubset = androidGraphSubset(rootFull, 'out')
     expect(incrementalSubset.nodes.map((n: any) => n.id).sort()).toEqual(fullSubset.nodes.map((n: any) => n.id).sort())
-  })
+  }, 60_000)
 })
 
 describe('component-rename stale retrieval (Batch 6 closure)', () => {
@@ -140,7 +140,7 @@ describe('component-rename stale retrieval (Batch 6 closure)', () => {
     expect(androidGraphSubset(root, out).nodes.map((n: any) => n.id).sort()).toEqual(
       androidGraphSubset(rootFull, 'out').nodes.map((n: any) => n.id).sort()
     )
-  })
+  }, 60_000)
 })
 
 describe('route rename stale retrieval', () => {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.10.2 - 2026-07-17
+
+This documentation-only corrective patch fixes the release-state documentation shipped with v1.10.1. No runtime, CLI, artifact, schema, or retrieval behavior changed.
+
+- Corrected stale release-state wording in `README.md` and related documentation.
+- Updated the documented latest release to v1.10.2.
+- Replaced temporary v1.10.1 release-preparation language with stable shipped-feature wording while preserving v1.10.1 as the version that introduced stage-specific bounded context retrieval.
+- Hardened the maintainer release guide with final-document-state checks across the release branch, merged `main`, annotated tag, and actual npm tarball.
+
 ## 1.10.1 - 2026-07-16
 
 Version 1.10.1 extends the existing `context` command with deterministic, stage-role-specific repository-evidence retrieval and honest bounded evidence reporting. Everything below is additive to the pre-1.10.1 `context` pipeline: no second search engine, ranking pipeline, graph engine, index artifact, capsule, or audit was introduced, and every pre-1.10.1 `context` invocation continues to behave identically when no role or structured request is supplied.

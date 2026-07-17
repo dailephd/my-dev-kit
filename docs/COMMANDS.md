@@ -1431,7 +1431,7 @@ npx @dailephd/my-dev-kit context --index .my-dev-kit --query "add a sibling data
 
 ### v1.10.1 Batch 1: request-file and context-role contracts
 
-**Implemented in v1.10.1 Batch 1 (not yet released).** `--request <path>` and `--role <role>` are additive; every pre-1.10.1 invocation of `context` continues to work identically without them.
+**Shipped in v1.10.1 Batch 1.** `--request <path>` and `--role <role>` are additive; every pre-1.10.1 invocation of `context` continues to work identically without them.
 
 ```sh
 npx @dailephd/my-dev-kit context --index <artifact-dir> --request <request.json> --json
@@ -1465,7 +1465,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 
 ### v1.10.1 Batch 2: role-aware candidate generation and changed-surface ranking
 
-**Implemented in v1.10.1 Batch 2 (not yet released).** Additive to Batch 1's contracts and the existing `context` pipeline — no new search engine, ranking pipeline, graph traversal, or graph-diff implementation was introduced.
+**Shipped in v1.10.1 Batch 2.** Additive to Batch 1's contracts and the existing `context` pipeline — no new search engine, ranking pipeline, graph traversal, or graph-diff implementation was introduced.
 
 - **`role` now changes candidate priorities.** `architecture` favors owner-like candidates (command handlers, registries/dispatchers, adapters, analyzers, builders) and public contracts. `implementation` favors an exact focus symbol, its direct dependencies, and validator/schema/error/constant contracts. `test-implementation` favors changed production files/symbols (from `changedFiles`/`changedSymbols`/`beforeIndex`+`afterIndex`) and their closest tests, and warns (rather than silently proceeding as if nothing changed) when no changed-surface input is supplied at all. A request without `role` is byte-for-byte unchanged from Batch 1/v1.10.0.
 - **`focusFiles`/`focusSymbols` are now resolved** against the active index. A resolved focus file contributes its contained symbols as bounded candidates; an unresolved focus file/symbol is reported in `roleContext.focus.unresolvedFocusFiles`/`unresolvedFocusSymbols` (never invented). A focus symbol given as a stable ID (`symbol:<path>#<name>`) resolves exactly; a simple name that matches more than one symbol stays ambiguous (`roleContext.focus.ambiguousFocusSymbols`) rather than guessing.
@@ -1478,7 +1478,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 
 ### v1.10.1 Batch 3: evidence groups and bounded test-infrastructure discovery
 
-**Implemented in v1.10.1 Batch 3 (not yet released).** Additive to Batch 1/2's contracts and the existing `context` pipeline — no new context engine, ranking pipeline, index artifact, or graph implementation was introduced. Reuses Batch 2's role-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model.
+**Shipped in v1.10.1 Batch 3.** Additive to Batch 1/2's contracts and the existing `context` pipeline — no new context engine, ranking pipeline, index artifact, or graph implementation was introduced. Reuses Batch 2's role-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model.
 
 - **`evidenceGroups[]`** organizes role-ranked evidence into deterministic, bounded, named groups. `architecture`: `owners`, `extension-points`, `contracts`, `graph-neighborhood`, `architecture-tests`. `implementation`: `owners`, `dependencies`, `callers-and-callees`, `contracts`, `validators-and-constants`, `errors`, `schemas-and-serializers`, `compatibility-surfaces`, `closest-tests`. `test-implementation`: `changed-surface`, `production-symbols`, `validators-and-boundaries`, `errors-and-side-effects`, `related-tests`, `fixtures`, `factories`, `mocks`, `setup-and-configuration`, `test-commands`. Group order and item order (score, then path/nodeId) are deterministic; a request with no `role` keeps `evidenceGroups: []`, matching Batch 1/2's legacy behavior exactly. Each group carries `limit`/`availableCount`/`usedCount`/`truncated`/`droppedCount` for auditable, deterministic (sort-before-truncate) caps.
 - **`selectedOwners`/`selectedContracts`/`selectedTests`** are deduplicated cross-group rollups of owner-like, contract-like, and test evidence respectively. **`groupTruncation`** mirrors every group's cap/truncation state at the capsule root for quick inspection.
@@ -1492,7 +1492,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 
 ### v1.10.1 Batch 4: responsibility mapping, adequacy, freshness, budget/truncation, full-file fallback, and provenance
 
-**Implemented in v1.10.1 Batch 4 (not yet released; v1.10.1 remains unpublished).** Additive to Batches 1-3's contracts and pipeline — no new context engine, ranking pipeline, evidence-group builder, test-infrastructure discovery, artifact family, or second capsule/audit was introduced. Everything below reads and extends what Batches 1-3 already produce.
+**Shipped in v1.10.1 Batch 4.** Additive to Batches 1-3's contracts and pipeline — no new context engine, ranking pipeline, evidence-group builder, test-infrastructure discovery, artifact family, or second capsule/audit was introduced. Everything below reads and extends what Batches 1-3 already produce.
 
 - **`testResponsibilityRefs` and `requestedEvidenceKinds: ['responsibility-mappings']` are now operational.** Each supplied ID (the current `ContextRequest.testResponsibilityRefs` contract is `string[]`) becomes a `responsibilityMappings.mappings[]` entry grounded only in explicit static evidence already produced by Batches 2/3 (changed/focus symbols, evidence-group membership, bounded test-infrastructure discovery) — never LLM reasoning, embedding similarity, or fuzzy filename matching. `mappingStatus` is `mapped` (every required evidence category grounded), `partially-mapped` (some grounded), `unmapped` (none grounded), or `not-applicable` (only ever from an explicit caller flag, never inferred). Duplicate IDs are rejected (first occurrence wins, reported in `duplicateResponsibilityIds`); unknown/unresolvable IDs are reported in `unknownResponsibilityIds`, never silently dropped. `limits` and `testResponsibilityRefs` are removed from `deferredRequestFields`; `responsibility-mappings` is removed from `unsupportedRequestedEvidenceKinds` — no `requestedEvidenceKinds` value remains deferred.
 - **Criticality.** `criticality` (`critical`/`noncritical`) is caller-supplied per responsibility; the current string-only `testResponsibilityRefs` contract cannot express it, so every responsibility defaults to `noncritical` (the documented safe default — never inferred from prose). A critical, unmapped responsibility always makes the role inadequate; a noncritical gap only warns.
@@ -1503,7 +1503,7 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 - **`provenance[]`** deterministically classifies and deduplicates every owner/contract/test/changed-surface/responsibility-mapping evidence item into a stable category (`caller-changed-file`, `graph-diff`, `code-graph`, `import-scan`, `test-configuration`, `package-json`, etc.) with a deterministic ID. Evidence appearing via more than one source merges its provenance (preserving every distinct relationship basis) rather than duplicating the evidence item.
 - **Additive audit steps.** The retrieval audit gained `map-responsibilities`, `classify-freshness`, `apply-budget`, `evaluate-adequacy`, and `record-provenance` steps after `update-context-adequacy`; no existing audit step's meaning changed. The retrieval audit now also carries the real computed `contextAdequacy`/`responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance` (earlier-batch correction: the audit's `contextAdequacy` was previously never passed through from the capsule's real verdict — a hardcoded Batch 1 stub was always written instead — fixed as part of this batch's wiring).
 
-**Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope. Version 1.10.1 remains unpublished.
+**Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope.
 
 ## graph-diff
 

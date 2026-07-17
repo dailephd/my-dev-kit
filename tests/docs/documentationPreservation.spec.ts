@@ -236,6 +236,7 @@ describe('documentation preservation checker', () => {
     const architecture = realDocuments['docs/ARCHITECTURE.md']
     const commands = realDocuments[manifest.commands.path]
     const workflows = realDocuments[manifest.workflows.path]
+    const release = realDocuments[manifest.release.path]
 
     it('preserves the approved patch placement and later roadmap scopes', () => {
       const v110 = roadmap.indexOf('## Version 1.10.0')
@@ -281,18 +282,34 @@ describe('documentation preservation checker', () => {
       expect(plan).toContain('### Stop conditions')
       expect(plan).toContain('my-dev-kit-orchestrator')
       expect(plan).toContain('my-dev-kit-lab')
-      expect(progress).toContain('## Current version in progress: v1.10.1')
-      expect(progress).toContain('Version 1.10.1 is implemented and release-prepared but not published')
+      expect(progress).toContain('## Shipped context capability: v1.10.1')
+      expect(progress).toContain('Version 1.10.1 shipped as a bounded patch')
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain('## In release preparation: v1.10.1')
-      expect(readme).toContain('Version 1.10.1 is implemented and release-prepared but not published')
+      expect(readme).toContain('## Latest release: v1.10.2')
+      expect(readme).toContain('## Stage-specific bounded context retrieval')
+      expect(readme).toContain('Version 1.10.1 introduced this shipped capability')
+      expect(readme).toContain('Runtime and CLI behavior are unchanged from v1.10.1')
       expect(commands).toContain('v1.10.1 Batch 1: request-file and context-role contracts')
       expect(workflows).toContain('Stage-role context refresh')
       expect(workflows).toContain('does not automatically run my-dev-kit')
       expect(architecture).toContain('Workflow-catalog semantics')
       expect(architecture).toContain('explicit v1.10.1 non-goals')
+    })
+
+    it('keeps final release documentation free of transitional state and preserves parity gates', () => {
+      const currentDocs = [readme, architecture, commands, workflows, realDocuments[manifest.projectOverview.path]]
+      const transitional =
+        /in release preparation|release-prepared|not yet released|remains unpublished|pending publication|publication pending/i
+
+      for (const document of currentDocs) expect(document).not.toMatch(transitional)
+      expect(readme).not.toContain('Latest release: v1.10.0')
+      expect(readme).not.toContain('Latest release: v1.10.1')
+      expect(release).toContain('## Final document state gate')
+      expect(release).toContain('pushed release branch, merged `main`, annotated tag')
+      expect(release).toContain('actual npm tarball')
+      expect(release).toContain('final state-changing command')
     })
   })
 
