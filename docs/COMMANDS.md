@@ -75,6 +75,8 @@ Supported languages:
 - TypeScript
 - JavaScript
 - Python
+- Kotlin
+- Java
 
 Supported source extensions:
 
@@ -83,6 +85,8 @@ Supported source extensions:
 - `.js`
 - `.jsx`
 - `.py`
+- `.kt`
+- `.java`
 
 ### Usage
 
@@ -94,7 +98,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 
 - `--root <path>`: project root. Source roots and output paths are resolved relative to this path.
 - `--src <path>`: source root to index, relative to `--root`. May be repeated. Required.
-- `--language <language>`: language hint. Supported values are `typescript`, `javascript`, and `python`. When omitted, language is inferred from file extensions.
+- `--language <language>`: language hint. Supported values are `typescript`, `javascript`, and `python`. Kotlin and Java are discovered from `.kt` and `.java` extensions; they are not separate `--language` values. When omitted, language is inferred from file extensions.
 - `--out <dir>`: output directory for index artifacts, relative to `--root`. Defaults to `.my-dev-kit`.
 - `--exclude <path-or-name>`: directory name or relative path prefix to exclude. May be repeated. This is path/name based, not glob based.
 - `--dry-run`: scan and report what would be indexed without writing artifacts.
@@ -179,7 +183,7 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cach
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cache --incremental --json
 ```
 
-Not implemented: deterministic artifact merge / partial rebuild for `--call-graph` itself (always a full regeneration when requested during a partial rebuild), stable artifact IDs across a full-rebuild fallback (a full rebuild has no reuse guarantee by definition), and `graph-diff`/watch mode/retrieval filtering (separate, later `v1.8.0` batches — see `docs/ROADMAP.md`).
+Not implemented: deterministic artifact merge or partial rebuild for `--call-graph` itself (it is fully regenerated during a partial rebuild), stable artifact IDs across a full-rebuild fallback, watch mode, and retrieval filtering. The separate `graph-diff` command is implemented; see [graph-diff](#graph-diff) below.
 
 ### Android project detection (v1.9.0 Batch 1)
 
@@ -511,7 +515,7 @@ Recommendations for large or multi-package repositories:
 - use a per-package `--out` (e.g. `apps/web/.my-dev-kit`) so each package's artifacts stay independent
 - re-run `--dry-run` after adding a new package or source root to confirm file counts before a full run
 
-This section documents present-day scoping practices only. It does not describe incremental indexing, cache reuse, watch mode, or graph diff — those remain planned for later `v1.8.0` batches (see `docs/ROADMAP.md`).
+This section documents large-repository scoping practices. Incremental indexing, cache reuse, and `graph-diff` are implemented elsewhere in this reference. Watch mode remains deferred; see [ROADMAP.md](ROADMAP.md).
 
 ## search
 
@@ -1375,14 +1379,19 @@ npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <
 - `--max-source-slices <n>`: optional positive integer, defaults to 8 when omitted. Caps `selectedSource.slices`; the primary focus node's slice is always retained first, then selected graph neighbors up to the cap.
 - `--max-graph-nodes <n>`, `--max-graph-edges <n>`: optional positive integers. Cap `selectedGraph.nodes`/`selectedGraph.edges` around the primary focus node; the focus node itself is never dropped by the node cap.
 - `--no-source`: disable source slices and source bundles. Semantic/classification summaries remain enabled, and adequacy records that source was intentionally disabled.
+- `--role <architecture|implementation|test-implementation>`: optional, no default (**v1.10.1 Batch 1**; role-aware candidate behavior implemented in **Batch 2**). Orthogonal to `--mode`; recorded in `request.role` and never overwrites/is overwritten by mode. See "v1.10.1 Batch 2" below.
+- `--request <path>`: optional (**v1.10.1 Batch 1**). A structured `ContextRequest` JSON file; see "v1.10.1 Batch 1: request-file and context-role contracts" and "v1.10.1 Batch 2" below.
 - `--json`: print the written capsule (and audit record path, when produced) as JSON to stdout.
 
 ### Output
 
-`context-capsule.json` includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `limits`, `requiredContext`, `optionalSupportContext`, `droppedContext`, `warnings`, `contextAdequacy`, `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, and `sourceControl`.
+`context-capsule.json` includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `limits`, `requiredContext`, `optionalSupportContext`, `droppedContext`, `warnings`, `deferredRequestFields`, `roleContext`, `contextAdequacy`, `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, and `sourceControl`.
 
+- `request.role` (**v1.10.1 Batch 1**) is `architecture`/`implementation`/`test-implementation`, or `null` for a legacy invocation. `request.requestFilePath` is the `--request` file path used, or `null`.
+- `deferredRequestFields` (**v1.10.1 Batch 1**; narrowed in **Batch 2**) names any `ContextRequest` fields that were supplied, validated, and normalized but are not yet operational; always `[]` for a legacy invocation. Each deferred field also produces a matching entry in `warnings`.
+- `roleContext` (**v1.10.1 Batch 2**) is the operational role/focus/changed-surface summary — see "v1.10.1 Batch 2" below. Present (with `role: null` and empty focus/changed-surface) even for legacy invocations.
 - `queryPlan` includes the normalized query and deterministic structured terms (raw, quoted phrases, path-like, symbol-like, route-like, command-like, artifact-like, classification-like).
-- `candidateFiles`/`candidateNodes` include ranked, explained candidates (`score`, `reasons`, `matchedTerms`, `retained`, `droppedReason` when dropped).
+- `candidateFiles`/`candidateNodes` include ranked, explained candidates (`score`, `reasons`, `matchedTerms`, `retained`, `droppedReason` when dropped), plus optional Batch 2 role-ranking metadata (`roleScoreAdjustment`, `contextRole`, `focusMatch`, `changedSurfaceMatch`, `changedStatus`) when a role/focus/changed-surface adjustment applied.
 - `focus` records **at most one** primary focus node/file (`focusNodeId`, `focusFilePath`, `selectionMode`, `confidence`, `reasons`, `ambiguityNotes`). `focusNodeId` is `null` when no candidate is safe to select.
 - `selectedGraph` is a bounded neighborhood (`nodes`, `edges`, `omittedNodeCount`, `omittedEdgeCount`) around the focus node, built the same way `slice` builds a neighborhood.
 - `selectedSource` lists bounded, **content-free** source slices (`filePath`, `startLine`, `endLine`, `reason`, `sourceRetrievalMethod`, `truncated`, `continuationUsed`) around the focus node and selected graph neighbors, capped by `--max-source-slices`.
@@ -1393,7 +1402,7 @@ npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <
 - `modeEffects` records every non-zero adjustment and reason. `sourceControl` records default-enabled or intentional disablement. `conflicts` contains only conservative static edit-guidance conflicts and is normally empty.
 - `contextAdequacy.status` reflects candidate/focus/graph/source/metadata sufficiency and explicit conflicts. `--no-source` becomes a listed assumption rather than a retrieval failure. A detected static conflict uses `context conflict found and user or upstream stage decision required`.
 
-`retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, and `contextAdequacy`. The final ordered sequence contains the Batch 3 generation steps plus `apply-mode-ranking-adjustment`, `skip-source-evidence`, and `detect-context-conflicts`. Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
+`retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, `roleContext` (**v1.10.1 Batch 2**), `contextAdequacy`, and (**v1.10.1 Batch 4**) `responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance`. The ordered step sequence contains the v1.6-era source-evidence generation steps, `apply-mode-ranking-adjustment`, `resolve-focus`/`merge-changed-surface`/`apply-role-ranking` (**v1.10.1 Batch 2**, between ranking and focus selection), `build-evidence-groups`/`discover-test-infrastructure`/`derive-test-commands` (**v1.10.1 Batch 3**, immediately after), `skip-source-evidence`, `detect-context-conflicts`, `update-context-adequacy`, and `map-responsibilities`/`classify-freshness`/`apply-budget`/`evaluate-adequacy`/`record-provenance` (**v1.10.1 Batch 4**, immediately after `update-context-adequacy`). Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
 
 ### Android integration (v1.10.0 Batch 6)
 
@@ -1419,6 +1428,82 @@ Both artifacts are compatible with indexes that do not have `classification.json
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 npx @dailephd/my-dev-kit context --index .my-dev-kit --query "add a sibling data model field" --out .my-dev-kit/context-capsule.json --audit-out .my-dev-kit/retrieval-audit-record.json --mode feature-add --max-candidate-files 8 --max-graph-nodes 30 --max-graph-edges 50 --json
 ```
+
+### v1.10.1 Batch 1: request-file and context-role contracts
+
+**Implemented in v1.10.1 Batch 1 (not yet released).** `--request <path>` and `--role <role>` are additive; every pre-1.10.1 invocation of `context` continues to work identically without them.
+
+```sh
+npx @dailephd/my-dev-kit context --index <artifact-dir> --request <request.json> --json
+npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --role implementation --out <path> --json
+```
+
+`--request <path>` supplies a versioned `ContextRequest` JSON document:
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "role": "implementation",
+  "query": "add a sibling data model field",
+  "mode": "feature-add",
+  "focusFiles": ["src/models/user.ts"]
+}
+```
+
+- `schemaVersion` (required) and `query` (required) are validated; only major `1` is accepted for `schemaVersion`.
+- `role`, `mode`, `index`, `root`, `output`, `auditOutput` are optional scalars. When the same field is also supplied on the CLI, equivalent normalized values are accepted and conflicting values fail with a diagnostic naming both sources; when only one source supplies a field, that value is used.
+- `root` (without `index`) resolves to `<root>/.my-dev-kit`, matching `index`'s own default index-directory convention; supplying both `index` and a `root` that implies a different index fails.
+- `focusFiles`, `focusSymbols`, `changedFiles`, `changedSymbols`, `beforeIndex`, `afterIndex`, and `requestedEvidenceKinds` are validated and deterministically normalized (arrays are deduplicated and sorted); **as of Batch 2 these fields are operational** — see "v1.10.1 Batch 2" below. `upstreamArtifactRefs`, `testResponsibilityRefs`, and `limits` remain validated/normalized but not yet operational, and are still named in the written capsule's `deferredRequestFields` with a matching warning.
+- `requestedEvidenceKinds` entries must be one of a fixed, documented set (`owner`, `dependencies`, `contracts`, `validators`, `constants`, `errors`, `schemas`, `callers`, `callees`, `closest-tests`, `test-infrastructure`, `test-commands`, `changed-surface`, `responsibility-mappings`); an unrecognized entry fails clearly rather than being silently accepted.
+- `limits` is a distinct, forward-looking contract (`candidates`, `graphDepth`, `files`, `symbols`, `sourceRanges`, `sourceLinesPerRange`, `characters`, `evidenceGroupEntries`, `fullFileFallbacks`, `responsibilityMappings`) from the existing operational `--max-candidate-files`/`--max-source-slices`/`--max-graph-nodes`/`--max-graph-edges` flags, which remain the only limits Batch 1 enforces. Each `limits` field must be a non-negative integer.
+
+`--role <architecture|implementation|test-implementation>` is a CLI equivalent to the request file's `role` field, subject to the same conflict rules. Role is orthogonal to `--mode`/`mode`: neither overwrites the other, and an unrecognized role value (from either source) fails clearly.
+
+Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major, an unknown role/evidence kind, an invalid field type, and invalid `limits` all fail before any capsule or audit file is written — there is no partial output on a validation failure.
+
+**Batch 1 boundary:** role-aware ranking and changed-surface intake arrived in Batch 2; evidence groups and test-infrastructure discovery arrived in Batch 3; responsibility mapping, role adequacy, freshness, and operational responsibility limits arrived in Batch 4. `testResponsibilityRefs` and `limits` were validated but deferred in Batch 1 and are operational in the final v1.10.1 implementation.
+
+### v1.10.1 Batch 2: role-aware candidate generation and changed-surface ranking
+
+**Implemented in v1.10.1 Batch 2 (not yet released).** Additive to Batch 1's contracts and the existing `context` pipeline — no new search engine, ranking pipeline, graph traversal, or graph-diff implementation was introduced.
+
+- **`role` now changes candidate priorities.** `architecture` favors owner-like candidates (command handlers, registries/dispatchers, adapters, analyzers, builders) and public contracts. `implementation` favors an exact focus symbol, its direct dependencies, and validator/schema/error/constant contracts. `test-implementation` favors changed production files/symbols (from `changedFiles`/`changedSymbols`/`beforeIndex`+`afterIndex`) and their closest tests, and warns (rather than silently proceeding as if nothing changed) when no changed-surface input is supplied at all. A request without `role` is byte-for-byte unchanged from Batch 1/v1.10.0.
+- **`focusFiles`/`focusSymbols` are now resolved** against the active index. A resolved focus file contributes its contained symbols as bounded candidates; an unresolved focus file/symbol is reported in `roleContext.focus.unresolvedFocusFiles`/`unresolvedFocusSymbols` (never invented). A focus symbol given as a stable ID (`symbol:<path>#<name>`) resolves exactly; a simple name that matches more than one symbol stays ambiguous (`roleContext.focus.ambiguousFocusSymbols`) rather than guessing.
+- **`changedFiles`/`changedSymbols`/`beforeIndex`/`afterIndex` are now operational.** Caller-supplied changed files/symbols and a `beforeIndex`/`afterIndex` graph diff (reusing the existing `graph-diff` symbol-index comparison, not a second comparison) are merged into one deterministic `roleContext.changedSurface` model with a `status` (`added`/`modified`/`removed`/`unknown`) and `provenance` (`caller`/`graph-diff`/`both`) per entry. Removed symbols are preserved as changed-surface evidence, never discarded. `beforeIndex`/`afterIndex` must be supplied together; an incompatible symbol-index schema version between the two fails clearly, matching `graph-diff`'s existing compatibility contract.
+- **`requestedEvidenceKinds` now constrains/prioritizes** the Batch 2 candidate categories it can express (`owner`, `dependencies`, `contracts`, `validators`, `constants`, `errors`, `schemas`, `callers`, `callees`, `closest-tests`, `changed-surface`). Kinds still owned by a later batch (`test-infrastructure`, `test-commands`, `responsibility-mappings`) are accepted but reported in `roleContext.unsupportedRequestedEvidenceKinds` with a warning, and never influence selection.
+- **Additive metadata only.** `candidateFiles[]`/`candidateNodes[]` gained optional `roleScoreAdjustment`, `contextRole`, `focusMatch`, `changedSurfaceMatch`, and `changedStatus` fields (absent for legacy candidates). The capsule and retrieval audit both gained an additive `roleContext` object (`role`, `focus`, `changedSurface`, `requestedEvidenceKinds`, `unsupportedRequestedEvidenceKinds`, `warnings`). No existing field's meaning changed, and the schema major did not change.
+- **Ranking stays deterministic and bounded.** Role/focus/changed-surface adjustments never bypass `--max-candidate-files`, `--max-graph-nodes`/`--max-graph-edges`, or `--max-source-slices`; ties still break on stable candidate ID/path, never insertion order.
+
+**Batch 2 boundary:** evidence groups and test-infrastructure discovery followed in Batch 3; responsibility mapping, role adequacy, freshness, and the final limits contract followed in Batch 4.
+
+### v1.10.1 Batch 3: evidence groups and bounded test-infrastructure discovery
+
+**Implemented in v1.10.1 Batch 3 (not yet released).** Additive to Batch 1/2's contracts and the existing `context` pipeline — no new context engine, ranking pipeline, index artifact, or graph implementation was introduced. Reuses Batch 2's role-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model.
+
+- **`evidenceGroups[]`** organizes role-ranked evidence into deterministic, bounded, named groups. `architecture`: `owners`, `extension-points`, `contracts`, `graph-neighborhood`, `architecture-tests`. `implementation`: `owners`, `dependencies`, `callers-and-callees`, `contracts`, `validators-and-constants`, `errors`, `schemas-and-serializers`, `compatibility-surfaces`, `closest-tests`. `test-implementation`: `changed-surface`, `production-symbols`, `validators-and-boundaries`, `errors-and-side-effects`, `related-tests`, `fixtures`, `factories`, `mocks`, `setup-and-configuration`, `test-commands`. Group order and item order (score, then path/nodeId) are deterministic; a request with no `role` keeps `evidenceGroups: []`, matching Batch 1/2's legacy behavior exactly. Each group carries `limit`/`availableCount`/`usedCount`/`truncated`/`droppedCount` for auditable, deterministic (sort-before-truncate) caps.
+- **`selectedOwners`/`selectedContracts`/`selectedTests`** are deduplicated cross-group rollups of owner-like, contract-like, and test evidence respectively. **`groupTruncation`** mirrors every group's cap/truncation state at the capsule root for quick inspection.
+- **`testInfrastructure`** reports bounded, conservative discovery of `relatedTests`, `fixtures`, `factories`, `mocks`, `setupFiles`, `testConfigurations`, `packageScripts`, `testCommands`, and `unresolved` entries. Because the existing indexer excludes `.test.`/`.spec.` paths from the symbol index/code graph by default (unchanged v1.10.0 behavior), related-test discovery performs a bounded, read-only directory walk of the index's own `sourceRoots` plus a lightweight, bounded, regex-based import-specifier scan (never executes or evaluates the scanned file) — not a second index. A test file becomes "related" only when it imports a file or named symbol of interest, never merely for its path; a fixture/factory/mock is only reported when a discovered related test imports it, and a `builder`/`factory`-named production file outside any test-scoped path is never misclassified as a test factory.
+- **Vitest test configuration** (`vitest.config.*`/`vite.config.*` with a `test:` block) is parsed for `include`/`exclude`/`setupFiles`/`testTimeout`/`hookTimeout`/`maxWorkers`/`environment` via bounded regex extraction (the file is never evaluated as code). Other detected config files (`jest.config.*`, `.mocharc*`, `pytest.ini`, `tox.ini`) are reported with `supported: false` plus a warning, never silently treated as understood. Multiple detected configuration files are all reported — ambiguity is preserved, never arbitrarily narrowed to one.
+- **Package scripts and exact test commands.** `packageScripts[]` lists `package.json` scripts matching a test/verification-relevant naming convention (`test*`, `typecheck`, `build`, `verify`, `docs*`, `benchmark*`, `security*`) — not every script. `testCommands[]` always includes the verbatim `test` script (scope `full-project`) when one exists, plus a file/suite-scoped `<test script> <related test file(s)>` command when at least one related test was discovered and the script matches a supported runner invocation (`vitest run`). A missing test script, no discovered related test, or an unsupported runner produces an `unresolved` entry rather than an invented command.
+- **`requestedEvidenceKinds` `test-infrastructure` and `test-commands` are now operational** (previously deferred in Batch 2): requesting either prioritizes and exposes the matching evidence for any role, including `architecture`/`implementation`. `responsibility-mappings` remains the only `requestedEvidenceKinds` value still reported in `roleContext.unsupportedRequestedEvidenceKinds`.
+- **Additive audit steps.** The retrieval audit gained `build-evidence-groups`, `discover-test-infrastructure`, and `derive-test-commands` steps between `record-retained-and-dropped-context` and `derive-source-targets`; no existing audit step's meaning changed.
+
+**Batch 3 boundary:** Batch 4 completed test-responsibility mapping, role-specific adequacy, freshness, and the final limits contract.
+
+### v1.10.1 Batch 4: responsibility mapping, adequacy, freshness, budget/truncation, full-file fallback, and provenance
+
+**Implemented in v1.10.1 Batch 4 (not yet released; v1.10.1 remains unpublished).** Additive to Batches 1-3's contracts and pipeline — no new context engine, ranking pipeline, evidence-group builder, test-infrastructure discovery, artifact family, or second capsule/audit was introduced. Everything below reads and extends what Batches 1-3 already produce.
+
+- **`testResponsibilityRefs` and `requestedEvidenceKinds: ['responsibility-mappings']` are now operational.** Each supplied ID (the current `ContextRequest.testResponsibilityRefs` contract is `string[]`) becomes a `responsibilityMappings.mappings[]` entry grounded only in explicit static evidence already produced by Batches 2/3 (changed/focus symbols, evidence-group membership, bounded test-infrastructure discovery) — never LLM reasoning, embedding similarity, or fuzzy filename matching. `mappingStatus` is `mapped` (every required evidence category grounded), `partially-mapped` (some grounded), `unmapped` (none grounded), or `not-applicable` (only ever from an explicit caller flag, never inferred). Duplicate IDs are rejected (first occurrence wins, reported in `duplicateResponsibilityIds`); unknown/unresolvable IDs are reported in `unknownResponsibilityIds`, never silently dropped. `limits` and `testResponsibilityRefs` are removed from `deferredRequestFields`; `responsibility-mappings` is removed from `unsupportedRequestedEvidenceKinds` — no `requestedEvidenceKinds` value remains deferred.
+- **Criticality.** `criticality` (`critical`/`noncritical`) is caller-supplied per responsibility; the current string-only `testResponsibilityRefs` contract cannot express it, so every responsibility defaults to `noncritical` (the documented safe default — never inferred from prose). A critical, unmapped responsibility always makes the role inadequate; a noncritical gap only warns.
+- **`roleAdequacy`** extends — never replaces — the existing (Batch 1) `contextAdequacy`. It reports `role`, `status` (reusing `ContextAdequacyStatus`), `requiredConditions`/`satisfiedConditions`/`missingConditions`/`blockingConditions`, `supportingEvidence`, `affectedResponsibilityIds`, and `truncationImpact`/`freshnessImpact`. Architecture requires a plausible owner and relevant contract/extension-point evidence; implementation additionally requires contract evidence and no critical unresolved requirement; test-implementation additionally requires changed-surface evidence, a related-test-or-explicit-missing-test state, and every critical responsibility mapped. A request with no `role` carries `contextAdequacy.status` forward unchanged and reports role adequacy as not applicable.
+- **`freshness`** classifies `fresh`/`stale`/`unknown`. `fresh` only when the active `--index`/`index` matches a supplied `afterIndex`; `stale` only when it matches a supplied `beforeIndex` while relevant changed-surface evidence exists; otherwise `unknown` — never fabricated as `fresh`. `git rev-parse HEAD` is read read-only, optionally, and is wrapped so a missing/absent Git never throws; it is recorded as informational evidence only (the index manifest does not yet record a repository commit to compare it against).
+- **`budget`/`truncation`.** `budget.limits[]` reports declared-vs-used values for `candidates`, `graphDepth`/graph nodes, `sourceRanges`, `sourceLinesPerRange`, `evidenceGroupEntries`, and `responsibilityMappings` from `ContextRequestLimits`, without overriding the existing `--max-*`/`ContextCapsuleLimits` boundary (both are reported side by side, never silently merged). `budget.characters` reports a deterministic serialized-evidence character measurement against `limits.characters` when supplied (never an exact-token claim). `truncation.records[]` rolls up per-group and responsibility-mapping truncation with `droppedCount`, `requiredEvidenceLost`, and `adequacyImpact`. Responsibility-mapping truncation is deterministically critical-first: a critical responsibility can only be dropped once every critical one already exceeds the limit, so a noncritical-only truncation is reported (never hidden) but does not by itself reduce adequacy.
+- **`fullFileFallback`** extends the existing bounded source-selection/continuation model. For contract/validator/error evidence a responsibility mapping needed but no selected source slice covered, one bounded whole-file read is attempted (line/character counts recorded, never the file content itself). `limits.fullFileFallbacks = 0` disables fallback entirely — the need is still reported as an honest, disallowed fallback record, never silently omitted. A positive value caps the fallback count deterministically (sorted by file path); the cap can never be exceeded.
+- **`provenance[]`** deterministically classifies and deduplicates every owner/contract/test/changed-surface/responsibility-mapping evidence item into a stable category (`caller-changed-file`, `graph-diff`, `code-graph`, `import-scan`, `test-configuration`, `package-json`, etc.) with a deterministic ID. Evidence appearing via more than one source merges its provenance (preserving every distinct relationship basis) rather than duplicating the evidence item.
+- **Additive audit steps.** The retrieval audit gained `map-responsibilities`, `classify-freshness`, `apply-budget`, `evaluate-adequacy`, and `record-provenance` steps after `update-context-adequacy`; no existing audit step's meaning changed. The retrieval audit now also carries the real computed `contextAdequacy`/`responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance` (earlier-batch correction: the audit's `contextAdequacy` was previously never passed through from the capsule's real verdict — a hardcoded Batch 1 stub was always written instead — fixed as part of this batch's wiring).
+
+**Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope. Version 1.10.1 remains unpublished.
 
 ## graph-diff
 

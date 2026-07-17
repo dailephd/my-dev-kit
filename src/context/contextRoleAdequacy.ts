@@ -1,0 +1,224 @@
+/**
+ * v1.10.1 Batch 4: role-specific adequacy (section 20).
+ *
+ * Extends, rather than replaces, the existing (Batch 1) `ContextAdequacyStatement`
+ * computed by `computeContextAdequacy` in `contextCapsule.ts`: `RoleAdequacyStatement.status`
+ * starts from that verdict and can only ever be *downgraded* (never silently
+ * upgraded) by role-specific missing/blocking conditions, freshness, or truncation.
+ * For legacy (no-role) requests this returns a `null`-role, `unknown` statement and
+ * never claims a role-specific verdict it cannot evaluate (section 20.5).
+ */
+import {
+  criticalPartiallyMappedResponsibilityIds,
+  criticalUnmappedResponsibilityIds,
+  noncriticalIssueResponsibilityIds,
+} from './responsibilityMapping.js'
+import type {
+  ChangedSurface,
+  ContextAdequacyStatement,
+  ContextAdequacyStatus,
+  ContextRole,
+  EvidenceGroup,
+  EvidenceItemRef,
+  FreshnessSummary,
+  ResponsibilityMappingSummary,
+  RoleAdequacyStatement,
+  TestInfrastructureSummary,
+  TruncationSummary,
+} from './types.js'
+
+export interface EvaluateRoleAdequacyOptions {
+  role: ContextRole | null
+  baseAdequacy: ContextAdequacyStatement
+  evidenceGroups: EvidenceGroup[]
+  selectedOwners: EvidenceItemRef[]
+  selectedContracts: EvidenceItemRef[]
+  selectedTests: EvidenceItemRef[]
+  testInfrastructure: TestInfrastructureSummary
+  changedSurface: ChangedSurface
+  requestedEvidenceKindsRequireTestInfra: boolean
+  requestedEvidenceKindsRequireTestCommands: boolean
+  responsibilityMappings: ResponsibilityMappingSummary
+  freshness: FreshnessSummary
+  truncation: TruncationSummary
+}
+
+const STATUS_ORDER: readonly ContextAdequacyStatus[] = [
+  'context sufficient for implementation',
+  'context sufficient with listed assumptions',
+  'context insufficient and more retrieval required',
+  'context conflict found and user or upstream stage decision required',
+]
+
+/** Never upgrades: returns whichever status is "worse" (later in `STATUS_ORDER`). */
+function downgrade(current: ContextAdequacyStatus, candidate: ContextAdequacyStatus): ContextAdequacyStatus {
+  return STATUS_ORDER.indexOf(candidate) > STATUS_ORDER.indexOf(current) ? candidate : current
+}
+
+export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): RoleAdequacyStatement {
+  const {
+    role,
+    baseAdequacy,
+    evidenceGroups,
+    selectedOwners,
+    selectedContracts,
+    selectedTests,
+    testInfrastructure,
+    changedSurface,
+    requestedEvidenceKindsRequireTestInfra,
+    requestedEvidenceKindsRequireTestCommands,
+    responsibilityMappings,
+    freshness,
+    truncation,
+  } = options
+
+  if (role === null) {
+    // Legacy (no-role) requests: role-specific adequacy cannot be evaluated (section
+    // 20.5/31). Carries the existing `contextAdequacy.status` forward unchanged rather
+    // than fabricating a role verdict, and never treats nonempty output as automatically
+    // adequate.
+    return {
+      role: null,
+      status: baseAdequacy.status,
+      requiredConditions: [],
+      satisfiedConditions: [],
+      missingConditions: [],
+      blockingConditions: [],
+      warnings: ['Role-specific adequacy is not applicable: no role was supplied for this request.'],
+      supportingEvidence: [],
+      affectedResponsibilityIds: [],
+      truncationImpact: false,
+      freshnessImpact: false,
+    }
+  }
+
+  const requiredConditions: string[] = []
+  const satisfiedConditions: string[] = []
+  const missingConditions: string[] = []
+  const blockingConditions: string[] = []
+  const warnings: string[] = []
+  const supportingEvidence: string[] = []
+
+  let status = baseAdequacy.status
+
+  const criticalUnmapped = criticalUnmappedResponsibilityIds(responsibilityMappings)
+  const criticalPartial = criticalPartiallyMappedResponsibilityIds(responsibilityMappings)
+  const noncriticalIssues = noncriticalIssueResponsibilityIds(responsibilityMappings)
+  const affectedResponsibilityIds = [...new Set([...criticalUnmapped, ...criticalPartial, ...noncriticalIssues])].sort()
+
+  if (role === 'architecture') {
+    requiredConditions.push('at least one plausible owner is present', 'at least one relevant contract/extension-point category is present')
+    if (selectedOwners.length > 0) {
+      satisfiedConditions.push('at least one plausible owner is present')
+      supportingEvidence.push(...selectedOwners.slice(0, 3).map((o) => o.id))
+    } else {
+      missingConditions.push('no plausible owner exists')
+      blockingConditions.push('no plausible owner exists')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
+    if (selectedContracts.length > 0) {
+      satisfiedConditions.push('at least one relevant contract/extension-point category is present')
+    } else {
+      missingConditions.push('no relevant contract/extension-point evidence')
+    }
+  } else if (role === 'implementation') {
+    requiredConditions.push('selected owner evidence exists', 'required contract evidence exists', 'no critical unresolved implementation requirement remains', 'context is not stale')
+    if (selectedOwners.length > 0) {
+      satisfiedConditions.push('selected owner evidence exists')
+    } else {
+      missingConditions.push('owner missing')
+      blockingConditions.push('owner missing')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
+    if (selectedContracts.length > 0) {
+      satisfiedConditions.push('required contract evidence exists')
+    } else {
+      missingConditions.push('required contract missing')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
+    if (criticalUnmapped.length > 0) {
+      missingConditions.push('critical unresolved implementation requirement remains')
+      blockingConditions.push(...criticalUnmapped)
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    } else {
+      satisfiedConditions.push('no critical unresolved implementation requirement remains')
+    }
+  } else {
+    // test-implementation
+    requiredConditions.push(
+      'changed-surface evidence exists or an explicitly accepted fallback basis exists',
+      'relevant production symbols exist',
+      'related test location or explicit missing-test state exists',
+      'every critical responsibility is mapped',
+      'context is not stale'
+    )
+    if (changedSurface.available) {
+      satisfiedConditions.push('changed-surface evidence exists or an explicitly accepted fallback basis exists')
+    } else {
+      missingConditions.push('changed surface required but missing')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
+    const productionSymbolsGroup = evidenceGroups.find((g) => g.kind === 'production-symbols')
+    if ((productionSymbolsGroup?.items.length ?? 0) > 0) {
+      satisfiedConditions.push('relevant production symbols exist')
+    } else {
+      missingConditions.push('relevant production symbols missing')
+    }
+    if (selectedTests.length > 0 || testInfrastructure.relatedTests.length > 0) {
+      satisfiedConditions.push('related test location or explicit missing-test state exists')
+    } else {
+      satisfiedConditions.push('related test location or explicit missing-test state exists (explicit missing-test state recorded)')
+    }
+    if (requestedEvidenceKindsRequireTestInfra && testInfrastructure.relatedTests.length === 0 && testInfrastructure.fixtures.length === 0) {
+      missingConditions.push('required test infrastructure missing')
+    }
+    if (requestedEvidenceKindsRequireTestCommands && testInfrastructure.testCommands.length === 0) {
+      missingConditions.push('test command required but unavailable')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
+    if (criticalUnmapped.length > 0) {
+      missingConditions.push('critical responsibility unmapped')
+      blockingConditions.push(...criticalUnmapped)
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    } else if (criticalPartial.length > 0) {
+      missingConditions.push('critical responsibility partially mapped')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    } else {
+      satisfiedConditions.push('every critical responsibility is mapped')
+    }
+  }
+
+  if (noncriticalIssues.length > 0) {
+    warnings.push(`Noncritical responsibility mapping gap(s) for: ${noncriticalIssues.join(', ')}.`)
+  }
+
+  const truncationImpact = truncation.records.some((r) => r.requiredEvidenceLost)
+  if (truncationImpact) {
+    missingConditions.push('required evidence truncated')
+    status = downgrade(status, 'context insufficient and more retrieval required')
+  }
+
+  const freshnessImpact = freshness.state !== 'fresh'
+  if (freshness.state === 'stale') {
+    missingConditions.push('context stale')
+    status = downgrade(status, 'context insufficient and more retrieval required')
+  } else if (freshness.state === 'unknown') {
+    warnings.push('Freshness could not be established (unknown); adequacy is not automatically reduced, but this is not the same as "fresh".')
+  } else {
+    satisfiedConditions.push('context is not stale')
+  }
+
+  return {
+    role,
+    status,
+    requiredConditions,
+    satisfiedConditions,
+    missingConditions,
+    blockingConditions: [...new Set(blockingConditions)].sort(),
+    warnings,
+    supportingEvidence,
+    affectedResponsibilityIds,
+    truncationImpact,
+    freshnessImpact,
+  }
+}

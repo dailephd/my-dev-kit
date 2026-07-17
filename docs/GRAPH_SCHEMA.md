@@ -828,6 +828,18 @@ Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVer
 
 Each `AuditStep` records `id`, `kind` (one of a fixed `AuditStepKind` set covering validation, manifest loading, query normalization, ranking, focus selection, graph/source selection, pruning, and conflict detection), `description`, `inputs`, `outputs`, `status` (`ok`/`skipped`/`failed`), and `warnings`. The record provides a full, ordered trail of how a context capsule was assembled, for auditing and debugging retrieval behavior — it is deterministic and does not itself claim runtime or LLM behavior.
 
+### Additive context schema evolution (v1.10.1)
+
+Version 1.10.1 preserves schema `"1.0.0"` and legacy no-role behavior while adding structured, role-specific repository evidence. It does not introduce a schema-major change.
+
+The capsule additively records `roleContext`, `evidenceGroups`, `selectedOwners`, `selectedContracts`, `selectedTests`, `testInfrastructure`, `responsibilityMappings`, `roleAdequacy`, `freshness`, `budget`, `truncation`, `fullFileFallback`, and `provenance`. The existing `contextAdequacy` field remains readable and retains its established meaning.
+
+The retrieval audit carries the same computed role, responsibility, adequacy, freshness, budget, truncation, fallback, and provenance evidence. Its ordered steps also record candidate selection, changed-surface intake, evidence grouping, test-infrastructure discovery, responsibility mapping, freshness classification, budget application, adequacy evaluation, and provenance recording. This remains one retrieval audit, not a parallel artifact family.
+
+Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner and relevant contract or extension-point evidence. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
+
+Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
+
 ## Stable node IDs and compatibility
 
 Node IDs are deterministic and stable across index runs for the same source root configuration. File node IDs use the `file:<relative-path>` form. Symbol node IDs use the `symbol:<relative-path>#<symbol-name>` form.

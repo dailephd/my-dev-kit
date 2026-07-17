@@ -15,12 +15,10 @@ The GitHub Actions workflow is defined at:
 The workflow runs on:
 
 - pushes to `main`
+- pushes to `release/**`, `fix/**`, and `audit/**` branches
 - pull requests
 
-The workflow uses a Node.js matrix:
-
-- 20.x
-- 22.x
+Each platform runs on Node.js 24.x.
 
 ## Platform support
 
@@ -50,6 +48,7 @@ CI validates the following:
 - search returns results from the indexed TypeScript example
 - graph view can generate DOT output from the indexed TypeScript example
 - the Python example can be indexed when Python is available
+- temporary example artifacts are removed after the smoke checks
 
 ## CI command sequence
 

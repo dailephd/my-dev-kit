@@ -1,4 +1,101 @@
-import type { ContextCapsule, RetrievalAuditRecord } from '../../src/context/types.js'
+import type {
+  BudgetSummary,
+  ContextCapsule,
+  FreshnessSummary,
+  FullFileFallbackSummary,
+  ResponsibilityMappingSummary,
+  RetrievalAuditRecord,
+  RoleAdequacyStatement,
+  RoleContextSummary,
+  TruncationSummary,
+} from '../../src/context/types.js'
+
+export function baseResponsibilityMappings(overrides: Partial<ResponsibilityMappingSummary> = {}): ResponsibilityMappingSummary {
+  return {
+    requested: false,
+    operational: false,
+    mappings: [],
+    unknownResponsibilityIds: [],
+    duplicateResponsibilityIds: [],
+    limit: null,
+    availableCount: 0,
+    usedCount: 0,
+    truncated: false,
+    droppedCount: 0,
+    criticalDropped: false,
+    warnings: [],
+    ...overrides,
+  }
+}
+
+export function baseRoleAdequacy(overrides: Partial<RoleAdequacyStatement> = {}): RoleAdequacyStatement {
+  return {
+    role: null,
+    status: 'context sufficient with listed assumptions',
+    requiredConditions: [],
+    satisfiedConditions: [],
+    missingConditions: [],
+    blockingConditions: [],
+    warnings: [],
+    supportingEvidence: [],
+    affectedResponsibilityIds: [],
+    truncationImpact: false,
+    freshnessImpact: false,
+    ...overrides,
+  }
+}
+
+export function baseFreshness(overrides: Partial<FreshnessSummary> = {}): FreshnessSummary {
+  return {
+    state: 'unknown',
+    role: null,
+    evidenceUsed: [],
+    evidenceUnavailable: [],
+    comparedIdentities: [],
+    reason: 'sample reason',
+    relevantChangedPaths: [],
+    warnings: [],
+    ...overrides,
+  }
+}
+
+export function baseBudget(overrides: Partial<BudgetSummary> = {}): BudgetSummary {
+  return { limits: [], characters: null, warnings: [], ...overrides }
+}
+
+export function baseTruncation(overrides: Partial<TruncationSummary> = {}): TruncationSummary {
+  return { truncated: false, records: [], warnings: [], ...overrides }
+}
+
+export function baseFullFileFallback(overrides: Partial<FullFileFallbackSummary> = {}): FullFileFallbackSummary {
+  return { enabled: true, limit: null, used: 0, fallbacks: [], warnings: [], ...overrides }
+}
+
+export function baseRoleContext(overrides: Partial<RoleContextSummary> = {}): RoleContextSummary {
+  return {
+    role: null,
+    focus: {
+      focusFiles: [],
+      focusSymbols: [],
+      unresolvedFocusFiles: [],
+      unresolvedFocusSymbols: [],
+      ambiguousFocusSymbols: [],
+      warnings: [],
+    },
+    changedSurface: {
+      available: false,
+      diffRequested: false,
+      files: [],
+      symbols: [],
+      conflicts: [],
+      warnings: [],
+    },
+    requestedEvidenceKinds: [],
+    unsupportedRequestedEvidenceKinds: [],
+    warnings: [],
+    ...overrides,
+  }
+}
 
 export function baseCapsule(overrides: Partial<ContextCapsule> = {}): ContextCapsule {
   return {
@@ -10,6 +107,8 @@ export function baseCapsule(overrides: Partial<ContextCapsule> = {}): ContextCap
       normalizedQuery: 'sample query',
       mode: 'feature-add',
       requestedOutputPath: 'context-capsule.json',
+      role: null,
+      requestFilePath: null,
     },
     index: {
       indexPath: 'index',
@@ -21,6 +120,33 @@ export function baseCapsule(overrides: Partial<ContextCapsule> = {}): ContextCap
     optionalSupportContext: [],
     droppedContext: [],
     warnings: [],
+    deferredRequestFields: [],
+    roleContext: baseRoleContext(),
+    evidenceGroups: [],
+    selectedOwners: [],
+    selectedContracts: [],
+    selectedTests: [],
+    testInfrastructure: {
+      relatedTests: [],
+      fixtures: [],
+      factories: [],
+      mocks: [],
+      setupFiles: [],
+      testConfigurations: [],
+      packageScripts: [],
+      testCommands: [],
+      unresolved: [],
+      warnings: [],
+    },
+    unresolvedItems: [],
+    groupTruncation: [],
+    responsibilityMappings: baseResponsibilityMappings(),
+    roleAdequacy: baseRoleAdequacy(),
+    freshness: baseFreshness(),
+    budget: baseBudget(),
+    truncation: baseTruncation(),
+    fullFileFallback: baseFullFileFallback(),
+    provenance: [],
     contextAdequacy: {
       status: 'context sufficient with listed assumptions',
       summary: 'sample summary',
@@ -115,18 +241,28 @@ export function baseAudit(overrides: Partial<RetrievalAuditRecord> = {}): Retrie
       normalizedQuery: 'sample query',
       mode: 'feature-add',
       requestedOutputPath: 'context-capsule.json',
+      role: null,
+      requestFilePath: null,
     },
     index: { indexPath: 'index', manifestPath: 'index/manifest.json' },
     steps: [],
     fallbacks: [],
     fullFileReadRecommendations: [],
     warnings: [],
+    roleContext: baseRoleContext(),
     contextAdequacy: {
       status: 'context sufficient with listed assumptions',
       summary: 'sample summary',
       assumptions: [],
       gaps: [],
     },
+    responsibilityMappings: baseResponsibilityMappings(),
+    roleAdequacy: baseRoleAdequacy(),
+    freshness: baseFreshness(),
+    budget: baseBudget(),
+    truncation: baseTruncation(),
+    fullFileFallback: baseFullFileFallback(),
+    provenance: [],
     ...overrides,
   }
 }

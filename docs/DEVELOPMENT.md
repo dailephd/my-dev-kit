@@ -184,6 +184,31 @@ If a more explicit validation sequence is needed, run:
     npm run build
     npm run verify
 
+### v1.10.1 context validation
+
+Use the repository's existing scripts and focused suites to validate the v1.10.1 context surface:
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run test:security
+npm run build
+npm run docs:check
+npm run verify
+npm run benchmark:retrieval
+npm pack --dry-run
+npm run dev -- --help
+npm run dev -- context --help
+npx vitest run tests/context
+npx vitest run tests/graph-diff
+npx vitest run tests/indexing
+```
+
+The context suites cover request-file normalization and validation, all three roles, role/mode independence, providers and stable ranking, before/after changed surfaces, evidence groups, responsibility mapping, role adequacy, freshness, caps, truncation, full-file fallback, compatibility, determinism, and cross-platform paths.
+
+Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.
+
 ## Local CLI smoke test
 
 After building, run a basic TypeScript smoke test:

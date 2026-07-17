@@ -16,6 +16,7 @@ import type {
   ContextEntry,
   ContextFocus,
   ContextConflictSummary,
+  ContextRole,
   DroppedContextEntry,
   PruningSummary,
   QueryPlan,
@@ -26,6 +27,19 @@ import type {
   SemanticSummary,
   ModeEffects,
   SourceControl,
+  RoleContextSummary,
+  EvidenceGroup,
+  EvidenceItemRef,
+  TestInfrastructureSummary,
+  UnresolvedEvidenceItem,
+  GroupTruncationEntry,
+  ResponsibilityMappingSummary,
+  RoleAdequacyStatement,
+  FreshnessSummary,
+  BudgetSummary,
+  TruncationSummary,
+  FullFileFallbackSummary,
+  ProvenanceRecord,
 } from './types.js'
 
 export interface BuildContextCapsuleOptions {
@@ -33,6 +47,38 @@ export interface BuildContextCapsuleOptions {
   originalQuery: string
   mode: ContextCapsuleMode
   requestedOutputPath: string
+  /** v1.10.1 Batch 1: stage-specific role, or null for a legacy (no --role/--request role) invocation. */
+  role?: ContextRole | null
+  /** v1.10.1 Batch 1: forward-slash path to the --request file used, or null/undefined for none. */
+  requestFilePath?: string | null
+  /** v1.10.1 Batch 1: names of accepted-but-not-yet-operational ContextRequest fields. */
+  deferredRequestFields?: string[]
+  /** v1.10.1 Batch 1: request-normalization warnings (e.g. deferred-field notices) to merge into capsule.warnings. */
+  requestWarnings?: string[]
+  /** v1.10.1 Batch 2: operational role/focus/changed-surface summary. */
+  roleContext: RoleContextSummary
+  /** v1.10.1 Batch 3: deterministic, bounded, role-scoped evidence groups. */
+  evidenceGroups: EvidenceGroup[]
+  selectedOwners: EvidenceItemRef[]
+  selectedContracts: EvidenceItemRef[]
+  selectedTests: EvidenceItemRef[]
+  testInfrastructure: TestInfrastructureSummary
+  unresolvedItems: UnresolvedEvidenceItem[]
+  groupTruncation: GroupTruncationEntry[]
+  /** v1.10.1 Batch 4: deterministic responsibility-to-evidence mapping. */
+  responsibilityMappings: ResponsibilityMappingSummary
+  /** v1.10.1 Batch 4: role-specific adequacy verdict. */
+  roleAdequacy: RoleAdequacyStatement
+  /** v1.10.1 Batch 4: fresh/stale/unknown classification. */
+  freshness: FreshnessSummary
+  /** v1.10.1 Batch 4: budget/limit usage rollup. */
+  budget: BudgetSummary
+  /** v1.10.1 Batch 4: truncation and required-evidence-loss reporting. */
+  truncation: TruncationSummary
+  /** v1.10.1 Batch 4: bounded, auditable full-file-fallback usage. */
+  fullFileFallback: FullFileFallbackSummary
+  /** v1.10.1 Batch 4: deterministic, deduplicated evidence provenance. */
+  provenance: ProvenanceRecord[]
   limits: ContextCapsuleLimits
   queryPlan: QueryPlan
   candidateFiles: CandidateFile[]
@@ -90,6 +136,25 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
     originalQuery,
     mode,
     requestedOutputPath,
+    role = null,
+    requestFilePath = null,
+    deferredRequestFields = [],
+    requestWarnings = [],
+    roleContext,
+    evidenceGroups,
+    selectedOwners,
+    selectedContracts,
+    selectedTests,
+    testInfrastructure,
+    unresolvedItems,
+    groupTruncation,
+    responsibilityMappings,
+    roleAdequacy,
+    freshness,
+    budget,
+    truncation,
+    fullFileFallback,
+    provenance,
     limits,
     queryPlan,
     candidateFiles,
@@ -161,6 +226,8 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
       normalizedQuery: normalizeQuery(originalQuery),
       mode,
       requestedOutputPath: toForwardSlash(requestedOutputPath),
+      role,
+      requestFilePath,
     },
     index: {
       indexPath: toForwardSlash(resolved.indexDir),
@@ -173,7 +240,23 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
     requiredContext: [...requiredContext, ...extraRequiredContext],
     optionalSupportContext: [...optionalSupportContext, ...extraOptionalSupportContext],
     droppedContext: [...extraDroppedContext],
-    warnings: [...resolved.manifest.warnings],
+    warnings: [...resolved.manifest.warnings, ...requestWarnings],
+    deferredRequestFields: [...deferredRequestFields].sort((a, b) => a.localeCompare(b)),
+    roleContext,
+    evidenceGroups,
+    selectedOwners,
+    selectedContracts,
+    selectedTests,
+    testInfrastructure,
+    unresolvedItems,
+    groupTruncation,
+    responsibilityMappings,
+    roleAdequacy,
+    freshness,
+    budget,
+    truncation,
+    fullFileFallback,
+    provenance,
     contextAdequacy,
     queryPlan,
     candidateFiles,

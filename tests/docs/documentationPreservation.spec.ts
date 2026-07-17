@@ -230,6 +230,72 @@ describe('documentation preservation checker', () => {
     })
   })
 
+  describe('v1.10.1 documentation plan', () => {
+    const roadmap = realDocuments[manifest.roadmap.path]
+    const readme = realDocuments[manifest.readme.path]
+    const architecture = realDocuments['docs/ARCHITECTURE.md']
+    const commands = realDocuments[manifest.commands.path]
+    const workflows = realDocuments[manifest.workflows.path]
+
+    it('preserves the approved patch placement and later roadmap scopes', () => {
+      const v110 = roadmap.indexOf('## Version 1.10.0')
+      const v1101 = roadmap.indexOf('## Version 1.10.1')
+      const v111 = roadmap.indexOf('## Version 1.11.0')
+      const v112 = roadmap.indexOf('## Version 1.12.0')
+      const v113 = roadmap.indexOf('## Version 1.13.0')
+      const v114 = roadmap.indexOf('## Version 1.14.0')
+      const v200 = roadmap.indexOf('## Version 2.0.0')
+
+      expect(v110).toBeLessThan(v1101)
+      expect(v1101).toBeLessThan(v111)
+      expect(v111).toBeLessThan(v112)
+      expect(v112).toBeLessThan(v113)
+      expect(v113).toBeLessThan(v114)
+      expect(v114).toBeLessThan(v200)
+
+      expect(roadmap.slice(v111, v112)).toContain('Compose semantic retrieval')
+      expect(roadmap.slice(v111, v112)).toContain('Android UI-test indexing')
+      expect(roadmap.slice(v112, v113)).toContain('Android architecture classification')
+      expect(roadmap.slice(v112, v113)).toContain('Android data-flow retrieval')
+      expect(roadmap.slice(v113, v114)).toContain('Android retrieval benchmarks')
+      expect(roadmap.slice(v114, v200)).toContain('non-Android language and framework coverage')
+      expect(roadmap.slice(v200)).toContain('Plugin architecture')
+      expect(roadmap.slice(v200)).toContain('Retrieval API')
+    })
+
+    it('retains implementation-ready v1.10.1 planning structure', () => {
+      const start = roadmap.indexOf('## Version 1.10.1')
+      const end = roadmap.indexOf('## Version 1.11.0')
+      const plan = roadmap.slice(start, end)
+      const progress = fs.readFileSync(path.join(repoRoot, 'docs', 'PROJECT_PROGRESS.md'), 'utf8')
+
+      expect(plan).not.toContain('Status: In progress; not published')
+      expect(plan).not.toMatch(/Batch \d+ \(implemented/)
+      expect(plan).not.toMatch(/\btests? (?:passed|passing)\b/i)
+      expect(plan).toContain('architecture')
+      expect(plan).toContain('implementation')
+      expect(plan).toContain('test-implementation')
+      expect(plan).toContain('### Planned capabilities')
+      expect(plan).toContain('### Validation expectations')
+      expect(plan).toContain('### Acceptance criteria')
+      expect(plan).toContain('### Stop conditions')
+      expect(plan).toContain('my-dev-kit-orchestrator')
+      expect(plan).toContain('my-dev-kit-lab')
+      expect(progress).toContain('## Current version in progress: v1.10.1')
+      expect(progress).toContain('Version 1.10.1 is implemented and release-prepared but not published')
+    })
+
+    it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
+      expect(readme).toContain('## In release preparation: v1.10.1')
+      expect(readme).toContain('Version 1.10.1 is implemented and release-prepared but not published')
+      expect(commands).toContain('v1.10.1 Batch 1: request-file and context-role contracts')
+      expect(workflows).toContain('Stage-role context refresh')
+      expect(workflows).toContain('does not automatically run my-dev-kit')
+      expect(architecture).toContain('Workflow-catalog semantics')
+      expect(architecture).toContain('explicit v1.10.1 non-goals')
+    })
+  })
+
   describe('missing document handling', () => {
     it('fails clearly when a required document is entirely absent', () => {
       const withoutRoadmap: DocumentContents = { ...realDocuments }

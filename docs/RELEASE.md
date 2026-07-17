@@ -230,6 +230,18 @@ Uninstall the global tarball test package.
 
 If the example directory names differ from examples/basic-ts or examples/basic-python, use the actual packaged example paths and update this guide before release.
 
+## Repository release gates
+
+Before npm publication, complete the repository release gates:
+
+1. Push the release branch normally and open the required pull request.
+2. Require the Linux, Windows, and macOS CI jobs to pass for the exact candidate commit.
+3. Merge through the repository's normal review process.
+4. Create the version tag from the verified release commit and push that tag without force.
+5. Create the GitHub Release from the same tag, using the matching changelog entry as release notes.
+
+Stop if the merged commit, tag, GitHub Release, package metadata, or validated candidate differ. npm publication is the final state-changing release step.
+
 ## Publish to npm
 
 Log in to npm if needed.
@@ -280,7 +292,7 @@ After verification, uninstall the global package if it is not needed locally.
 
 ## Release record
 
-After publishing, update or confirm the following:
+Before publishing, update or confirm the following:
 
 - CHANGELOG.md includes the entry and release date for the intended release version
 - README.md install instructions point to the npm package
@@ -288,7 +300,7 @@ After publishing, update or confirm the following:
 - package.json version matches the published version
 - any release notes are consistent with the actual command surface
 
-If a GitHub release is created manually, use the CHANGELOG.md entry as the source of truth. Do not describe unreleased roadmap items as released features.
+Use the CHANGELOG.md entry as the source of truth for the GitHub Release. Do not describe unreleased roadmap items as released features.
 
 ## Automation status
 

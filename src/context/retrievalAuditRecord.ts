@@ -3,16 +3,111 @@ import * as path from 'node:path'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { VERSION } from '../version.js'
-import type { AuditStep, ContextCapsuleRequest, RetrievalAuditRecord } from './types.js'
+import type {
+  AuditStep,
+  BudgetSummary,
+  ContextAdequacyStatement,
+  ContextCapsuleRequest,
+  FreshnessSummary,
+  FullFileFallbackSummary,
+  ProvenanceRecord,
+  ResponsibilityMappingSummary,
+  RetrievalAuditRecord,
+  RoleAdequacyStatement,
+  RoleContextSummary,
+  TruncationSummary,
+} from './types.js'
 
 export interface BuildRetrievalAuditRecordOptions {
   resolved: ResolvedIndexManifest
   request: ContextCapsuleRequest
   steps: AuditStep[]
+  /** v1.10.1 Batch 1: request-normalization warnings (e.g. deferred-field notices). */
+  warnings?: string[]
+  /** v1.10.1 Batch 2: operational role/focus/changed-surface summary. */
+  roleContext: RoleContextSummary
+  /** v1.10.1 Batch 4: the same computed adequacy verdict written to the capsule. Optional
+   * (defaults to the pre-Batch-4 static stub) so existing Batch 1/2/3 callers/tests that
+   * do not pass it keep their prior behavior. */
+  contextAdequacy?: ContextAdequacyStatement
+  responsibilityMappings?: ResponsibilityMappingSummary
+  roleAdequacy?: RoleAdequacyStatement
+  freshness?: FreshnessSummary
+  budget?: BudgetSummary
+  truncation?: TruncationSummary
+  fullFileFallback?: FullFileFallbackSummary
+  provenance?: ProvenanceRecord[]
+}
+
+const LEGACY_CONTEXT_ADEQUACY: ContextAdequacyStatement = {
+  status: 'context sufficient with listed assumptions',
+  summary: 'Batch 1 capsule includes request and index/artifact summaries only.',
+  assumptions: ['No graph focus, source bundles, or ranked candidates are selected yet.'],
+  gaps: [],
+}
+
+const EMPTY_RESPONSIBILITY_MAPPINGS: ResponsibilityMappingSummary = {
+  requested: false,
+  operational: false,
+  mappings: [],
+  unknownResponsibilityIds: [],
+  duplicateResponsibilityIds: [],
+  limit: null,
+  availableCount: 0,
+  usedCount: 0,
+  truncated: false,
+  droppedCount: 0,
+  criticalDropped: false,
+  warnings: [],
+}
+
+const EMPTY_FRESHNESS: FreshnessSummary = {
+  state: 'unknown',
+  role: null,
+  evidenceUsed: [],
+  evidenceUnavailable: [],
+  comparedIdentities: [],
+  reason: 'Freshness classification was not computed for this request.',
+  relevantChangedPaths: [],
+  warnings: [],
+}
+
+const EMPTY_BUDGET: BudgetSummary = { limits: [], characters: null, warnings: [] }
+const EMPTY_TRUNCATION: TruncationSummary = { truncated: false, records: [], warnings: [] }
+const EMPTY_FULL_FILE_FALLBACK: FullFileFallbackSummary = { enabled: true, limit: null, used: 0, fallbacks: [], warnings: [] }
+
+function emptyRoleAdequacy(status: ContextAdequacyStatement['status']): RoleAdequacyStatement {
+  return {
+    role: null,
+    status,
+    requiredConditions: [],
+    satisfiedConditions: [],
+    missingConditions: [],
+    blockingConditions: [],
+    warnings: [],
+    supportingEvidence: [],
+    affectedResponsibilityIds: [],
+    truncationImpact: false,
+    freshnessImpact: false,
+  }
 }
 
 export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOptions): RetrievalAuditRecord {
-  const { resolved, request, steps } = options
+  const {
+    resolved,
+    request,
+    steps,
+    warnings = [],
+    roleContext,
+    contextAdequacy = LEGACY_CONTEXT_ADEQUACY,
+    responsibilityMappings = EMPTY_RESPONSIBILITY_MAPPINGS,
+    roleAdequacy = emptyRoleAdequacy(contextAdequacy.status),
+    freshness = EMPTY_FRESHNESS,
+    budget = EMPTY_BUDGET,
+    truncation = EMPTY_TRUNCATION,
+    fullFileFallback = EMPTY_FULL_FILE_FALLBACK,
+    provenance = [],
+  } = options
   return {
     schemaVersion: '1.0.0',
     generatedAt: new Date().toISOString(),
@@ -25,15 +120,16 @@ export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOpti
     steps,
     fallbacks: [],
     fullFileReadRecommendations: [],
-    warnings: [],
-    contextAdequacy: {
-      status: 'context sufficient with listed assumptions',
-      summary: 'Batch 1 capsule includes request and index/artifact summaries only.',
-      assumptions: [
-        'No graph focus, source bundles, or ranked candidates are selected yet.',
-      ],
-      gaps: [],
-    },
+    warnings,
+    roleContext,
+    contextAdequacy,
+    responsibilityMappings,
+    roleAdequacy,
+    freshness,
+    budget,
+    truncation,
+    fullFileFallback,
+    provenance,
   }
 }
 

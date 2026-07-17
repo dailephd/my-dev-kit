@@ -86,7 +86,14 @@ DOT output does not require Graphviz. All graph views are backed by the `fronten
 
 ## Notes
 
-- Generated `.my-dev-kit` directories (outside of `.my-dev-kit-index`) are local output only and are not committed.
-- The pre-built `.my-dev-kit-index` directory is tracked for smoke-test purposes.
+- Generated `.my-dev-kit-index` output is local only and is not tracked.
 - This example does not require a database, network access, or Graphviz.
 - The `view --graph frontend-test` view will produce an empty graph for this example because the base indexer excludes `.test.` files from default discovery.
+
+Clean up after the workflow:
+
+```sh
+node -e "require('fs').rmSync('examples/basic-react-tsx/.my-dev-kit-index',{recursive:true,force:true})"
+```
+
+See the [full command reference](../../docs/COMMANDS.md) for flag details.

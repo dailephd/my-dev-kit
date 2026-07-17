@@ -6,7 +6,7 @@
 
 The product goal is simple: help developers understand large projects without reading whole files, broad folders, or unfiltered documentation — and support downstream tools and LLM-assisted workflows with deterministic, bounded local artifacts.
 
-The current stable v1 line focuses on deterministic local artifacts and graph-guided retrieval:
+The stable v1 line is built around deterministic local artifacts and graph-guided retrieval:
 
 - `manifest.json`
 - `symbol-index.json`
@@ -70,7 +70,7 @@ Version 1.0.0 includes six primary commands:
 - `view`
 - `search`
 
-### Implemented capabilities
+### Planned capabilities
 
 #### Indexing
 
@@ -132,12 +132,12 @@ Version 1.0.x releases focus on release hardening, documentation quality, and sa
 
 ### Large-repository safety
 
-- default ignore rules for common generated folders (implemented)
-- `--exclude` support where missing (implemented)
-- `--dry-run` support for expensive commands (implemented)
-- progress reporting during indexing (implemented)
-- clearer output when a repository is large: safe-maximum preflight warnings and documentation for indexing large monorepos landed as part of [Version 1.8.0 Batch 1](#version-180)
-- safer behavior when a command would scan too many files: see the `large-file-count`/`broad-source-root` preflight warnings in [Version 1.8.0 Batch 1](#version-180); `my-dev-kit` still does not hard-fail large scans
+- default ignore rules for common generated folders
+- `--exclude` support wherever an indexing or retrieval command scans the file tree
+- `--dry-run` support for expensive commands
+- progress reporting during indexing
+- safe-maximum preflight warnings when a repository is large, so a large index run is never a silent surprise
+- documentation for indexing large monorepos, including per-package `--src`/`--out` scoping guidance
 
 ### Retrieval workflow reporting
 
@@ -179,21 +179,21 @@ Planned and incremental improvements:
 
 Version 1.1.0 adds the first semantic integration layer on top of the existing code graph workflow.
 
-### Implemented
+### Planned capabilities
 
 #### Index-first semantic architecture
 
 - `index` runs semantic analyzers as part of the index run
 - `manifest.json` is the authoritative artifact registry; it records all current artifact paths and analyzer status
 - stale artifacts from previous runs are removed when `index` refreshes the artifact directory
-- analyzer registry in `manifest.json` records status, version, and artifact refs per analyzer
+- an analyzer registry in `manifest.json` records status, version, and artifact refs per analyzer
 
 #### Semantic metadata contracts
 
 - `semanticRoles` and `artifactRefs` arrays on symbols in `symbol-index.json`
 - `semanticRoles` and `artifactRefs` arrays on symbol nodes in `code-graph.json`
 - `evidenceRefs` collected from semantic roles for use in lookup output
-- semantic schema version `1.0.0` with defined role names
+- a semantic schema version with defined role names
 
 #### Data-model artifacts linked from index
 
@@ -226,7 +226,7 @@ Version 1.1.0 adds the first semantic integration layer on top of the existing c
 
 Version 1.2.0 adds React/TSX and frontend-test indexing, exact source string retrieval and repeated literal reporting, React region retrieval, local component-tree prop/event-flow retrieval, and frontend semantic graph views.
 
-### Implemented
+### Planned capabilities
 
 #### TSX and React indexing
 
@@ -283,7 +283,7 @@ The goal is to help developers answer: what route, component, UI marker, storage
 
 All v1.3.0 facts are conservative static evidence. The tool records what the source text contains. It does not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 
-### Implemented
+### Planned capabilities
 
 #### Frontend reachability artifact
 
@@ -330,7 +330,7 @@ All v1.3.0 facts are conservative static evidence. The tool records what the sou
 - `source --route`, `source --storage-key`, `source --ui`
 - `view --graph route`, `view --graph browser-storage`, `view --graph ui-reachability`
 
-### Future work for this area
+### Future scope
 
 - producer support for UI markers defined in local sub-components
 - route-to-API-handler and access-policy relationships
@@ -342,7 +342,7 @@ Version 1.4.0 adds source continuation and bounded local dependency expansion.
 
 The goal is to reduce full-file reads when the correct file, symbol, or component is already known.
 
-### Implemented
+### Planned capabilities
 
 #### Source continuation
 
@@ -368,7 +368,7 @@ The goal is to reduce full-file reads when the correct file, symbol, or componen
 - deterministic block ordering and deduplication
 - explanation for every included and skipped block
 
-#### Static boundaries
+### Architecture and compatibility constraints
 
 - direct, same-file dependency resolution only
 - no cross-file closure
@@ -376,7 +376,7 @@ The goal is to reduce full-file reads when the correct file, symbol, or componen
 - no browser execution
 - degraded or skipped frontend-specific expansion when frontend artifacts are unavailable
 
-### Future work for this area
+### Future scope
 
 - cross-file dependency closure
 - richer semantic type-checking for dependency detection
@@ -388,7 +388,7 @@ Version 1.5.0 adds conservative static schema and layer classification, built on
 
 The goal is to help developers avoid editing the wrong layer by classifying files and symbols by their role in the project, and by surfacing conservative edit guidance, readiness, risk labels, evidence, and uncertainty through the existing retrieval commands without introducing a second retrieval system.
 
-### Implemented
+### Planned capabilities
 
 #### Classification producer and artifact
 
@@ -433,7 +433,7 @@ The goal is to help developers avoid editing the wrong layer by classifying file
 - `slice` preserves compact classification metadata
 - `source` propagates compact classification metadata and a compact classification summary when available
 
-#### Static boundaries
+### Architecture and compatibility constraints
 
 - classification is derived only from source text, the existing graph, and existing artifacts
 - no runtime execution
@@ -443,7 +443,7 @@ The goal is to help developers avoid editing the wrong layer by classifying file
 - absence of `classification.json` never breaks existing retrieval commands
 - classification guidance is advisory and evidence-backed, not an automatic edit decision
 
-### Future work for this area
+### Future scope
 
 - task-specific context-report aggregation
 - stronger cross-file classification signal aggregation
@@ -455,7 +455,7 @@ Version 1.6.0 focuses on orchestrator-ready retrieval capsules and context packe
 
 The goal is not to replace `my-dev-kit-orchestrator`. The goal is to make `my-dev-kit` produce compact, task-specific retrieval outputs that the orchestrator can consume without raw graph dumps or full-file context.
 
-### Implemented capabilities
+### Planned capabilities
 
 #### Retrieval capsules
 
@@ -480,11 +480,9 @@ The goal is not to replace `my-dev-kit-orchestrator`. The goal is to make `my-de
 
 #### Context capsule modes
 
-Implemented modes are `general`, `feature-add`, and `subsystem`. They apply
-small deterministic ranking adjustments only; they do not control workflows or
-replace orchestrator stages.
+Planned modes are `general`, `feature-add`, and `subsystem`. They apply small deterministic ranking adjustments only; they do not control workflows or replace orchestrator stages.
 
-#### Compatibility boundary
+### Architecture and compatibility constraints
 
 - `my-dev-kit` produces capsules and audit records
 - `my-dev-kit-orchestrator` remains the staged workflow controller
@@ -493,84 +491,13 @@ replace orchestrator stages.
 
 ## Version 1.7.0
 
-Version 1.7.0 implements an internal, developer-facing retrieval regression suite for `my-dev-kit` itself.
+Version 1.7.0 defines an internal, developer-facing retrieval regression suite for `my-dev-kit` itself.
 
-The goal is to prevent regressions in the bounded-context behavior introduced and expanded through v1.6.0 context capsules.
-
-### Batch 1 status (implemented)
-
-Batch 1 added the internal foundation: TypeScript contracts for suite
-config/task/report/verdict shapes, a config loader with clear validation
-errors, a JSON+TXT report writer, a minimal runner, and the
-`npm run benchmark:retrieval` entry point. It is internal-only (no public
-CLI command) and not wired into `npm run verify` or CI.
-
-### Batch 2 status (implemented)
-
-Batch 2 adds the execution core: a fixture/source-root resolver with
-filesystem-safe task-ID and output-path handling, per-task index
-preparation (reusing `runIndexCommand()` directly), and a context
-execution adapter that runs the real v1.6 `context` command as a
-subprocess against each task's fresh index. `core.json`'s one task is now
-executable (no longer `skip: true`) and produces real
-`context-capsule.json`/`retrieval-audit-record.json`/`task-execution.json`
-artifacts per run. A task that executes successfully is reported
-`executed` (verdict `PASS` meaning "ran without error"); a task whose
-fixture/index/context step fails is reported `blocked`. There is still no
-assertion engine: nothing compares the retrieved evidence against
-per-task expectations yet, and the `REGRESSION` verdict remains
-unreachable.
-
-### Batch 3 status (implemented)
-
-Batch 3 adds the judgment layer on top of Batch 2's execution core:
-
-- a deterministic assertion engine (`src/retrievalRegression/assertions.ts`)
-  that reads each task's generated `context-capsule.json` and
-  `retrieval-audit-record.json` and evaluates configurable expectations
-  for candidate files/nodes, focus, selected graph evidence, bounded
-  source evidence, semantic/classification summaries, artifact
-  references, conflicts, mode effects, audit steps (including ordering
-  and uniqueness), no-raw-content, cap compliance, and context adequacy
-- a metrics engine (`src/retrievalRegression/metrics.ts`) that aggregates
-  task/assertion counts and per-category pass rates deterministically
-  (missing denominators report `null`, never a fabricated rate)
-- verdict logic (`src/retrievalRegression/verdict.ts`) that makes
-  `REGRESSION` reachable: a task regresses when a required assertion
-  fails, is blocked when execution or a required assertion could not be
-  evaluated, and otherwise passes; the suite verdict is `BLOCKED` if any
-  task is blocked, else `REGRESSION` if any task regressed, else `PASS`
-- `--fail-on-regression` (only fails the process nonzero on
-  `REGRESSION`/`BLOCKED` when passed; a report is always written) and
-  `--max-failures` (stops running remaining tasks once the limit of
-  blocked/regressed tasks is reached, recording them as `planned` with a
-  clear reason) on the `runRetrievalRegression.ts` entry point
-- `core.json`'s one executable task now carries real, stable expectations
-  based on the actual generated Batch 2 capsule/audit shapes, and
-  `npm run benchmark:retrieval` now passes `--fail-on-regression`
-- JSON and TXT reports include assertion results, metrics, verdicts, and
-  a compact failed-assertions-by-task summary, without inlining raw
-  source, graph, capsule, audit, semantic, or classification content
-
-### Batch 4 status (implemented)
-
-Batch 4 completes a representative six-task core suite using the existing
-data-model, React/TSX, and basic TypeScript examples. It covers
-data-model feature-add, subsystem mode, no-source behavior, React/TSX
-retrieval, no-false-conflict behavior, and ambiguity, with audit,
-no-raw-content, caps, and adequacy expectations on every executable task.
-Classification-absent behavior remains covered by assertion unit tests but
-is deferred as an executable task because current indexing always emits
-classification and the runner does not mutate generated artifacts.
-
-`benchmark:retrieval` remains separate from `npm run verify`: it is a
-heavier subprocess-based maintainer check, while the broader test suite
-has known unrelated timeout flakiness. Historical baseline comparison is
-not implemented.
+The goal is to prevent regressions in the bounded-context behavior introduced by v1.6.0 context capsules.
 
 ### Purpose
 
-The planned suite should answer product-specific retrieval questions such as:
+The suite should answer product-specific retrieval questions such as:
 
 - did query planning regress?
 - did candidate file or candidate node ranking regress?
@@ -582,6 +509,40 @@ The planned suite should answer product-specific retrieval questions such as:
 - did `general`, `feature-add`, or `subsystem` mode behavior regress?
 - did `--no-source` behavior regress?
 - did context adequacy, audit completeness, cap compliance, compatibility, or no-raw-content guarantees regress?
+
+### Planned capabilities
+
+#### Suite foundation
+
+- TypeScript contracts for suite config/task/report/verdict shapes
+- a config loader with clear validation errors
+- a JSON and TXT report writer
+- a runner reachable through `npm run benchmark:retrieval`
+- an internal-only entry point, not a public CLI command, and not wired into `npm run verify` or CI
+
+#### Execution core
+
+- a fixture/source-root resolver with filesystem-safe task-ID and output-path handling
+- per-task index preparation that reuses the existing `index` command implementation directly
+- a context execution adapter that runs the real `context` command as a subprocess against each task's fresh index
+- per-task `context-capsule.json`/`retrieval-audit-record.json`/`task-execution.json` artifacts
+- a distinction between a task that executes without error and a task whose fixture/index/context step fails
+
+#### Assertion and metrics engine
+
+- a deterministic assertion engine that reads each task's generated capsule and audit record and evaluates configurable expectations for candidate files/nodes, focus, selected graph evidence, bounded source evidence, semantic/classification summaries, artifact references, conflicts, mode effects, audit steps (ordering and uniqueness), no-raw-content, cap compliance, and context adequacy
+- a metrics engine that aggregates task/assertion counts and per-category pass rates deterministically, reporting `null` rather than a fabricated rate when a denominator is missing
+- verdict logic where a task regresses when a required assertion fails, is blocked when execution or a required assertion could not be evaluated, and otherwise passes; the suite verdict is blocked if any task is blocked, else regressed if any task regressed, else passing
+- `--fail-on-regression` and `--max-failures` options on the suite entry point, with a report always written regardless of exit behavior
+- JSON and TXT reports that include assertion results, metrics, verdicts, and a compact failed-assertions-by-task summary, without inlining raw source, graph, capsule, audit, semantic, or classification content
+
+#### Representative core suite
+
+A representative deterministic local task set covering data-model feature-add, subsystem mode, no-source behavior, React/TSX retrieval, no-false-conflict behavior, and ambiguity, with audit, no-raw-content, caps, and adequacy expectations on every executable task.
+
+Classification-absent behavior is exercised through assertion unit tests rather than as an executable task, since indexing always emits classification and the runner does not mutate generated artifacts.
+
+`benchmark:retrieval` remains separate from `npm run verify`: it is a heavier subprocess-based maintainer check. Historical baseline comparison across runs is not part of this plan.
 
 ### Retrieval regression coverage
 
@@ -608,8 +569,7 @@ Representative deterministic local tasks cover:
 
 ### Assertions
 
-The assertion engine and representative suite are implemented. Assertions
-remain deterministic and local:
+The assertion engine and representative suite remain deterministic and local:
 
 - the right bounded context is retained for representative tasks
 - retained and dropped reasons remain stable and explainable
@@ -621,8 +581,6 @@ remain deterministic and local:
 
 ### Planned metrics
 
-The metrics engine itself is implemented as of Batch 3 (see above), computing
-task/assertion counts and per-category pass rates from real assertion results.
 Likely internal retrieval regression metrics include:
 
 - selected file, node, edge, and source-slice counts
@@ -636,7 +594,7 @@ These are maintainer metrics for regression detection, not a public performance 
 
 ### Entry point decision
 
-Initial implementation should prefer a maintainer or development entry point such as `npm run benchmark:retrieval`.
+The suite should prefer a maintainer or development entry point such as `npm run benchmark:retrieval`.
 
 A public CLI command remains undecided. If a public command is ever added later, that should be justified by the implementation rather than assumed by the roadmap now.
 
@@ -646,7 +604,7 @@ A public CLI command remains undecided. If a public command is ever added later,
 
 `my-dev-kit-lab` should remain responsible for release readiness, security posture, dependency and package safety, and external release gates. It should not be the home for product-specific retrieval-quality assertions.
 
-### Non-goals
+### Explicit exclusions
 
 Version 1.7.0 is not planned as:
 
@@ -669,71 +627,47 @@ Version 1.8.0 focuses on scalability and indexing ergonomics.
 
 The goal is to make `my-dev-kit` more practical for larger repositories before expanding into heavier multi-language and Android projects.
 
-### Batch 1 status (implemented)
-
-Batch 1 is the indexing ergonomics foundation: it makes the existing `index` command safer and more informative for larger repositories, without implementing incremental indexing, graph diff, or watch mode.
-
-- Default ignores now also skip `.my-dev-kit` and any `.my-dev-kit-*` directory (custom `--out` directories and generated smoke/index output folders), so `index` does not re-scan its own or another `my-dev-kit` output directory. `--exclude` and existing default ignores are unchanged and still apply.
-- Added a deterministic large-repo preflight step (`src/indexing/preflight.ts`) that reports `preflightWarnings` (`{ code, message }`) on both `index` and `index --dry-run`, in a fixed, deterministic order: `large-file-count` (eligible file count exceeds a static threshold of 5000) and `broad-source-root` (a `--src` value resolves to the project root and discovered file count exceeds 1000). Warnings are advisory only — they never fail the command and never claim safety beyond static file-count evidence.
-- `index --dry-run` and file-count estimation, progress reporting (`--progress`, stderr-only diagnostics that keep `--json` stdout parseable), and improved default ignores for common generated/build/cache directories were already implemented ahead of this roadmap entry; Batch 1 extends that existing foundation with the `.my-dev-kit*` self-ignore and the preflight-warning layer above rather than replacing it.
-- Added a "Indexing large monorepos" documentation section (`docs/COMMANDS.md`) covering per-package `--src`/`--out` scoping and using `--dry-run` before indexing an unfamiliar large repository.
-
-Batch 1 does not implement incremental indexing, cache metadata, changed-file detection, partial rebuild, graph diff, watch mode, or search/lookup/slice filtering — those remain planned below for later `v1.8.0` batches.
-
-### Batch 2 status (implemented)
-
-Batch 2 is the incremental-indexing foundation: cache metadata, changed-file detection, and config invalidation, built on top of Batch 1's preflight/dry-run/progress/default-ignore work. **It does not implement partial artifact rebuild** — every `--incremental` run that finds a change (or an incompatible/missing/stale cache) still performs a full rebuild through the existing indexing pipeline; only a true no-op ("nothing changed") run skips rebuilding.
-
-- Added `index --incremental`, which compares the current file set against an internal `cache-metadata.json` (SHA-256 content hash per file plus a config fingerprint) and reports one of six deterministic modes: `incremental-full-initial`, `incremental-full-cache-incompatible`, `incremental-full-config-changed`, `incremental-no-change`, or `incremental-change-detected-full-rebuild` (see `docs/COMMANDS.md`).
-- Added `index --reset-cache`, which deletes only `cache-metadata.json` from `--out` (never `manifest.json` or other normal artifacts) and reports `{ requested, existed, path }`; combined with `--incremental` it resets first and then performs a safe `incremental-full-initial` run.
-- Added deterministic added/changed/removed/unchanged file classification (`src/indexing/cacheMetadata.ts`), with alphabetically sorted, bounded (20-entry) samples.
-- Added cache/config invalidation: a corrupt or schema/version-incompatible cache, or a changed config fingerprint (source roots, `--exclude`, `--call-graph`, `--language`, or default-ignore rules), triggers a full rebuild with a reported `cacheInvalidationReason` rather than silently reusing a stale or incompatible cache.
-- `manifest.json` now records `indexMode`, and, on builds that actually ran, `cacheMode`/`cacheInvalidationReason`/`changedFileSummary` (see `docs/GRAPH_SCHEMA.md`). `cache-metadata.json` itself remains internal bookkeeping, not a public semantic artifact.
-- Preserved all Batch 1 behavior: `preflightWarnings` still appear on `index`/`index --dry-run`; `--dry-run` still writes no artifacts and never touches the cache; `--progress` still keeps `--json` stdout parseable; `.my-dev-kit`/`.my-dev-kit-*` self-ignore still applies (cache metadata is never indexed as source).
-
-Batch 2 does not implement full partial artifact rebuild, deterministic artifact merge across changed/unchanged analyses, stable artifact ID equivalence across partial rebuilds, graph-diff, watch mode, or search/lookup/slice filtering — those remain planned below for later `v1.8.0` batches.
-
-### Batch 3 status (implemented)
-
-Batch 3 adds real partial-rebuild correctness on top of Batch 2's cache metadata and changed-file detection.
-
-- `index --incremental` now reuses unchanged files' per-file analysis (read back from the previous `symbol-index.json`, combined with `reExportSpecifiers`/`exportAllSpecifiers` now also carried in `cache-metadata.json`) instead of re-parsing them, re-analyzes changed/added files exactly like a full build, and drops removed files from every affected artifact — reported as two new modes, `incremental-partial` and `incremental-partial-with-artifact-fallback` (see `docs/COMMANDS.md`).
-- `graph.fileDeps`/`graph.symbols` (and the code graph built from them) are still recomputed globally from the full merged file set on every partial rebuild — import/re-export/export-all resolution depends on the complete current file set, not just the files that changed, so this is not a shortcut but a correctness requirement. File and symbol node IDs (`file:<path>`, `symbol:<path>#<name>`) stay stable for unchanged files because they are derived purely from path/name, never from build order or run-specific state.
-- `--call-graph`, when requested during a partial rebuild, is always fully regenerated (call-graph extraction re-parses source text directly and is not derived from cached per-file analysis) — reported honestly via `cacheMode: "incremental-partial-with-artifact-fallback"` and `partialRebuildFallbackArtifacts: ["call-graph"]`, never silently treated as reused.
-- `data-model.json`, `frontend-semantic.json`, `frontend-reachability.json`, and `classification.json` needed no analyzer-specific partial-rebuild logic: they already run over the complete current `symbol-index.json`/`code-graph.json` on every build (full or partial), so a correctly merged core index keeps them fully correct with no stale entries automatically.
-- When partial-rebuild reuse is not safely possible (the previous `symbol-index.json` is missing, unreadable, or from an incompatible schema version), `--incremental` falls back honestly to a full rebuild — reported as `incremental-change-detected-full-rebuild` with the reason in `cacheInvalidationReason` — rather than guessing or silently producing incorrect output.
-- Equivalence tests (`tests/index/partialRebuild.spec.ts`) prove partial incremental `symbol-index.json`/`code-graph.json`/`call-graph.json` output is logically equivalent (normalized for timestamps only) to a clean full `index` run of the same source tree, across changed-file, added-file, removed-file, and re-export/export-all cross-file-dependency fixtures, and that unchanged file/symbol node IDs stay bit-identical across a partial rebuild.
-- `manifest.json` gained `partialRebuildFallbackArtifacts` (see `docs/GRAPH_SCHEMA.md`). Preserved all Batch 1 and Batch 2 behavior: preflight warnings, `--dry-run`, `--progress`, `.my-dev-kit`/`.my-dev-kit-*` self-ignore, `--reset-cache`, and the `incremental-no-change`/`incremental-full-*` modes all continue to work exactly as before.
-
-Batch 3 does not implement graph-diff, watch mode, or search/lookup/slice filtering — those remain planned below.
-
-### Batch 4 status (implemented)
-
-Batch 4 adds the `graph-diff` command: a deterministic, read-only comparison of two existing index directories, built on Batch 3's stable node/edge IDs.
-
-- Added `graph-diff --before <index-dir> --after <index-dir> --json`, which compares `manifest.json`/`code-graph.json` (required) and `symbol-index.json`/`classification.json`/`data-model.json`/`frontend-semantic.json`/`frontend-reachability.json` (optional, degrading gracefully when absent) between the two directories. It never runs `index` and never writes to or modifies either input directory.
-- Node/edge diffing reuses the existing stable `node.id`/`edge.id` identity from Batch 3 — no new comparison scheme was introduced. Reports `added`/`removed` (compact refs) and `changed` (only the fields that actually differ, with `before`/`after` limited to those fields — never a full node/edge dump).
-- `symbol-index.json` gets a compact companion diff (added/removed/changed file paths and symbol ids), `manifest.json` gets a fixed-field diff (`indexMode`, `cacheMode`, `changedFileSummary`, `partialRebuildFallbackArtifacts`, analyzer status changes, etc. — excluding `createdAt`), `classification.json` gets a per-entry diff by its own stable id (added/removed/changed edit guidance, risk labels, etc.), and `data-model.json`/`frontend-semantic.json`/`frontend-reachability.json` get a safe summary-count-only diff (not a fragile deep per-entry diff, since they lack a single stable per-entry identity).
-- Exit behavior: `0` for valid inputs whether or not differences are found; non-zero with a clear error for invalid arguments, a missing index directory, or a malformed required artifact; a missing *optional* artifact never causes a non-zero exit, only a warning and an "unavailable" diff section.
-- Equivalence tests (`tests/graph-diff/graphDiff.spec.ts`) prove `graph-diff` correctly reports no differences for identical indexes and correctly reports added/removed/changed nodes and edges for changed/added/removed-file fixtures, alongside determinism and read-only-input-directory checks.
-
-Batch 4 does not implement watch mode, search/lookup/slice/source filtering, or a dedicated `call-graph.json` diff section — those remain planned below or deferred as noted.
-
-### Remaining deferred items and future work
-
-The completed v1.8.0 implementation currently stops at Batch 4. The items below remain deferred from that implementation close-out unless and until a later release or follow-up batch explicitly lands them.
-
 ### Planned capabilities
+
+#### Indexing ergonomics
+
+- default ignores that also skip `.my-dev-kit` and any `.my-dev-kit-*` output directory, so `index` never re-scans its own or another `my-dev-kit` output directory
+- a deterministic large-repo preflight step that reports advisory `preflightWarnings` (`{ code, message }`) on both `index` and `index --dry-run`, in a fixed order: a large-eligible-file-count warning and a broad-source-root warning; warnings never fail the command and never claim safety beyond static file-count evidence
+- `index --dry-run` file-count estimation
+- `--progress` progress reporting that keeps `--json` stdout parseable (diagnostics on stderr only)
+- documentation for indexing large monorepos, covering per-package `--src`/`--out` scoping and using `--dry-run` before indexing an unfamiliar large repository
 
 #### Incremental indexing
 
-- changed-file detection (implemented in Batch 2)
-- cache/config invalidation (implemented in Batch 2)
-- clear cache reset command (implemented in Batch 2)
-- partial index rebuild for the core artifact pipeline — `symbol-index.json`/`code-graph.json` (implemented in Batch 3)
-- deterministic artifact merge across changed and unchanged file analyses, for the core artifact pipeline (implemented in Batch 3)
-- stable artifact IDs across partial rebuilds, for the core artifact pipeline (implemented in Batch 3)
-- partial (non-fallback) call-graph rebuild (not implemented — `--call-graph` is always fully regenerated during a partial rebuild and reported as an artifact fallback)
+- `index --incremental`, comparing the current file set against internal cache metadata (a content hash per file plus a config fingerprint) and reporting a deterministic mode describing what happened (first run, incompatible/missing cache, changed config, no change, or change detected)
+- `index --reset-cache`, which removes only the cache metadata from `--out` (never other artifacts) and reports what it did
+- deterministic added/changed/removed/unchanged file classification, with bounded, sorted samples
+- cache/config invalidation: a corrupt or incompatible cache, or a changed config fingerprint (source roots, `--exclude`, `--call-graph`, `--language`, or default-ignore rules), triggers a full rebuild with a reported invalidation reason rather than silently reusing a stale or incompatible cache
+- `manifest.json` records the index mode and, on builds that ran, the cache mode/invalidation reason/changed-file summary; cache metadata itself remains internal bookkeeping, not a public semantic artifact
+- partial rebuild for the core artifact pipeline: unchanged files' per-file analysis is reused rather than re-parsed, changed/added files are re-analyzed like a full build, and removed files are dropped from every affected artifact
+- the file-dependency and symbol graph (and the code graph built from them) are always recomputed globally from the full merged file set on every partial rebuild, since import/re-export/export-all resolution depends on the complete current file set rather than only the files that changed; file and symbol node IDs stay stable for unchanged files because they are derived purely from path/name
+- when a call graph is requested during a partial rebuild, it is always fully regenerated (call-graph extraction re-parses source text directly rather than deriving from cached per-file analysis) and reported honestly as an artifact fallback, never silently treated as reused
+- semantic, data-model, frontend, and classification analyzers require no analyzer-specific partial-rebuild logic, since they already run over the complete current core index on every build
+- when partial-rebuild reuse is not safely possible (a missing, unreadable, or schema-incompatible previous index), `--incremental` falls back honestly to a full rebuild with the reason recorded, rather than guessing or producing incorrect output
+
+#### Graph diff
+
+- a `graph-diff` command that performs a deterministic, read-only comparison of two existing index directories, reusing the stable node/edge identity the incremental-indexing plan establishes
+- `graph-diff --before <index-dir> --after <index-dir> --json`, comparing the core manifest and code graph (required) and the optional semantic/classification/data-model/frontend artifacts (degrading gracefully when absent), and never running `index` or writing to either input directory
+- node/edge diffing reuses the existing stable node/edge identity — no new comparison scheme
+- `added`/`removed` reported as compact refs, `changed` reported only for the fields that actually differ, never a full node/edge dump
+- a compact companion diff for the symbol index (added/removed/changed file paths and symbol ids), a fixed-field diff for the manifest, a per-entry diff for classification by its own stable id, and a safe summary-count-only diff for artifacts that lack a single stable per-entry identity
+- a zero exit code for valid inputs whether or not differences are found; a non-zero exit with a clear error for invalid arguments, a missing index directory, or a malformed required artifact; a missing optional artifact never causes a non-zero exit, only a warning and an "unavailable" diff section
+
+### Dependencies and ordering
+
+1. indexing ergonomics and preflight safety
+2. incremental indexing foundation (cache metadata, changed-file detection, invalidation)
+3. partial artifact rebuild correctness for the core pipeline
+4. graph-diff built on stable node/edge identity
+5. search/lookup/slice filtering (future scope)
+
+### Future scope
 
 #### Watch mode
 
@@ -743,17 +677,6 @@ The completed v1.8.0 implementation currently stops at Batch 4. The items below 
 - report changed nodes and edges
 - keep output deterministic
 
-#### Graph diff
-
-- compare two index runs (implemented in Batch 4)
-- report added nodes (implemented in Batch 4)
-- report removed nodes (implemented in Batch 4)
-- report changed nodes (implemented in Batch 4)
-- report added edges (implemented in Batch 4)
-- report removed edges (implemented in Batch 4)
-- report changed edge metadata (implemented in Batch 4)
-- dedicated `call-graph.json` diff section (not implemented — call-graph content is already reflected in `code-graph.json`'s `calls` edges)
-
 #### Search and lookup filtering
 
 - filter search by node kind
@@ -762,161 +685,98 @@ The completed v1.8.0 implementation currently stops at Batch 4. The items below 
 - filter lookup output by edge kind
 - filter graph slices by node and edge kinds
 
+#### Deferred graph-diff scope
+
+- a dedicated `call-graph.json` diff section (call-graph content is already reflected in `code-graph.json`'s call edges, so a separate section is not currently planned)
+- partial (non-fallback) call-graph rebuild during incremental indexing
+
 ## Version 1.9.0
 
 Version 1.9.0 starts Android support with Android project detection and Kotlin/Java structural indexing.
 
 The goal is to let `my-dev-kit` recognize Android project structure and retrieve useful Kotlin/Java source context without rewriting the existing artifact model.
 
-### Batch 1 status (implemented)
-
-Batch 1 is the Android project detection foundation: static Gradle/Android project, module, and source-set detection, with zero Kotlin/Java structural indexing yet.
-
-- `index` now performs static Android project detection against `--root` on every run (no new flag): `settings.gradle(.kts)` `include(...)` parsing (conservative, regex-based, not a real Groovy/Kotlin-DSL parser), root/module `build.gradle(.kts)` Android plugin-id substring evidence (`com.android.application`/`com.android.library`), `AndroidManifest.xml` path existence, and `main`/`test`/`androidTest` source-set + Kotlin/Java source-root existence — all existence/substring-based, never Gradle execution, never Kotlin/Java parsing.
-- Added `android-project.json` (own `artifactKind`, own schema version, own ID space — not merged into `code-graph.json`/`symbol-index.json`), written only when Android evidence is found, registered in `manifest.json`'s `analyzers` array as `{ id: 'android-project', ... }` using the same pattern `classification` already uses. A non-Android project is completely unaffected (`status: 'skipped'`, no file written).
-- `.gradle` added to the default-ignore directory list; `build` (already default-ignored since v1.8.0 Batch 1) already covers all nested Android build-output paths by existing depth-independent basename matching, with zero new ignore-pattern code needed.
-- `index --incremental`'s config fingerprint now covers detected Android structure (an `androidEvidenceFingerprint` derived from the built artifact itself, not raw file hashing), so a Gradle/manifest edit that changes detected structure correctly invalidates the cache even though those files live outside `--src`; an edit that doesn't change any detected fact correctly does not. `--reset-cache`, the no-change fast path, and stale-artifact cleanup all continue to work unchanged.
-- `graph-diff` requires zero code changes: it never enumerates the index directory, so `android-project.json` is inert to it; the existing generic `manifest.analyzerChanges` diff already reports Android analyzer-status changes between two indexes. Proven by a dedicated compatibility test suite, not just asserted.
-- Kept the artifact simpler than originally sketched: module summaries live directly inside `android-project.json`; a separate `android-modules.json` was not needed and was not created.
-
-Batch 1 does not implement Kotlin/Java structural indexing, Kotlin/Java file/symbol nodes in `code-graph.json`/`symbol-index.json`, Android component-role detection, Room/Retrofit/Hilt/Dagger detection, a detailed Gradle project model, a detailed `AndroidManifest.xml` artifact, Android resources/navigation artifacts, or Compose semantic retrieval — those remain planned below for later `v1.9.0` batches.
-
 ### Planned capabilities
 
 #### Android project detection
 
-- detect Android projects from Gradle files and Android manifests (implemented in Batch 1)
-- detect Gradle modules (implemented in Batch 1)
-- distinguish app modules and library modules (implemented in Batch 1)
-- detect source sets such as `main`, `test`, and `androidTest` (implemented in Batch 1)
-- detect Kotlin source roots (implemented in Batch 1)
-- detect Java source roots (implemented in Batch 1)
-- detect generated/build directories that should be ignored (implemented in Batch 1)
-- Gradle version-catalog plugin-alias resolution (not implemented — only literal plugin-id substrings are recognized)
-- custom Gradle `projectDir` remap support (not implemented — module paths always follow the default Gradle directory convention)
+Static, existence/substring-based detection against `--root` on every `index` run (no new flag) — never Gradle execution, never Kotlin/Java parsing:
+
+- detect Android projects from Gradle files and Android manifests
+- detect Gradle modules from `settings.gradle(.kts)` `include(...)` evidence
+- distinguish app modules and library modules from Android plugin-id substring evidence
+- detect source sets such as `main`, `test`, and `androidTest`
+- detect Kotlin source roots
+- detect Java source roots
+- detect generated/build directories that should be ignored (`.gradle` added to default ignores; `build` already covered by existing depth-independent basename matching)
+- Gradle version-catalog plugin-alias resolution remains excluded (only literal plugin-id substrings are recognized)
+- custom Gradle `projectDir` remap support remains excluded (module paths follow the default Gradle directory convention)
 
 Artifact:
 
-- `android-project.json` (implemented in Batch 1; module summaries live inside it — a separate `android-modules.json` was not needed)
-
-### Batch 2 status (implemented)
-
-Batch 2 adds Kotlin structural indexing on top of Batch 1's Android/source-root detection foundation.
-
-- `.kt` files under a requested `--src` root are now discovered and indexed exactly like `.ts`/`.js`/`.py` files, through a new `KotlinAdapter` registered in the existing `LanguageRegistry` — no new indexing pipeline, no new command, no new flag.
-- A conservative, deterministic, line/regex-based extractor (not the Kotlin compiler, not a grammar parser) extracts: package declaration, imports (including wildcards), top-level `class`/`data class`/`sealed class`/`interface`/`object`/`enum class` declarations, top-level functions (including extension functions), and top-level `val`/`var` properties.
-- **Top-level declarations only** — matches the existing TypeScript (`ts.forEachChild`, direct children only) and Python (`tree.body`, top-level only) precedent exactly; class members are not extracted as separate symbols for any language today, so Kotlin doesn't invent a new member-symbol model either.
-- Modifiers, `suspend`, extension receivers, annotations, and `Flow`/`StateFlow` usage are surfaced through the existing `signature` text field (no new fields added to `SymbolDefinition`/`ExtractionResult`) — the same choice the Python adapter already made for decorators.
-- One new `SymbolKind` value, `object`, added because Kotlin's `object`/`companion object` (a singleton/namespace) doesn't map cleanly onto `class`. `SourceLanguage` gained `kotlin`.
-- Import resolution is a best-effort, honestly-limited heuristic (single-top-level-declaration-per-file convention); wildcard imports and multi-declaration files correctly resolve to no target rather than guessing.
-- Call-graph extraction is not implemented for Kotlin (`supportsCallGraph: false`) — Kotlin's trailing-lambda call syntax makes regex-based call detection too unreliable; documented as a limitation, not silently skipped.
-- `search`, `lookup`, `slice`, and `source` all work on Kotlin file/symbol nodes with zero new flags, since Kotlin symbols land in the same `symbol-index.json`/`code-graph.json` artifacts. Verified by dedicated tests, not just asserted.
-- Incremental indexing and `graph-diff` remain fully compatible: Kotlin files participate in the existing changed-file/partial-rebuild machinery and appear as ordinary graph nodes with no Kotlin-specific special-casing needed anywhere in either system.
-- Preserves the existing `--src` source-root boundary: Kotlin source roots recorded in `android-project.json` (Batch 1) are informational only and never expand or override `--src`.
-
-Batch 2 does not implement Java structural indexing, Android component-role detection, Compose semantic retrieval, member function/property symbols, or call-graph edges for Kotlin — those remain planned below or deferred as noted.
+- `android-project.json`, its own `artifactKind` and schema version, written only when Android evidence is found and registered in `manifest.json`'s `analyzers` array; a non-Android project is completely unaffected. Module summaries live directly inside this artifact rather than a separate module artifact.
+- the incremental-indexing config fingerprint covers detected Android structure via an evidence fingerprint derived from the built artifact itself, so a Gradle/manifest edit that changes detected structure correctly invalidates the cache even though those files live outside `--src`
+- `graph-diff` requires no Android-specific code: the existing generic analyzer-status diff already reports Android analyzer-status changes between two indexes
 
 #### Kotlin structural indexing
 
-- `.kt` file discovery (implemented in Batch 2)
-- package declarations (implemented in Batch 2)
-- imports (implemented in Batch 2)
-- classes (implemented in Batch 2)
-- interfaces (implemented in Batch 2)
-- objects (implemented in Batch 2)
-- data classes (implemented in Batch 2)
-- sealed classes (implemented in Batch 2)
-- enums (implemented in Batch 2)
-- top-level functions (implemented in Batch 2)
-- extension functions (implemented in Batch 2)
-- top-level properties (implemented in Batch 2)
-- member functions/properties as separate symbol-index entries (not implemented — matches existing TypeScript/Python top-level-only precedent)
-- constructors as separate symbols (not implemented — primary constructor parameters remain visible via the class's `signature` text)
-- annotations (implemented in Batch 2 — visible via `signature` text, not a new field)
-- `suspend` functions (implemented in Batch 2 — visible via `signature` text)
-- basic coroutine and `Flow`/`StateFlow` usage markers (implemented in Batch 2 — visible via `signature` text and `imports`)
-- Kotlin call-graph edges (not implemented — documented limitation, regex-based call detection deemed too unreliable)
-
-### Batch 3 status (implemented)
-
-Batch 3 adds Java structural indexing on top of Batch 1's Android detection and Batch 2's Kotlin indexing.
-
-- `.java` files under a requested `--src` root are now discovered and indexed exactly like `.ts`/`.js`/`.py`/`.kt` files, through a new `JavaAdapter` registered in the existing `LanguageRegistry` — no new indexing pipeline, no new command, no new flag.
-- A conservative, deterministic, line/regex-based extractor (not `javac`, no Maven/Gradle execution) mirrors the Kotlin adapter's design almost exactly: package declaration, imports (including `static` and wildcard forms), top-level `class`/`interface`/`enum`/`record`/`@interface` (annotation type) declarations.
-- **Top-level declarations only** — same rule as Kotlin and the existing TypeScript/Python precedent; no method/field/constructor symbols were added, and no member-symbol schema change was needed or made.
-- Modifiers (`abstract`/`final`/`static`/`sealed`/`non-sealed`), `extends`/`implements` targets, and annotations are surfaced through the existing `signature` text field — no new fields added to `SymbolDefinition`/`ExtractionResult`.
-- **Zero new `SymbolKind` values** — `record` maps to `class`, `@interface` annotation types map to `interface`; both existing kinds already fit cleanly.
-- Import resolution uses the same best-effort single-declaration-per-file heuristic as Kotlin (`<packageDir>/<Name>.java`); wildcard and static-wildcard imports correctly resolve to no target.
-- Call-graph extraction is not implemented for Java (`supportsCallGraph: false`), matching the Kotlin decision.
-- `search`, `lookup`, `slice`, and `source` all work on Java file/symbol nodes with zero new flags, verified by dedicated tests.
-- Incremental indexing and `graph-diff` remain fully compatible with zero Java-specific special-casing.
-- Preserves the `--src` source-root boundary: Batch 1's detected Android Java source roots are informational only and never expand or override `--src`.
-
-Batch 3 does not implement method/field/constructor symbols, Java call-graph edges, semantic type resolution, cross-file `extends`/`implements` resolution, or Maven/Gradle model parsing.
+- `.kt` file discovery under a requested `--src` root, indexed like `.ts`/`.js`/`.py` files through a language adapter registered in the existing language registry — no new indexing pipeline, no new command, no new flag
+- a conservative, deterministic, line/regex-based extractor (not the Kotlin compiler): package declaration, imports (including wildcards), top-level class/data-class/sealed-class/interface/object/enum declarations, top-level functions (including extension functions), and top-level properties
+- top-level declarations only, matching the existing TypeScript and Python precedent; member functions/properties and constructors are not extracted as separate symbols
+- modifiers, `suspend`, extension receivers, annotations, and coroutine/`Flow`/`StateFlow` usage are surfaced through the existing signature text field rather than new schema fields
+- one additional symbol kind (`object`) for Kotlin's singleton/namespace construct that doesn't map cleanly onto `class`
+- import resolution is a best-effort heuristic based on a single-top-level-declaration-per-file convention; wildcard imports and multi-declaration files resolve to no target rather than guessing
+- call-graph extraction is excluded for Kotlin, since trailing-lambda call syntax makes regex-based call detection unreliable
+- `search`, `lookup`, `slice`, and `source` work on Kotlin file/symbol nodes with no new flags, since Kotlin symbols land in the same core artifacts
+- incremental indexing and `graph-diff` remain fully compatible with no Kotlin-specific special-casing
+- Kotlin source roots recorded by Android project detection remain informational only and never expand or override `--src`
 
 #### Java structural indexing
 
-- `.java` file discovery (implemented in Batch 3)
-- package declarations (implemented in Batch 3)
-- imports, including `static` and wildcard forms (implemented in Batch 3)
-- top-level classes (implemented in Batch 3)
-- top-level interfaces (implemented in Batch 3)
-- top-level enums (implemented in Batch 3)
-- top-level annotation type declarations (implemented in Batch 3 — mapped to `interface`)
-- top-level record declarations (implemented in Batch 3 — mapped to `class`)
-- annotations on top-level declarations (implemented in Batch 3 — visible via `signature` text)
-- `extends` and `implements` relationships (implemented in Batch 3 — visible via `signature` text, not resolved across files)
-- methods (not implemented — matches existing TypeScript/Kotlin/Python top-level-only precedent)
-- fields (not implemented — matches existing TypeScript/Kotlin/Python top-level-only precedent)
-- Java call-graph edges (not implemented — matches the Kotlin decision)
-
-### Batch 4 status (implemented)
-
-Batch 4 adds conservative static Android component-role detection on top of Batch 1's Android detection and Batch 2/3's Kotlin/Java structural indexing.
-
-- A new `detectAndroidComponents()` (`src/android/detectAndroidComponents.ts`) evaluates every top-level Kotlin/Java `class`/`interface`/`object` symbol already in `symbolIndex` against 14 roles, using the evidence priority annotation > superclass/interface > import > package/path > naming suffix (weakest, never alone sufficient for `high` confidence).
-- Runs automatically on every `index` of an Android project — no new flag, no new command, no second indexing pipeline.
-- New optional artifact `android-components.json`, written only when at least one role is detected, registered in `manifest.json`'s `analyzers` array (`{ id: 'android-components', ... }`) via the exact same pattern `android-project`/`classification` already use.
-- Compact `androidComponentRoles`/`androidComponentRefs` fields added to `SymbolDefinition`, `GraphSymbolRecord`, and `CodeGraphNode` — the same compact-projection-plus-artifact-ref pattern `classificationRoles`/`classificationRefs` already established; zero breaking changes to any existing field.
-- `search`, `lookup`, `slice`, and `source` all surface role metadata with zero new flags: `search` gained one new indexed field (`androidComponentRole`); `lookup`/`source` mirror the existing `classificationRoles`/`classificationRefs` pass-through wiring exactly; `slice` needed no changes at all (it already returns whole node objects).
-- Only Retrofit-service detection reads past a symbol's own declaration line (HTTP method annotations are on methods, not the interface declaration) — a small, bounded, brace-depth-scanned re-read of the already-indexed file (capped at 400 lines) covers that one case; every other role uses only data already in `symbolIndex`.
-- Preserves the `--src` source-root boundary: detection only reads files already present in `symbolIndex` (i.e. already under a requested `--src` root) — it never scans additional source roots Batch 1 may have recorded.
-- Does not implement: method/field/constructor-level role evidence, a detailed `AndroidManifest.xml`-based component registry, Compose semantic retrieval, or any runtime/dependency-injection/navigation verification.
-
-Batch 5 hardens and verifies end-to-end retrieval and command compatibility for the Android/Kotlin/Java work added in Batches 1 through 4 — integration hardening only, no new commands, no new flags, no schema redesign.
-
-- Added `tests/fixtures/android/mixed-kotlin-java-app`, a single Android module with role-bearing and plain Kotlin and Java sources side by side, so `index`/`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental` are all proven against one index containing Android project facts, Kotlin symbols, Java symbols, and Android component roles together, not just each language in isolation as Batches 1–4 tested.
-- Confirmed `context` and `graph-diff` were already fully generic with respect to Android/Kotlin/Java data (neither needed Android-specific code in any prior batch); added compatibility tests proving the context capsule can surface Android/Kotlin/Java candidates for task-like queries while staying bounded, and that `graph-diff` reports added/changed Kotlin and Java nodes (including role-metadata changes) with no dedicated Android/Kotlin/Java diff section.
-- No production source changes were required — this batch is tests-and-fixture-only.
-- Does not implement: new commands, new flags, a detailed Gradle model, a detailed `AndroidManifest.xml` artifact, Android resources/navigation artifacts, Compose semantic retrieval, or any Android build/emulator/runtime/security validation.
+- `.java` file discovery under a requested `--src` root, indexed like other languages through a dedicated language adapter — no new indexing pipeline, no new command, no new flag
+- a conservative, deterministic, line/regex-based extractor mirroring the Kotlin adapter's design: package declaration, imports (including `static` and wildcard forms), and top-level class/interface/enum/record/annotation-type declarations
+- top-level declarations only, matching the Kotlin and TypeScript/Python precedent; no method/field/constructor symbols
+- modifiers, `extends`/`implements` targets, and annotations are surfaced through the existing signature text field rather than new schema fields
+- zero new symbol-kind values: `record` maps to `class`, annotation types map to `interface`
+- import resolution uses the same best-effort single-declaration-per-file heuristic as Kotlin; wildcard and static-wildcard imports resolve to no target
+- call-graph extraction is excluded for Java, matching the Kotlin decision
+- `search`, `lookup`, `slice`, and `source` work on Java file/symbol nodes with no new flags
+- incremental indexing and `graph-diff` remain fully compatible with no Java-specific special-casing
+- Android Java source roots remain informational only and never expand or override `--src`
+- excluded from this plan: method/field/constructor symbols, Java call-graph edges, semantic type resolution, cross-file `extends`/`implements` resolution, and Maven/Gradle model parsing
 
 #### Android component detection
 
-Static detection for common Android classes and patterns:
+Static detection for common Android classes and patterns, using annotation, superclass/interface, import, package/path, and naming-suffix evidence (naming alone is never sufficient for high confidence):
 
-- `Activity` (implemented in Batch 4)
-- `Fragment` (implemented in Batch 4)
-- `ViewModel` (implemented in Batch 4)
-- `Service` (implemented in Batch 4)
-- `BroadcastReceiver` (implemented in Batch 4)
-- `ContentProvider` (implemented in Batch 4)
-- `Worker` (implemented in Batch 4)
-- repository classes (implemented in Batch 4 — medium confidence ceiling, no annotation/superclass evidence tier)
-- use-case classes (implemented in Batch 4 — medium confidence ceiling)
-- Room entities and DAOs when detectable by annotations (implemented in Batch 4)
-- Room databases when detectable by annotation or `RoomDatabase` superclass (implemented in Batch 4)
-- Retrofit services when detectable by annotations (implemented in Batch 4 — via a bounded body scan, since HTTP method annotations are inside the interface)
-- Hilt/Dagger modules when detectable by annotations (implemented in Batch 4)
-- Android component-role classification beyond these 14 role tags (not implemented — deferred)
+- `Activity`
+- `Fragment`
+- `ViewModel`
+- `Service`
+- `BroadcastReceiver`
+- `ContentProvider`
+- `Worker`
+- repository classes (medium confidence ceiling, no annotation/superclass evidence tier)
+- use-case classes (medium confidence ceiling)
+- Room entities and DAOs when detectable by annotations
+- Room databases when detectable by annotation or `RoomDatabase` superclass
+- Retrofit services when detectable by annotations, via a small bounded scan of the interface body (HTTP method annotations live on methods, not the interface declaration)
+- Hilt/Dagger modules when detectable by annotations
+- Android component-role classification beyond this set of roles remains future scope
 
-#### Command integration
+Artifact and compact metadata:
 
-- include Kotlin/Java symbols in `symbol-index.json` (implemented in Batch 2/3)
-- include Kotlin/Java file and symbol nodes in `code-graph.json` (implemented in Batch 2/3)
-- preserve existing TypeScript/JavaScript/Python behavior (preserved)
-- keep Android artifacts registered in `manifest.json` (implemented in Batch 1/4)
-- keep static-analysis boundaries explicit (preserved)
-- verify `search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental` compatibility when Android/Kotlin/Java facts coexist in one index (verified in Batch 5)
+- `android-components.json`, an optional artifact written only when at least one role is detected, registered the same way `android-project`/`classification` are
+- compact `androidComponentRoles`/`androidComponentRefs` fields added to symbol/graph records, following the same compact-projection-plus-artifact-ref pattern `classificationRoles`/`classificationRefs` established
+- `search`, `lookup`, `slice`, and `source` surface role metadata with no new flags beyond one new indexed search field
+
+### Dependencies and ordering
+
+1. Android project/module/source-set detection foundation
+2. Kotlin structural indexing
+3. Java structural indexing
+4. Android component-role detection
+5. combined-fixture regression coverage proving Android, Kotlin, Java, and component-role evidence coexist correctly in one index alongside `search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental`
 
 ### Non-goals
 
@@ -933,208 +793,110 @@ Version 1.10.0 adds Android Gradle, manifest, resource, and navigation artifacts
 
 The goal is to make Android behavior visible outside Kotlin/Java source files, because important app behavior is often defined in Gradle, XML manifests, resources, and navigation graphs.
 
-### Batch 1 status (implemented)
-
-Batch 1 is the detailed static Gradle project model: it extends v1.9.0 Batch 1's Android/module/source-set detection foundation with plugins, dependencies, `android {}` configuration, and version-catalog evidence. Manifest, resource, and navigation artifacts are not part of Batch 1 and remain planned below.
-
-- Added `android-gradle.json` (own `artifactKind`, own schema version), written when detailed Gradle evidence is found, registered in `manifest.json`'s `analyzers` array as `{ id: 'android-gradle', ... }` — the same pattern `android-project`/`android-components` already use. `android-project.json` is unchanged and remains the coarse project/module/source-set summary; `android-gradle.json` is a detailed layer built on the same module set.
-- Extends the existing `src/android/parseGradleEvidence.ts` regex/brace-scanning parser (not a new Gradle scanner) with: settings evidence (`rootProject.name`, `include(...)` reused from v1.9.0, `includeBuild(...)`, `project(...).projectDir` remaps), plugin evidence (`id(...)`, `id '...'`, `alias(libs.plugins.*)`, `apply plugin:`/`apply(plugin = ...)`), dependency evidence (external-module/project/version-catalog-alias/platform/file/unknown, per configuration), `android {}` evidence (`namespace`, `compileSdk`, `applicationId`, `minSdk`, `targetSdk`, `versionCode`, `versionName`, `testInstrumentationRunner`, `buildFeatures`, `buildTypes`, `productFlavors`, `flavorDimensions`, source-set overrides), and a bounded `gradle/libs.versions.toml` parser (no new runtime dependency — the TOML subset the file actually uses is hand-parsed).
-- Every SDK/config value is a resolved-literal-or-raw-unresolved-with-warning union (`AndroidGradleValue<T>`): a dynamic expression (variable reference, function call, string concatenation) is always preserved as raw source text with a warning, never guessed at.
-- `index --incremental`'s config fingerprint now also covers an `androidGradleEvidenceFingerprint`, alongside v1.9.0's `androidEvidenceFingerprint`; any settings/build/version-catalog edit that changes detected Gradle evidence invalidates the cache and regenerates `android-gradle.json` in full (no partial per-module rebuild in this batch). Stale-artifact cleanup and `--reset-cache` behavior are unchanged.
-
-Batch 1 does not implement `AndroidManifest.xml` parsing, resource/navigation artifacts, Compose semantic retrieval, or any new retrieval selector/graph view — those remain planned below for later `v1.10.0` batches.
-
 ### Planned capabilities
 
 #### Gradle project model
 
-Static parsing for:
+A detailed static Gradle project model, extending v1.9.0's Android/module/source-set detection foundation with plugins, dependencies, `android {}` configuration, and version-catalog evidence:
 
-- `settings.gradle` (implemented in Batch 1)
-- `settings.gradle.kts` (implemented in Batch 1)
-- `build.gradle` (implemented in Batch 1)
-- `build.gradle.kts` (implemented in Batch 1)
-- `gradle/libs.versions.toml` (implemented in Batch 1)
+- settings evidence (`rootProject.name`, `include(...)`, `includeBuild(...)`, `project(...).projectDir` remaps)
+- plugin evidence (`id(...)`, `apply plugin:`, version-catalog plugin aliases)
+- dependency evidence (external-module/project/version-catalog-alias/platform/file/unknown, per configuration)
+- `android {}` evidence (`namespace`, `compileSdk`, `applicationId`, `minSdk`, `targetSdk`, `versionCode`, `versionName`, `testInstrumentationRunner`, `buildFeatures`, `buildTypes`, `productFlavors`, `flavorDimensions`, source-set overrides)
+- a bounded `gradle/libs.versions.toml` parser covering the TOML subset the file actually uses
+- every SDK/config value is a resolved-literal-or-raw-unresolved-with-warning union: a dynamic expression is always preserved as raw source text with a warning, never guessed at
+- the incremental-indexing config fingerprint covers detected Gradle evidence, so a settings/build/version-catalog edit that changes detected evidence invalidates the cache
 
-Extract where practical:
+Artifact:
 
-- included modules (implemented in Batch 1)
-- Android Gradle plugin usage (implemented in Batch 1)
-- application/library module type (implemented in Batch 1; `test`/`dynamic-feature` also recognized)
-- namespace (implemented in Batch 1)
-- application ID (implemented in Batch 1)
-- min SDK (implemented in Batch 1)
-- target SDK (implemented in Batch 1)
-- compile SDK (implemented in Batch 1)
-- build types (implemented in Batch 1)
-- product flavors (implemented in Batch 1)
-- dependencies (implemented in Batch 1)
-- plugins (implemented in Batch 1)
-- source sets (source-set *overrides* implemented in Batch 1; the base source-set model itself remains in `android-project.json`)
-
-Candidate artifact:
-
-- `android-gradle.json` (implemented in Batch 1)
-
-### Batch 2 status (implemented)
-
-Batch 2 is the detailed static Android manifest model: it discovers and parses `AndroidManifest.xml` files using v1.9.0's module/source-set detection and Batch 1's Gradle namespace/custom-manifest-path evidence. Resource and navigation artifacts are not part of Batch 2 and remain planned below.
-
-- Added `android-manifest.json` (own `artifactKind`, own schema version), written when one or more manifest files are discovered, registered in `manifest.json`'s `analyzers` array as `{ id: 'android-manifest', ... }` — the same pattern `android-gradle`/`android-project` already use.
-- Added a bounded, non-executing XML parser (`src/android/xml/parseXml.ts`, hand-written rather than a new runtime dependency — the same call Batch 1 made for TOML) backing `src/android/discoverAndroidManifests.ts` (discovery: default source-set locations plus statically-visible custom Gradle manifest paths) and `src/android/parseAndroidManifest.ts` (per-manifest parsing), orchestrated by `src/android/buildAndroidManifestProject.ts`.
-- **Manifest merging is never simulated**: every source-set manifest (`main`, `debug`, `release`, product flavors, `test`, `androidTest`, custom source sets) is parsed and preserved as its own independent record, including duplicate declarations across source sets.
-- Extracted per manifest: `package`/`uses-sdk`/`sharedUserId`/`installLocation`; `uses-permission`/`uses-permission-sdk-23`/declared `permission`/`uses-feature`; the `application` declaration and its attributes; `activity`/`activity-alias`/`service`/`receiver`/`provider` components with `exported` state (never overinterpreted — `"true"`/`"false"`/`"unspecified"` only), process/permission attributes, and provider authorities/grant-uri-permission/path-permission evidence; `intent-filter`/`action`/`category`/`data`; `meta-data` (including FileProvider-style references); launcher and deep-link candidates from direct static intent-filter evidence only.
-- Component names (`.Name`/`Name`/`com.example.Name` forms) resolve against the manifest's own `package` attribute first, falling back to the Gradle namespace only when no `package` attribute exists — never against `applicationId`, never invented when neither base is available (left unresolved with a warning).
-- Every non-string attribute value is a resolved-literal/resource-reference/placeholder/unresolved/absent union; resource references (`@type/name`, `?attr/name`) are preserved but never resolved to an actual value.
-- `index --incremental`'s config fingerprint now also covers an `androidManifestEvidenceFingerprint`, alongside v1.9.0's `androidEvidenceFingerprint` and Batch 1's `androidGradleEvidenceFingerprint`; any manifest add/edit/delete, Gradle namespace change, or custom-manifest-path change invalidates the cache and regenerates `android-manifest.json` in full (no partial per-manifest rebuild in this batch).
-
-Batch 2 does not implement resource XML parsing/resolution, `android-resources.json`, `android-navigation.json`, a broad declaration-to-source relationship graph, or any Android retrieval selector/graph view — those remain planned below for later `v1.10.0` batches.
+- `android-gradle.json`, its own `artifactKind` and schema version, registered the same way the other Android analyzers are; `android-project.json` remains the coarse project/module/source-set summary, and `android-gradle.json` is a detailed layer built on the same module set
 
 #### Manifest artifact
 
-Static parsing for `AndroidManifest.xml`:
+Static parsing for `AndroidManifest.xml`, using the module/source-set detection foundation and Gradle namespace/custom-manifest-path evidence:
 
-- package/namespace information where available (implemented in Batch 2)
-- permissions (implemented in Batch 2)
-- activities (implemented in Batch 2)
-- services (implemented in Batch 2)
-- receivers (implemented in Batch 2)
-- providers (implemented in Batch 2; also activity-alias, implemented alongside the four named above)
-- exported components (implemented in Batch 2; explicit `true`/`false`/`unspecified` only — no effective-value computation from platform-version/merging rules)
-- intent filters (implemented in Batch 2)
-- launcher activity (implemented in Batch 2, as launcher *candidates* from direct static evidence — no manifest-merging or build-variant resolution)
-- deep links (implemented in Batch 2, as deep-link *candidates* from direct static evidence — no runtime reachability or domain-verification proof)
-- application metadata (implemented in Batch 2; component-level `meta-data` also implemented)
+- discovery across default source-set locations plus statically-visible custom Gradle manifest paths
+- manifest merging is never simulated: every source-set manifest (`main`, `debug`, `release`, product flavors, `test`, `androidTest`, custom source sets) is parsed and preserved as its own independent record, including duplicate declarations across source sets
+- package/namespace information, `uses-sdk`, `sharedUserId`, `installLocation`
+- permissions (`uses-permission`, `uses-permission-sdk-23`, declared `permission`, `uses-feature`)
+- the application declaration and its attributes
+- activities, activity-aliases, services, receivers, and providers, with `exported` state reported only as an explicit `true`/`false`/`unspecified` value — never computed from platform-version/merging rules
+- intent filters (actions, categories, data)
+- application- and component-level metadata, including FileProvider-style references
+- launcher and deep-link candidates from direct static intent-filter evidence only — no manifest-merging or build-variant resolution, no runtime reachability or domain-verification proof
+- component names resolve against the manifest's own `package` attribute first, falling back to the Gradle namespace only when no `package` attribute exists — never against `applicationId`, never invented when neither base is available
+- every non-string attribute value is a resolved-literal/resource-reference/placeholder/unresolved/absent union
+- the incremental-indexing config fingerprint covers manifest evidence, so a manifest add/edit/delete, namespace change, or custom-manifest-path change invalidates the cache
 
-Candidate artifact:
+Artifact:
 
-- `android-manifest.json` (implemented in Batch 2)
-
-### Batch 3 status (implemented)
-
-Batch 3 is the detailed static Android resource model: it discovers and indexes `res/` resource directories using v1.9.0's module/source-set detection and Batch 1's Gradle resource-directory evidence. Navigation semantics, manifest-to-resource/source-to-resource relationships, and resource resolution are not part of Batch 3 and remain planned below.
-
-- Added `android-resources.json` (own `artifactKind`, own schema version), written when one or more resource files are discovered, registered in `manifest.json`'s `analyzers` array as `{ id: 'android-resources', ... }` — the same pattern `android-manifest`/`android-gradle`/`android-project` already use.
-- Added `src/android/discoverAndroidResourceDirectories.ts` (default source-set locations plus Batch 1 Gradle `res.srcDirs(...)` overrides) and `src/android/parseResourceDirectoryName.ts` (conservative qualifier parsing — locale, night mode, API level, density, orientation, smallest-width/width/height — with unrecognized segments preserved rather than discarded).
-- Added `src/android/parseAndroidValuesResource.ts` (`values*` XML: `string`/`color`/`style`/`bool`/`integer`/`dimen`/`fraction`/`plurals`/arrays/`attr`/`declare-styleable`/explicit-type `item`) and `src/android/parseAndroidResourceFile.ts` (layouts with declared IDs and `<include>`/`<fragment>` evidence; generic file-based XML for drawables/mipmaps/menus/anims/animators/color-state-lists/fonts/navigation graphs; FileProvider `<paths>`; `<network-security-config>`), all built on Batch 2's shared bounded XML parser, additively extended with an element `text` field (zero change to Batch 2 manifest-parsing behavior, verified by the existing Batch 2 regression suite).
-- **Resource merging, overlay precedence, and device-configuration matching are never simulated**: every qualified directory/file across every source set is indexed and preserved independently; duplicate logical resource names are never collapsed, no runtime winner is ever selected.
-- Every resource reference (`@type/name`, `@+id/name`, `@id/name`, `?attr/name`, `@android:...`, `@package:type/name`, `@null`/`@empty`) is classified and given a `candidateTargetIds[]` — every statically-known local definition sharing its logical key, enumerated rather than resolved to one target.
-- A `res/navigation/*.xml` file is recorded only as a generic file-based resource — no destination/action/argument/deep-link navigation semantics were pulled forward from the planned Navigation artifact below.
-- `index --incremental`'s config fingerprint now also covers an `androidResourcesEvidenceFingerprint`; because binary resource files contribute no parsed content to the artifact JSON, their fingerprint additionally folds in a per-file content hash so a binary edit still invalidates the cache. Any resource add/edit/delete or custom Gradle resource-directory change regenerates `android-resources.json` in full (no partial per-file rebuild in this batch).
-
-Batch 3 does not implement navigation destination/action/argument extraction, manifest-to-resource or source-to-resource cross-artifact relationships, resource resolution/compilation, or any Android retrieval selector/graph view — those remain planned below for later `v1.10.0` batches.
+- `android-manifest.json`, its own `artifactKind` and schema version, registered the same way the other Android analyzers are
 
 #### Resource artifact
 
-Static resource indexing for:
+Static resource indexing, using the module/source-set detection foundation and Gradle resource-directory evidence:
 
-- `res/values/strings.xml` (implemented in Batch 3)
-- `res/values/colors.xml` (implemented in Batch 3)
-- `res/values/themes.xml` (implemented in Batch 3, as `style` definitions — no theme-inheritance resolution)
-- `res/drawable/` (implemented in Batch 3; binary bitmap content is indexed by path/qualifier/extension only, never decoded)
-- `res/mipmap/` (implemented in Batch 3, same boundary as drawables)
-- `res/xml/` (implemented in Batch 3, including FileProvider paths and network-security config as specialized records)
-- `res/layout/` when XML views are used (implemented in Batch 3)
+- `res/values/` (strings, colors, styles/themes, bools, integers, dimens, fractions, plurals, arrays, attrs, declare-styleable, explicit-type items)
+- `res/drawable/` and `res/mipmap/` — binary bitmap content is indexed by path/qualifier/extension only, never decoded
+- `res/xml/`, including FileProvider paths and network-security config as specialized records
+- `res/layout/` with declared IDs and `<include>`/`<fragment>` evidence
+- conservative qualifier parsing (locale, night mode, API level, density, orientation, smallest-width/width/height), with unrecognized segments preserved rather than discarded
+- resource merging, overlay precedence, and device-configuration matching are never simulated: every qualified directory/file across every source set is indexed and preserved independently, and duplicate logical resource names are never collapsed
+- every resource reference is classified and given every statically-known local definition sharing its logical key, enumerated rather than resolved to one target
+- navigation XML files are recorded only as a generic file-based resource at this layer — destination/action/argument navigation semantics belong to the navigation artifact below
+- the incremental-indexing config fingerprint covers resource evidence, including a per-file content hash for binary resources so a binary edit still invalidates the cache
 
-Extract where practical:
+Artifact:
 
-- string resource keys (implemented in Batch 3)
-- style/theme names (implemented in Batch 3; no inheritance resolution)
-- color names (implemented in Batch 3)
-- drawable names (implemented in Batch 3)
-- layout IDs (implemented in Batch 3)
-- view IDs (implemented in Batch 3)
-- navigation XML references (implemented in Batch 3 only as bounded generic file-resource evidence — no destination/action/argument extraction; full navigation semantics remain planned below)
-
-Candidate artifact:
-
-- `android-resources.json` (implemented in Batch 3)
-
-### Batch 4 status (implemented)
-
-Batch 4 is the detailed static Android navigation model: it discovers and indexes `res/navigation/*.xml` graphs (reusing Batch 3's already-discovered navigation resource-file records) and narrowly-supported static Compose navigation routes from already-indexed Kotlin/Java source. Manifest deep-link linking, screen-to-route cross-artifact relationships, and full Compose semantics are not part of Batch 4 and remain planned below.
-
-- Added `android-navigation.json` (own `artifactKind`, own schema version), written when navigation XML or supported Compose route evidence is found, registered in `manifest.json`'s `analyzers` array as `{ id: 'android-navigation', ... }` — the same pattern the other three Android analyzers use.
-- Added `src/android/buildAndroidNavigationXmlModel.ts` (root/nested graphs, `fragment`/`activity`/`dialog` destinations with unrecognized elements conservatively preserved as `custom`, `<action>` with candidate destination/popUpTo enumeration and flags/animation references, `<argument>` with classified default values, `<deepLink>` with parsed scheme/host/placeholder evidence, `<include>` with multi-candidate target resolution) and `src/android/buildComposeNavigationRoutes.ts` (bounded static extraction from `composable`/`navigation`/`dialog`/`activity`/`NavHost` calls — direct string literals, same-file `const val` resolution, and type-route arguments only; dynamic expressions always left unresolved with a warning, never invented), merged by `src/android/buildAndroidNavigationProject.ts`.
-- **XML and Compose evidence are two clearly separated evidence kinds, never auto-linked**: this batch never infers that an XML destination and a Compose route are "the same" screen from name/string similarity alone.
-- Extended the shared XML parser (`src/android/xml/parseXml.ts`) with `findNamespacePrefixForUri`, a generalization of Batch 2's Android-namespace-only lookup needed for navigation XML's `app`/`tools` namespaces — zero change to Batch 2/3 parsing behavior, verified by their existing regression suites.
-- A **direct screen candidate** is recorded only when a route's content lambda is exactly one top-level PascalCase call with no control-flow keywords anywhere in the body; ambiguous content (e.g. an `if`/`else` choosing between screens) still produces route evidence but no screen candidate.
-- Compose route evidence is computed inside the same index-finishing pipeline stage `android-components.json` (v1.9.0 Batch 4) already uses, since it needs the already-built symbol index; the XML portion is computed early (like the other three Android builders) with its own `androidNavigationXmlEvidenceFingerprint`, since navigation XML isn't tracked by the normal `--src` changed-file mechanism — Kotlin/Java changes affecting Compose routes are already covered by that existing mechanism.
-
-Batch 4 does not implement manifest-to-navigation deep-link relationships, navigation-to-resource or destination-to-source relationships, route-to-screen graph edges, full Compose semantic indexing, or any Android retrieval selector/graph view — manifest/navigation/resource/source relationship linking was implemented in Batch 5 (below); retrieval selectors/graph views remain planned for Batch 6 or v1.11.0.
+- `android-resources.json`, its own `artifactKind` and schema version, registered the same way the other Android analyzers are
 
 #### Navigation artifact
 
-Static parsing for Android navigation evidence:
+Static parsing for Android navigation evidence, reusing the resource artifact's already-discovered navigation resource-file records plus narrowly-supported static Compose navigation routes from already-indexed Kotlin/Java source:
 
-- XML navigation graph destinations when present (implemented in Batch 4)
-- Compose route string constants when detectable (implemented in Batch 4, narrowly — direct string literals, same-file `const val`, and type-route arguments only; dynamic expressions are never invented)
-- deep-link mappings from manifest/navigation resources (XML navigation deep links implemented in Batch 4; exact manifest-to-navigation deep-link *linking* implemented in Batch 5)
-- screen-to-route relationships when statically visible (direct screen *candidates* implemented in Batch 4; destination/route-to-symbol graph edges implemented in Batch 5)
+- root/nested XML navigation graphs, with `fragment`/`activity`/`dialog` destinations and unrecognized elements conservatively preserved as `custom`
+- `<action>` with candidate destination/popUpTo enumeration and flags/animation references
+- `<argument>` with classified default values
+- `<deepLink>` with parsed scheme/host/placeholder evidence
+- `<include>` with multi-candidate target resolution
+- bounded static extraction of Compose navigation routes from `composable`/`navigation`/`dialog`/`activity`/`NavHost` calls — direct string literals, same-file constant resolution, and type-route arguments only; dynamic expressions are always left unresolved with a warning, never invented
+- XML and Compose evidence are two clearly separated evidence kinds, never auto-linked from name/string similarity alone
+- a direct screen candidate is recorded only when a route's content lambda is exactly one top-level PascalCase call with no control-flow keywords anywhere in the body; ambiguous content still produces route evidence but no screen candidate
 
-Candidate artifact:
+Artifact:
 
-- `android-navigation.json` (implemented in Batch 4)
+- `android-navigation.json`, its own `artifactKind` and schema version, registered the same way the other Android analyzers are
 
-### Batch 5 status (implemented)
+#### Cross-artifact relationships
 
-Batch 5 connects the six Android artifacts from Batches 1-4 (plus v1.9.0's `android-project.json`/`android-components.json`) through compact, deterministic, conservative static graph relationships — integrated additively into the existing `code-graph.json`, not a new artifact, not a parallel graph.
+The six Android artifacts (Gradle, manifest, resources, navigation, plus v1.9.0's project and component-role artifacts) connect through compact, deterministic, conservative static graph relationships, integrated additively into `code-graph.json` rather than a new or parallel artifact:
 
-- Added `src/android/buildAndroidArtifactRelationships.ts`, called at the end of the same index-finishing pipeline stage `android-components.json`/Compose route extraction already use, and `src/graph/addAndroidRelationshipsToCodeGraph.ts`, which additively merges the result into `code-graph.json` by `id` — the same merge pattern `addFrontendRelationshipsToCodeGraph.ts` already uses for frontend routes.
-- Extended `CodeGraphNodeKind`/`CodeGraphEdgeKind` (backward-compatible additive union extension) with 13 new Android node kinds and 17 new Android edge kinds; extended `CodeGraphNode` with optional `androidArtifactId`/`androidEntityId`/`androidModuleId`/`androidSourceSetId`/`androidMetadata` fields.
-- Every relationship node reuses the stable ID its owning artifact already assigned (module/manifest-component/resource-definition/navigation-destination/etc. IDs are never re-minted); every source-side edge endpoint reuses the existing `symbol`- or `file`-kind node from structural indexing — Kotlin/Java class nodes are never duplicated.
-- Implements all required relationship families: `module-contains-source-set`, `manifest-declares-component`, `manifest-component-resolves-to-source` (exact fully-qualified class name only, following `targetActivity` for `activity-alias`), `component-has-intent-filter`, `component-uses-permission`/`manifest-uses-permission` (no security verdict drawn), `resource-defined-in-file`, `source-references-resource` (bounded, comment/string-stripped `R.type.name` scan of indexed Kotlin/Java source; `android.R.*` framework references always skipped), `navigation-graph-contains-destination`, `navigation-destination-has-action`, `navigation-action-targets-destination`/`navigation-action-pop-up-to-destination`, `navigation-graph-includes-graph`, `navigation-destination-has-deep-link`, `manifest-deep-link-matches-navigation-deep-link` (exact scheme/host/port/path only — a manifest `pathPrefix`/`pathPattern` or a navigation deep link with a placeholder is always a non-match), `navigation-destination-resolves-to-screen`, `compose-route-resolves-to-screen`.
-- Every one-to-many static match (multiple candidate classes, resource definitions, navigation targets, or screen functions) is enumerated as one edge per candidate — never narrowed to a single runtime winner, since edge metadata cannot hold arrays.
-- Registered in `manifest.json`'s `analyzers` array as `{ id: 'android-relationships', ... }` with `artifacts: []` (it enriches `code-graph.json` in place, producing no new top-level file).
-- No dedicated incremental fingerprint: relationships are recomputed fresh whenever the finishing pipeline runs, which already happens on any upstream Android evidence fingerprint change or tracked Kotlin/Java source change. `graph-diff` required zero code changes — it already diffs `CodeGraph.nodes`/`.edges` purely by `id` equality.
+- every relationship node reuses the stable ID its owning artifact already assigned; every source-side edge endpoint reuses the existing symbol- or file-kind node from structural indexing
+- relationship families include: module-contains-source-set, manifest-declares-component, manifest-component-resolves-to-source (exact fully-qualified class name only, following `targetActivity` for activity-aliases), component-has-intent-filter, component/manifest-uses-permission (no security verdict drawn), resource-defined-in-file, source-references-resource (a bounded, comment/string-stripped `R.type.name` scan of indexed Kotlin/Java source; framework `android.R.*` references are always skipped), navigation-graph-contains-destination, navigation-destination-has-action, navigation-action-targets/pop-up-to-destination, navigation-graph-includes-graph, navigation-destination-has-deep-link, manifest-deep-link-matches-navigation-deep-link (exact scheme/host/port/path only), navigation-destination-resolves-to-screen, and compose-route-resolves-to-screen
+- every one-to-many static match (multiple candidate classes, resource definitions, navigation targets, or screen functions) is enumerated as one edge per candidate, never narrowed to a single runtime winner
+- registered in `manifest.json`'s `analyzers` array with no new top-level artifact file, since it enriches `code-graph.json` in place
+- `graph-diff` requires no relationship-specific code, since it already diffs graph nodes/edges purely by stable ID equality
 
-Batch 5 does not implement retrieval selectors, graph views, or any new CLI flag for these relationships (that is Batch 6's scope), and does not claim runtime reachability, effective permission enforcement, or deep-link resolution success — only static structural evidence.
+#### Command integration
 
-### Batch 6 status (implemented)
+The Android evidence and relationships surface through the existing `search`, `lookup`, `source`, `slice`, `context`, and `view` command families — no new top-level command, no second retrieval runtime, no second graph:
 
-Batch 6 exposes the Android evidence and Batch 5 relationships through the existing `search`, `lookup`, `source`, `slice`, `context`, and `view` command families — no new top-level command, no second retrieval runtime, no second graph.
+- `search --android-route <route>`, `search --permission <permission>`, `search --resource <name>`, `search --android-component <name>` (each mutually exclusive with `--query` and the existing reachability selectors)
+- `lookup --android-component <name>`, returning `found`/`not-found`/`ambiguous` with detailed component evidence on a unique match
+- `source --android-route <route>`, `source --resource <name>`, retrieving a bounded excerpt via the resolved node's own path/line; binary resources return metadata only, never decoded content; multiple exact candidates return `ambiguous` with every candidate ID rather than a chosen winner
+- `slice --android-route <route>`, `slice --android-component <name>`, resolving a unique root and then calling the unmodified graph-slicing engine — identical depth/direction/edge-kind/cap behavior to `--node`
+- `view --graph android-module`, `view --graph android-manifest`, `view --graph android-navigation`, each rendering the existing code graph filtered to a relevant Android node-kind seed set expanded one hop across a fixed, named set of relationship edges — the existing DOT/SVG/PNG renderer, no second renderer
+- `context` requires no new command or flag: Android nodes participate in the same searchable/candidate-ranking pipeline as file/symbol nodes, so a route/permission/resource/component-shaped query can select an Android node as focus, expand across real relationship edges, and attach bounded source evidence for it
 
-- Added `src/android/androidRetrieval.ts`: one shared, bounded resolver (artifact/graph loading, exact-match candidate resolution for routes/permissions/resources/components, search/lookup result builders) reused by every command below.
-- `search` gained `--android-route`, `--permission`, `--resource`, and `--android-component` (each mutually exclusive with `--query` and the existing reachability selectors), returning `my-dev-kit-v1-android-search-result` with every exact candidate preserved.
-- `lookup` gained `--android-component`, returning `found`/`not-found`/`ambiguous` (mirroring the existing lookup ambiguity contract) with detailed component evidence — intent filters, permission edges, source-class candidates, deep-link matches — on a unique match.
-- `source` gained `--android-route` and `--resource`, retrieving a bounded excerpt via the resolved node's own `path`/`line` (no reparsing); binary resources (`.png`/`.ttf`/etc.) return metadata only, never decoded content; multiple exact candidates (e.g. a resource defined in `values/` and `values-es/`) return `ambiguous` with every candidate ID, never a chosen qualifier/source-set winner.
-- `slice` gained `--android-route` and `--android-component`, resolving a unique root then calling the **unmodified** `sliceGraph` engine — identical depth/direction/edge-kind/cap behavior to `--node`.
-- `view` gained `--graph android-module`, `--graph android-manifest`, and `--graph android-navigation` (`src/graph/adaptGraphArtifact.ts`), each rendering `code-graph.json` itself (the same artifact `--graph code` renders) filtered to a Batch 5 node-kind seed set expanded one hop across a fixed, named set of real relationship edges — the existing DOT/SVG/PNG renderer, no second renderer.
-- `context` needed no new command or flag: `src/search/searchIndex.ts` now treats `android-*` code-graph nodes as searchable (previously only `file`/`symbol`), and `src/context/candidateRanking.ts` now accepts those kinds into the same generic candidate-ranking/graph-expansion/source-selection pipeline — a route/permission/resource/component-shaped query can now select an Android node as focus, expand across real Batch 5 edges, and attach bounded source evidence for it.
-- `src/lookup/resolveSourceTarget.ts` (`resolveFileNodeTarget`, already shared by `source --node` and `context`'s source-slice selection) was additively extended to resolve a bounded excerpt for `android-*` nodes carrying a `path`/`line`.
-- Added a combined fixture, `tests/fixtures/android-retrieval/combined-app/`, and two test files (`tests/android/androidRetrieval.spec.ts`, `tests/cli/androidRetrievalCommands.spec.ts`) covering exact-match/ambiguity/no-match behavior, binary-resource non-decoding, real relationship traversal in slices/views, context Android-query integration, missing-Android-evidence and non-Android-project compatibility, and stale-retrieval-after-re-index (route rename, permission removal, full/incremental equivalence).
+### Dependencies and ordering
 
-Batch 6 does not implement full Compose semantic retrieval, Android UI-test indexing, Android architecture/data-flow classification, or an Android retrieval benchmark program — those remain planned below for v1.11.0-v1.13.0.
-
-### Command integration
-
-Implemented selectors (v1.10.0 Batch 6):
-
-- `search --android-route <route>`
-- `search --permission <permission>`
-- `search --resource <name>`
-- `search --android-component <name>`
-- `lookup --android-component <name>`
-- `source --android-route <route>`
-- `source --resource <name>`
-- `slice --android-route <route>`
-- `slice --android-component <name>`
-- `view --graph android-module`
-- `view --graph android-manifest`
-- `view --graph android-navigation`
-- `context` Android-query integration (no new flag)
-
-### Batch 7 status (implemented)
-
-Batch 7 is the combined Android integration and regression gate: it validates Batches 1-6 as one coherent capability (source → detection → Gradle/manifest/resource/navigation models → Kotlin/Java indexing → Android component evidence → code-graph relationships → incremental indexing → graph-diff → search/lookup/source/slice/context/view) against one canonical fixture, rather than adding new product scope.
-
-- Extended the existing Batch 6 canonical fixture (`tests/fixtures/android-retrieval/combined-app/`) into a full-coverage combined fixture — a second (`:core`) library module, Groovy alongside Kotlin DSL, product flavors/version-catalog/dynamic-dependency evidence, an activity-alias with resolved `targetActivity`, `uses-permission-sdk-23`/`uses-feature`/metadata, an exact plus a host-mismatched deep link, a component with no matching source class, additional resource types (styles/arrays/plurals/styleable/night-qualified duplicates), a nested/included navigation graph, a `popUpTo` action and a missing-target action, and full Compose builder coverage including a direct type-safe route (`composable<HomeRoute>()`) — rather than creating a second overlapping fixture.
-- Added `tests/integration/` (five suites, 181 tests): fixture integrity, full artifact-generation plus cross-artifact identity plus the complete Batch 5 relationship-family matrix plus graph compactness, the complete Batch 6 retrieval/lookup/source/slice/view/context matrix, a combined incremental/stale-evidence/determinism gate, and a graph-diff plus missing/malformed-index gate.
-- Closed the two fixture-level gaps Batch 6 explicitly reported as deferred: dedicated activity-alias public-retrieval tests (search/lookup/slice all resolve the alias to its exact `targetActivity` source class) and dedicated resource-deletion/component-rename stale-retrieval tests (each verified against both incremental re-indexing and a clean full re-index for equivalence).
-- Corrected one narrow Batch 5→6 gap discovered by the direct type-safe-route fixture: `route.typeRouteName` was recorded by Batch 4 but never projected into Batch 5's compact `android-compose-route` `androidMetadata`, so a type-safe route existed in the graph but could never be found by `search`/`source`/`slice --android-route`. Added the missing `typeRouteName` field to the existing `androidMetadata` shape and a matching branch in the Batch 6 resolver — no new relationship family, no new artifact field beyond the one already-agreed compact-metadata contract.
-- Full test suite: 1645/1645 passing (1464 Batch 6 baseline + 181 new Batch 7 integration tests), `npm run verify` (typecheck, build, docs:check) clean, and `npm run benchmark:retrieval` still PASS (confirms Batch 6's context candidate-eligibility change caused no regression).
-
-Batches 1 through 8 are complete. The v1.10.0 implementation is complete, documentation is reconciled, and the implementation-completeness audit has passed. Pre-release readiness remains next; v1.10.0 has not been published.
+1. Gradle project model
+2. manifest artifact
+3. resource artifact
+4. navigation artifact
+5. cross-artifact relationships integrated into the code graph
+6. command integration across `search`/`lookup`/`source`/`slice`/`view`/`context`
+7. combined-fixture integration and regression coverage across the full Android/Kotlin/Java/Gradle/manifest/resource/navigation/relationship surface
 
 ### Static boundaries
 
@@ -1143,6 +905,155 @@ Batches 1 through 8 are complete. The v1.10.0 implementation is complete, docume
 - no runtime intent resolution
 - no proof that a deep link works at runtime
 - no Play Store or signing validation
+
+## Version 1.10.1
+
+Version 1.10.1 extends the existing context architecture with deterministic role-specific repository-evidence retrieval and honest bounded evidence reporting. It is a bounded patch on top of the v1.10.0 baseline and does not replace, reduce, reorder, or postpone any scope assigned to v1.11.0, v1.12.0, v1.13.0, v1.14.0, or v2.0.0.
+
+### Goal
+
+Architecture context is normally retrieved before behavior and implementation planning. Production code can change after that retrieval, making the initial packet stale for implementation or test writing. Architecture planning, production implementation, and test implementation also require materially different evidence; one broad packet either omits critical contracts or includes too much unrelated repository content.
+
+The v1.10.1 goal is to let callers refresh role-specific context while preserving existing behavior:
+
+- **architecture** asks where behavior should live and retrieves owners, extension points, public contracts, structural neighbors, and architecture tests;
+- **implementation** asks what exact current code must change or be preserved and retrieves owners, callers/callees, validators, constants, defaults, limits, errors, serializers, schemas, compatibility surfaces, and closest tests;
+- **test-implementation** asks how approved test responsibilities should be implemented against final production code and retrieves changed production files/symbols, graph-diff evidence, branches and side-effect boundaries where statically represented, existing tests, fixtures, factories, mocks, setup, configuration, commands, and responsibility mappings.
+
+The result must avoid both context extremes: generic instructions without repository/test evidence, and repository-wide dumps, unbounded graph output, whole libraries, or unrelated artifacts. Output must be role-specific, fresh when provable, bounded, deterministic, inspectable, auditable, and explicit when required evidence is inadequate.
+
+### Current architecture extended
+
+The plan extends current owners rather than creating parallel systems:
+
+- `src/commands/contextCommand.ts` owns context CLI parsing and coordinates search, focus, graph, source, capsule, and audit output.
+- `src/context/types.ts` owns the context capsule request contract, extended with role, structured request, changed surface, before/after index, and test-responsibility references.
+- `src/context/candidateRanking.ts` and `src/search/rankSearchResults.ts` own deterministic ranking and stable ties; no separate candidate-provider registry is introduced.
+- `src/context/graphFocus.ts`, `src/context/graphSelection.ts`, and `src/graph/sliceGraph.ts` own focus ambiguity and capped deterministic graph expansion.
+- `src/context/sourceSelection.ts` and `src/context/sourceBundles.ts` own bounded source ranges, continuation, dependency bundles, and skipped-source warnings.
+- Budgets are count, graph-cap, source-line, and bundle based. Exact model-token budgeting is not part of this plan and must not be claimed.
+- `src/context/contextCapsule.ts` and `src/context/retrievalAuditRecord.ts` own capsule/audit serialization on a stable additive schema.
+- `src/graph-diff/buildSymbolIndexDiff.ts` returns sorted added/removed/changed files and symbols and is the preferred before/after changed-surface source.
+- Existing indexing, manifest, cache-metadata, and partial-rebuild owners remain authoritative. v1.10.1 does not create a second context index.
+
+Test files receive general test/fixture classification; fixtures, factories, mocks, setup files, and package scripts are separately modeled by this plan through bounded discovery over existing classifications, paths, imports/graph evidence, package configuration, and test configuration. A major index schema change is not part of this patch.
+
+### Planned capabilities
+
+#### Request and role contracts
+
+- `ContextRole` (`architecture`/`implementation`/`test-implementation`), orthogonal to the existing `general`/`feature-add`/`subsystem` modes: neither overwrites the other
+- a structured, schema-versioned `ContextRequest` JSON contract, supplied via `context --request <path>` and validated before any capsule or audit file is written
+- `context --role <role>` as the CLI-equivalent shorthand for the request file's `role` field
+- deterministic CLI/request-file normalization: when the same field is supplied on both the CLI and in a request file, equivalent normalized values are accepted and conflicting values fail with a diagnostic naming both sources
+- structural validation of every optional field (`focusFiles`, `focusSymbols`, `changedFiles`/`changedSymbols`, `beforeIndex`/`afterIndex`, `testResponsibilityRefs`, `requestedEvidenceKinds`, `limits`), rejecting malformed JSON, unsupported schema majors, unknown roles/evidence kinds, conflicting values, missing required index pairs, and invalid limits/paths
+- full legacy compatibility: every pre-1.10.1 `context` invocation continues to work identically without `--request`/`--role`
+
+#### Role-aware evidence retrieval
+
+- role changes candidate priorities: architecture favors owner-like candidates (command handlers, registries/dispatchers, adapters, analyzers, builders) and public contracts; implementation favors an exact focus symbol, its direct dependencies, and validator/schema/error/constant contracts; test-implementation favors changed production files/symbols and their closest tests
+- `focusFiles`/`focusSymbols` resolve against the active index; an unresolved focus is reported rather than invented, and an ambiguous simple-name match is reported as ambiguous rather than guessed
+- `changedFiles`/`changedSymbols` (caller-supplied) and `beforeIndex`/`afterIndex` (graph-diff evidence, reusing the existing symbol-index diff rather than a second comparison) merge into one deterministic changed-surface model with a status (added/modified/removed/unknown) and provenance (caller/graph-diff/both) per entry; removed symbols are preserved as changed-surface evidence, never discarded
+- `requestedEvidenceKinds` constrains and prioritizes the evidence categories a role surfaces from a fixed, documented set (owner, dependencies, contracts, validators, constants, errors, schemas, callers, callees, closest-tests, test-infrastructure, test-commands, changed-surface, responsibility-mappings); an unrecognized entry fails validation rather than being silently accepted
+- ranking stays deterministic and bounded: role/focus/changed-surface adjustments never bypass the existing candidate/graph/source caps, and ties always break on stable candidate ID/path
+
+#### Evidence groups and test infrastructure
+
+- role-ranked evidence organizes into deterministic, bounded, named groups: architecture groups owners, extension points, contracts, the graph neighborhood, and architecture tests; implementation groups owners, dependencies, callers/callees, contracts, validators/constants, errors, schemas/serializers, compatibility surfaces, and closest tests; test-implementation groups the changed surface, production symbols, validators/boundaries, errors/side-effects, related tests, fixtures, factories, mocks, setup/configuration, and test commands
+- each group carries a fixed internal capacity, an available/used/dropped count, and a truncated flag for auditable, deterministic (sort-before-truncate) caps; a request with no role keeps evidence groups empty, matching legacy behavior exactly
+- cross-group rollups (selected owners, selected contracts, selected tests) deduplicate evidence that appears in more than one group
+- because the indexer excludes test-path files from the core symbol index/code graph by default, related-test discovery performs a bounded, read-only directory walk plus a lightweight, bounded, regex-based import-specifier scan — never a second index and never an execution of the scanned file; a test file becomes "related" only when it imports a file or named symbol of interest, and a fixture/factory/mock is only reported when a discovered related test actually imports it
+- a naming-convention match alone (for example a file merely named like a "builder" or "factory") is never treated as selected evidence without backing graph, import, or classification evidence — this conservative evidence boundary is intentional, not a gap to close later
+- supported test configuration files (Vitest/Vite `test:` blocks) are parsed for `include`/`exclude`/`setupFiles`/`testTimeout`/`hookTimeout`/`maxWorkers`/`environment` via bounded regex extraction, never evaluated as code; other detected configuration formats are reported as unsupported rather than silently treated as understood, and multiple detected configuration files are all reported rather than arbitrarily narrowed to one
+- package scripts matching a test/verification-relevant naming convention are surfaced, and an exact test command is derived only when a supported runner invocation and at least one related test are both available; otherwise the gap is reported as unresolved rather than an invented command
+
+#### Test-responsibility mapping and oracle evidence
+
+- callers provide stable responsibility references; free-form prose is never reported as fully mapped
+- each mapping connects a responsibility to grounded static evidence only (changed/focus symbols, evidence-group membership, bounded test-infrastructure discovery) — never LLM reasoning, embedding similarity, or fuzzy filename matching
+- mapping status is mapped, partially mapped, unmapped, or not-applicable (not-applicable only ever from an explicit caller flag, never inferred)
+- duplicate responsibility references are rejected with the first occurrence winning; unknown/unresolvable references are reported rather than silently dropped
+- criticality is caller-supplied per responsibility and defaults to noncritical when the request contract cannot express it; a critical, unmapped responsibility always makes the role inadequate, while a noncritical gap only warns
+- test-focused evidence supports exact return/final/persisted state, error type/diagnostic/exit code, required and forbidden side effects, cleanup/rollback, idempotency/retry, and artifact-shape assertions; `my-dev-kit` retrieves evidence and does not write tests or use LLM reasoning to decide assertions
+
+#### Role adequacy
+
+- role adequacy extends, rather than replaces, the existing context-adequacy verdict
+- nonempty evidence is never automatically treated as adequate: architecture requires a plausible owner and relevant contract/extension-point evidence; implementation additionally requires contract evidence and no critical unresolved requirement; test-implementation additionally requires changed-surface evidence, a related-test-or-explicit-missing-test state, and every critical responsibility mapped
+- a request with no role carries the existing adequacy verdict forward unchanged and reports role adequacy as not applicable
+
+#### Freshness
+
+- freshness classifies as fresh, stale, or unknown; an index directory existing is never treated as proof of freshness by itself
+- fresh only when the active index matches a supplied `afterIndex`; stale only when it matches a supplied `beforeIndex` while relevant changed-surface evidence exists; otherwise unknown
+- repository state evidence (for example a repository commit identity) is read read-only and optionally, wrapped so a missing or absent source control system never throws, and recorded as informational evidence only
+- before/after indexes and changed files/symbols remain the primary supported freshness evidence; no unsupported freshness claim is made
+
+#### Boundedness and reporting
+
+- candidate limits, graph depth/node/edge limits, file/symbol limits, source-range and source-line limits, character limits, evidence-group-entry limits, full-file-fallback limits, and responsibility-mapping limits are all declared and reported alongside their used/available/dropped counts
+- `limits.responsibilityMappings` is an enforcing limit: it actually caps how many responsibility mappings are produced, truncating deterministically critical-first (a critical responsibility can only be dropped once every critical one already exceeds the limit)
+- `limits.evidenceGroupEntries` is a reporting-only budget: it is recorded as a declared value alongside the real usage/availability/drop counts, but the actual per-group caps that shape evidence-group truncation are the fixed internal limits each group defines (for example 3 or 5 for owners, 10 for contracts); the declared field does not override those internal caps. This is a deliberate reporting boundary, not an unresolved implementation gap.
+- truncation is always reported with dropped counts, whether required evidence was lost, and the resulting adequacy impact
+- full-file fallback remains exceptional: it is attempted only for contract/validator/error evidence a responsibility mapping needed but no selected source slice covered, it records line/character counts rather than the file content itself, a fallback limit of zero disables it entirely while still reporting the disallowed need honestly, and a positive limit deterministically caps the fallback count
+
+#### Provenance and audit agreement
+
+- the capsule and the retrieval audit share consistent selection facts: included and excluded evidence are both explained, fallback use is audited, truncation is audited, and unresolved evidence is explicit
+- every owner/contract/test/changed-surface/responsibility-mapping evidence item is classified into a stable provenance category (for example caller-changed-file, graph-diff, code-graph, import-scan, test-configuration, package-json) with a deterministic ID; evidence reachable through more than one source merges its provenance rather than duplicating the evidence item
+
+#### Determinism
+
+- identical index, request, role, mode, limits, focus, changed surface, and source state produce identical selection, ranking, groups, warnings, adequacy, truncation, capsule, and audit output, excluding only normalized existing nondeterministic metadata (such as generation timestamps)
+- stable ties, normalized paths, stable serialization, and no filesystem-order dependence apply throughout
+- before/after graph-diff evidence stays consistent with `graph-diff`'s own comparison behavior
+- capsule and audit JSON remain safe for stdout parsing
+
+### Architecture and compatibility constraints
+
+- no second search engine, no second graph engine, no second index
+- no workflow-catalog ownership, no native orchestrator execution, no lab runtime, no LLM ranking
+- no automatic source editing, no automatic test writing
+- no security or release responsibility
+- existing context usage remains compatible without new options; new capsule/audit fields are additive
+- `my-dev-kit-orchestrator` owns workflow/stage/command/rule/report-contract IDs, workflow selection and dependency resolution, prompt assembly, stage order and lifecycle, correction/judge handling, and publication authorization; its integration with role-specific context remains manual/prompt-guided rather than a native automatic execution path
+- `my-dev-kit-lab` owns controlled strategy experiments, context-quality evaluation, security validation, and code-rot auditing, and is not a production context runtime
+- `ContextRequest`, context capsules, and retrieval audits are `my-dev-kit` contracts; the orchestrator's workflow instruction packet and stage context bundle are separate contracts; no shared package is required between the two projects
+
+### Explicit exclusions
+
+v1.10.1 does not implement workflow catalog semantics/selection, stage order, orchestrator instruction packets, prompt assembly, native orchestrator stages/execution, artifact lifecycle, judge routing, publication authorization, automatic source/test editing, LLM ranking/mapping, subjective grading, complete semantic fixture/mock/factory indexing, exact model tokenization, shared schemas, a public plugin architecture, security validation, runtime Android behavior, or release actions.
+
+### Validation expectations
+
+Behavior-derived validation covers: request normalization and error handling; role/mode independence; owner selection and ambiguity; candidate ranking and stable ties; changed files/symbols and graph-diff intake; evidence groups and missing-evidence handling; responsibility states and critical inadequacy; role adequacy, including nonempty-but-inadequate output; fresh/stale/unknown evidence; every cap/truncation/fallback path; existing command/artifact/index compatibility; repeated deterministic output; and cross-platform path behavior (Windows/Linux/macOS).
+
+Relevant validation commands include typecheck, the focused context test suite, the broader test suite, the documentation checks, the retrieval regression benchmark, and a package dry run. Request-file, per-role, JSON-output, capsule/audit inspection, before/after-index, missing-evidence, tiny-budget, and stale-context scenarios all warrant smoke-level coverage. A validation command that does not exist yet must not be documented as available.
+
+### Dependencies and ordering
+
+1. establish request and role contracts
+2. apply role-aware candidate selection and ranking
+3. assemble evidence groups and test infrastructure discovery
+4. derive responsibility mappings, adequacy, freshness, and provenance
+5. validate compatibility, determinism, and regression behavior
+6. reconcile documentation before release work
+
+### Acceptance criteria
+
+- Existing context behavior remains compatible without new options.
+- All three roles produce deterministic, bounded, inspectable evidence using existing search/graph/source/index owners.
+- Changed files/symbols and before/after graph-diff evidence are accepted without a second diff/index system.
+- Required missing evidence, truncation, full-file fallback, and fresh/stale/unknown state are explicit and affect adequacy honestly.
+- Structured responsibility mappings never claim unsupported completeness.
+- Capsule/audit evolution is additive and existing consumers remain readable.
+- No workflow-catalog, orchestrator runtime, lab runtime, LLM, security, editing, or publication responsibility enters `my-dev-kit`.
+- Compatibility, determinism, boundedness, incremental, benchmark, package, documentation, and cross-platform validation pass.
+- v1.11.0 through v2.0.0 remain present and retain their existing scope.
+
+### Stop conditions
+
+Architecture approval should be sought before implementing any of: breaking CLI defaults, a major capsule/audit/manifest schema change, a second search/graph/index engine, unprovable freshness presented as fact, evidence-free responsibility completeness, native orchestrator execution, a shared package, or movement of later roadmap scope.
 
 ## Version 1.11.0
 

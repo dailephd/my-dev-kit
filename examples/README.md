@@ -2,6 +2,8 @@
 
 These folders are small projects for learning and smoke testing my-dev-kit from a cloned repository or inspected package contents.
 
+Run the commands from the repository root with Node.js and npm available. Python 3.8 or later is required only for `basic-python`; Graphviz is optional because the examples render DOT directly. See the [command reference](../docs/COMMANDS.md) for complete flag details.
+
 - `basic-ts` — a small TypeScript project for code-graph indexing, search, lookup, and source retrieval.
 - `basic-python` — a small Python project for code-graph indexing and search behavior.
 - `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, conservative static `trace-view` behavior, and (v1.5.0) conservative static classification of its `User` interface.
@@ -61,6 +63,14 @@ npx @dailephd/my-dev-kit source --index examples/basic-data-model-ts/.my-dev-kit
 
 Classification is conservative and static: categories, edit guidance, readiness, and risk labels are derived only from file paths, naming conventions, and existing index/semantic evidence, never from runtime or browser behavior. An index built without the classification analyzer (or an older index) is still fully usable — `search`/`lookup`/`slice`/`source` simply omit the classification fields.
 
-See each example's `README.md` for the full workflow.
+See each example's `README.md` for its focused workflow.
 
 Generated `.my-dev-kit` directories are local output only and are not tracked in the repository.
+
+## Clean up
+
+Remove all generated example indexes with this shell-neutral Node.js command:
+
+```sh
+node -e "for (const path of ['examples/basic-ts/.my-dev-kit','examples/basic-python/.my-dev-kit','examples/basic-data-model-ts/.my-dev-kit','examples/basic-react-tsx/.my-dev-kit']) require('fs').rmSync(path,{recursive:true,force:true})"
+```

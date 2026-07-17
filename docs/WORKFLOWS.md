@@ -321,6 +321,62 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --f
 
 Android projects additionally produce `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` when the applicable static evidence exists. Android artifact-backed nodes and candidate relationships enrich the existing `code-graph.json`; there is no `android-relationships.json`. Android selectors use exact matching and preserve ambiguity; route/resource source is bounded, binary resources are not decoded, and `android-module`, `android-manifest`, and `android-navigation` views render real graph edges only. This remains static analysis: it does not build Android projects, resolve dependencies, merge manifests, select resources, prove runtime behavior, provide full Compose semantics, or perform Android security validation.
 
+## Workflow 11: Stage-role context refresh (v1.10.1)
+
+Version 1.10.1 is implemented and release-prepared but not published. Its role-aware workflow uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage.
+
+Use a role directly:
+
+```sh
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "locate the context extension point" --role architecture --out .my-dev-kit/architecture-context.json --json
+```
+
+Or provide a structured request:
+
+```sh
+npx @dailephd/my-dev-kit context --request context-request.json --json
+```
+
+`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, and provenance before using the result.
+
+### Architecture-stage flow
+
+1. Index or refresh the repository using the existing `index` command.
+2. Retrieve architecture-role context for the request.
+3. Inspect ownership ambiguity, structural evidence, adequacy, truncation, and provenance.
+4. Use the evidence to identify the extension point and avoid parallel architecture.
+
+The primary question is: "Where should the behavior live?"
+
+### Implementation-stage flow
+
+1. Refresh the index immediately before production editing.
+2. Retrieve implementation-role context rather than relying only on the earlier architecture capsule.
+3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests.
+4. Stop if required evidence is inadequate, stale, unknown where freshness is mandatory, or truncated beyond the task's requirements.
+5. Implement production code outside my-dev-kit context generation.
+
+The primary question is: "What exact current code must be changed or preserved?"
+
+### Test-implementation-stage flow
+
+1. After production changes, refresh the index again.
+2. Collect changed production files/symbols from the implementation report, caller input, or before/after `graph-diff` evidence.
+3. Retrieve test-implementation context using caller-supplied stable test-responsibility IDs.
+4. Inspect changed symbols, validators/constants/errors, failure and side-effect boundaries, related tests, fixtures/factories/mocks/setup/configuration, package scripts, exact commands, and responsibility mappings.
+5. Stop if critical responsibilities are unmapped or the changed surface/test infrastructure is inadequate.
+6. Implement tests outside context generation and then run verification.
+
+The primary question is: "How should approved test responsibilities be implemented against final production code?"
+
+### Orchestrator and lab boundary
+
+The current orchestrator does not automatically run my-dev-kit and does not expose implementation-context or test-context as native stages. Initial my-dev-kit-orchestrator v1.2.1 integration is prompt-guided: existing implementation and test-implementation stages require the manual refresh and reference supplemental context artifacts. Workflow catalogs, instruction packets, TaskState, prompts, lifecycle, stage order, judge/correction handling, and freshness policy remain orchestrator-owned.
+
+my-dev-kit-lab v0.4.3 may run controlled comparisons of full/bounded workflow instructions and architecture/implementation/test refresh strategies, then measure size, explicit evidence recall, irrelevant inclusion, mapping completeness, provenance, determinism, truncation/inadequacy, and target immutability. The lab does not become a required production workflow component.
+
+Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.md). Legacy invocations without `--role` or `--request` remain compatible.
+
 ---
 
 ## Bundled examples

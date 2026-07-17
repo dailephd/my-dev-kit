@@ -82,6 +82,9 @@ Generated artifacts inside `.my-dev-kit/`:
 - `data-model.json` - data entities, fields, and relationships, when the TypeScript model analyzer finds qualifying source
 - `data-model-graph.json` - derived semantic graph of data-model entities, when the TypeScript model analyzer runs
 - `frontend-semantic.json` - React components, local components, prop types, hooks, handlers, JSX regions, test blocks, locators, and flow relationships, when `.tsx`, `.jsx`, or test files are indexed
+- `frontend-reachability.json` - static route, browser-storage, and UI-marker evidence, when the frontend analyzer finds qualifying source
+- `classification.json` - conservative static file and symbol classifications
+- `android-project.json`, `android-components.json`, `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` - conditional Android static-evidence artifacts
 
 Re-run the same command to refresh the artifact directory when source changes.
 
@@ -283,8 +286,9 @@ The steps above cover the core `index` -> `search`/`lookup`/`slice`/`source` -> 
 - **Data-model and lineage** (`data-model --entity`/`--field`/`--trace-view`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-7-data-model-and-model-to-view-lineage-inspection)
 - **Classification** (`classification.json`, surfaced through `search`/`lookup`/`slice`/`source`) — see [COMMANDS.md](COMMANDS.md)
 - **Context capsules and retrieval audits** (`context --mode ... --out ... --audit-out ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-8-context-capsule-and-retrieval-audit-v160)
+- **Role-aware context** (`context --role architecture|implementation|test-implementation` or `context --request <path>`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-11-stage-role-context-refresh-v1101)
 - **Read-only comparison of two index snapshots** (`graph-diff --before ... --after ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-9-compare-two-index-snapshots-with-graph-diff-v180)
-- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v190)
+- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v1100)
 - **Source continuation and local dependency expansion** (`--continue`, `--include-local-deps`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-6-source-continuation-and-local-dependency-expansion-v140)
 
 ## Next steps
