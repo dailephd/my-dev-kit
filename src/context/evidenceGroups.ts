@@ -11,6 +11,8 @@
 import { isContractLike, isOwnerLike, isTestLike } from './roleCandidates.js'
 import { discoverTestInfrastructure, type BoundedList } from './testInfrastructureDiscovery.js'
 import { CONSTANT_PATTERN, ERROR_PATTERN, SCHEMA_PATTERN, SIDE_EFFECT_PATTERN, VALIDATOR_PATTERN } from './evidencePatterns.js'
+import { isFixtureLike, isGeneratedLike, isMockLike, isTestScoped } from './evidenceClassification.js'
+import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type {
@@ -140,6 +142,90 @@ function isAdjacentCandidate(reasons: string[]): boolean {
   return hasReasonMatching(reasons, /direct graph neighbor/)
 }
 
+/**
+ * v1.10.3 Batch 1: structural implementation-owner eligibility (F-001/F-002).
+ *
+ * Filename keywords (`isOwnerLike`) and focus (`focusMatch`) are ranking/relevance
+ * signals only (applied earlier, in `roleCandidates.ts`, via score adjustments) and
+ * are deliberately absent from this predicate: neither may gate owner eligibility on
+ * its own (CASE-002 — a focused, owner-named test/fixture/generated file must never
+ * qualify). A candidate qualifies only via independent structural evidence: exported
+ * production-symbol status, contract/canonical-type naming, a classification role
+ * that is not itself a non-owner category, or a real incoming import/depends-on/calls
+ * edge from another non-test-scoped file (resolver/registry/definition/producer
+ * ownership). Test/fixture/mock/generated paths and non-owner classification roles
+ * are hard-excluded regardless of any other signal.
+ */
+const NON_OWNER_CLASSIFICATION_ROLES = new Set(['projection-type', 'view-model', 'ui-only-state', 'test-fixture', 'generated-file'])
+const NON_OWNER_EDIT_GUIDANCE = new Set(['generated-do-not-edit', 'test-only', 'docs-only', 'avoid-primary-edit-target'])
+const OWNER_QUALIFYING_EDIT_GUIDANCE = new Set(['safe-primary-edit-target', 'inspect-before-edit'])
+
+function isForbiddenOwnerPath(filePath: string | undefined): boolean {
+  return isTestScoped(filePath) || isFixtureLike(filePath) || isMockLike(filePath) || isGeneratedLike(filePath)
+}
+
+/** A candidate must have *request relevance* in addition to structural evidence
+ * (section 16): otherwise every contract-shaped file anywhere in the repository
+ * (e.g. an unrelated `types.ts`) would qualify merely by existing, since
+ * `contractLikeBoost` is applied regardless of relevance. Deliberately does not
+ * treat a bare base-search `matchedTerms` hit as relevance here: free-text search
+ * can match incidental metadata (e.g. a query word coincidentally equal to a
+ * classification `editGuidance` string) with no bearing on ownership. Relevance
+ * for ownership means the candidate is an explicit focus file/symbol, is
+ * one-hop graph-adjacent to a focus/changed-surface seed, is itself
+ * changed-surface evidence, or is an exact query-name match. */
+function hasRequestRelevance(candidate: { reasons: string[] }): boolean {
+  return hasReasonMatching(candidate.reasons, /explicit focus (file|symbol)|direct graph neighbor|exact query-name match|changed-surface/)
+}
+
+function hasNonOwnerClassification(roles: ClassificationRoleRef[] | undefined): boolean {
+  if (!roles || roles.length === 0) return false
+  return roles.some((r) => NON_OWNER_CLASSIFICATION_ROLES.has(r.role) || NON_OWNER_EDIT_GUIDANCE.has(r.editGuidance))
+}
+
+function hasOwnerQualifyingClassification(roles: ClassificationRoleRef[] | undefined): boolean {
+  if (!roles || roles.length === 0) return false
+  return roles.some((r) => !NON_OWNER_CLASSIFICATION_ROLES.has(r.role) && !NON_OWNER_EDIT_GUIDANCE.has(r.editGuidance) && OWNER_QUALIFYING_EDIT_GUIDANCE.has(r.editGuidance))
+}
+
+/** Node/file IDs with at least one incoming `imports`/`depends-on`/`calls` edge from
+ * another, non-test-scoped node: i.e. something else in the codebase structurally
+ * depends on it (resolver/registry/definition/producer ownership), independent of
+ * filename or focus. */
+function computeStructuralProducerIds(codeGraph: CodeGraph): Set<string> {
+  const pathById = new Map(codeGraph.nodes.map((n) => [n.id, n.path]))
+  const producers = new Set<string>()
+  for (const edge of codeGraph.edges) {
+    if (edge.kind !== 'imports' && edge.kind !== 'depends-on' && edge.kind !== 'calls') continue
+    if (edge.source === edge.target) continue
+    if (isForbiddenOwnerPath(pathById.get(edge.source))) continue
+    producers.add(edge.target)
+  }
+  return producers
+}
+
+function isStructuralOwnerNode(node: CandidateNode, ctx: { exportedNodeIds: Set<string>; producerIds: Set<string> }): boolean {
+  if (!hasRequestRelevance(node)) return false
+  if (isForbiddenOwnerPath(node.filePath)) return false
+  if (hasNonOwnerClassification(node.classificationRoles)) return false
+  if (isContractLike(node)) return true
+  if (hasOwnerQualifyingClassification(node.classificationRoles)) return true
+  if (ctx.exportedNodeIds.has(node.nodeId)) return true
+  if (ctx.producerIds.has(node.nodeId)) return true
+  return false
+}
+
+function isStructuralOwnerFile(file: CandidateFile, ctx: { exportedFilePaths: Set<string>; producerIds: Set<string> }): boolean {
+  if (!hasRequestRelevance(file)) return false
+  if (isForbiddenOwnerPath(file.path)) return false
+  if (hasNonOwnerClassification(file.classificationRoles)) return false
+  if (isContractLike({ filePath: file.path, label: file.path })) return true
+  if (hasOwnerQualifyingClassification(file.classificationRoles)) return true
+  if (ctx.exportedFilePaths.has(file.path)) return true
+  if (ctx.producerIds.has(`file:${file.path}`)) return true
+  return false
+}
+
 /** Reconstructs the same focus/changed-surface seed node/file IDs Batch 2's
  * `roleCandidates.ts` used for adjacency, so direction can be derived here without
  * a second graph traversal (only the existing edges are inspected). */
@@ -216,11 +302,25 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
 
-  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isOwnerLike(n)))
-  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isOwnerLike({ filePath: f.path, label: f.path })))
+  // v1.10.3 Batch 1: eligibility is structural (see isStructuralOwnerNode/File above);
+  // isOwnerLike remains a ranking signal only (applied in roleCandidates.ts scoring).
+  const exportedNodeIds = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true).map((n) => n.id))
+  const exportedFilePaths = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true && n.path).map((n) => n.path as string))
+  const producerIds = computeStructuralProducerIds(codeGraph)
+
+  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds })))
+  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds })))
   const ownerItems = [
-    ...ownerNodes.map((n) => nodeToItem(n, 'owner-like candidate', 'owner-like naming/graph-position heuristic')),
-    ...ownerFiles.map((f) => fileToItem(f, 'owner-like candidate', 'owner-like naming/graph-position heuristic')),
+    ...ownerNodes.map((n) =>
+      nodeToItem(n, 'structural owner candidate', isOwnerLike(n) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence')
+    ),
+    ...ownerFiles.map((f) =>
+      fileToItem(
+        f,
+        'structural owner candidate',
+        isOwnerLike({ filePath: f.path, label: f.path }) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence'
+      )
+    ),
   ]
 
   const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isContractLike(n)))
@@ -270,9 +370,9 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   let selectedTests: EvidenceItemRef[] = []
 
   if (role === 'architecture') {
-    const ownersGroup = pushGroup('owners', ownerItems, { limit: 5, required: true, provenance: 'owner-like classification over role-ranked candidates' })
+    const ownersGroup = pushGroup('owners', ownerItems, { limit: 5, required: true, provenance: 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates' })
     const extensionPoints = ownerItems.filter((item) => adjacentItems.some((a) => a.id === item.id))
-    pushGroup('extension-points', extensionPoints, { limit: 8, required: true, provenance: 'owner-like candidates that are also graph-adjacent to the focus/seed' })
+    pushGroup('extension-points', extensionPoints, { limit: 8, required: true, provenance: 'structural owners that are also graph-adjacent to the focus/seed' })
     const contractsGroup = pushGroup('contracts', contractItems, { limit: 10, required: true, provenance: 'contract-like classification over role-ranked candidates' })
     const graphNeighborhoodItems: EvidenceItemRef[] = selectedGraph.nodes.map((n) => ({
       id: n.nodeId,
@@ -293,7 +393,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     selectedOwners = ownersGroup.items
     selectedContracts = contractsGroup.items
   } else if (role === 'implementation') {
-    const ownersGroup = pushGroup('owners', ownerItems, { limit: 3, required: true, provenance: 'owner-like classification over role-ranked candidates' })
+    const ownersGroup = pushGroup('owners', ownerItems, { limit: 3, required: true, provenance: 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates' })
     // Directed when edge evidence distinguishes them (see splitDependenciesAndCallers);
     // falls back to the full undirected neighbor set when no directed edge exists (e.g.
     // no --call-graph and adjacency came only from a shared file-level import edge).
