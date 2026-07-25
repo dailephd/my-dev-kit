@@ -959,6 +959,32 @@ export interface GroupTruncationEntry {
   usedCount: number
   truncated: boolean
   droppedCount: number
+  /** v1.10.3 Batch 2 (additive, optional): required-first allocation diagnostics.
+   * Populated only for groups produced by the required-first allocator (currently:
+   * the implementation role's required evidence groups). Absent for groups the
+   * allocator does not govern (e.g. architecture/test-implementation role groups) —
+   * older consumers can ignore all of these fields. */
+  required?: boolean
+  /** This group's initial bounded reservation, before any spillover. */
+  reservation?: number
+  /** How many items this group filled from its own reservation, before spillover. */
+  initiallySelectedCount?: number
+  /** Unused reservation this group contributed to the shared spillover pool. */
+  unusedReservationContributed?: number
+  /** Additional items this group received from the shared spillover pool. */
+  borrowedCapacity?: number
+  /** Qualified required evidence for this group that remained unselected after spillover. */
+  requiredOmittedCount?: number
+  /** Qualified optional evidence for this group that remained unselected (0 unless an optional tier shares this group's pool). */
+  optionalOmittedCount?: number
+  /** True when this group's required evidence was omitted after full allocation (reduces role adequacy). */
+  adequacyAffected?: boolean
+  /** The real finite bound governing this allocation pass (sum of all participating groups' reservations). */
+  governingHardBound?: number
+  /** Total items selected across all groups in this allocation pass. */
+  aggregateCapacityUsed?: number
+  /** governingHardBound minus aggregateCapacityUsed. */
+  aggregateCapacityRemaining?: number
 }
 
 // --- v1.10.1 Batch 4: responsibility mapping, role adequacy, freshness, budget,

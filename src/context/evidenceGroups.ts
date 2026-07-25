@@ -77,6 +77,80 @@ function dedupeById(items: EvidenceItemRef[]): EvidenceItemRef[] {
   return [...seen.values()]
 }
 
+/**
+ * v1.10.3 Batch 2: required-first evidence allocation (F-003).
+ *
+ * Before this, each implementation-role required group applied its fixed cap in
+ * isolation: a group with more qualified evidence than its cap always dropped the
+ * excess, even while other required groups had unused reservation. This treats
+ * every group's existing cap as an *initial reservation* out of one shared pool
+ * scoped to the required groups passed in (their fixed declaration order below is
+ * the "fixed required-group priority" — unchanged from before this batch), and
+ * reassigns unused reservation to earlier-unmet groups before later ones, using
+ * each group's own pre-existing candidate rank (never re-ranked here) and, where
+ * ranks tie, the existing path/nodeId ordering already baked into that rank.
+ *
+ * The real governing bound for this pass is the sum of the participating groups'
+ * reservations — the same total capacity that already existed (as isolated caps)
+ * before this batch. Nothing is invented: reassignment only ever moves capacity
+ * that another required group in this pass left unused, so total selected
+ * evidence across the pass can never exceed that pre-existing sum. This is
+ * deliberately independent of `requestLimits.evidenceGroupEntries`, which remains
+ * a diagnostic/reporting-only value (contextBudget.ts) and is never treated as an
+ * enforced allocation bound.
+ */
+export interface RequiredGroupAllocationInput {
+  kind: EvidenceGroupKind
+  items: EvidenceItemRef[]
+  reservation: number
+}
+
+export interface RequiredGroupAllocationResult {
+  kind: EvidenceGroupKind
+  dedupedItems: EvidenceItemRef[]
+  selectedItems: EvidenceItemRef[]
+  reservation: number
+  initiallySelectedCount: number
+  unusedReservationContributed: number
+  borrowedCapacity: number
+  effectiveLimit: number
+  requiredOmittedCount: number
+}
+
+function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): RequiredGroupAllocationResult[] {
+  const prepared = inputs.map((input) => {
+    const dedupedItems = dedupeById(input.items)
+    const initiallySelected = dedupedItems.slice(0, input.reservation)
+    const remaining = dedupedItems.slice(input.reservation)
+    const unusedReservationContributed = Math.max(0, input.reservation - dedupedItems.length)
+    return { kind: input.kind, reservation: input.reservation, dedupedItems, initiallySelected, remaining, unusedReservationContributed }
+  })
+
+  let pool = prepared.reduce((sum, g) => sum + g.unusedReservationContributed, 0)
+
+  return prepared.map((g): RequiredGroupAllocationResult => {
+    let borrowedCapacity = 0
+    let selectedItems = g.initiallySelected
+    if (pool > 0 && g.remaining.length > 0) {
+      const take = Math.min(pool, g.remaining.length)
+      selectedItems = [...g.initiallySelected, ...g.remaining.slice(0, take)]
+      borrowedCapacity = take
+      pool -= take
+    }
+    return {
+      kind: g.kind,
+      dedupedItems: g.dedupedItems,
+      selectedItems,
+      reservation: g.reservation,
+      initiallySelectedCount: g.initiallySelected.length,
+      unusedReservationContributed: g.unusedReservationContributed,
+      borrowedCapacity,
+      effectiveLimit: g.reservation + borrowedCapacity,
+      requiredOmittedCount: g.dedupedItems.length - selectedItems.length,
+    }
+  })
+}
+
 function makeGroup(kind: EvidenceGroupKind, role: ContextRole | null, items: EvidenceItemRef[], options: MakeGroupOptions): EvidenceGroup {
   const { limit, required, provenance, unresolved = [], warnings = [], availableCountOverride } = options
   const deduped = dedupeById(items)
@@ -204,25 +278,51 @@ function computeStructuralProducerIds(codeGraph: CodeGraph): Set<string> {
   return producers
 }
 
-function isStructuralOwnerNode(node: CandidateNode, ctx: { exportedNodeIds: Set<string>; producerIds: Set<string> }): boolean {
+/** File paths that are one-hop adjacent to a focus/changed-surface seed only as a
+ * *caller* of that seed (they import/call into it), and never as something the seed
+ * (or anything else) depends on. Computed directly from graph edges using the same
+ * `file:<path>` node-ID convention as `computeSeedNodeIds`/`roleCandidates.ts`'s own
+ * adjacency pass — deliberately not derived from `splitDependenciesAndCallers`'s
+ * `callerItems`, which only ever matches symbol-level candidates (its `itemById` is
+ * keyed by bare `EvidenceItemRef.id`, which for file items is the bare path, not the
+ * `file:`-prefixed graph node id `callerIds`/`dependencyIds` are populated with). */
+function computeCallerOnlyFilePaths(codeGraph: CodeGraph, seedNodeIds: Set<string>): Set<string> {
+  const pathById = new Map(codeGraph.nodes.map((n) => [n.id, n.path]))
+  const dependedOnIds = new Set<string>()
+  const callerIds = new Set<string>()
+  for (const edge of codeGraph.edges) {
+    if (edge.kind !== 'imports' && edge.kind !== 'depends-on' && edge.kind !== 'calls') continue
+    if (seedNodeIds.has(edge.source) && !seedNodeIds.has(edge.target)) dependedOnIds.add(edge.target)
+    if (seedNodeIds.has(edge.target) && !seedNodeIds.has(edge.source)) callerIds.add(edge.source)
+  }
+  const callerOnlyFilePaths = new Set<string>()
+  for (const id of callerIds) {
+    if (dependedOnIds.has(id)) continue
+    const path = id.startsWith('file:') ? id.slice('file:'.length) : pathById.get(id)
+    if (path) callerOnlyFilePaths.add(path)
+  }
+  return callerOnlyFilePaths
+}
+
+function isStructuralOwnerNode(node: CandidateNode, ctx: { exportedNodeIds: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> }): boolean {
   if (!hasRequestRelevance(node)) return false
   if (isForbiddenOwnerPath(node.filePath)) return false
   if (hasNonOwnerClassification(node.classificationRoles)) return false
   if (isContractLike(node)) return true
   if (hasOwnerQualifyingClassification(node.classificationRoles)) return true
-  if (ctx.exportedNodeIds.has(node.nodeId)) return true
   if (ctx.producerIds.has(node.nodeId)) return true
+  if (ctx.exportedNodeIds.has(node.nodeId) && !(node.filePath && ctx.callerOnlyFilePaths.has(node.filePath))) return true
   return false
 }
 
-function isStructuralOwnerFile(file: CandidateFile, ctx: { exportedFilePaths: Set<string>; producerIds: Set<string> }): boolean {
+function isStructuralOwnerFile(file: CandidateFile, ctx: { exportedFilePaths: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> }): boolean {
   if (!hasRequestRelevance(file)) return false
   if (isForbiddenOwnerPath(file.path)) return false
   if (hasNonOwnerClassification(file.classificationRoles)) return false
   if (isContractLike({ filePath: file.path, label: file.path })) return true
   if (hasOwnerQualifyingClassification(file.classificationRoles)) return true
-  if (ctx.exportedFilePaths.has(file.path)) return true
   if (ctx.producerIds.has(`file:${file.path}`)) return true
+  if (ctx.exportedFilePaths.has(file.path) && !ctx.callerOnlyFilePaths.has(file.path)) return true
   return false
 }
 
@@ -302,27 +402,6 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
 
-  // v1.10.3 Batch 1: eligibility is structural (see isStructuralOwnerNode/File above);
-  // isOwnerLike remains a ranking signal only (applied in roleCandidates.ts scoring).
-  const exportedNodeIds = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true).map((n) => n.id))
-  const exportedFilePaths = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true && n.path).map((n) => n.path as string))
-  const producerIds = computeStructuralProducerIds(codeGraph)
-
-  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds })))
-  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds })))
-  const ownerItems = [
-    ...ownerNodes.map((n) =>
-      nodeToItem(n, 'structural owner candidate', isOwnerLike(n) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence')
-    ),
-    ...ownerFiles.map((f) =>
-      fileToItem(
-        f,
-        'structural owner candidate',
-        isOwnerLike({ filePath: f.path, label: f.path }) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence'
-      )
-    ),
-  ]
-
   const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isContractLike(n)))
   const contractFiles = sortByScoreThenPath(retainedFiles.filter((f) => isContractLike({ filePath: f.path, label: f.path })))
   const contractItems = [
@@ -355,13 +434,46 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     nodeToItem(n, 'exported-symbol', 'graph exported=true')
   )
 
+  // v1.10.3 Batch 1: eligibility is structural (see isStructuralOwnerNode/File above);
+  // isOwnerLike remains a ranking signal only (applied in roleCandidates.ts scoring).
+  // v1.10.3 Batch 2 narrow compatibility correction (F-003 regression found while
+  // testing required-first spillover): a bare exported binding is not independent
+  // ownership evidence when the file's only relevance to the request is that it
+  // *calls into* the focus/seed (a downstream consumer), and nothing else in the
+  // codebase depends on it either. Recovering unused reservation from other groups
+  // could otherwise promote such leaf consumers (e.g. `export const a = seedFn()`)
+  // into "owners" once capacity allowed it — exactly the false-owner shape Batch 1
+  // already excludes for fixtures/tests/generated files. Contract-like naming,
+  // classification, and real producer relationships are unaffected.
+  const callerOnlyFilePaths = computeCallerOnlyFilePaths(codeGraph, seedNodeIds)
+  const exportedNodeIds = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true).map((n) => n.id))
+  const exportedFilePaths = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true && n.path).map((n) => n.path as string))
+  const producerIds = computeStructuralProducerIds(codeGraph)
+
+  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds, callerOnlyFilePaths })))
+  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds, callerOnlyFilePaths })))
+  const ownerItems = [
+    ...ownerNodes.map((n) =>
+      nodeToItem(n, 'structural owner candidate', isOwnerLike(n) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence')
+    ),
+    ...ownerFiles.map((f) =>
+      fileToItem(
+        f,
+        'structural owner candidate',
+        isOwnerLike({ filePath: f.path, label: f.path }) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence'
+      )
+    ),
+  ]
+
   const groups: EvidenceGroup[] = []
   const unresolvedItems: UnresolvedEvidenceItem[] = []
+  const allocationDiagnostics = new Map<string, Partial<GroupTruncationEntry>>()
 
-  function pushGroup(kind: EvidenceGroupKind, items: EvidenceItemRef[], opts: MakeGroupOptions): EvidenceGroup {
+  function pushGroup(kind: EvidenceGroupKind, items: EvidenceItemRef[], opts: MakeGroupOptions, diagnostics?: Partial<GroupTruncationEntry>): EvidenceGroup {
     const g = makeGroup(kind, role, items, opts)
     groups.push(g)
     unresolvedItems.push(...g.unresolved)
+    if (diagnostics) allocationDiagnostics.set(g.id, diagnostics)
     return g
   }
 
@@ -393,29 +505,84 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     selectedOwners = ownersGroup.items
     selectedContracts = contractsGroup.items
   } else if (role === 'implementation') {
-    const ownersGroup = pushGroup('owners', ownerItems, { limit: 3, required: true, provenance: 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates' })
     // Directed when edge evidence distinguishes them (see splitDependenciesAndCallers);
     // falls back to the full undirected neighbor set when no directed edge exists (e.g.
     // no --call-graph and adjacency came only from a shared file-level import edge).
-    pushGroup('dependencies', dependencyItems.length > 0 ? dependencyItems : adjacentItems, {
-      limit: 10,
-      required: true,
-      provenance: 'directed graph edges (seed -> neighbor) over one-hop adjacency reused from Batch 2 role ranking',
-    })
-    pushGroup('callers-and-callees', [...callerItems, ...dependencyItems].length > 0 ? [...callerItems, ...dependencyItems] : adjacentItems, {
-      limit: 15,
-      required: true,
-      provenance: 'directed graph edges (both directions) over one-hop adjacency reused from Batch 2 role ranking',
-    })
-    const contractsGroup = pushGroup('contracts', contractItems, { limit: 10, required: true, provenance: 'contract-like classification over role-ranked candidates' })
+    const dependencyGroupItems = dependencyItems.length > 0 ? dependencyItems : adjacentItems
+    const callersGroupItems = [...callerItems, ...dependencyItems].length > 0 ? [...callerItems, ...dependencyItems] : adjacentItems
     const validators = contractItems.filter((i) => VALIDATOR_PATTERN.test(i.path ?? '') || CONSTANT_PATTERN.test(i.path ?? ''))
-    pushGroup('validators-and-constants', validators, { limit: 10, required: true, provenance: 'validator/constant naming subset of contract-like candidates' })
     const errors = contractItems.filter((i) => ERROR_PATTERN.test(i.path ?? ''))
-    pushGroup('errors', errors, { limit: 10, required: true, provenance: 'error naming subset of contract-like candidates' })
     const schemas = contractItems.filter((i) => SCHEMA_PATTERN.test(i.path ?? ''))
-    pushGroup('schemas-and-serializers', schemas, { limit: 10, required: true, provenance: 'schema naming subset of contract-like candidates' })
-    pushGroup('compatibility-surfaces', exportedSymbolItems, { limit: 8, required: true, provenance: 'exported symbol candidates (graph exported=true)' })
-    pushGroup('closest-tests', closestTestItems, { limit: 8, required: true, provenance: 'test-file naming convention over role-ranked candidates' })
+
+    // v1.10.3 Batch 2 (F-003): the fixed per-group caps below are now treated as
+    // initial reservations out of one shared required-first allocation pass, in this
+    // same fixed priority order, rather than as isolated final caps (see
+    // allocateRequiredGroups above). Group identities, candidate content, and
+    // candidate rank/order are unchanged from Batch 1/pre-Batch-2.
+    const allocations = allocateRequiredGroups([
+      { kind: 'owners', items: ownerItems, reservation: 3 },
+      { kind: 'dependencies', items: dependencyGroupItems, reservation: 10 },
+      { kind: 'callers-and-callees', items: callersGroupItems, reservation: 15 },
+      { kind: 'contracts', items: contractItems, reservation: 10 },
+      { kind: 'validators-and-constants', items: validators, reservation: 10 },
+      { kind: 'errors', items: errors, reservation: 10 },
+      { kind: 'schemas-and-serializers', items: schemas, reservation: 10 },
+      { kind: 'compatibility-surfaces', items: exportedSymbolItems, reservation: 8 },
+      { kind: 'closest-tests', items: closestTestItems, reservation: 8 },
+    ])
+    const allocationByKind = new Map(allocations.map((a) => [a.kind, a]))
+    const governingHardBound = allocations.reduce((sum, a) => sum + a.reservation, 0)
+    const aggregateCapacityUsed = allocations.reduce((sum, a) => sum + a.selectedItems.length, 0)
+
+    const provenanceByKind: Partial<Record<EvidenceGroupKind, string>> = {
+      owners: 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates',
+      dependencies: 'directed graph edges (seed -> neighbor) over one-hop adjacency reused from Batch 2 role ranking',
+      'callers-and-callees': 'directed graph edges (both directions) over one-hop adjacency reused from Batch 2 role ranking',
+      contracts: 'contract-like classification over role-ranked candidates',
+      'validators-and-constants': 'validator/constant naming subset of contract-like candidates',
+      errors: 'error naming subset of contract-like candidates',
+      'schemas-and-serializers': 'schema naming subset of contract-like candidates',
+      'compatibility-surfaces': 'exported symbol candidates (graph exported=true)',
+      'closest-tests': 'test-file naming convention over role-ranked candidates',
+    }
+
+    function pushAllocatedGroup(kind: EvidenceGroupKind): EvidenceGroup {
+      const allocation = allocationByKind.get(kind)
+      if (!allocation) throw new Error(`Missing required-first allocation for evidence group "${kind}"`)
+      return pushGroup(
+        kind,
+        allocation.selectedItems,
+        {
+          limit: allocation.effectiveLimit,
+          required: true,
+          provenance: `${provenanceByKind[kind]} (required-first allocation: reservation ${allocation.reservation}, borrowed ${allocation.borrowedCapacity})`,
+          availableCountOverride: allocation.dedupedItems.length,
+        },
+        {
+          required: true,
+          reservation: allocation.reservation,
+          initiallySelectedCount: allocation.initiallySelectedCount,
+          unusedReservationContributed: allocation.unusedReservationContributed,
+          borrowedCapacity: allocation.borrowedCapacity,
+          requiredOmittedCount: allocation.requiredOmittedCount,
+          optionalOmittedCount: 0,
+          adequacyAffected: allocation.requiredOmittedCount > 0,
+          governingHardBound,
+          aggregateCapacityUsed,
+          aggregateCapacityRemaining: governingHardBound - aggregateCapacityUsed,
+        }
+      )
+    }
+
+    const ownersGroup = pushAllocatedGroup('owners')
+    pushAllocatedGroup('dependencies')
+    pushAllocatedGroup('callers-and-callees')
+    const contractsGroup = pushAllocatedGroup('contracts')
+    pushAllocatedGroup('validators-and-constants')
+    pushAllocatedGroup('errors')
+    pushAllocatedGroup('schemas-and-serializers')
+    pushAllocatedGroup('compatibility-surfaces')
+    pushAllocatedGroup('closest-tests')
     selectedOwners = ownersGroup.items
     selectedContracts = contractsGroup.items
   } else if (role === 'test-implementation') {
@@ -553,7 +720,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     }
   }
 
-  return finalizeResult({ groups, selectedOwners, selectedContracts, selectedTests, testInfrastructure, unresolvedItems, warnings })
+  return finalizeResult({ groups, selectedOwners, selectedContracts, selectedTests, testInfrastructure, unresolvedItems, warnings }, allocationDiagnostics)
 }
 
 function boundedGroupOptions<T>(list: BoundedList<T>, required: boolean, provenance: string): MakeGroupOptions {
@@ -575,7 +742,7 @@ function emptyTestInfrastructure(): TestInfrastructureSummary {
   }
 }
 
-function finalizeResult(result: Omit<BuildEvidenceGroupsResult, 'groupTruncation'>): BuildEvidenceGroupsResult {
+function finalizeResult(result: Omit<BuildEvidenceGroupsResult, 'groupTruncation'>, allocationDiagnostics?: Map<string, Partial<GroupTruncationEntry>>): BuildEvidenceGroupsResult {
   const groupTruncation: GroupTruncationEntry[] = result.groups.map((g) => ({
     groupId: g.id,
     limit: g.limit,
@@ -583,6 +750,7 @@ function finalizeResult(result: Omit<BuildEvidenceGroupsResult, 'groupTruncation
     usedCount: g.usedCount,
     truncated: g.truncated,
     droppedCount: g.droppedCount,
+    ...(allocationDiagnostics?.get(g.id) ?? {}),
   }))
   return { ...result, groupTruncation }
 }

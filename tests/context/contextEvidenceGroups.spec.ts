@@ -398,18 +398,18 @@ describe('evidence-group construction', () => {
     const first = runContext(indexOut, requestPath, outPath)
     expect(first.status).toBe(0)
     const firstCapsule = JSON.parse(readFileSync(outPath, 'utf8'))
-    const ownerPaths = firstCapsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
-    // implementation role bounds the owners group to 3 (existing owner-group limit,
-    // unchanged by this batch): all retained owners must come from the credible
-    // structural set, never the unrelated leaf consumer, and the group must report
-    // that more credible owners existed than were retained (bounded, not collapsed).
+    const ownerPaths: string[] = firstCapsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
+    const uniqueOwnerPaths = new Set(ownerPaths)
+    // v1.10.3 Batch 2: the implementation role's owners group reservation (3) is now
+    // an initial reservation, not an isolated cap — unused reservation from other
+    // required groups may legitimately spill over here, so more than 3 owners can be
+    // retained (section 22.9: "only final retained count may change when legitimate
+    // spillover applies"). What must not change is *which* files qualify: every
+    // credible structural owner is retained, and the unrelated leaf consumer never is.
     const credibleOwnerPaths = new Set(['src/contract.ts', 'src/resolver.ts', 'src/registry.ts', 'src/producer.ts'])
-    expect(ownerPaths.length).toBe(3)
-    for (const p of ownerPaths) expect(credibleOwnerPaths.has(p)).toBe(true)
-    expect(ownerPaths.includes('src/consumer.ts')).toBe(false)
-    const ownersGroup = firstCapsule.evidenceGroups.find((g: { kind: string }) => g.kind === 'owners')
-    expect(ownersGroup.availableCount).toBeGreaterThan(ownersGroup.usedCount)
-    expect(ownersGroup.truncated).toBe(true)
+    for (const p of credibleOwnerPaths) expect(uniqueOwnerPaths.has(p)).toBe(true)
+    expect(uniqueOwnerPaths.has('src/consumer.ts')).toBe(false)
+    for (const p of uniqueOwnerPaths) expect(credibleOwnerPaths.has(p)).toBe(true)
 
     const second = runContext(indexOut, requestPath, outPath)
     expect(second.status).toBe(0)
