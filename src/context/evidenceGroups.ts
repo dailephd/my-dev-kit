@@ -345,28 +345,68 @@ function computeSeedNodeIds(options: { codeGraph: CodeGraph; focusIntake: Contex
   return seed
 }
 
+/**
+ * v1.10.3 Batch 4: canonical graph-node identity for an `EvidenceItemRef` (confirmed
+ * Batch 3 finding — the file-node ID mismatch).
+ *
+ * `code-graph.json` file nodes use a `file:<repository-relative-path>` ID; symbol
+ * nodes use their own `symbol:<path>#<name>` ID. A symbol-sourced `EvidenceItemRef`
+ * already carries that exact graph ID as `.nodeId` (`nodeToItem` sets `id: node.nodeId`),
+ * so it always matched. A plain file-sourced item (`fileToItem`) sets `id: file.path`
+ * (the bare path, no `file:` prefix) and no `.nodeId` at all — so it could never match
+ * a `file:`-prefixed edge endpoint. This is the single conversion boundary: prefer the
+ * item's own graph node ID when it has one (already correct for both symbol and
+ * node-sourced-file items), otherwise derive the canonical file node ID from its path.
+ */
+function canonicalGraphId(item: EvidenceItemRef): string {
+  if (item.nodeId) return item.nodeId
+  if (item.path) return `file:${item.path}`
+  return item.id
+}
+
 /** Splits undirected one-hop adjacency evidence into "seed depends on this" (dependencies)
  * vs "this depends on/calls the seed" (callers), using the existing `imports`/`depends-on`/
  * `calls` edges directly. An item with edges in both directions appears in both lists
- * (materially different relationships — see section 9.4), never duplicated within one list. */
+ * (materially different relationships — see section 9.4), never duplicated within one list.
+ * Matching is keyed by `canonicalGraphId` (v1.10.3 Batch 4), not the bare `EvidenceItemRef.id`,
+ * so plain file-level evidence resolves correctly against `file:`-prefixed graph edges instead
+ * of silently failing to match and forcing every caller onto the undirected adjacency fallback. */
 function splitDependenciesAndCallers(options: {
   codeGraph: CodeGraph
   adjacentItems: EvidenceItemRef[]
   seedNodeIds: Set<string>
 }): { dependencyItems: EvidenceItemRef[]; callerItems: EvidenceItemRef[] } {
   const { codeGraph, adjacentItems, seedNodeIds } = options
-  const itemById = new Map(adjacentItems.map((i) => [i.id, i]))
+  const itemByGraphId = new Map(adjacentItems.map((i) => [canonicalGraphId(i), i]))
   const dependencyIds = new Set<string>()
   const callerIds = new Set<string>()
   for (const edge of codeGraph.edges) {
     if (edge.kind !== 'imports' && edge.kind !== 'depends-on' && edge.kind !== 'calls') continue
-    if (seedNodeIds.has(edge.source) && itemById.has(edge.target)) dependencyIds.add(edge.target)
-    if (seedNodeIds.has(edge.target) && itemById.has(edge.source)) callerIds.add(edge.source)
+    if (seedNodeIds.has(edge.source) && itemByGraphId.has(edge.target)) dependencyIds.add(edge.target)
+    if (seedNodeIds.has(edge.target) && itemByGraphId.has(edge.source)) callerIds.add(edge.source)
   }
   return {
-    dependencyItems: adjacentItems.filter((i) => dependencyIds.has(i.id)),
-    callerItems: adjacentItems.filter((i) => callerIds.has(i.id)),
+    dependencyItems: dedupeByCanonicalGraphId(adjacentItems.filter((i) => dependencyIds.has(canonicalGraphId(i)))),
+    callerItems: dedupeByCanonicalGraphId(adjacentItems.filter((i) => callerIds.has(canonicalGraphId(i)))),
   }
+}
+
+/** The same underlying file can appear twice in `adjacentItems` — once as a plain file
+ * candidate (`id: <path>`) and once as a synthesized/ranked file-kind node candidate
+ * (`id: file:<path>`) — since candidate files and candidate nodes are independent lists
+ * (v1.10.1 Batch 2). Both now resolve to the same `canonicalGraphId`, so collapse them
+ * to one entry (first occurrence, preserving the existing deterministic order) rather
+ * than reporting the same relationship twice. */
+function dedupeByCanonicalGraphId(items: EvidenceItemRef[]): EvidenceItemRef[] {
+  const seen = new Set<string>()
+  const result: EvidenceItemRef[] = []
+  for (const item of items) {
+    const key = canonicalGraphId(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(item)
+  }
+  return result
 }
 
 export interface BuildEvidenceGroupsOptions {
