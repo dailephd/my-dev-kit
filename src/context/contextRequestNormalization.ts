@@ -151,15 +151,13 @@ function validateContextRequestShape(value: unknown, displayPath: string): Conte
     }
   }
 
-  // dedupe+sort collection fields for deterministic normalization
-  for (const field of [
-    'focusFiles',
-    'focusSymbols',
-    'changedFiles',
-    'changedSymbols',
-    'upstreamArtifactRefs',
-    'testResponsibilityRefs',
-  ] as const) {
+  // dedupe+sort collection fields for deterministic normalization. `testResponsibilityRefs`
+  // is deliberately excluded (v1.10.3 Batch 3, F-004): sorting+deduping it here would
+  // discard duplicate-ID and first-occurrence-order information before it ever reaches
+  // `responsibilityMapping.ts`, which already has its own first-occurrence-preserving
+  // dedup + duplicate-ID diagnostic (`dedupeResponsibilityInputs`) that depends on
+  // seeing the caller's original sequence, duplicates included.
+  for (const field of ['focusFiles', 'focusSymbols', 'changedFiles', 'changedSymbols', 'upstreamArtifactRefs'] as const) {
     const fieldValue = result[field]
     if (fieldValue) result[field] = dedupeSorted(fieldValue)
   }
