@@ -1,10 +1,13 @@
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import type { Command } from 'commander'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { readIndexManifest } from '../indexing/readIndexManifest.js'
 import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
 import { buildContextCapsule, computeContextAdequacy, writeContextCapsule } from '../context/contextCapsule.js'
 import { buildRetrievalAuditRecord, writeRetrievalAuditRecord } from '../context/retrievalAuditRecord.js'
+import { buildRawEvidenceIndexIdentity } from '../context/rawEvidenceIdentity.js'
+import { assertRawEvidenceParity } from '../context/rawEvidenceParity.js'
 import { buildQueryPlan } from '../context/queryPlan.js'
 import { buildModeEffects, rankCandidateFiles, rankCandidateNodes, type RankingInput } from '../context/candidateRanking.js'
 import { selectPrimaryFocus } from '../context/graphFocus.js'
@@ -132,6 +135,7 @@ export function registerContextCommand(program: Command): void {
       })
 
       const resolved = readIndexManifest(normalized.index)
+      const rawEvidenceIdentity = buildRawEvidenceIndexIdentity(resolved)
       steps.push({
         id: 'step-load-manifest',
         kind: 'load-manifest',
@@ -845,6 +849,7 @@ export function registerContextCommand(program: Command): void {
 
       const capsule = buildContextCapsule({
         resolved,
+        identity: rawEvidenceIdentity,
         originalQuery: normalized.query,
         mode,
         requestedOutputPath: normalized.out,
@@ -898,21 +903,21 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
-      const writtenCapsulePath = writeContextCapsule(normalized.out, capsule)
+      const plannedCapsulePath = toForwardSlash(path.resolve(normalized.out))
       steps.push({
         id: 'step-write-context-capsule',
         kind: 'write-context-capsule',
         description: 'Wrote the context capsule artifact.',
         inputs: { outputPath: normalized.out },
-        outputs: { writtenPath: writtenCapsulePath },
+        outputs: { writtenPath: plannedCapsulePath },
         status: 'ok',
         warnings: [],
       })
 
-      let writtenAuditPath: string | null = null
+      let auditRecord: ReturnType<typeof buildRetrievalAuditRecord> | null = null
       if (normalized.auditOut) {
-        const auditRecord = buildRetrievalAuditRecord({
-          resolved,
+        auditRecord = buildRetrievalAuditRecord({
+          identity: rawEvidenceIdentity,
           request: capsule.request,
           warnings: [...normalized.warnings, ...roleContext.warnings, ...evidenceResult.warnings],
           roleContext,
@@ -942,8 +947,14 @@ export function registerContextCommand(program: Command): void {
             },
           ],
         })
-        writtenAuditPath = writeRetrievalAuditRecord(normalized.auditOut, auditRecord)
+        assertRawEvidenceParity(capsule, auditRecord)
       }
+
+      const writtenCapsulePath = writeContextCapsule(normalized.out, capsule)
+      const writtenAuditPath =
+        normalized.auditOut && auditRecord
+          ? writeRetrievalAuditRecord(normalized.auditOut, auditRecord)
+          : null
 
       if (options.json) {
         console.log(

@@ -323,7 +323,7 @@ Android projects additionally produce `android-gradle.json`, `android-manifest.j
 
 ## Workflow 11: Stage-role context refresh (v1.10.1)
 
-Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.2 changes documentation only. The current unreleased v1.10.3 implementation corrects implementation-owner eligibility, required-evidence allocation, duplicate responsibility observability, and file-level dependency/caller direction without changing the workflow or CLI syntax.
+Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.2 changes documentation only. The current unreleased v1.10.3 implementation also gives the capsule and retrieval audit one grounded repository/index identity and validates their shared contract before successful output, without changing the workflow or CLI syntax.
 
 Use a role directly:
 
@@ -337,7 +337,7 @@ Or provide a structured request:
 npx @dailephd/my-dev-kit context --request context-request.json --json
 ```
 
-`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, and provenance before using the result.
+`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, provenance, and the matching capsule/audit `index.projectRoot` before using the result. Do not hand-edit either generated artifact: regenerate the pair from the same request and validated index.
 
 ### Architecture-stage flow
 

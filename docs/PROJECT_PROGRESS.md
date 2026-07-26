@@ -10,19 +10,21 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 The current branch contains the complete my-dev-kit v1.10.3 context-readiness corrective patch. Package metadata remains `1.10.2`, and npm, Git tags, and GitHub Releases still identify v1.10.2 as latest; implementation is not publication.
 
-The four completed corrections are:
+The five completed corrections are:
 
 1. **Structurally grounded owners** — implementation-owner eligibility now combines request relevance with exported-production-symbol, contract/canonical-type, classification, or graph-producer evidence. Neutral filenames qualify when the structure supports ownership; focus, owner-like naming, test/fixture/generated paths, projections/views, and unrelated leaf consumers do not qualify by themselves.
 2. **Required-first allocation** — the implementation role treats existing required-group caps as initial reservations in one finite deterministic pool. Unused capacity spills in fixed priority order; genuine demand beyond the aggregate reservation bound remains reported and blocks adequacy. Additive diagnostics expose reservation, contribution, borrowing, selected/omitted counts, aggregate capacity, and adequacy impact.
 3. **Observable duplicate responsibilities** — public request normalization preserves duplicate `testResponsibilityRefs` until responsibility mapping. One mapping is emitted per unique ID in first-occurrence order, while duplicate and unknown/unmapped diagnostics remain visible and capsule/audit summaries remain equal.
 4. **Directed file evidence** — file evidence now resolves to canonical `file:<path>` graph identity for dependency/caller classification, matching symbol-level direction and deduplicating alternate evidence representations.
 
-Compatibility remains intact: the CLI syntax, roles, evidence-kind vocabulary, string-only responsibility references, legacy no-role behavior, and context artifact schema `"1.0.0"` are unchanged. Separate orchestrator and lab corrective patches remain ecosystem work; their behavior is not implemented here.
+5. **Raw-evidence identity and parity** — one canonical identity from the validated active manifest supplies both artifacts. New audits carry project root and manifest schema identity, and a deterministic pre-write parity gate rejects contradictory identity or readiness summaries.
+
+Compatibility remains intact: the CLI syntax, roles, evidence-kind vocabulary, string-only responsibility references, legacy no-role behavior, and context artifact schema `"1.0.0"` are unchanged. Old audits without repository identity remain parseable but do not gain fabricated identity; current audits always include the grounded fields.
 
 ### v1.10.3 validation evidence
 
-- Focused v1.10.3 context suites: 52/52 tests passing across 5 files.
-- Full suite: 1,845/1,845 tests passing across 163 files after the documentation-preservation cases were added.
+- Complete context suite: 281/281 tests passing across 29 files.
+- Full suite: 1,865/1,865 tests passing across 165 files.
 - `npm run typecheck` and `npm run build`: passing.
 - `npm run docs:check` and `npm run verify`: passing.
 - `npm run benchmark:retrieval`: PASS, 6/6 tasks.

@@ -138,7 +138,7 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 ### Current development: v1.10.3 (implemented, unreleased)
 
-The current repository includes an unreleased corrective patch for implementation-role context readiness. It keeps structurally credible owners even when their filenames are neutral, rejects owner candidates supported only by focus or naming, allocates the finite required-evidence capacity before reporting genuine required truncation, preserves duplicate responsibility-ID diagnostics, and classifies directed file-level dependency and caller evidence by canonical graph identity. The CLI syntax, role and evidence-kind vocabularies, and context artifact schema major remain unchanged.
+The current repository includes an unreleased corrective patch for implementation-role context readiness. It keeps structurally credible owners even when their filenames are neutral, rejects owner candidates supported only by focus or naming, allocates the finite required-evidence capacity before reporting genuine required truncation, preserves duplicate responsibility-ID diagnostics, classifies directed file-level dependency and caller evidence by canonical graph identity, and makes each newly generated capsule/audit pair prove the same repository and index identity before output is written. The CLI syntax, role and evidence-kind vocabularies, and context artifact schema major remain unchanged.
 
 ### Android capability introduced in v1.10.0
 
@@ -166,7 +166,7 @@ This is static evidence, not runtime proof. my-dev-kit does not execute Gradle o
 
 ## Stage-specific bounded context retrieval
 
-Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.2 package keeps that behavior unchanged. The current unreleased v1.10.3 implementation corrects owner eligibility, required-evidence allocation, duplicate responsibility observability, and directed file-level dependency/caller classification without changing the command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.2 package keeps that behavior unchanged. The current unreleased v1.10.3 implementation also aligns capsule/audit repository identity and validates their duplicated contract fields before successful output, without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 

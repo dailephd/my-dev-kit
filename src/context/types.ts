@@ -323,6 +323,10 @@ export interface FullFileReadRecommendation {
 export interface RetrievalAuditRecordIndex {
   indexPath: string
   manifestPath: string
+  /** Additive in schema major 1. Absent in legacy audits. */
+  manifestSchemaVersion?: string
+  /** Additive in schema major 1. Absent in legacy audits; never inferred by readers. */
+  projectRoot?: string
 }
 
 export interface RetrievalAuditRecord {

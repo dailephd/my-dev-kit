@@ -1368,6 +1368,8 @@ Also write a retrieval audit record:
 npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <path> --audit-out <path> --json
 ```
 
+When `--audit-out` is supplied, the command builds both artifacts in memory and validates their duplicated repository/index identity and readiness summaries before writing either file. A contract mismatch fails nonzero with `RAW_EVIDENCE_PARITY_MISMATCH`; it never silently chooses one artifact as authoritative. The audit remains bounded and does not duplicate capsule-only evidence.
+
 ### Flags
 
 - `--index <dir>`: index artifact directory. Defaults to `.my-dev-kit`.
@@ -1506,6 +1508,8 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 **Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope.
 
 ### v1.10.3 implementation-role readiness corrections (unreleased)
+
+Newly generated capsule/audit pairs share one canonical identity sourced from the validated active index manifest. Both `index` objects contain the same `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`; before/after paths remain represented identically in `freshness.comparedIdentities`. Paths use stable forward-slash serialization, preserve POSIX case, and are not compared by basename or suffix. Old supported-major audits without the additive repository fields remain readable but cannot prove repository identity to an identity-sensitive consumer.
 
 The current repository includes these additive corrections; they are not part of the published v1.10.2 package:
 
