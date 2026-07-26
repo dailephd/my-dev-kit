@@ -33,6 +33,9 @@ import type {
 } from './types.js'
 
 export interface BoundedList<T> {
+  /** Complete bounded discovery inventory used by the downstream shared allocator.
+   * This field is internal and is never serialized into a context capsule/audit. */
+  candidates: T[]
   items: T[]
   availableCount: number
   limit: number
@@ -43,6 +46,7 @@ export interface BoundedList<T> {
 function bound<T>(sorted: T[], limit: number): BoundedList<T> {
   const items = sorted.slice(0, limit)
   return {
+    candidates: sorted,
     items,
     availableCount: sorted.length,
     limit,
@@ -232,6 +236,45 @@ interface RelatedTestMatch {
   basis: string[]
 }
 
+/**
+ * Rank compact related-test references for bounded selection.
+ *
+ * Discovery relationships are request-scoped rather than responsibility-specific:
+ * `testResponsibilityRefs` is intentionally only a string-ID contract, so assigning
+ * a particular test to a particular responsibility would fabricate semantics. The
+ * honest coverage signal available here is the set of changed/focus symbols or files
+ * each test imports. Greedily retain references that add previously unseen request
+ * evidence before redundant references, then prefer direct symbol references and
+ * stable paths. This order matters only when the real aggregate bound overflows.
+ */
+function rankRelatedTestMatches(matches: RelatedTestMatch[]): RelatedTestMatch[] {
+  const remaining = [...matches]
+  const selected: RelatedTestMatch[] = []
+  const coveredBasis = new Set<string>()
+
+  while (remaining.length > 0) {
+    remaining.sort((a, b) => {
+      const aNew = a.basis.filter((basis) => !coveredBasis.has(basis)).length
+      const bNew = b.basis.filter((basis) => !coveredBasis.has(basis)).length
+      return (
+        bNew - aNew ||
+        (a.relationship === b.relationship
+          ? 0
+          : a.relationship === 'references-selected-production-symbol'
+            ? -1
+            : 1) ||
+        a.testPath.localeCompare(b.testPath)
+      )
+    })
+    const next = remaining.shift()
+    if (!next) break
+    selected.push(next)
+    for (const basis of next.basis) coveredBasis.add(basis)
+  }
+
+  return selected
+}
+
 /** Parses `symbol:<path>#<name>` IDs into a path -> simple-name-set lookup. */
 function symbolsOfInterestByPath(symbolsOfInterest: string[]): Map<string, Set<string>> {
   const byPath = new Map<string, Set<string>>()
@@ -283,8 +326,7 @@ function findRelatedTests(options: {
     }
   }
 
-  matches.sort((a, b) => a.testPath.localeCompare(b.testPath))
-  return matches
+  return rankRelatedTestMatches(matches)
 }
 
 function toEvidenceItem(options: {

@@ -129,6 +129,7 @@ describe('evidence-group construction', () => {
     expect(kinds).toEqual([
       'changed-surface',
       'production-symbols',
+      'contracts',
       'validators-and-boundaries',
       'errors-and-side-effects',
       'related-tests',

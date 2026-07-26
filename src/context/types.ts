@@ -963,10 +963,13 @@ export interface GroupTruncationEntry {
   usedCount: number
   truncated: boolean
   droppedCount: number
+  /** Additive schema-major-1 diagnostic: stable identities omitted by a genuine
+   * bounded required-group overflow. Older consumers may ignore this field. */
+  droppedEvidenceIds?: string[]
   /** v1.10.3 Batch 2 (additive, optional): required-first allocation diagnostics.
    * Populated only for groups produced by the required-first allocator (currently:
-   * the implementation role's required evidence groups). Absent for groups the
-   * allocator does not govern (e.g. architecture/test-implementation role groups) —
+   * the implementation and test-implementation roles' required evidence groups).
+   * Absent for groups the allocator does not govern (for example, architecture) —
    * older consumers can ignore all of these fields. */
   required?: boolean
   /** This group's initial bounded reservation, before any spillover. */

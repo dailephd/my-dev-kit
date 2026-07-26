@@ -9,7 +9,7 @@
  * already exists into named, capped, auditable groups.
  */
 import { isContractLike, isOwnerLike, isTestLike } from './roleCandidates.js'
-import { discoverTestInfrastructure, type BoundedList } from './testInfrastructureDiscovery.js'
+import { DEFAULT_TEST_INFRA_LIMITS, discoverTestInfrastructure, type BoundedList } from './testInfrastructureDiscovery.js'
 import { CONSTANT_PATTERN, ERROR_PATTERN, SCHEMA_PATTERN, SIDE_EFFECT_PATTERN, VALIDATOR_PATTERN } from './evidencePatterns.js'
 import { isFixtureLike, isGeneratedLike, isMockLike, isTestScoped } from './evidenceClassification.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
@@ -150,6 +150,21 @@ function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): Require
     }
   })
 }
+
+const TEST_IMPLEMENTATION_REQUIRED_RESERVATIONS: ReadonlyArray<{
+  kind: EvidenceGroupKind
+  reservation: number
+}> = [
+  { kind: 'contracts', reservation: 10 },
+  { kind: 'validators-and-boundaries', reservation: 10 },
+  { kind: 'errors-and-side-effects', reservation: 10 },
+  { kind: 'related-tests', reservation: DEFAULT_TEST_INFRA_LIMITS.relatedTests },
+  { kind: 'fixtures', reservation: DEFAULT_TEST_INFRA_LIMITS.fixtures },
+  { kind: 'factories', reservation: DEFAULT_TEST_INFRA_LIMITS.factories },
+  { kind: 'mocks', reservation: DEFAULT_TEST_INFRA_LIMITS.mocks },
+  { kind: 'setup-and-configuration', reservation: DEFAULT_TEST_INFRA_LIMITS.setupFiles },
+  { kind: 'test-commands', reservation: DEFAULT_TEST_INFRA_LIMITS.testCommands },
+]
 
 function makeGroup(kind: EvidenceGroupKind, role: ContextRole | null, items: EvidenceItemRef[], options: MakeGroupOptions): EvidenceGroup {
   const { limit, required, provenance, unresolved = [], warnings = [], availableCountOverride } = options
@@ -658,12 +673,10 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       provenance: 'reused changedSurface.symbols (Batch 2)',
       availableCountOverride: changedSymbolItems.length,
     })
-    const validators = contractItems.filter((i) => VALIDATOR_PATTERN.test(i.path ?? '') || CONSTANT_PATTERN.test(i.path ?? ''))
-    pushGroup('validators-and-boundaries', validators, { limit: 10, required: true, provenance: 'validator/constant naming subset of contract-like candidates' })
+    const validators = contractItems.filter((i) => VALIDATOR_PATTERN.test(i.path ?? i.id) || CONSTANT_PATTERN.test(i.path ?? i.id))
     const errorsAndSideEffects = contractItems
-      .filter((i) => ERROR_PATTERN.test(i.path ?? ''))
-      .concat(adjacentItems.filter((i) => SIDE_EFFECT_PATTERN.test(i.path ?? '')))
-    pushGroup('errors-and-side-effects', errorsAndSideEffects, { limit: 10, required: true, provenance: 'error-naming candidates plus conservative side-effect-boundary naming over graph-adjacent candidates' })
+      .filter((i) => ERROR_PATTERN.test(i.path ?? i.id))
+      .concat(adjacentItems.filter((i) => SIDE_EFFECT_PATTERN.test(i.path ?? i.id)))
 
     const filesOfInterest = [
       ...new Set([...changedSurface.files.filter((f) => f.status !== 'removed').map((f) => f.path), ...focusIntake.focusFiles.filter((f) => f.resolved).flatMap((f) => f.matchedFilePaths)]),
@@ -682,13 +695,18 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     })
     warnings.push(...infra.warnings)
 
-    const relatedTestsGroup = pushGroup('related-tests', infra.relatedTests.items, boundedGroupOptions(infra.relatedTests, true, 'graph import/call edges from selected/changed production evidence'))
-    pushGroup('fixtures', infra.fixtures.items, boundedGroupOptions(infra.fixtures, true, 'graph import edges from related tests'))
-    pushGroup('factories', infra.factories.items, boundedGroupOptions(infra.factories, true, 'graph import edges from related tests'))
-    pushGroup('mocks', infra.mocks.items, boundedGroupOptions(infra.mocks, true, 'graph import edges from related tests'))
-    const setupAndConfigItems = [...infra.setupFiles.items]
-    pushGroup('setup-and-configuration', setupAndConfigItems, boundedGroupOptions(infra.setupFiles, true, 'test configuration setupFiles field'))
-    const testCommandItems: EvidenceItemRef[] = infra.testCommands.items.map((c) => ({
+    const testConfigurationItems: EvidenceItemRef[] = infra.testConfigurations.candidates.map((configuration) => ({
+      id: `test-config:${configuration.path}`,
+      itemKind: 'file',
+      path: configuration.path,
+      sourceLocation: { filePath: configuration.path },
+      relationship: configuration.supported ? 'supported-test-configuration' : 'detected-unsupported-test-configuration',
+      basis: `static ${configuration.framework} configuration discovery`,
+      provenance: `test-configuration:${configuration.path}`,
+      metadata: { framework: configuration.framework, supported: configuration.supported },
+    }))
+    const setupAndConfigItems = [...infra.setupFiles.candidates, ...testConfigurationItems]
+    const testCommandItems: EvidenceItemRef[] = infra.testCommands.candidates.map((c) => ({
       id: c.commandText ?? `unresolved:${c.commandSource}`,
       itemKind: 'command',
       relationship: c.scope,
@@ -696,10 +714,89 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       provenance: c.commandSource,
       metadata: { commandText: c.commandText, framework: c.framework, scope: c.scope },
     }))
-    pushGroup('test-commands', testCommandItems, boundedGroupOptions(infra.testCommands, true, 'derived from package.json test script + discovered related tests'))
+
+    const candidatesByKind = new Map<EvidenceGroupKind, EvidenceItemRef[]>([
+      ['contracts', contractItems],
+      ['validators-and-boundaries', validators],
+      ['errors-and-side-effects', errorsAndSideEffects],
+      ['related-tests', infra.relatedTests.candidates],
+      ['fixtures', infra.fixtures.candidates],
+      ['factories', infra.factories.candidates],
+      ['mocks', infra.mocks.candidates],
+      ['setup-and-configuration', setupAndConfigItems],
+      ['test-commands', testCommandItems],
+    ])
+    const allocations = allocateRequiredGroups(
+      TEST_IMPLEMENTATION_REQUIRED_RESERVATIONS.map(({ kind, reservation }) => ({
+        kind,
+        items: candidatesByKind.get(kind) ?? [],
+        reservation,
+      }))
+    )
+    const allocationByKind = new Map(allocations.map((allocation) => [allocation.kind, allocation]))
+    const governingHardBound = allocations.reduce((sum, allocation) => sum + allocation.reservation, 0)
+    const aggregateCapacityUsed = allocations.reduce((sum, allocation) => sum + allocation.selectedItems.length, 0)
+    const provenanceByKind: Partial<Record<EvidenceGroupKind, string>> = {
+      contracts: 'contract-like classification over role-ranked candidates',
+      'validators-and-boundaries': 'validator/constant naming subset of contract-like candidates',
+      'errors-and-side-effects': 'error-naming candidates plus conservative side-effect-boundary naming over graph-adjacent candidates',
+      'related-tests': 'coverage-aware compact references from import scans over selected/changed production evidence',
+      fixtures: 'graph import edges from related tests',
+      factories: 'graph import edges from related tests',
+      mocks: 'graph import edges from related tests',
+      'setup-and-configuration': 'test configuration and setup-file discovery',
+      'test-commands': 'derived from package.json test script + discovered related tests',
+    }
+
+    function pushAllocatedTestGroup(kind: EvidenceGroupKind): EvidenceGroup {
+      const allocation = allocationByKind.get(kind)
+      if (!allocation) throw new Error(`Missing test-role required-first allocation for evidence group "${kind}"`)
+      const selectedIds = new Set(allocation.selectedItems.map((item) => item.id))
+      const droppedEvidenceIds = allocation.dedupedItems
+        .filter((item) => !selectedIds.has(item.id))
+        .map((item) => item.id)
+      return pushGroup(
+        kind,
+        allocation.selectedItems,
+        {
+          limit: allocation.effectiveLimit,
+          required: true,
+          provenance: `${provenanceByKind[kind]} (required-first allocation: reservation ${allocation.reservation}, borrowed ${allocation.borrowedCapacity})`,
+          availableCountOverride: allocation.dedupedItems.length,
+        },
+        {
+          required: true,
+          reservation: allocation.reservation,
+          initiallySelectedCount: allocation.initiallySelectedCount,
+          unusedReservationContributed: allocation.unusedReservationContributed,
+          borrowedCapacity: allocation.borrowedCapacity,
+          requiredOmittedCount: allocation.requiredOmittedCount,
+          optionalOmittedCount: 0,
+          adequacyAffected: allocation.requiredOmittedCount > 0,
+          governingHardBound,
+          aggregateCapacityUsed,
+          aggregateCapacityRemaining: governingHardBound - aggregateCapacityUsed,
+          droppedEvidenceIds,
+        }
+      )
+    }
+
+    const contractsGroup = pushAllocatedTestGroup('contracts')
+    pushAllocatedTestGroup('validators-and-boundaries')
+    pushAllocatedTestGroup('errors-and-side-effects')
+    const relatedTestsGroup = pushAllocatedTestGroup('related-tests')
+    const fixturesGroup = pushAllocatedTestGroup('fixtures')
+    const factoriesGroup = pushAllocatedTestGroup('factories')
+    const mocksGroup = pushAllocatedTestGroup('mocks')
+    const setupAndConfigurationGroup = pushAllocatedTestGroup('setup-and-configuration')
+    const testCommandsGroup = pushAllocatedTestGroup('test-commands')
 
     unresolvedItems.push(...infra.unresolved)
     selectedTests = relatedTestsGroup.items
+    selectedContracts = contractsGroup.items
+
+    const selectedSetupAndConfigurationIds = new Set(setupAndConfigurationGroup.items.map((item) => item.id))
+    const selectedTestCommandIds = new Set(testCommandsGroup.items.map((item) => item.id))
 
     return finalizeResult({
       groups,
@@ -707,20 +804,22 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       selectedContracts,
       selectedTests,
       testInfrastructure: {
-        relatedTests: infra.relatedTests.items,
-        fixtures: infra.fixtures.items,
-        factories: infra.factories.items,
-        mocks: infra.mocks.items,
-        setupFiles: infra.setupFiles.items,
-        testConfigurations: infra.testConfigurations.items,
+        relatedTests: relatedTestsGroup.items,
+        fixtures: fixturesGroup.items,
+        factories: factoriesGroup.items,
+        mocks: mocksGroup.items,
+        setupFiles: infra.setupFiles.candidates.filter((item) => selectedSetupAndConfigurationIds.has(item.id)),
+        testConfigurations: infra.testConfigurations.candidates.filter((item) => selectedSetupAndConfigurationIds.has(`test-config:${item.path}`)),
         packageScripts: infra.packageScripts.items,
-        testCommands: infra.testCommands.items,
+        testCommands: infra.testCommands.candidates.filter((command) =>
+          selectedTestCommandIds.has(command.commandText ?? `unresolved:${command.commandSource}`)
+        ),
         unresolved: infra.unresolved,
         warnings: infra.warnings,
       },
       unresolvedItems,
       warnings,
-    })
+    }, allocationDiagnostics)
   } else {
     // Legacy (no-role) requests: evidence groups remain empty (TST-B3-029). No grouping,
     // no test-infrastructure discovery is run — this preserves the pre-Batch-3 capsule shape.
