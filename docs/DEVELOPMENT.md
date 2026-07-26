@@ -207,6 +207,16 @@ npx vitest run tests/indexing
 
 The context suites cover request-file normalization and validation, all three roles, role/mode independence, providers and stable ranking, before/after changed surfaces, evidence groups, responsibility mapping, role adequacy, freshness, caps, truncation, full-file fallback, compatibility, determinism, and cross-platform paths.
 
+For the unreleased v1.10.3 corrective patch, keep these regression suites in the focused context run:
+
+- `tests/context/contextEvidenceGroups.spec.ts` — structurally grounded neutral owners, false-owner exclusions, and deterministic owner ordering.
+- `tests/context/contextRequiredAllocation.spec.ts` — required-first reservations, deterministic spillover, finite aggregate bounds, genuine required truncation, diagnostics, adequacy, legacy compatibility, and determinism.
+- `tests/context/contextResponsibilityDuplicates.spec.ts` — duplicate and unknown/unmapped observability, first-occurrence mapping order, capsule/audit parity, and deterministic request handling.
+- `tests/context/contextDirectedEvidence.spec.ts` — canonical file graph identity, dependency/caller direction, deduplication, and symbol/file parity.
+- `tests/context/contextV1103IntegrationMatrix.spec.ts` — end-to-end producer coverage for the repository-owned historical context cases represented by permanent fixtures.
+
+Do not depend on transient external fixture paths. Permanent regressions belong in repository-owned tests or fixtures, and generated capsule, audit, index, benchmark, and temporary request outputs must remain ignored and uncommitted.
+
 Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.
 
 ## Local CLI smoke test

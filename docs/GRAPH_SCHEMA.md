@@ -840,6 +840,17 @@ Role adequacy distinguishes nonempty output from sufficient evidence. Architectu
 
 Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
 
+### Additive context readiness fields (v1.10.3, unreleased)
+
+The current repository keeps context capsule and retrieval-audit schema version `"1.0.0"` while correcting implementation-role readiness:
+
+- Implementation-role `groupTruncation[]` entries may include optional allocation fields: `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`.
+- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other required groups; `requiredOmittedCount` is qualified required evidence still omitted after spillover. `governingHardBound` is the finite sum of participating reservations, not the request's reporting-only `limits.evidenceGroupEntries` value.
+- `responsibilityMappings.duplicateResponsibilityIds` remains the public duplicate diagnostic. Normalization preserves duplicate references until mapping, actual mappings stay unique in first-occurrence order, and duplicate and `unknownResponsibilityIds` diagnostics can both describe the same input.
+- `EvidenceItemRef.id` remains the public evidence identity. For directed file-edge classification, a plain file item is matched to the code graph through canonical `file:<path>` node identity; symbol items use their existing symbol node ID. No new public ID format is introduced.
+
+These additions are optional for schema-major-1 consumers. Existing fields retain their meanings, legacy no-role output stays compatible, and the retrieval audit carries the same responsibility, allocation/truncation, adequacy, and direction-derived summaries as the capsule.
+
 ## Stable node IDs and compatibility
 
 Node IDs are deterministic and stable across index runs for the same source root configuration. File node IDs use the `file:<relative-path>` form. Symbol node IDs use the `symbol:<relative-path>#<symbol-name>` form.

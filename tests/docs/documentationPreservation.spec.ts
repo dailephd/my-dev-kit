@@ -15,17 +15,20 @@ function loadManifest(): PreservationManifest {
 }
 
 function loadRealDocuments(manifest: PreservationManifest): DocumentContents {
-  const paths = [
+  const paths = new Set([
     manifest.roadmap.path,
     manifest.readme.path,
     manifest.projectOverview.path,
     ...manifest.architecture.paths,
+    ...manifest.artifacts.paths,
     manifest.commands.path,
     manifest.workflows.path,
+    ...Object.keys(manifest.statusBoundaries.documentKeywords),
+    ...manifest.statusBoundaries.boundaryPaths,
     manifest.release.path,
     manifest.changelog.path,
     manifest.security.path,
-  ]
+  ])
   const documents: DocumentContents = {}
   for (const docPath of paths) {
     documents[docPath] = fs.readFileSync(path.join(repoRoot, docPath), 'utf8')
@@ -52,6 +55,205 @@ describe('documentation preservation checker', () => {
     }
     const violations = checkDocumentationPreservation(manifest, mutated)
     expect(violations).toEqual([])
+  })
+
+  describe('table-driven anti-drift preservation matrix', () => {
+    const cases: Array<{
+      name: string
+      rule: string
+      mutate: (documents: DocumentContents) => DocumentContents
+    }> = [
+      {
+        name: 'a roadmap version is removed',
+        rule: 'roadmap-version-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '## Version 1.10.3',
+            '## Removed patch version',
+          ),
+        }),
+      },
+      {
+        name: 'individual versions are replaced by a range',
+        rule: 'roadmap-no-version-ranges',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: `${documents[manifest.roadmap.path]}\n\nv1.10.0-v1.13.0\n`,
+        }),
+      },
+      {
+        name: 'a future version disappears',
+        rule: 'roadmap-version-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '## Version 1.11.0',
+            '## Removed future version',
+          ),
+        }),
+      },
+      {
+        name: 'product direction disappears',
+        rule: 'roadmap-structural-section',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '## Product principles',
+            '## Removed product direction',
+          ),
+        }),
+      },
+      {
+        name: 'architecture direction disappears',
+        rule: 'roadmap-structural-section',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '## Long-term direction',
+            '## Removed architecture direction',
+          ),
+        }),
+      },
+      {
+        name: 'validation expectations disappear',
+        rule: 'roadmap-structural-section',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replaceAll(
+            '### Validation expectations',
+            '### Removed validation expectations',
+          ),
+        }),
+      },
+      {
+        name: 'a published version is marked planned',
+        rule: 'roadmap-published-status',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '## Version 1.10.2\n\n**Status: published.**',
+            '## Version 1.10.2\n\n**Status: planned.**',
+          ),
+        }),
+      },
+      {
+        name: 'v1.10.3 is marked published without evidence',
+        rule: 'roadmap-unreleased-not-published',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
+            '**Status: implemented in the current repository; unreleased.**',
+            '**Status: published.**',
+          ),
+        }),
+      },
+      {
+        name: 'a README pillar disappears',
+        rule: 'readme-pillar-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.readme.path]: documents[manifest.readme.path].replace(
+            '## Design boundaries',
+            '## Removed design boundaries',
+          ),
+        }),
+      },
+      {
+        name: 'an architecture subsystem disappears',
+        rule: 'architecture-domain-present',
+        mutate: (documents) =>
+          manifest.architecture.paths.reduce<DocumentContents>(
+            (result, documentPath) => ({
+              ...result,
+              [documentPath]: result[documentPath].replaceAll(
+                'Android detection layer',
+                'Removed Android detection subsystem',
+              ),
+            }),
+            { ...documents },
+          ),
+      },
+      {
+        name: 'an artifact family disappears',
+        rule: 'artifact-family-present',
+        mutate: (documents) =>
+          manifest.artifacts.paths.reduce<DocumentContents>(
+            (result, documentPath) => ({
+              ...result,
+              [documentPath]: result[documentPath].replaceAll(
+                'retrieval-audit-record.json',
+                'removed-audit-artifact.json',
+              ),
+            }),
+            { ...documents },
+          ),
+      },
+      {
+        name: 'a public command family disappears',
+        rule: 'command-family-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.commands.path]: documents[manifest.commands.path].replaceAll(
+            '`graph-diff`',
+            '`removed-command`',
+          ),
+        }),
+      },
+      {
+        name: 'a workflow family disappears',
+        rule: 'workflow-family-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.workflows.path]: documents[manifest.workflows.path].replaceAll(
+            'Stage-role context refresh',
+            'Removed stage-role workflow',
+          ),
+        }),
+      },
+      {
+        name: 'a published CHANGELOG entry disappears',
+        rule: 'changelog-version-present',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.changelog.path]: documents[manifest.changelog.path].replace(
+            '## 1.7.0',
+            '## Removed published release',
+          ),
+        }),
+      },
+      {
+        name: 'the current and future distinction disappears',
+        rule: 'current-future-status-boundary',
+        mutate: (documents) => ({
+          ...documents,
+          [manifest.readme.path]: documents[manifest.readme.path].replaceAll(
+            'implemented, unreleased',
+            'current development',
+          ),
+        }),
+      },
+      {
+        name: 'the manual workflow boundary disappears',
+        rule: 'static-analysis-boundary-present',
+        mutate: (documents) =>
+          manifest.statusBoundaries.boundaryPaths.reduce<DocumentContents>(
+            (result, documentPath) => ({
+              ...result,
+              [documentPath]: result[documentPath].replaceAll(
+                'does not automatically run my-dev-kit',
+                'runs the integration',
+              ),
+            }),
+            { ...documents },
+          ),
+      },
+    ]
+
+    it.each(cases)('fails when $name', ({ mutate, rule }) => {
+      const violations = checkDocumentationPreservation(manifest, mutate(realDocuments))
+      expect(violations.some((violation) => violation.rule === rule)).toBe(true)
+    })
   })
 
   describe('roadmap preservation', () => {

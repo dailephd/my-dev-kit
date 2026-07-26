@@ -18,15 +18,20 @@ function readIfExists(relativePath: string): string | undefined {
 
 function collectDocumentPaths(manifest: PreservationManifest): string[] {
   return [
-    manifest.roadmap.path,
-    manifest.readme.path,
-    manifest.projectOverview.path,
-    ...manifest.architecture.paths,
-    manifest.commands.path,
-    manifest.workflows.path,
-    manifest.release.path,
-    manifest.changelog.path,
-    manifest.security.path,
+    ...new Set([
+      manifest.roadmap.path,
+      manifest.readme.path,
+      manifest.projectOverview.path,
+      ...manifest.architecture.paths,
+      ...manifest.artifacts.paths,
+      manifest.commands.path,
+      manifest.workflows.path,
+      ...Object.keys(manifest.statusBoundaries.documentKeywords),
+      ...manifest.statusBoundaries.boundaryPaths,
+      manifest.release.path,
+      manifest.changelog.path,
+      manifest.security.path,
+    ]),
   ]
 }
 

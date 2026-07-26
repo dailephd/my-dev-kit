@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.10.2 is the latest published release and is a documentation-only corrective patch. The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior, with no runtime or CLI changes in v1.10.2. The current repository supports:
+Version 1.10.2 is the latest published release and is a documentation-only corrective patch. The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior, with no runtime or CLI changes in v1.10.2. The current repository also contains the implemented but unreleased v1.10.3 context-readiness corrections; they are not part of the published package. The current repository supports:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations

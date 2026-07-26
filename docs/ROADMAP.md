@@ -1055,6 +1055,47 @@ Relevant validation commands include typecheck, the focused context test suite, 
 
 Architecture approval should be sought before implementing any of: breaking CLI defaults, a major capsule/audit/manifest schema change, a second search/graph/index engine, unprovable freshness presented as fact, evidence-free responsibility completeness, native orchestrator execution, a shared package, or movement of later roadmap scope.
 
+## Version 1.10.2
+
+**Status: published.**
+
+Version 1.10.2 is a documentation-only corrective patch. It replaces stale v1.10.1 release-state wording and strengthens the release guide's final-document-state checks. It does not change runtime, CLI, artifact, schema, or retrieval behavior.
+
+## Version 1.10.3
+
+**Status: implemented in the current repository; unreleased.**
+
+### Goal
+
+Correct implementation-role context readiness so structurally credible owners are retained, false owners are rejected, required evidence uses available bounded capacity before truncation, duplicate responsibility IDs remain observable, and directed file-level dependency/caller evidence is classified correctly without changing schema major 1 or weakening genuine readiness blockers.
+
+### Implemented scope
+
+- Implementation-owner eligibility combines request relevance with independent structural evidence. Owner-like filename terms remain ranking signals, not eligibility gates; focus alone is insufficient.
+- Test, fixture, generated, projection-only, view-only, and unrelated leaf evidence cannot qualify as implementation owners without independent structural support.
+- Required implementation evidence groups use their existing fixed capacities as initial reservations in one deterministic required-first allocation pass.
+- Unused reservation spills in fixed group priority to required groups with remaining qualified evidence. Selection never exceeds the finite sum of participating reservations.
+- Genuine required overflow remains reported and continues to block role adequacy. Additive diagnostics expose reservations, contributed and borrowed capacity, selected and omitted counts, aggregate bound use, and adequacy impact.
+- Public request normalization preserves duplicate `testResponsibilityRefs` long enough for responsibility mapping to report them. Actual mappings remain unique, with deterministic first-occurrence order; duplicate and unknown/unmapped diagnostics remain independently visible.
+- File-level dependency and caller evidence uses canonical graph-node identity, distinguishing the evidence item's public ID from its `file:<path>` graph identity and preserving directed relationships.
+- Context capsules and retrieval-audit records carry the same computed summaries, and repeated identical inputs remain deterministic.
+
+### Compatibility boundaries
+
+- `ContextRequest`, context capsules, and retrieval-audit records remain schema major `1`; the current artifact schema version remains `"1.0.0"`.
+- Existing `context` syntax, modes, roles, requested-evidence kinds, and legacy no-role behavior remain unchanged.
+- `limits.evidenceGroupEntries` remains diagnostic/reporting-only. The finite implementation required-evidence bound is the sum of the participating groups' internal reservations.
+- Responsibility criticality remains outside the string-only `testResponsibilityRefs` request field; this patch does not add a new criticality contract.
+- my-dev-kit remains a local, read-only, deterministic static-evidence producer. The current orchestrator does not automatically invoke it.
+
+### Exclusions and deferred ecosystem work
+
+Version 1.10.3 does not add runtime proof, LLM-based owner selection, automatic source or test editing, automatic orchestrator integration, orchestrator contradiction/identity enforcement, supplemental packet/report reconciliation, lab owner/allocation/readiness metrics, or release actions. Separate orchestrator and lab corrective patches remain ecosystem work and are not my-dev-kit features.
+
+### Validation expectations
+
+Behavior-derived validation covers neutral and false-owner cases, deterministic multiple-owner ordering, required-first allocation and spillover, finite aggregate bounds and genuine overflow, additive allocation diagnostics, duplicate/unknown responsibility diagnostics and first-occurrence mapping order, directed file-level dependency/caller identity, capsule/audit parity, legacy schema-major-1 compatibility, deterministic output, focused context regression suites, full tests, typecheck, build, documentation checks, retrieval benchmarks, and package verification.
+
 ## Version 1.11.0
 
 Version 1.11.0 adds Jetpack Compose semantic retrieval and Android UI-test indexing.

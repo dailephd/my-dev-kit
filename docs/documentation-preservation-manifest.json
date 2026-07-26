@@ -17,6 +17,8 @@
       "## Version 1.9.0",
       "## Version 1.10.0",
       "## Version 1.10.1",
+      "## Version 1.10.2",
+      "## Version 1.10.3",
       "## Version 1.11.0",
       "## Version 1.12.0",
       "## Version 1.13.0",
@@ -25,7 +27,8 @@
     ],
     "requiredOrder": [
       "1.0.0", "1.0.x", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0",
-      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.11.0", "1.12.0", "1.13.0", "1.14.0", "2.0.0"
+      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.10.2", "1.10.3",
+      "1.11.0", "1.12.0", "1.13.0", "1.14.0", "2.0.0"
     ],
     "forbiddenVersionRangeSubstitutions": [
       "1.10.0-1.13.0", "1.10.0 - 1.13.0", "1.10-1.13", "v1.10.0-v1.13.0", "v1.10-v1.13"
@@ -34,8 +37,21 @@
       "## Overview",
       "## Product principles",
       "## Ecosystem integration notes",
-      "## Long-term direction"
+      "## Long-term direction",
+      "### Validation expectations"
     ],
+    "publishedVersions": [
+      "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.6.1",
+      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.10.2"
+    ],
+    "implementedUnreleasedVersions": ["1.10.3"],
+    "futureVersionScopeKeywords": {
+      "1.11.0": ["Compose semantic retrieval", "Android UI-test indexing"],
+      "1.12.0": ["Android architecture classification", "Android data-flow retrieval"],
+      "1.13.0": ["Android retrieval benchmarks", "examples", "workflow documentation"],
+      "1.14.0": ["non-Android language and framework coverage"],
+      "2.0.0": ["Plugin architecture", "Retrieval API"]
+    },
     "androidVersionScopeKeywords": {
       "1.9.0": ["Android project detection", "Kotlin", "Java", "component"],
       "1.10.0": ["Gradle", "manifest", "resource", "navigation"],
@@ -89,6 +105,28 @@
       "Model-to-view lineage layer"
     ]
   },
+  "artifacts": {
+    "paths": ["README.md", "docs/ARCHITECTURE.md", "docs/GRAPH_SCHEMA.md"],
+    "requiredArtifactFamilies": [
+      "manifest.json",
+      "code-graph.json",
+      "symbol-index.json",
+      "classification.json",
+      "frontend-semantic.json",
+      "frontend-reachability.json",
+      "data-model.json",
+      "data-model-graph.json",
+      "model-view-lineage.json",
+      "context-capsule.json",
+      "retrieval-audit-record.json",
+      "android-project.json",
+      "android-components.json",
+      "android-gradle.json",
+      "android-manifest.json",
+      "android-resources.json",
+      "android-navigation.json"
+    ]
+  },
   "commands": {
     "path": "docs/COMMANDS.md",
     "requiredCommandFamilies": [
@@ -105,9 +143,30 @@
       "Source continuation and local dependency expansion",
       "Data-model and model-to-view lineage",
       "Context capsule and retrieval audit",
+      "Stage-role context refresh",
       "graph-diff",
       "Android/Kotlin/Java"
     ]
+  },
+  "statusBoundaries": {
+    "documentKeywords": {
+      "README.md": ["latest published release", "implemented, unreleased", "planned scopes"],
+      "docs/ROADMAP.md": [
+        "**Status: published.**",
+        "**Status: implemented in the current repository; unreleased.**",
+        "## Version 1.11.0"
+      ],
+      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Implemented but unreleased: v1.10.3"]
+    },
+    "requiredBoundaryKeywords": [
+      "local-first",
+      "does not call an LLM",
+      "read-only",
+      "conservative static analysis",
+      "does not automatically run my-dev-kit",
+      "reporting-only"
+    ],
+    "boundaryPaths": ["README.md", "docs/ARCHITECTURE.md", "docs/COMMANDS.md", "docs/WORKFLOWS.md"]
   },
   "release": {
     "path": "docs/RELEASE.md",
@@ -130,7 +189,8 @@
       "## 1.0.0", "## 1.1.0", "## 1.2.0", "## 1.3.0", "## 1.4.0", "## 1.5.0",
       "## 1.6.0", "## 1.6.1", "## 1.7.0", "## 1.8.0", "## 1.9.0", "## 1.10.0",
       "## 1.10.1", "## 1.10.2"
-    ]
+    ],
+    "requiredUnreleasedVersionHeadings": ["## 1.10.3 - Unreleased"]
   },
   "security": {
     "path": "docs/SECURITY.md",

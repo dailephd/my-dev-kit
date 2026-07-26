@@ -1505,6 +1505,18 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 
 **Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope.
 
+### v1.10.3 implementation-role readiness corrections (unreleased)
+
+The current repository includes these additive corrections; they are not part of the published v1.10.2 package:
+
+- **Owner eligibility:** an implementation owner needs request relevance plus independent structural evidence. Exported production symbols, contract/canonical-type shape, classification, or a graph producer relationship can qualify a neutral filename. Focus or owner-like naming alone cannot qualify a file, and test, fixture, generated, projection-only, view-only, or unrelated leaf evidence is excluded without independent structural support.
+- **Required-first allocation:** each required implementation evidence group starts with its existing reservation. Unused reservation spills in fixed group priority to required groups with remaining qualified evidence. Selection stays within the finite sum of all participating reservations; demand beyond that bound is reported as required truncation and reduces role adequacy.
+- **Allocation diagnostics:** implementation-role `groupTruncation[]` entries may add `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`. These fields are optional and additive. `limits.evidenceGroupEntries` remains reporting-only and is not a request-level hard selector.
+- **Responsibility IDs:** `testResponsibilityRefs` keeps the caller's sequence through request normalization. Responsibility mapping emits one mapping per unique ID in first-occurrence order; `duplicateResponsibilityIds` reports each repeated ID once in first-duplicate-occurrence order. `unknownResponsibilityIds` and mapping status remain independent, so an ID can be both unknown/unmapped and duplicated without either diagnostic disappearing.
+- **Directed file evidence:** plain file evidence retains its repository-relative evidence item ID but uses canonical `file:<path>` graph-node identity to classify dependency versus caller edges. Symbol evidence continues to use its symbol node ID. Capsule and retrieval-audit summaries use the same computed results.
+
+The request schema major remains `1`, output schema version remains `"1.0.0"`, and the command syntax, modes, roles, evidence-kind vocabulary, and legacy behavior are unchanged. This correction does not add responsibility criticality to `testResponsibilityRefs`, runtime proof, LLM owner selection, source editing, or automatic orchestrator integration.
+
 ## graph-diff
 
 Compare two existing `my-dev-kit` index output directories and report added, removed, and changed graph/artifact elements. `graph-diff` is a **v1.8.0 Batch 4** command.
