@@ -171,18 +171,19 @@ Most integration tests invoke the CLI as a child process against fixture project
 
 ## Full validation
 
-Run the full validation chain before release-related changes or package publishing:
+Complete validation requires both commands, in order, before release-related changes or package publishing:
 
+    npm run test
     npm run verify
 
-The verify script runs the main local validation sequence for the repository.
+`npm test` runs the complete Vitest suite. `npm run verify` runs the remaining non-test verification gates (typecheck, build, docs check) and intentionally excludes the test suite, so running both does not execute the suite twice. `npm run verify` on its own is not a substitute for `npm test`.
 
 If a more explicit validation sequence is needed, run:
 
     npm run typecheck
     npm run test
     npm run build
-    npm run verify
+    npm run docs:check
 
 ### v1.10.1 context validation
 
@@ -284,10 +285,10 @@ Common scripts:
   Runs TypeScript type checking without emitting files.
 
 - npm run test
-  Runs all tests with Vitest.
+  Runs all tests with Vitest. This is the canonical complete test suite.
 
 - npm run verify
-  Runs the main validation chain.
+  Runs the non-test verification chain (typecheck, build, docs check). It excludes the test suite; run npm run test separately for complete validation.
 
 - npm run clean
   Removes dist/.
@@ -590,6 +591,7 @@ Use SVG or PNG manually when Graphviz is installed:
 Before publishing a release:
 
     npm ci
+    npm run test
     npm run verify
     npm pack --dry-run
 

@@ -80,6 +80,7 @@ The Python example writes to:
 Run the main validation chain before release-related changes:
 
     npm ci
+    npm run test
     npm run verify
     npm pack --dry-run
 

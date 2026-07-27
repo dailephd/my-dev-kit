@@ -39,7 +39,7 @@
     "test": "vitest run",
     "test:security": "vitest run tests/security",
     "docs:check": "tsx scripts/docs/checkDocs.ts",
-    "verify": "npm run typecheck && npm run test && npm run build && npm run docs:check",
+    "verify": "npm run typecheck && npm run build && npm run docs:check",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepack": "npm run build",
     "benchmark:retrieval": "tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit/retrieval-regression --fail-on-regression"
