@@ -6,6 +6,7 @@ const repoRoot = path.resolve(__dirname, '..', '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
   scripts: Record<string, string>
 }
+const packageSetupNotes = fs.readFileSync(path.join(repoRoot, 'PACKAGE_SETUP_NOTES.md'), 'utf8')
 
 describe('package script contract: test vs verify', () => {
   it('defines a canonical full test script', () => {
@@ -32,5 +33,17 @@ describe('package script contract: test vs verify', () => {
     expect(pkg.scripts.verify).toMatch(/npm run typecheck/)
     expect(pkg.scripts.verify).toMatch(/npm run build/)
     expect(pkg.scripts.verify).toMatch(/npm run docs:check/)
+  })
+
+  it('documents complete validation without assigning tests to verify', () => {
+    const releaseValidation = packageSetupNotes
+      .split('## Release validation commands')[1]
+      ?.split('## Release readiness checklist')[0]
+
+    expect(releaseValidation).toMatch(/\bnpm (?:run )?test\b/)
+    expect(releaseValidation).toContain('npm run verify')
+    expect(packageSetupNotes).not.toMatch(
+      /npm run verify[^\n]*(?:\+\s*tests?\b|\b(?:includes|runs)\s+(?:the\s+)?(?:full\s+)?tests?\b)/i,
+    )
   })
 })
