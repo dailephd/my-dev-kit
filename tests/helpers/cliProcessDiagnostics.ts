@@ -17,6 +17,7 @@ type SpawnImplementation = (
 
 export interface TestProcessContext {
   testName: string
+  stage?: string
   fixturePath?: string
   outputPath?: string
   cachePath?: string
@@ -39,6 +40,7 @@ export interface SerializedSpawnError {
 
 export interface TestProcessResult {
   testName: string
+  stage: string | null
   executable: string
   arguments: string[]
   readableCommand: string
@@ -53,6 +55,17 @@ export interface TestProcessResult {
   spawnError: SerializedSpawnError | null
   stdout: string
   stderr: string
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+}
+
+export interface TestStageTiming {
+  testName: string
+  stage: string
+  startedAt: string
+  finishedAt: string
+  durationMs: number
 }
 
 export interface PathDiagnostic {
@@ -101,15 +114,19 @@ export function runTestProcess(
   dependencies: Pick<DiagnosticDependencies, 'spawn'> = {}
 ): TestProcessResult {
   const spawn = dependencies.spawn ?? spawnSync
+  const startedAt = new Date()
+  const startTime = performance.now()
   const result = spawn(options.executable, options.args, {
     cwd: options.cwd,
     encoding: 'utf8',
     shell: false,
     windowsHide: true,
   })
+  const finishedAt = new Date()
 
   return {
     testName: options.context.testName,
+    stage: options.context.stage ?? null,
     executable: options.executable,
     arguments: [...options.args],
     readableCommand: readableCommand(options.executable, options.args),
@@ -126,7 +143,38 @@ export function runTestProcess(
       : null,
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
+    startedAt: startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs: Math.round((performance.now() - startTime) * 100) / 100,
   }
+}
+
+function timingDiagnosticsEnabled(): boolean {
+  return process.env.MDK_TEST_TIMING_DIAGNOSTICS === '1'
+}
+
+export function reportTestProcessTiming(result: TestProcessResult): void {
+  if (!timingDiagnosticsEnabled()) return
+
+  process.stderr.write(
+    `[test-process-timing] ${JSON.stringify({
+      testName: result.testName,
+      stage: result.stage,
+      startedAt: result.startedAt,
+      finishedAt: result.finishedAt,
+      durationMs: result.durationMs,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      spawnError: result.spawnError,
+      stdoutLength: result.stdout.length,
+      stderrLength: result.stderr.length,
+    })}\n`
+  )
+}
+
+export function reportTestStageTiming(timing: TestStageTiming): void {
+  if (!timingDiagnosticsEnabled()) return
+  process.stderr.write(`[test-stage-timing] ${JSON.stringify(timing)}\n`)
 }
 
 function relativeFixturePath(root: string, path: string): string {
@@ -211,7 +259,21 @@ export function assertTestProcessSucceeded(
   result: TestProcessResult,
   dependencies: Omit<DiagnosticDependencies, 'spawn'> = {}
 ): void {
-  if (result.exitCode === 0 && result.signal === null && result.spawnError === null) return
+  assertTestProcessExitCode(result, 0, dependencies)
+}
+
+export function assertTestProcessExitCode(
+  result: TestProcessResult,
+  expectedExitCode: number,
+  dependencies: Omit<DiagnosticDependencies, 'spawn'> = {}
+): void {
+  if (
+    result.exitCode === expectedExitCode &&
+    result.signal === null &&
+    result.spawnError === null
+  ) {
+    return
+  }
 
   const diagnosticCollectionErrors: string[] = []
   let fixture: FixtureDiagnostic | null = null
@@ -234,8 +296,9 @@ export function assertTestProcessSucceeded(
   }
 
   throw new Error(
-    `CLI process failed with diagnostics:\n${JSON.stringify(
+    `CLI process exited unexpectedly with diagnostics:\n${JSON.stringify(
       {
+        expectedExitCode,
         process: result,
         expectedArtifacts,
         fixture,

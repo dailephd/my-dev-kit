@@ -7,9 +7,17 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, cpSync, writeFileSync } 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  assertTestProcessExitCode,
+  reportTestProcessTiming,
+  reportTestStageTiming,
+  runTestProcess,
+} from '../helpers/cliProcessDiagnostics.js'
 import { CANONICAL_FIXTURE_ROOT } from './androidV110CombinedFixture.spec.js'
 
 const tempDirs: string[] = []
+const NON_ANDROID_TEST_NAME =
+  'Android selectors return honest no-match/empty behavior on a valid non-Android index'
 
 function runCli(args: string[]) {
   return spawnSync(process.execPath, [tsxCliPath(), 'src/cli.ts', ...args], {
@@ -36,10 +44,47 @@ function runIndex(root: string, out: string) {
   return join(root, out)
 }
 
+function runDiagnosedCli(
+  stage: string,
+  args: string[],
+  fixturePath: string,
+  outputPath: string,
+  expectedPaths: string[] = []
+) {
+  const result = runTestProcess({
+    executable: process.execPath,
+    args: [tsxCliPath(), 'src/cli.ts', ...args],
+    cwd: process.cwd(),
+    context: {
+      testName: NON_ANDROID_TEST_NAME,
+      stage,
+      fixturePath,
+      outputPath,
+      indexPaths: [outputPath],
+      expectedPaths,
+    },
+  })
+  reportTestProcessTiming(result)
+  assertTestProcessExitCode(result, 0)
+  return result
+}
+
 afterEach(() => {
+  const startedAt = new Date()
+  const startTime = performance.now()
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop()
     if (dir) rmSync(dir, { recursive: true, force: true })
+  }
+  const testName = expect.getState().currentTestName
+  if (testName?.endsWith(NON_ANDROID_TEST_NAME)) {
+    reportTestStageTiming({
+      testName,
+      stage: 'cleanup',
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMs: Math.round((performance.now() - startTime) * 100) / 100,
+    })
   }
 })
 
@@ -131,24 +176,72 @@ describe('graph-diff gate', () => {
 })
 
 describe('missing, partial, and malformed index gate', () => {
-  it('Android selectors return honest no-match/empty behavior on a valid non-Android index', () => {
+  // The canonical four-worker suite measured 28.744s versus 9.47s isolated
+  // and about 8.80s in the two-file run. Keep measured contention headroom
+  // local to this intentionally seven-process integration case.
+  it(NON_ANDROID_TEST_NAME, () => {
+    const fixtureStartedAt = new Date()
+    const fixtureStartTime = performance.now()
     const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-android-v110-nonandroid-'))
     tempDirs.push(root)
     writeFileSync(join(root, 'index.ts'), 'export function hello() { return 1 }\n')
     const out = join(root, 'out')
-    expect(runCli(['index', '--root', root, '--src', '.', '--out', out, '--json']).status).toBe(0)
+    reportTestStageTiming({
+      testName: NON_ANDROID_TEST_NAME,
+      stage: 'fixture creation',
+      startedAt: fixtureStartedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMs: Math.round((performance.now() - fixtureStartTime) * 100) / 100,
+    })
+    runDiagnosedCli(
+      'initial indexing',
+      ['index', '--root', root, '--src', '.', '--out', out, '--json'],
+      root,
+      out,
+      [join(out, 'manifest.json'), join(out, 'code-graph.json')]
+    )
 
-    expect(JSON.parse(runCli(['search', '--index', out, '--android-route', 'home', '--json']).stdout).results).toEqual([])
-    expect(JSON.parse(runCli(['lookup', '--index', out, '--android-component', 'x', '--json']).stdout).status).toBe('not-found')
-    expect(JSON.parse(runCli(['source', '--index', out, '--android-route', 'home', '--json']).stdout).status).toBe('not-found')
-    const sliceResult = runCli(['slice', '--index', out, '--android-route', 'home', '--json'])
+    expect(
+      JSON.parse(runDiagnosedCli('search no-match', ['search', '--index', out, '--android-route', 'home', '--json'], root, out).stdout)
+        .results
+    ).toEqual([])
+    expect(
+      JSON.parse(
+        runDiagnosedCli('lookup no-match', ['lookup', '--index', out, '--android-component', 'x', '--json'], root, out).stdout
+      ).status
+    ).toBe('not-found')
+    expect(
+      JSON.parse(runDiagnosedCli('source no-match', ['source', '--index', out, '--android-route', 'home', '--json'], root, out).stdout)
+        .status
+    ).toBe('not-found')
+    const sliceResult = runDiagnosedCli(
+      'slice no-match',
+      ['slice', '--index', out, '--android-route', 'home', '--json'],
+      root,
+      out
+    )
     expect(JSON.parse(sliceResult.stdout).status).toBe('not-found')
-    const view = JSON.parse(runCli(['view', '--index', out, '--graph', 'android-navigation', '--out', join(root, 'nav.dot'), '--json']).stdout)
+    const navPath = join(root, 'nav.dot')
+    const view = JSON.parse(
+      runDiagnosedCli(
+        'empty Android navigation view',
+        ['view', '--index', out, '--graph', 'android-navigation', '--out', navPath, '--json'],
+        root,
+        out,
+        [navPath]
+      ).stdout
+    )
     expect(view.nodeCount).toBe(0)
 
-    const ctx = runCli(['context', '--index', out, '--query', 'hello function', '--out', join(root, 'ctx.json'), '--json'])
-    expect(ctx.status).toBe(0)
-  })
+    const contextPath = join(root, 'ctx.json')
+    runDiagnosedCli(
+      'context generation',
+      ['context', '--index', out, '--query', 'hello function', '--out', contextPath, '--json'],
+      root,
+      out,
+      [contextPath]
+    )
+  }, 40_000)
 
   it('handles a malformed Android artifact using existing JSON-error behavior without a silent fallback', () => {
     const root = copyFixture()
