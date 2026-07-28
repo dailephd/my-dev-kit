@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.3 - Unreleased
+## 1.10.3 - 2026-07-28
 
 This corrective patch refines implementation-role context readiness while preserving the v1.10.1 command and artifact contracts.
 

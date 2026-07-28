@@ -208,7 +208,7 @@ npx vitest run tests/indexing
 
 The context suites cover request-file normalization and validation, all three roles, role/mode independence, providers and stable ranking, before/after changed surfaces, evidence groups, responsibility mapping, role adequacy, freshness, caps, truncation, full-file fallback, compatibility, determinism, and cross-platform paths.
 
-For the unreleased v1.10.3 corrective patch, keep these regression suites in the focused context run:
+For the v1.10.3 corrective patch, keep these regression suites in the focused context run:
 
 - `tests/context/contextEvidenceGroups.spec.ts` — structurally grounded neutral owners, false-owner exclusions, and deterministic owner ordering.
 - `tests/context/contextRequiredAllocation.spec.ts` — required-first reservations, deterministic spillover, finite aggregate bounds, genuine required truncation, diagnostics, adequacy, legacy compatibility, and determinism.

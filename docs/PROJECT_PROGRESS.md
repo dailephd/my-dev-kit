@@ -4,13 +4,13 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.10.2` is the latest published release. It is a documentation-only corrective patch that fixes stale release-state wording included with v1.10.1; runtime and CLI behavior are unchanged from v1.10.1. Version 1.10.1 introduced deterministic, role-specific repository-evidence retrieval, while v1.10.0 introduced the completed Android/Kotlin/Java/Gradle/manifest/resource/navigation surface.
+`@dailephd/my-dev-kit@1.10.3` is the latest published release. It includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity). Version 1.10.1 introduced deterministic, role-specific repository-evidence retrieval, while v1.10.0 introduced the completed Android/Kotlin/Java/Gradle/manifest/resource/navigation surface.
 
-## Implemented but unreleased: v1.10.3
+## Shipped: v1.10.3
 
-The current branch contains the complete my-dev-kit v1.10.3 context-readiness corrective patch. Package metadata remains `1.10.2`, and npm, Git tags, and GitHub Releases still identify v1.10.2 as latest; implementation is not publication.
+v1.10.3 is the published release. It includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity).
 
-The five completed corrections are:
+The corrections are:
 
 1. **Structurally grounded owners** — implementation-owner eligibility now combines request relevance with exported-production-symbol, contract/canonical-type, classification, or graph-producer evidence. Neutral filenames qualify when the structure supports ownership; focus, owner-like naming, test/fixture/generated paths, projections/views, and unrelated leaf consumers do not qualify by themselves.
 2. **Required-first allocation** — the implementation role treats existing required-group caps as initial reservations in one finite deterministic pool. Unused capacity spills in fixed priority order; genuine demand beyond the aggregate reservation bound remains reported and blocks adequacy. Additive diagnostics expose reservation, contribution, borrowing, selected/omitted counts, aggregate capacity, and adequacy impact.
@@ -59,7 +59,7 @@ Version 1.10.1 shipped as a bounded patch on the v1.10.0 baseline that extends t
 - `limits.responsibilityMappings` is an **enforcing** limit — it actually truncates the number of responsibility mappings produced (`src/context/contextBudget.ts`, `src/context/responsibilityMapping.ts`).
 - `limits.evidenceGroupEntries` is **reporting-only** — the field is validated, normalized, and reported alongside real usage/availability/drop counts in `budget.limits[]`, but the actual per-group truncation caps come from fixed internal values in `src/context/evidenceGroups.ts` (for example owners = 3 or 5 depending on role, contracts = 10). The declared request-level value does not override those internal caps. This is documented in `docs/ROADMAP.md` as an intentional reporting boundary, not a gap.
 - Files that merely match a naming convention (for example a file named similarly to "builder" or "factory") are intentionally excluded from evidence groups and test-infrastructure discovery unless backed by graph, import, or classification evidence. This is a deliberate conservative boundary.
-- For the implementation role in unreleased v1.10.3, internal group caps are initial reservations in a shared finite allocation pass. This does not make `limits.evidenceGroupEntries` an enforcing selector.
+- For the implementation role in v1.10.3, internal group caps are initial reservations in a shared finite allocation pass. This does not make `limits.evidenceGroupEntries` an enforcing selector.
 
 ### Documentation correction
 

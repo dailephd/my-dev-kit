@@ -1063,22 +1063,11 @@ Version 1.10.2 is a documentation-only corrective patch. It replaces stale v1.10
 
 ## Version 1.10.3
 
-**Status: implemented in the current repository; unreleased.**
+**Status: published.**
 
 ### Goal
 
 Correct implementation-role context readiness so structurally credible owners are retained, false owners are rejected, required evidence uses available bounded capacity before truncation, duplicate responsibility IDs remain observable, and directed file-level dependency/caller evidence is classified correctly without changing schema major 1 or weakening genuine readiness blockers.
-
-### Implemented scope
-
-- Implementation-owner eligibility combines request relevance with independent structural evidence. Owner-like filename terms remain ranking signals, not eligibility gates; focus alone is insufficient.
-- Test, fixture, generated, projection-only, view-only, and unrelated leaf evidence cannot qualify as implementation owners without independent structural support.
-- Required implementation evidence groups use their existing fixed capacities as initial reservations in one deterministic required-first allocation pass.
-- Unused reservation spills in fixed group priority to required groups with remaining qualified evidence. Selection never exceeds the finite sum of participating reservations.
-- Genuine required overflow remains reported and continues to block role adequacy. Additive diagnostics expose reservations, contributed and borrowed capacity, selected and omitted counts, aggregate bound use, and adequacy impact.
-- Public request normalization preserves duplicate `testResponsibilityRefs` long enough for responsibility mapping to report them. Actual mappings remain unique, with deterministic first-occurrence order; duplicate and unknown/unmapped diagnostics remain independently visible.
-- File-level dependency and caller evidence uses canonical graph-node identity, distinguishing the evidence item's public ID from its `file:<path>` graph identity and preserving directed relationships.
-- Context capsules and retrieval-audit records carry the same computed summaries, and repeated identical inputs remain deterministic.
 
 ### Compatibility boundaries
 

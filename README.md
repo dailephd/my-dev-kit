@@ -132,13 +132,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.10.2
+## Latest release: v1.10.3
 
-`@dailephd/my-dev-kit@1.10.2` is the latest published release. v1.10.2 is a documentation-only corrective patch that replaces stale release-state wording from the v1.10.1 package. Runtime and CLI behavior are unchanged from v1.10.1.
-
-### Current development: v1.10.3 (implemented, unreleased)
-
-The current repository includes an unreleased corrective patch for implementation-role context readiness. It keeps structurally credible owners even when their filenames are neutral, rejects owner candidates supported only by focus or naming, allocates the finite required-evidence capacity before reporting genuine required truncation, preserves duplicate responsibility-ID diagnostics, classifies directed file-level dependency and caller evidence by canonical graph identity, and makes each newly generated capsule/audit pair prove the same repository and index identity before output is written. The CLI syntax, role and evidence-kind vocabularies, and context artifact schema major remain unchanged.
+`@dailephd/my-dev-kit@1.10.3` is the latest published release. v1.10.3 is a corrective patch that refines implementation-role context readiness while preserving the v1.10.1 command and artifact contracts. It keeps structurally credible owners even when their filenames are neutral, rejects owner candidates supported only by focus or naming, allocates the finite required-evidence capacity before reporting genuine required truncation, preserves duplicate responsibility-ID diagnostics, classifies directed file-level dependency and caller evidence by canonical graph identity, and makes each newly generated capsule/audit pair prove the same repository and index identity before output is written. Runtime and CLI behavior are unchanged from v1.10.2.
 
 ### Android capability introduced in v1.10.0
 
@@ -166,7 +162,7 @@ This is static evidence, not runtime proof. my-dev-kit does not execute Gradle o
 
 ## Stage-specific bounded context retrieval
 
-Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.2 package keeps that behavior unchanged. The current unreleased v1.10.3 implementation also aligns capsule/audit repository identity and validates their duplicated contract fields before successful output, without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.3 package includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (capsule/audit repository identity alignment and duplicated contract field validation) without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 
@@ -544,7 +540,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.10.2 is the latest published release. Version 1.10.3 is implemented in the current repository but remains unreleased. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.10.3 is the latest published release. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

@@ -42,9 +42,9 @@
     ],
     "publishedVersions": [
       "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.6.1",
-      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.10.2"
+      "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.10.2", "1.10.3"
     ],
-    "implementedUnreleasedVersions": ["1.10.3"],
+    "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
       "1.11.0": ["Compose semantic retrieval", "Android UI-test indexing"],
       "1.12.0": ["Android architecture classification", "Android data-flow retrieval"],
@@ -150,13 +150,12 @@
   },
   "statusBoundaries": {
     "documentKeywords": {
-      "README.md": ["latest published release", "implemented, unreleased", "planned scopes"],
+      "README.md": ["latest published release", "planned scopes"],
       "docs/ROADMAP.md": [
         "**Status: published.**",
-        "**Status: implemented in the current repository; unreleased.**",
         "## Version 1.11.0"
       ],
-      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Implemented but unreleased: v1.10.3"]
+      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Shipped: v1.10.3"]
     },
     "requiredBoundaryKeywords": [
       "local-first",
@@ -188,9 +187,9 @@
     "requiredVersionHeadings": [
       "## 1.0.0", "## 1.1.0", "## 1.2.0", "## 1.3.0", "## 1.4.0", "## 1.5.0",
       "## 1.6.0", "## 1.6.1", "## 1.7.0", "## 1.8.0", "## 1.9.0", "## 1.10.0",
-      "## 1.10.1", "## 1.10.2"
+      "## 1.10.1", "## 1.10.2", "## 1.10.3"
     ],
-    "requiredUnreleasedVersionHeadings": ["## 1.10.3 - Unreleased"]
+    "requiredUnreleasedVersionHeadings": []
   },
   "security": {
     "path": "docs/SECURITY.md",

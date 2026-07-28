@@ -1507,11 +1507,11 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 
 **Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope.
 
-### v1.10.3 implementation-role readiness corrections (unreleased)
+### v1.10.3 implementation-role readiness corrections (shipped)
 
 Newly generated capsule/audit pairs share one canonical identity sourced from the validated active index manifest. Both `index` objects contain the same `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`; before/after paths remain represented identically in `freshness.comparedIdentities`. Paths use stable forward-slash serialization, preserve POSIX case, and are not compared by basename or suffix. Old supported-major audits without the additive repository fields remain readable but cannot prove repository identity to an identity-sensitive consumer.
 
-The current repository includes these additive corrections; they are not part of the published v1.10.2 package:
+These additive corrections are part of the published v1.10.3 package:
 
 - **Owner eligibility:** an implementation owner needs request relevance plus independent structural evidence. Exported production symbols, contract/canonical-type shape, classification, or a graph producer relationship can qualify a neutral filename. Focus or owner-like naming alone cannot qualify a file, and test, fixture, generated, projection-only, view-only, or unrelated leaf evidence is excluded without independent structural support.
 - **Required-first allocation:** each required implementation evidence group starts with its existing reservation. Unused reservation spills in fixed group priority to required groups with remaining qualified evidence. Selection stays within the finite sum of all participating reservations; demand beyond that bound is reported as required truncation and reduces role adequacy.

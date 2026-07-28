@@ -138,17 +138,6 @@ describe('documentation preservation checker', () => {
         }),
       },
       {
-        name: 'v1.10.3 is marked published without evidence',
-        rule: 'roadmap-unreleased-not-published',
-        mutate: (documents) => ({
-          ...documents,
-          [manifest.roadmap.path]: documents[manifest.roadmap.path].replace(
-            '**Status: implemented in the current repository; unreleased.**',
-            '**Status: published.**',
-          ),
-        }),
-      },
-      {
         name: 'a README pillar disappears',
         rule: 'readme-pillar-present',
         mutate: (documents) => ({
@@ -219,17 +208,6 @@ describe('documentation preservation checker', () => {
           [manifest.changelog.path]: documents[manifest.changelog.path].replace(
             '## 1.7.0',
             '## Removed published release',
-          ),
-        }),
-      },
-      {
-        name: 'the current and future distinction disappears',
-        rule: 'current-future-status-boundary',
-        mutate: (documents) => ({
-          ...documents,
-          [manifest.readme.path]: documents[manifest.readme.path].replaceAll(
-            'implemented, unreleased',
-            'current development',
           ),
         }),
       },
@@ -489,10 +467,10 @@ describe('documentation preservation checker', () => {
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain('## Latest release: v1.10.2')
+      expect(readme).toContain('## Latest release: v1.10.3')
       expect(readme).toContain('## Stage-specific bounded context retrieval')
       expect(readme).toContain('Version 1.10.1 introduced this shipped capability')
-      expect(readme).toContain('Runtime and CLI behavior are unchanged from v1.10.1')
+      expect(readme).toContain('Runtime and CLI behavior are unchanged from v1.10.2')
       expect(commands).toContain('v1.10.1 Batch 1: request-file and context-role contracts')
       expect(workflows).toContain('Stage-role context refresh')
       expect(workflows).toContain('does not automatically run my-dev-kit')

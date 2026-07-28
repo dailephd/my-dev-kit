@@ -842,7 +842,7 @@ Role adequacy distinguishes nonempty output from sufficient evidence. Architectu
 
 Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
 
-### Additive context readiness fields (v1.10.3, unreleased)
+### Additive context readiness fields (v1.10.3, shipped)
 
 The current repository keeps context capsule and retrieval-audit schema version `"1.0.0"` while correcting implementation-role readiness:
 

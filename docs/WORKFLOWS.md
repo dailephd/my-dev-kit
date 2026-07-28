@@ -323,7 +323,7 @@ Android projects additionally produce `android-gradle.json`, `android-manifest.j
 
 ## Workflow 11: Stage-role context refresh (v1.10.1)
 
-Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.2 changes documentation only. The current unreleased v1.10.3 implementation also gives the capsule and retrieval audit one grounded repository/index identity and validates their shared contract before successful output, without changing the workflow or CLI syntax.
+Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.3 (shipped) also gives the capsule and retrieval audit one grounded repository/index identity and validates their shared contract before successful output, without changing the workflow or CLI syntax.
 
 Use a role directly:
 
