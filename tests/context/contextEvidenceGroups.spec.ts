@@ -129,6 +129,7 @@ describe('evidence-group construction', () => {
     expect(kinds).toEqual([
       'changed-surface',
       'production-symbols',
+      'contracts',
       'validators-and-boundaries',
       'errors-and-side-effects',
       'related-tests',
@@ -249,6 +250,199 @@ describe('evidence-group construction', () => {
     const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
     const retainedCount = capsule.candidateFiles.filter((f: { retained: boolean }) => f.retained).length
     expect(retainedCount).toBeLessThanOrEqual(1)
+  })
+
+  // v1.10.3 Batch 1: structural implementation-owner eligibility (F-001/F-002).
+  // Responsibility IDs: TST-B1103-001..006.
+
+  it('TST-B1103-001: a neutral canonical filename (types.ts/profiles.ts/resolver.ts) qualifies as owner through structural evidence, not filename keywords', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-neutral-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'types.ts'), 'export interface Profile {\n  id: string\n}\n')
+    writeFileSync(join(src, 'profiles.ts'), "import type { Profile } from './types'\n\nexport const profiles: Profile[] = [{ id: 'alpha' }]\n")
+    writeFileSync(join(src, 'resolver.ts'), "import { profiles } from './profiles'\n\nexport function resolveProfile(id: string) {\n  return profiles.find((p) => p.id === id)\n}\n")
+    writeFileSync(join(src, 'consumer.ts'), "import { resolveProfile } from './resolver'\n\nexport const found = resolveProfile('alpha')\n")
+
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'neutral-owner.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'Locate the canonical profile registry and resolver owners',
+      focusFiles: ['src/profiles.ts', 'src/resolver.ts'],
+      focusSymbols: ['symbol:src/profiles.ts#profiles', 'symbol:src/resolver.ts#resolveProfile'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runContext(indexOut, requestPath, outPath)
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    const ownerPaths = capsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
+    expect(ownerPaths).toContain('src/profiles.ts')
+    expect(ownerPaths).toContain('src/resolver.ts')
+    expect(capsule.roleAdequacy.missingConditions).not.toContain('owner missing')
+  })
+
+  it('TST-B1103-002: resolver/contract/definition ownership with downstream consumers qualifies deterministically', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-resolver-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'contract.ts'), 'export type Resolution = { found: boolean }\n')
+    writeFileSync(
+      join(src, 'definitions.ts'),
+      "import type { Resolution } from './contract'\n\nexport const definitions: Record<string, Resolution> = { alpha: { found: true } }\n"
+    )
+    writeFileSync(
+      join(src, 'resolver.ts'),
+      "import { definitions } from './definitions'\n\nexport function resolve(id: string) {\n  return definitions[id]\n}\n"
+    )
+    writeFileSync(join(src, 'consumerA.ts'), "import { resolve } from './resolver'\n\nexport const a = resolve('alpha')\n")
+    writeFileSync(join(src, 'consumerB.ts'), "import { resolve } from './resolver'\n\nexport const b = resolve('alpha')\n")
+
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'resolver-owner.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'Locate the resolver and its governing contract/definitions',
+      focusFiles: ['src/resolver.ts'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runContext(indexOut, requestPath, outPath)
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    const ownerPaths = capsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
+    expect(ownerPaths).toContain('src/resolver.ts')
+    expect(ownerPaths).toContain('src/definitions.ts')
+    expect(ownerPaths.includes('src/consumerA.ts')).toBe(false)
+    expect(ownerPaths.includes('src/consumerB.ts')).toBe(false)
+
+    const second = runContext(indexOut, requestPath, outPath)
+    expect(second.status).toBe(0)
+    const secondCapsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    expect(secondCapsule.selectedOwners.map((o: { id: string }) => o.id)).toEqual(capsule.selectedOwners.map((o: { id: string }) => o.id))
+  })
+
+  it('TST-B1103-003: focusing an unrelated test/fixture/generated file with an owner-like name never establishes ownership', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-focus-only-')
+    const src = join(root, 'src')
+    const tests = join(root, 'tests')
+    mkdirSync(src, { recursive: true })
+    mkdirSync(tests, { recursive: true })
+    writeFileSync(join(src, 'unrelated.ts'), 'export const unrelated = 1\n')
+    writeFileSync(join(tests, 'generatedManager.ts'), "export const generatedFixture = 'not-a-production-owner'\n")
+
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--src', 'tests', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'focus-false-owner.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'Inspect generated fixture evidence',
+      focusFiles: ['tests/generatedManager.ts'],
+      focusSymbols: ['symbol:tests/generatedManager.ts#generatedFixture'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runContext(indexOut, requestPath, outPath)
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    expect(capsule.selectedOwners.length).toBe(0)
+    expect(capsule.roleAdequacy.missingConditions).toContain('owner missing')
+    expect(capsule.roleAdequacy.blockingConditions).toContain('owner missing')
+  })
+
+  it('TST-B1103-004: existing owner-like-keyword fixtures keep qualifying (no regression)', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-keyword-compat-')
+    const { indexOut } = writeFullFixture(root)
+    const requestPath = writeRequest(root, 'keyword-owner.json', {
+      schemaVersion: '1.0.0',
+      query: 'widget',
+      role: 'implementation',
+      focusSymbols: ['symbol:src/widgetRegistry.ts#registerWidget'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runContext(indexOut, requestPath, outPath)
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    expect(capsule.selectedOwners.some((o: { path?: string }) => o.path === 'src/widgetRegistry.ts')).toBe(true)
+  })
+
+  it('TST-B1103-005: multiple materially credible owners are all retained in stable deterministic order', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-multi-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'contract.ts'), 'export type Resolution = { found: boolean }\n')
+    writeFileSync(join(src, 'resolver.ts'), "import type { Resolution } from './contract'\n\nexport function resolve(id: string): Resolution {\n  return { found: id.length > 0 }\n}\n")
+    writeFileSync(join(src, 'registry.ts'), "import { resolve } from './resolver'\n\nexport const registryEntry = resolve('alpha')\n")
+    writeFileSync(join(src, 'producer.ts'), "import { registryEntry } from './registry'\n\nexport const produced = registryEntry\n")
+    writeFileSync(join(src, 'consumer.ts'), "import { produced } from './producer'\n\nexport const value = produced\n")
+
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'multi-owner.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'Locate all credible owners in this resolution pipeline',
+      focusFiles: ['src/resolver.ts', 'src/registry.ts', 'src/producer.ts'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const first = runContext(indexOut, requestPath, outPath)
+    expect(first.status).toBe(0)
+    const firstCapsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    const ownerPaths: string[] = firstCapsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
+    const uniqueOwnerPaths = new Set(ownerPaths)
+    // v1.10.3 Batch 2: the implementation role's owners group reservation (3) is now
+    // an initial reservation, not an isolated cap — unused reservation from other
+    // required groups may legitimately spill over here, so more than 3 owners can be
+    // retained (section 22.9: "only final retained count may change when legitimate
+    // spillover applies"). What must not change is *which* files qualify: every
+    // credible structural owner is retained, and the unrelated leaf consumer never is.
+    const credibleOwnerPaths = new Set(['src/contract.ts', 'src/resolver.ts', 'src/registry.ts', 'src/producer.ts'])
+    for (const p of credibleOwnerPaths) expect(uniqueOwnerPaths.has(p)).toBe(true)
+    expect(uniqueOwnerPaths.has('src/consumer.ts')).toBe(false)
+    for (const p of uniqueOwnerPaths) expect(credibleOwnerPaths.has(p)).toBe(true)
+
+    const second = runContext(indexOut, requestPath, outPath)
+    expect(second.status).toBe(0)
+    const secondCapsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    expect(secondCapsule.selectedOwners.map((o: { id: string }) => o.id)).toEqual(firstCapsule.selectedOwners.map((o: { id: string }) => o.id))
+  })
+
+  it('TST-B1103-006: cross-platform repository-relative paths (POSIX, spaces) select the same owner deterministically', () => {
+    const root = createTempRoot('my-dev-kit-v1-owner-crossplat-')
+    const src = join(root, 'src', 'my module')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'types.ts'), 'export interface Item {\n  id: string\n}\n')
+    writeFileSync(join(src, 'resolver.ts'), "import type { Item } from './types'\n\nexport function resolveItem(id: string): Item {\n  return { id }\n}\n")
+    writeFileSync(join(src, 'consumer.ts'), "import { resolveItem } from './resolver'\n\nexport const item = resolveItem('alpha')\n")
+
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'crossplat-owner.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'Locate the item resolver owner',
+      focusFiles: ['src/my module/resolver.ts'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runContext(indexOut, requestPath, outPath)
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    const ownerPaths = capsule.selectedOwners.map((o: { path?: string }) => o.path).filter(Boolean)
+    expect(ownerPaths.some((p: string) => p.replace(/\\/g, '/') === 'src/my module/resolver.ts')).toBe(true)
+    for (const p of ownerPaths) expect(p.includes('\\')).toBe(false)
   })
 
   it('TST-B3-029: legacy no-role requests keep evidenceGroups/testInfrastructure empty and unchanged', () => {

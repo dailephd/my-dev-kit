@@ -150,6 +150,15 @@ describe('Batch 5: legacy CLI end-to-end compatibility', () => {
     expect(audit.request.role).toBeNull()
     expect(audit.roleContext.role).toBeNull()
     expect(audit.contextAdequacy).toEqual(capsule.contextAdequacy)
+    expect(audit.index.projectRoot).toBe(capsule.index.projectRoot)
+    expect(audit.index.indexPath).toBe(capsule.index.indexPath)
+    expect(audit.freshness.comparedIdentities).toEqual(capsule.freshness.comparedIdentities)
+    expect(audit.freshness.comparedIdentities).toEqual(
+      expect.arrayContaining([
+        { label: 'beforeIndexPath', value: null },
+        { label: 'afterIndexPath', value: null },
+      ])
+    )
   })
 })
 
@@ -293,6 +302,16 @@ describe('Batch 5: capsule/audit agreement', () => {
     const { capsule, audit } = runFullScenario(root)
     expect(audit.contextAdequacy).toEqual(capsule.contextAdequacy)
     expect(audit.roleAdequacy).toEqual(capsule.roleAdequacy)
+  })
+
+  it('TST-B5-006A: the real producer writes matching repository and active-index identity', () => {
+    const root = createTempRoot('my-dev-kit-v1-b5-agree-identity-')
+    const { capsule, audit } = runFullScenario(root)
+    expect(capsule.index.projectRoot).toBe(root.replace(/\\/g, '/'))
+    expect(audit.index.projectRoot).toBe(capsule.index.projectRoot)
+    expect(audit.index.indexPath).toBe(capsule.index.indexPath)
+    expect(audit.index.manifestPath).toBe(capsule.index.manifestPath)
+    expect(audit.index.manifestSchemaVersion).toBe(capsule.index.manifestSchemaVersion)
   })
 
   it('TST-B5-007: capsule/audit freshness agreement', () => {

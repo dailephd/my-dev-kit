@@ -1,17 +1,41 @@
-import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, cpSync, writeFileSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  assertTestProcessSucceeded,
+  runTestProcess,
+} from '../helpers/cliProcessDiagnostics.js'
 
 const FIXTURES_ROOT = join(process.cwd(), 'tests', 'fixtures', 'android-gradle')
 const tempDirs: string[] = []
 
-function runCli(args: string[]) {
-  return spawnSync(process.execPath, [tsxCliPath(), 'src/cli.ts', ...args], {
+function runCli(args: string[], root: string, out: string) {
+  const outputDir = join(root, out)
+  return runTestProcess({
+    executable: process.execPath,
+    args: [tsxCliPath(), 'src/cli.ts', ...args],
     cwd: process.cwd(),
-    encoding: 'utf8',
-    shell: false,
+    context: {
+      testName: expect.getState().currentTestName ?? 'android Gradle incremental CLI invocation',
+      fixturePath: root,
+      outputPath: outputDir,
+      cachePath: join(outputDir, 'cache-metadata.json'),
+      indexPaths: [
+        join(outputDir, 'manifest.json'),
+        join(outputDir, 'symbol-index.json'),
+        join(outputDir, 'code-graph.json'),
+        join(outputDir, 'android-gradle.json'),
+      ],
+      expectedPaths: [
+        join(root, 'app', 'build.gradle'),
+        join(root, 'settings.gradle'),
+        join(root, 'app', 'src', 'main'),
+        join(outputDir, 'manifest.json'),
+        join(outputDir, 'android-gradle.json'),
+        join(outputDir, 'cache-metadata.json'),
+      ],
+    },
   })
 }
 
@@ -27,8 +51,8 @@ function copyFixture(name: string): string {
 }
 
 function runIndex(root: string, out: string, extra: string[] = []) {
-  const result = runCli(['index', '--root', root, '--src', 'app/src/main', '--out', out, '--json', ...extra])
-  expect(result.status).toBe(0)
+  const result = runCli(['index', '--root', root, '--src', 'app/src/main', '--out', out, '--json', ...extra], root, out)
+  assertTestProcessSucceeded(result)
   return JSON.parse(result.stdout)
 }
 
@@ -68,8 +92,8 @@ describe('android-gradle.json manifest registration and stale cleanup', () => {
 
   it('a non-Android Gradle project does not register a misleading android-gradle analyzer artifact', () => {
     const root = copyFixture('non-android-gradle-project')
-    const r = runCli(['index', '--root', root, '--src', 'lib', '--out', 'out', '--json'])
-    expect(r.status).toBe(0)
+    const r = runCli(['index', '--root', root, '--src', 'lib', '--out', 'out', '--json'], root, 'out')
+    assertTestProcessSucceeded(r)
     const result = JSON.parse(r.stdout)
 
     expect(result.androidGradlePath).toBeTruthy()

@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.10.2 is the latest published release and is a documentation-only corrective patch. The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior, with no runtime or CLI changes in v1.10.2. The current repository supports:
+Version 1.10.3 is the latest published release. It includes the v1.10.2 documentation corrections plus v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity). The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior. The current repository supports:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -186,7 +186,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current shipped scope (through v1.10.2, with context behavior introduced in v1.10.1):
+Current shipped scope (through v1.10.3, with context behavior introduced in v1.10.1 and v1.10.3 refinements):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`

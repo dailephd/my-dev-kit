@@ -323,7 +323,7 @@ Android projects additionally produce `android-gradle.json`, `android-manifest.j
 
 ## Workflow 11: Stage-role context refresh (v1.10.1)
 
-Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.2 changes documentation only; this workflow and its CLI behavior are unchanged.
+Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.3 (shipped) also gives the capsule and retrieval audit one grounded repository/index identity and validates their shared contract before successful output, without changing the workflow or CLI syntax.
 
 Use a role directly:
 
@@ -337,7 +337,7 @@ Or provide a structured request:
 npx @dailephd/my-dev-kit context --request context-request.json --json
 ```
 
-`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, and provenance before using the result.
+`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, provenance, and the matching capsule/audit `index.projectRoot` before using the result. Do not hand-edit either generated artifact: regenerate the pair from the same request and validated index.
 
 ### Architecture-stage flow
 
@@ -352,9 +352,10 @@ The primary question is: "Where should the behavior live?"
 
 1. Refresh the index immediately before production editing.
 2. Retrieve implementation-role context rather than relying only on the earlier architecture capsule.
-3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests.
-4. Stop if required evidence is inadequate, stale, unknown where freshness is mandatory, or truncated beyond the task's requirements.
-5. Implement production code outside my-dev-kit context generation.
+3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests. A structurally grounded owner needs request relevance plus independent structural support; a focused or owner-named file is not enough by itself.
+4. Inspect required-group allocation diagnostics. Unused reservation can be borrowed by another required group, but evidence omitted after the finite aggregate bound is exhausted remains genuine required truncation.
+5. Stop if required evidence is inadequate, stale, unknown where freshness is mandatory, or genuinely truncated beyond the task's requirements.
+6. Implement production code outside my-dev-kit context generation.
 
 The primary question is: "What exact current code must be changed or preserved?"
 
@@ -362,7 +363,7 @@ The primary question is: "What exact current code must be changed or preserved?"
 
 1. After production changes, refresh the index again.
 2. Collect changed production files/symbols from the implementation report, caller input, or before/after `graph-diff` evidence.
-3. Retrieve test-implementation context using caller-supplied stable test-responsibility IDs.
+3. Retrieve test-implementation context using caller-supplied stable test-responsibility IDs. Repeated IDs produce one mapping in first-occurrence order plus an explicit duplicate diagnostic; duplicate and unknown/unmapped diagnostics are independent.
 4. Inspect changed symbols, validators/constants/errors, failure and side-effect boundaries, related tests, fixtures/factories/mocks/setup/configuration, package scripts, exact commands, and responsibility mappings.
 5. Stop if critical responsibilities are unmapped or the changed surface/test infrastructure is inadequate.
 6. Implement tests outside context generation and then run verification.

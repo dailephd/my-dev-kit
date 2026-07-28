@@ -28,3 +28,9 @@ npx @dailephd/my-dev-kit lookup --index examples/basic-data-model-ts/.my-dev-kit
 Generated `.my-dev-kit` directories are local output only and are not meant to be committed.
 
 This example does not require a database, network access, or Graphviz.
+
+Clean up the generated index:
+
+```sh
+node -e "require('fs').rmSync('examples/basic-data-model-ts/.my-dev-kit',{recursive:true,force:true})"
+```

@@ -1368,6 +1368,8 @@ Also write a retrieval audit record:
 npx @dailephd/my-dev-kit context --index <artifact-dir> --query "<task>" --out <path> --audit-out <path> --json
 ```
 
+When `--audit-out` is supplied, the command builds both artifacts in memory and validates their duplicated repository/index identity and readiness summaries before writing either file. A contract mismatch fails nonzero with `RAW_EVIDENCE_PARITY_MISMATCH`; it never silently chooses one artifact as authoritative. The audit remains bounded and does not duplicate capsule-only evidence.
+
 ### Flags
 
 - `--index <dir>`: index artifact directory. Defaults to `.my-dev-kit`.
@@ -1504,6 +1506,20 @@ Malformed JSON, a missing `--request` file, an unsupported `schemaVersion` major
 - **Additive audit steps.** The retrieval audit gained `map-responsibilities`, `classify-freshness`, `apply-budget`, `evaluate-adequacy`, and `record-provenance` steps after `update-context-adequacy`; no existing audit step's meaning changed. The retrieval audit now also carries the real computed `contextAdequacy`/`responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance` (earlier-batch correction: the audit's `contextAdequacy` was previously never passed through from the capsule's real verdict — a hardcoded Batch 1 stub was always written instead — fixed as part of this batch's wiring).
 
 **Not implemented:** LLM-based mapping or adequacy, subjective assertion-quality scoring, automatic test generation, and automatic test execution during retrieval remain outside the `context` command's scope.
+
+### v1.10.3 implementation-role readiness corrections (shipped)
+
+Newly generated capsule/audit pairs share one canonical identity sourced from the validated active index manifest. Both `index` objects contain the same `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`; before/after paths remain represented identically in `freshness.comparedIdentities`. Paths use stable forward-slash serialization, preserve POSIX case, and are not compared by basename or suffix. Old supported-major audits without the additive repository fields remain readable but cannot prove repository identity to an identity-sensitive consumer.
+
+These additive corrections are part of the published v1.10.3 package:
+
+- **Owner eligibility:** an implementation owner needs request relevance plus independent structural evidence. Exported production symbols, contract/canonical-type shape, classification, or a graph producer relationship can qualify a neutral filename. Focus or owner-like naming alone cannot qualify a file, and test, fixture, generated, projection-only, view-only, or unrelated leaf evidence is excluded without independent structural support.
+- **Required-first allocation:** each required implementation evidence group starts with its existing reservation. Unused reservation spills in fixed group priority to required groups with remaining qualified evidence. Selection stays within the finite sum of all participating reservations; demand beyond that bound is reported as required truncation and reduces role adequacy.
+- **Allocation diagnostics:** implementation-role `groupTruncation[]` entries may add `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`. These fields are optional and additive. `limits.evidenceGroupEntries` remains reporting-only and is not a request-level hard selector.
+- **Responsibility IDs:** `testResponsibilityRefs` keeps the caller's sequence through request normalization. Responsibility mapping emits one mapping per unique ID in first-occurrence order; `duplicateResponsibilityIds` reports each repeated ID once in first-duplicate-occurrence order. `unknownResponsibilityIds` and mapping status remain independent, so an ID can be both unknown/unmapped and duplicated without either diagnostic disappearing.
+- **Directed file evidence:** plain file evidence retains its repository-relative evidence item ID but uses canonical `file:<path>` graph-node identity to classify dependency versus caller edges. Symbol evidence continues to use its symbol node ID. Capsule and retrieval-audit summaries use the same computed results.
+
+The request schema major remains `1`, output schema version remains `"1.0.0"`, and the command syntax, modes, roles, evidence-kind vocabulary, and legacy behavior are unchanged. This correction does not add responsibility criticality to `testResponsibilityRefs`, runtime proof, LLM owner selection, source editing, or automatic orchestrator integration.
 
 ## graph-diff
 

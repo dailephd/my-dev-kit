@@ -3,12 +3,32 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
-import { runCli } from '../lookup/testCli.js'
+import {
+  assertTestProcessExitCode,
+  reportTestProcessTiming,
+  reportTestStageTiming,
+  runTestProcess,
+} from '../helpers/cliProcessDiagnostics.js'
+import { runCli, tsxCliPath } from '../lookup/testCli.js'
 
 const tempDirs: string[] = []
+const FAILURE_CASES_TEST_NAME =
+  'fails clearly for missing entities, missing fields, malformed field selectors, and conflicting trace flags'
 
 afterEach(() => {
+  const startedAt = new Date()
+  const startTime = performance.now()
   while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true })
+  const testName = expect.getState().currentTestName
+  if (testName?.endsWith(FAILURE_CASES_TEST_NAME)) {
+    reportTestStageTiming({
+      testName,
+      stage: 'cleanup',
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMs: Math.round((performance.now() - startTime) * 100) / 100,
+    })
+  }
 })
 
 function makeTempRepo(): string {
@@ -31,6 +51,30 @@ async function buildIndexFixture(root: string): Promise<string> {
     out: '.my-dev-kit-v1',
   })
   return join(root, '.my-dev-kit-v1')
+}
+
+function runDiagnosedFailure(
+  stage: string,
+  args: string[],
+  fixturePath: string,
+  indexPath: string
+) {
+  const result = runTestProcess({
+    executable: process.execPath,
+    args: [tsxCliPath(), 'src/cli.ts', ...args],
+    cwd: process.cwd(),
+    context: {
+      testName: FAILURE_CASES_TEST_NAME,
+      stage,
+      fixturePath,
+      outputPath: indexPath,
+      indexPaths: [indexPath],
+      expectedPaths: [join(indexPath, 'manifest.json'), join(indexPath, 'code-graph.json')],
+    },
+  })
+  reportTestProcessTiming(result)
+  assertTestProcessExitCode(result, 2)
+  return result
 }
 
 describe('data-model trace-view command behavior', () => {
@@ -89,25 +133,67 @@ describe('data-model trace-view command behavior', () => {
     expect(parsed.warnings.some((warning: { kind: string }) => warning.kind === 'skipped-dynamic-pattern')).toBe(true)
   })
 
-  it('fails clearly for missing entities, missing fields, malformed field selectors, and conflicting trace flags', async () => {
+  // The canonical four-worker suite measured 21.557s versus 5.35s isolated
+  // and about 5.55s in the two-file run. Keep measured contention headroom
+  // local to this intentionally four-process integration case.
+  it(FAILURE_CASES_TEST_NAME, async () => {
+    const fixtureStartedAt = new Date()
+    const fixtureStartTime = performance.now()
     const root = makeTempRepo()
     write(root, 'src/supported.tsx', readFixture('supported.tsx'))
+    reportTestStageTiming({
+      testName: FAILURE_CASES_TEST_NAME,
+      stage: 'fixture creation',
+      startedAt: fixtureStartedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMs: Math.round((performance.now() - fixtureStartTime) * 100) / 100,
+    })
+
+    const indexStartedAt = new Date()
+    const indexStartTime = performance.now()
     const indexDir = await buildIndexFixture(root)
+    reportTestStageTiming({
+      testName: FAILURE_CASES_TEST_NAME,
+      stage: 'initial indexing',
+      startedAt: indexStartedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMs: Math.round((performance.now() - indexStartTime) * 100) / 100,
+    })
 
-    const missingEntity = runCli(['data-model', '--index', indexDir, '--trace-view', 'Missing', '--json'])
-    const missingField = runCli(['data-model', '--index', indexDir, '--field', 'User.missing', '--trace-view', '--json'])
-    const malformedField = runCli(['data-model', '--index', indexDir, '--field', 'User', '--trace-view', '--json'])
-    const conflicting = runCli(['data-model', '--index', indexDir, '--entity', 'User', '--trace-view', 'User', '--json'])
+    const missingEntity = runDiagnosedFailure(
+      'missing entity',
+      ['data-model', '--index', indexDir, '--trace-view', 'Missing', '--json'],
+      root,
+      indexDir
+    )
+    const missingField = runDiagnosedFailure(
+      'missing field',
+      ['data-model', '--index', indexDir, '--field', 'User.missing', '--trace-view', '--json'],
+      root,
+      indexDir
+    )
+    const malformedField = runDiagnosedFailure(
+      'malformed field selector',
+      ['data-model', '--index', indexDir, '--field', 'User', '--trace-view', '--json'],
+      root,
+      indexDir
+    )
+    const conflicting = runDiagnosedFailure(
+      'conflicting trace flags',
+      ['data-model', '--index', indexDir, '--entity', 'User', '--trace-view', 'User', '--json'],
+      root,
+      indexDir
+    )
 
-    expect(missingEntity.status).toBe(2)
+    expect(missingEntity.exitCode).toBe(2)
     expect(missingEntity.stderr).toContain('Entity not found: Missing')
-    expect(missingField.status).toBe(2)
+    expect(missingField.exitCode).toBe(2)
     expect(missingField.stderr).toContain('Field not found: User.missing')
-    expect(malformedField.status).toBe(2)
+    expect(malformedField.exitCode).toBe(2)
     expect(malformedField.stderr).toContain('Field selector must use exact format Entity.field.')
-    expect(conflicting.status).toBe(2)
+    expect(conflicting.exitCode).toBe(2)
     expect(conflicting.stderr).toContain('cannot combine --entity with --trace-view')
-  })
+  }, 30_000)
 
   it('does not require Graphviz and existing generation and lookup behavior still work', async () => {
     const root = makeTempRepo()

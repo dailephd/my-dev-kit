@@ -12,3 +12,9 @@ npx @dailephd/my-dev-kit source --index examples/basic-ts/.my-dev-kit --file src
 ```
 
 This example is secondary documentation for cloned repositories and package smoke tests. Normal users should run `npx @dailephd/my-dev-kit` inside their own project.
+
+Clean up the generated index:
+
+```sh
+node -e "require('fs').rmSync('examples/basic-ts/.my-dev-kit',{recursive:true,force:true})"
+```

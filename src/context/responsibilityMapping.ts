@@ -43,9 +43,14 @@ interface ResolvedResponsibilityInputs {
 }
 
 /** Rejects duplicate responsibility IDs deterministically: the first occurrence wins,
- * later duplicates are dropped and reported (TST-B4-005). In the current CLI/request-file
- * path duplicates are already removed by `contextRequestNormalization.ts`'s `dedupeSorted`;
- * this is a defensive second boundary for direct/unit-test callers of this module. */
+ * later duplicates are dropped and reported (TST-B4-005). `contextRequestNormalization.ts`
+ * no longer sorts/dedupes `testResponsibilityRefs` (v1.10.3 Batch 3, F-004), so this is
+ * now the sole point where duplicates are both detected and resolved for the public
+ * request-file path, not just a defensive second boundary for direct callers.
+ * `duplicateResponsibilityIds` preserves first-*duplicate*-occurrence order (the order in
+ * which each ID was seen for the second time), deliberately not alphabetically sorted, so
+ * it stays meaningful relative to the caller's original sequence (section 17.3). An ID
+ * repeated more than twice is still reported only once (the `Set` below). */
 function dedupeResponsibilityInputs(inputs: ResponsibilityInput[]): ResolvedResponsibilityInputs {
   const seen = new Map<string, ResponsibilityInput>()
   const duplicateResponsibilityIds: string[] = []
@@ -58,7 +63,7 @@ function dedupeResponsibilityInputs(inputs: ResponsibilityInput[]): ResolvedResp
     }
     seen.set(input.id, input)
   }
-  return { inputs: [...seen.values()], duplicateResponsibilityIds: [...new Set(duplicateResponsibilityIds)].sort(), warnings }
+  return { inputs: [...seen.values()], duplicateResponsibilityIds: [...new Set(duplicateResponsibilityIds)], warnings }
 }
 
 function findGroup(groups: EvidenceGroup[], kind: EvidenceGroup['kind']): EvidenceGroup | undefined {
@@ -307,14 +312,21 @@ export function buildResponsibilityMappings(options: BuildResponsibilityMappings
   // Deterministic truncation order (section 25.2): critical responsibilities are
   // preserved ahead of noncritical ones; ties break on responsibilityId. This means
   // a bounded `responsibilityMappings` limit can only ever drop a critical
-  // responsibility once every critical one is already retained.
-  mappings.sort((a, b) => {
+  // responsibility once every critical one is already retained. This ordering decides
+  // *which* mappings survive truncation only; it is not the returned order.
+  const truncationOrder = [...mappings].sort((a, b) => {
     if (a.criticality !== b.criticality) return a.criticality === 'critical' ? -1 : 1
     return a.responsibilityId.localeCompare(b.responsibilityId)
   })
   const effectiveLimit = limit ?? DEFAULT_RESPONSIBILITY_MAPPING_LIMIT
-  const bounded = mappings.slice(0, effectiveLimit).sort((a, b) => a.responsibilityId.localeCompare(b.responsibilityId))
-  const droppedMappings = mappings.slice(effectiveLimit)
+  const survivingIds = new Set(truncationOrder.slice(0, effectiveLimit).map((m) => m.responsibilityId))
+  // v1.10.3 Batch 3 (F-004): the returned mapping order follows the caller's
+  // first-occurrence input order (`inputs`, already first-occurrence-deduped by
+  // `dedupeResponsibilityInputs`), not an alphabetical resort, so that e.g.
+  // `[TST-002, TST-001, TST-002, TST-003, TST-001]` maps as `[TST-002, TST-001,
+  // TST-003]` rather than being silently reordered alphabetically (section 17.2).
+  const bounded = mappings.filter((m) => survivingIds.has(m.responsibilityId))
+  const droppedMappings = truncationOrder.slice(effectiveLimit)
   const droppedCount = droppedMappings.length
   const criticalDropped = droppedMappings.some((m) => m.criticality === 'critical')
   if (droppedCount > 0) {

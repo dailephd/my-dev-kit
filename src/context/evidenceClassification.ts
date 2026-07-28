@@ -17,6 +17,13 @@ export const FIXTURE_PATH_PATTERN = /(^|[\\/])(__fixtures__|fixtures|test-data|t
 /** Paths under a mock-shaped directory. */
 export const MOCK_PATH_PATTERN = /(^|[\\/])(__mocks__|mocks)([\\/]|$)/i
 
+/** Paths under a generated-output directory, or a `.generated.` infix, or a
+ * `generated`-prefixed/suffixed basename. v1.10.3 Batch 1: used only to keep
+ * codegen output out of implementation-owner eligibility (F-002); never a
+ * ranking signal. */
+export const GENERATED_PATH_PATTERN = /(^|[\\/])(generated|__generated__|codegen)([\\/]|$)|\.generated\.[jt]sx?$/i
+export const GENERATED_NAME_PATTERN = /(^|[^a-z])generated([^a-z]|$)/i
+
 /** Filenames whose own name signals mock/stub/fake/spy intent. */
 export const MOCK_NAME_PATTERN = /(mock|stub|fake|spy)/i
 
@@ -41,6 +48,11 @@ export function isFixtureLike(filePath: string | undefined): boolean {
 export function isMockLike(filePath: string | undefined): boolean {
   if (filePath === undefined) return false
   return MOCK_PATH_PATTERN.test(filePath) || MOCK_NAME_PATTERN.test(stripExt(basename(filePath)))
+}
+
+export function isGeneratedLike(filePath: string | undefined): boolean {
+  if (filePath === undefined) return false
+  return GENERATED_PATH_PATTERN.test(filePath) || GENERATED_NAME_PATTERN.test(stripExt(basename(filePath)))
 }
 
 /** True when a file lives inside a test-scoped area of the tree: itself a `*.spec`/`*.test`

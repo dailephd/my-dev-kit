@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { VERSION } from '../version.js'
+import type { RawEvidenceIndexIdentity } from './rawEvidenceIdentity.js'
 import type {
   ArtifactReferenceSummaryEntry,
   CandidateFile,
@@ -44,6 +45,7 @@ import type {
 
 export interface BuildContextCapsuleOptions {
   resolved: ResolvedIndexManifest
+  identity: RawEvidenceIndexIdentity
   originalQuery: string
   mode: ContextCapsuleMode
   requestedOutputPath: string
@@ -133,6 +135,7 @@ export function buildArtifactRefs(resolved: ResolvedIndexManifest): ContextCapsu
 export function buildContextCapsule(options: BuildContextCapsuleOptions): ContextCapsule {
   const {
     resolved,
+    identity,
     originalQuery,
     mode,
     requestedOutputPath,
@@ -230,10 +233,10 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
       requestFilePath,
     },
     index: {
-      indexPath: toForwardSlash(resolved.indexDir),
-      manifestPath: toForwardSlash(resolved.manifestPath),
-      manifestSchemaVersion: resolved.manifest.version,
-      projectRoot: resolved.manifest.projectRoot,
+      indexPath: identity.indexPath,
+      manifestPath: identity.manifestPath,
+      manifestSchemaVersion: identity.manifestSchemaVersion,
+      projectRoot: identity.projectRoot,
       artifactRefs,
     },
     limits,

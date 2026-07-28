@@ -171,18 +171,19 @@ Most integration tests invoke the CLI as a child process against fixture project
 
 ## Full validation
 
-Run the full validation chain before release-related changes or package publishing:
+Complete validation requires both commands, in order, before release-related changes or package publishing:
 
+    npm run test
     npm run verify
 
-The verify script runs the main local validation sequence for the repository.
+`npm test` runs the complete Vitest suite. `npm run verify` runs the remaining non-test verification gates (typecheck, build, docs check) and intentionally excludes the test suite, so running both does not execute the suite twice. `npm run verify` on its own is not a substitute for `npm test`.
 
 If a more explicit validation sequence is needed, run:
 
     npm run typecheck
     npm run test
     npm run build
-    npm run verify
+    npm run docs:check
 
 ### v1.10.1 context validation
 
@@ -206,6 +207,16 @@ npx vitest run tests/indexing
 ```
 
 The context suites cover request-file normalization and validation, all three roles, role/mode independence, providers and stable ranking, before/after changed surfaces, evidence groups, responsibility mapping, role adequacy, freshness, caps, truncation, full-file fallback, compatibility, determinism, and cross-platform paths.
+
+For the v1.10.3 corrective patch, keep these regression suites in the focused context run:
+
+- `tests/context/contextEvidenceGroups.spec.ts` — structurally grounded neutral owners, false-owner exclusions, and deterministic owner ordering.
+- `tests/context/contextRequiredAllocation.spec.ts` — required-first reservations, deterministic spillover, finite aggregate bounds, genuine required truncation, diagnostics, adequacy, legacy compatibility, and determinism.
+- `tests/context/contextResponsibilityDuplicates.spec.ts` — duplicate and unknown/unmapped observability, first-occurrence mapping order, capsule/audit parity, and deterministic request handling.
+- `tests/context/contextDirectedEvidence.spec.ts` — canonical file graph identity, dependency/caller direction, deduplication, and symbol/file parity.
+- `tests/context/contextV1103IntegrationMatrix.spec.ts` — end-to-end producer coverage for the repository-owned historical context cases represented by permanent fixtures.
+
+Do not depend on transient external fixture paths. Permanent regressions belong in repository-owned tests or fixtures, and generated capsule, audit, index, benchmark, and temporary request outputs must remain ignored and uncommitted.
 
 Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.
 
@@ -274,10 +285,10 @@ Common scripts:
   Runs TypeScript type checking without emitting files.
 
 - npm run test
-  Runs all tests with Vitest.
+  Runs all tests with Vitest. This is the canonical complete test suite.
 
 - npm run verify
-  Runs the main validation chain.
+  Runs the non-test verification chain (typecheck, build, docs check). It excludes the test suite; run npm run test separately for complete validation.
 
 - npm run clean
   Removes dist/.
@@ -580,6 +591,7 @@ Use SVG or PNG manually when Graphviz is installed:
 Before publishing a release:
 
     npm ci
+    npm run test
     npm run verify
     npm pack --dry-run
 

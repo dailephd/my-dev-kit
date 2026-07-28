@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.10.3 - 2026-07-28
+
+This corrective patch refines implementation-role context readiness while preserving the v1.10.1 command and artifact contracts.
+
+- Implementation-owner eligibility now requires request relevance plus independent structural evidence. Neutral filenames can qualify, while focus alone, owner-like filenames alone, and test, fixture, generated, projection-only, view-only, or unrelated leaf evidence cannot establish ownership.
+- Required implementation evidence now uses a deterministic required-first allocation. Each group begins with its existing reservation; unused capacity spills to required groups with remaining qualified evidence in fixed priority order. Genuine demand beyond the finite aggregate bound remains explicit and continues to reduce role adequacy.
+- Additive `groupTruncation` diagnostics report reservation, borrowed capacity, selected and omitted required evidence, aggregate bound use, and adequacy impact for the implementation-role allocation pass.
+- Duplicate `testResponsibilityRefs` remain observable through public request normalization. Mappings stay unique in first-occurrence order, while duplicate and unknown/unmapped diagnostics remain independently visible in both the context capsule and retrieval audit.
+- Directed file-level dependency and caller evidence now matches canonical `file:<path>` graph-node identity, keeping file evidence classification aligned with symbol evidence and deduplicating alternate representations of the same graph node.
+- Context capsule and retrieval-audit generation now share one canonical repository/index identity sourced from the validated index manifest. Newly generated audits include `index.projectRoot` and `index.manifestSchemaVersion`, and a deterministic producer parity gate validates duplicated identity and summary fields before either requested output is written.
+- Supported schema-major-1 audits created by older versions remain parseable without the additive identity fields. Consumers must treat absent identity as unavailable rather than inventing it; current generation never emits an audit without the grounded repository identity.
+- Output remains deterministic, legacy requests remain compatible, and schema version `"1.0.0"` remains unchanged. No CLI option, context role, requested-evidence kind, runtime proof, LLM selection, source editing, automatic orchestration, or publication behavior is added.
+
 ## 1.10.2 - 2026-07-17
 
 This documentation-only corrective patch fixes the release-state documentation shipped with v1.10.1. No runtime, CLI, artifact, schema, or retrieval behavior changed.

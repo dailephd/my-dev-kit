@@ -157,7 +157,7 @@ export function buildTruncation(options: BuildTruncationOptions): TruncationSumm
   for (const entry of groupTruncation) {
     if (!entry.truncated) continue
     const group = evidenceGroups.find((g) => g.id === entry.groupId)
-    const droppedEvidenceIds: string[] = [] // groups only expose `droppedCount`, not the specific dropped IDs (they were never materialized past the cap)
+    const droppedEvidenceIds = entry.droppedEvidenceIds ?? []
     const requiredEvidenceLost = group?.required === true
     records.push({
       id: `truncation-group:${entry.groupId}`,

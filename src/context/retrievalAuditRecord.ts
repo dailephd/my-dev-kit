@@ -1,8 +1,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { toForwardSlash } from '../io/pathUtils.js'
-import type { ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { VERSION } from '../version.js'
+import type { RawEvidenceIndexIdentity } from './rawEvidenceIdentity.js'
 import type {
   AuditStep,
   BudgetSummary,
@@ -19,7 +19,7 @@ import type {
 } from './types.js'
 
 export interface BuildRetrievalAuditRecordOptions {
-  resolved: ResolvedIndexManifest
+  identity: RawEvidenceIndexIdentity
   request: ContextCapsuleRequest
   steps: AuditStep[]
   /** v1.10.1 Batch 1: request-normalization warnings (e.g. deferred-field notices). */
@@ -94,7 +94,7 @@ function emptyRoleAdequacy(status: ContextAdequacyStatement['status']): RoleAdeq
 
 export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOptions): RetrievalAuditRecord {
   const {
-    resolved,
+    identity,
     request,
     steps,
     warnings = [],
@@ -114,8 +114,10 @@ export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOpti
     tool: { name: 'my-dev-kit', version: VERSION },
     request,
     index: {
-      indexPath: toForwardSlash(resolved.indexDir),
-      manifestPath: toForwardSlash(resolved.manifestPath),
+      indexPath: identity.indexPath,
+      manifestPath: identity.manifestPath,
+      manifestSchemaVersion: identity.manifestSchemaVersion,
+      projectRoot: identity.projectRoot,
     },
     steps,
     fallbacks: [],

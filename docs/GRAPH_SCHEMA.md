@@ -824,7 +824,7 @@ The context capsule never embeds a raw graph or artifact dump — all evidence i
 
 Written by the `context` command only when `--audit-out` is requested. Schema version `"1.0.0"`.
 
-Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVersion`, `generatedAt`, `tool`, `request`, `index` (`{ indexPath, manifestPath }`), `steps` (ordered `AuditStep[]`), `fallbacks`, `fullFileReadRecommendations`, `warnings`, `contextAdequacy`.
+Top-level fields (see `src/context/types.ts` `RetrievalAuditRecord`): `schemaVersion`, `generatedAt`, `tool`, `request`, `index` (`{ indexPath, manifestPath, manifestSchemaVersion?, projectRoot? }`), `steps` (ordered `AuditStep[]`), `fallbacks`, `fullFileReadRecommendations`, `warnings`, `contextAdequacy`.
 
 Each `AuditStep` records `id`, `kind` (one of a fixed `AuditStepKind` set covering validation, manifest loading, query normalization, ranking, focus selection, graph/source selection, pruning, and conflict detection), `description`, `inputs`, `outputs`, `status` (`ok`/`skipped`/`failed`), and `warnings`. The record provides a full, ordered trail of how a context capsule was assembled, for auditing and debugging retrieval behavior — it is deterministic and does not itself claim runtime or LLM behavior.
 
@@ -836,9 +836,23 @@ The capsule additively records `roleContext`, `evidenceGroups`, `selectedOwners`
 
 The retrieval audit carries the same computed role, responsibility, adequacy, freshness, budget, truncation, fallback, and provenance evidence. Its ordered steps also record candidate selection, changed-surface intake, evidence grouping, test-infrastructure discovery, responsibility mapping, freshness classification, budget application, adequacy evaluation, and provenance recording. This remains one retrieval audit, not a parallel artifact family.
 
+Current generation also writes the same canonical active-index identity to both artifacts: `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`. The source is the already validated index manifest, not process working-directory inference. Before/after identities remain in the shared `freshness.comparedIdentities` array. Before writing a requested pair, the producer validates these identities and every other duplicated readiness summary in deterministic order.
+
 Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner and relevant contract or extension-point evidence. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
 
 Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
+
+### Additive context readiness fields (v1.10.3, shipped)
+
+The current repository keeps context capsule and retrieval-audit schema version `"1.0.0"` while correcting implementation-role readiness:
+
+- Implementation-role `groupTruncation[]` entries may include optional allocation fields: `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`.
+- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other required groups; `requiredOmittedCount` is qualified required evidence still omitted after spillover. `governingHardBound` is the finite sum of participating reservations, not the request's reporting-only `limits.evidenceGroupEntries` value.
+- `responsibilityMappings.duplicateResponsibilityIds` remains the public duplicate diagnostic. Normalization preserves duplicate references until mapping, actual mappings stay unique in first-occurrence order, and duplicate and `unknownResponsibilityIds` diagnostics can both describe the same input.
+- `EvidenceItemRef.id` remains the public evidence identity. For directed file-edge classification, a plain file item is matched to the code graph through canonical `file:<path>` node identity; symbol items use their existing symbol node ID. No new public ID format is introduced.
+- Retrieval-audit `index.manifestSchemaVersion` and `index.projectRoot` are additive optional fields for schema-major-1 compatibility. Current generation always populates them; old supported-major audits can omit them and remain parseable, with identity unavailable rather than inferred.
+
+These additions are optional for schema-major-1 consumers. Existing fields retain their meanings, legacy no-role output stays compatible, and the retrieval audit carries the same responsibility, allocation/truncation, adequacy, and direction-derived summaries as the capsule.
 
 ## Stable node IDs and compatibility
 
