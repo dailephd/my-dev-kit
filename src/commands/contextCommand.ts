@@ -766,6 +766,7 @@ export function registerContextCommand(program: Command): void {
         evidenceGroups: evidenceResult.groups,
         groupTruncation: evidenceResult.groupTruncation,
         responsibilityMappings,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
       })
       steps.push({
         id: 'step-apply-budget',
@@ -816,6 +817,7 @@ export function registerContextCommand(program: Command): void {
         responsibilityMappings,
         freshness,
         truncation,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
       })
       steps.push({
         id: 'step-evaluate-adequacy',

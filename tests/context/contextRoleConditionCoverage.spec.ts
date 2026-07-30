@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  classifyRoleConditionOmissions,
   evaluateRoleConditionCoverage,
   type RoleConditionCoverageEvidenceGroup,
 } from '../../src/context/roleConditionCoverage.js'
@@ -10,6 +11,7 @@ import { findRawEvidenceParityIssues } from '../../src/context/rawEvidenceParity
 import type {
   ContextCapsule,
   EvidenceItemRef,
+  GroupTruncationEntry,
   RetrievalAuditRecord,
   RoleConditionCoverage,
 } from '../../src/context/types.js'
@@ -61,10 +63,10 @@ describe('role condition coverage contract', () => {
   it('retains owner coverage when surplus adequate owner candidates are omitted', () => {
     const ownerA = evidence('symbol:src/owner.ts#OwnerA', 'src/owner.ts')
     const ownerB = evidence('symbol:src/owner.ts#OwnerB', 'src/owner.ts')
-    const owner = findCondition(
-      evaluate([group('implementation-owners', [ownerA, ownerB], [ownerB])]),
-      'implementation.selected-owner'
-    )
+    const conditionCoverage = evaluate([
+      group('implementation-owners', [ownerA, ownerB], [ownerB]),
+    ])
+    const owner = findCondition(conditionCoverage, 'implementation.selected-owner')
 
     expect(owner).toMatchObject({
       requiredWitnessCount: 1,
@@ -74,15 +76,33 @@ describe('role condition coverage contract', () => {
       lostRequiredCondition: false,
       lossReason: null,
     })
+    expect(
+      classifyRoleConditionOmissions({
+        groupTruncation: [{
+          groupId: 'implementation-owners',
+          limit: 1,
+          availableCount: 2,
+          usedCount: 1,
+          truncated: true,
+          droppedCount: 1,
+          required: true,
+        }],
+        roleConditionCoverage: conditionCoverage,
+      })[0]
+    ).toMatchObject({
+      requiredOmittedCount: 0,
+      optionalOmittedCount: 1,
+      adequacyAffected: false,
+    } satisfies Partial<GroupTruncationEntry>)
   })
 
   it('retains contract coverage when surplus adequate contract candidates are omitted', () => {
     const contractA = evidence('symbol:src/contracts.ts#ContractA', 'src/contracts.ts')
     const contractB = evidence('symbol:src/contracts.ts#ContractB', 'src/contracts.ts')
-    const contract = findCondition(
-      evaluate([group('implementation-contracts', [contractA, contractB], [contractA])]),
-      'implementation.required-contract'
-    )
+    const conditionCoverage = evaluate([
+      group('implementation-contracts', [contractA, contractB], [contractA]),
+    ])
+    const contract = findCondition(conditionCoverage, 'implementation.required-contract')
 
     expect(contract).toMatchObject({
       requiredWitnessCount: 1,
@@ -92,6 +112,24 @@ describe('role condition coverage contract', () => {
       lostRequiredCondition: false,
       lossReason: null,
     })
+    expect(
+      classifyRoleConditionOmissions({
+        groupTruncation: [{
+          groupId: 'implementation-contracts',
+          limit: 1,
+          availableCount: 2,
+          usedCount: 1,
+          truncated: true,
+          droppedCount: 1,
+          required: true,
+        }],
+        roleConditionCoverage: conditionCoverage,
+      })[0]
+    ).toMatchObject({
+      requiredOmittedCount: 0,
+      optionalOmittedCount: 1,
+      adequacyAffected: false,
+    } satisfies Partial<GroupTruncationEntry>)
   })
 
   it('reports loss when bounded allocation omits the last adequate required witness', () => {

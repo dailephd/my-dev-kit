@@ -12,7 +12,7 @@ import { isContractLike, isOwnerLike, isTestLike } from './roleCandidates.js'
 import { DEFAULT_TEST_INFRA_LIMITS, discoverTestInfrastructure, type BoundedList } from './testInfrastructureDiscovery.js'
 import { CONSTANT_PATTERN, ERROR_PATTERN, SCHEMA_PATTERN, SIDE_EFFECT_PATTERN, VALIDATOR_PATTERN } from './evidencePatterns.js'
 import { isFixtureLike, isGeneratedLike, isMockLike, isTestScoped } from './evidenceClassification.js'
-import { evaluateRoleConditionCoverage } from './roleConditionCoverage.js'
+import { classifyRoleConditionOmissions, evaluateRoleConditionCoverage } from './roleConditionCoverage.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -116,7 +116,7 @@ export interface RequiredGroupAllocationResult {
   unusedReservationContributed: number
   borrowedCapacity: number
   effectiveLimit: number
-  requiredOmittedCount: number
+  omittedCount: number
 }
 
 function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): RequiredGroupAllocationResult[] {
@@ -148,7 +148,7 @@ function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): Require
       unusedReservationContributed: g.unusedReservationContributed,
       borrowedCapacity,
       effectiveLimit: g.reservation + borrowedCapacity,
-      requiredOmittedCount: g.dedupedItems.length - selectedItems.length,
+      omittedCount: g.dedupedItems.length - selectedItems.length,
     }
   })
 }
@@ -631,9 +631,6 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
           initiallySelectedCount: allocation.initiallySelectedCount,
           unusedReservationContributed: allocation.unusedReservationContributed,
           borrowedCapacity: allocation.borrowedCapacity,
-          requiredOmittedCount: allocation.requiredOmittedCount,
-          optionalOmittedCount: 0,
-          adequacyAffected: allocation.requiredOmittedCount > 0,
           governingHardBound,
           aggregateCapacityUsed,
           aggregateCapacityRemaining: governingHardBound - aggregateCapacityUsed,
@@ -782,9 +779,6 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
           initiallySelectedCount: allocation.initiallySelectedCount,
           unusedReservationContributed: allocation.unusedReservationContributed,
           borrowedCapacity: allocation.borrowedCapacity,
-          requiredOmittedCount: allocation.requiredOmittedCount,
-          optionalOmittedCount: 0,
-          adequacyAffected: allocation.requiredOmittedCount > 0,
           governingHardBound,
           aggregateCapacityUsed,
           aggregateCapacityRemaining: governingHardBound - aggregateCapacityUsed,
@@ -896,15 +890,22 @@ function emptyTestInfrastructure(): TestInfrastructureSummary {
 }
 
 function finalizeResult(result: Omit<BuildEvidenceGroupsResult, 'groupTruncation'>, allocationDiagnostics?: Map<string, Partial<GroupTruncationEntry>>): BuildEvidenceGroupsResult {
-  const groupTruncation: GroupTruncationEntry[] = result.groups.map((g) => ({
+  const rawGroupTruncation: GroupTruncationEntry[] = result.groups.map((g) => ({
     groupId: g.id,
     limit: g.limit,
     availableCount: g.availableCount,
     usedCount: g.usedCount,
     truncated: g.truncated,
     droppedCount: g.droppedCount,
+    required: g.required,
     ...(allocationDiagnostics?.get(g.id) ?? {}),
   }))
+  const groupTruncation = classifyRoleConditionOmissions({
+    groupTruncation: rawGroupTruncation,
+    roleConditionCoverage: result.roleConditionCoverage.length > 0
+      ? result.roleConditionCoverage
+      : undefined,
+  })
   return { ...result, groupTruncation }
 }
 

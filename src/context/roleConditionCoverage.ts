@@ -1,6 +1,7 @@
 import type {
   ContextRole,
   EvidenceItemRef,
+  GroupTruncationEntry,
   RoleConditionCoverage,
   RoleConditionDefinition,
 } from './types.js'
@@ -47,6 +48,13 @@ export interface RoleConditionCoverageEvidenceGroup {
 export interface EvaluateRoleConditionCoverageOptions {
   role: ContextRole | null
   evidenceGroups: readonly RoleConditionCoverageEvidenceGroup[]
+}
+
+export interface ClassifyRoleConditionOmissionsOptions {
+  groupTruncation: readonly GroupTruncationEntry[]
+  /** undefined means the caller predates condition coverage and must retain the
+   * conservative group-required classification. */
+  roleConditionCoverage?: readonly RoleConditionCoverage[]
 }
 
 function compareStableIds(left: string, right: string): number {
@@ -103,6 +111,67 @@ export function evaluateRoleConditionCoverage(options: EvaluateRoleConditionCove
       lostRequiredCondition,
       lossReason: lostRequiredCondition ? 'bounded-allocation-omitted-required-witnesses' : null,
       evaluationOrder: definition.evaluationOrder,
+    }
+  })
+}
+
+/**
+ * Attribute bounded omissions once, after condition coverage and allocation are
+ * both known. Current definitions intentionally map one condition to one group;
+ * anything broader is rejected rather than double-counting a witness deficit.
+ */
+export function classifyRoleConditionOmissions(
+  options: ClassifyRoleConditionOmissionsOptions
+): GroupTruncationEntry[] {
+  const coverage = options.roleConditionCoverage
+  const conditionAwareRoles = new Set(coverage?.map((condition) => condition.role) ?? [])
+  const conditionByGroupId = new Map<string, RoleConditionCoverage>()
+
+  for (const condition of coverage ?? []) {
+    if (condition.evidenceGroupIds.length !== 1) {
+      throw new Error(
+        `Condition-to-group attribution is ambiguous for "${condition.conditionId}": expected exactly one evidence group.`
+      )
+    }
+    const groupId = condition.evidenceGroupIds[0]
+    if (conditionByGroupId.has(groupId)) {
+      throw new Error(
+        `Condition-to-group attribution is ambiguous for "${groupId}": multiple conditions share one evidence group.`
+      )
+    }
+    conditionByGroupId.set(groupId, condition)
+  }
+
+  return options.groupTruncation.map((entry) => {
+    const omittedCount = Math.max(0, entry.availableCount - entry.usedCount)
+    const conditionAwareRole = [...conditionAwareRoles].find((role) =>
+      entry.groupId.startsWith(`${role}-`)
+    )
+
+    if (!conditionAwareRole) {
+      const requiredOmittedCount = entry.required === true ? omittedCount : 0
+      return {
+        ...entry,
+        droppedCount: omittedCount,
+        requiredOmittedCount,
+        optionalOmittedCount: omittedCount - requiredOmittedCount,
+        adequacyAffected: requiredOmittedCount > 0,
+      }
+    }
+
+    const condition = conditionByGroupId.get(entry.groupId)
+    const requiredWitnessDeficit =
+      condition?.required === true && condition.lostRequiredCondition
+        ? Math.max(0, condition.requiredWitnessCount - condition.retainedWitnessCount)
+        : 0
+    const requiredOmittedCount = Math.min(omittedCount, requiredWitnessDeficit)
+
+    return {
+      ...entry,
+      droppedCount: omittedCount,
+      requiredOmittedCount,
+      optionalOmittedCount: omittedCount - requiredOmittedCount,
+      adequacyAffected: requiredOmittedCount > 0,
     }
   })
 }

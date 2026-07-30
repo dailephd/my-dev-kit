@@ -226,7 +226,7 @@ describe('my-dev-kit v1.10.3 final producer integration matrix', () => {
     assertCapsuleAuditParity(capsule, audit)
   })
 
-  it('TST-B1304-INT-005 (CASE-005 shape): required evidence beyond the real bound is genuinely truncated and blocks adequacy', () => {
+  it('TST-B1304-INT-005 (CASE-005 shape): surplus overflow remains visible without blocking covered conditions', () => {
     const root = createTempRoot('my-dev-kit-v1-int-case005-')
     const src = join(root, 'src')
     mkdirSync(src, { recursive: true })
@@ -252,9 +252,9 @@ describe('my-dev-kit v1.10.3 final producer integration matrix', () => {
     const audit = JSON.parse(readFileSync(auditOut, 'utf8'))
 
     expect(capsule.truncation.truncated).toBe(true)
-    expect(capsule.truncation.records.some((r: { requiredEvidenceLost: boolean }) => r.requiredEvidenceLost)).toBe(true)
-    expect(capsule.roleAdequacy.missingConditions).toContain('required evidence truncated')
-    expect(capsule.roleAdequacy.status).toBe('context insufficient and more retrieval required')
+    expect(capsule.truncation.records.some((r: { requiredEvidenceLost: boolean }) => r.requiredEvidenceLost)).toBe(false)
+    expect(capsule.roleAdequacy.missingConditions).not.toContain('required evidence truncated')
+    expect(capsule.roleAdequacy.status).toBe('context sufficient for implementation')
 
     assertCapsuleAuditParity(capsule, audit)
   })

@@ -27,6 +27,7 @@ import type {
   TestInfrastructureSummary,
   TruncationSummary,
   RoleConditionId,
+  RoleConditionCoverage,
 } from './types.js'
 
 function implementationConditionLabel(conditionId: RoleConditionId): string {
@@ -54,6 +55,9 @@ export interface EvaluateRoleAdequacyOptions {
   responsibilityMappings: ResponsibilityMappingSummary
   freshness: FreshnessSummary
   truncation: TruncationSummary
+  /** Current implementation-role pipeline supplies this. Optional only for
+   * conservative legacy-compatible callers. */
+  roleConditionCoverage?: RoleConditionCoverage[]
 }
 
 const STATUS_ORDER: readonly ContextAdequacyStatus[] = [
@@ -83,6 +87,7 @@ export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): Role
     responsibilityMappings,
     freshness,
     truncation,
+    roleConditionCoverage,
   } = options
 
   if (role === null) {
@@ -156,6 +161,14 @@ export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): Role
     } else {
       satisfiedConditions.push('no critical unresolved implementation requirement remains')
     }
+    if (
+      roleConditionCoverage === undefined ||
+      !roleConditionCoverage.some((condition) => condition.role === 'implementation')
+    ) {
+      missingConditions.push('role condition coverage unavailable')
+      blockingConditions.push('role condition coverage unavailable')
+      status = downgrade(status, 'context insufficient and more retrieval required')
+    }
   } else {
     // test-implementation
     requiredConditions.push(
@@ -207,7 +220,34 @@ export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): Role
 
   const truncationImpact = truncation.records.some((r) => r.requiredEvidenceLost)
   if (truncationImpact) {
-    missingConditions.push('required evidence truncated')
+    const conditionAwareCoverage =
+      roleConditionCoverage?.filter((condition) => condition.role === role) ?? []
+    if (conditionAwareCoverage.length === 0) {
+      missingConditions.push('required evidence truncated')
+    } else {
+      const lostConditions = conditionAwareCoverage.filter((entry) => entry.lostRequiredCondition)
+      for (const condition of lostConditions) {
+        const existingDiagnostic =
+          condition.conditionId === 'implementation.selected-owner'
+            ? 'owner missing'
+            : condition.conditionId === 'implementation.required-contract'
+              ? 'required contract missing'
+              : `required condition witness lost during bounded selection: ${condition.conditionId}`
+        if (!missingConditions.includes(existingDiagnostic)) {
+          missingConditions.push(existingDiagnostic)
+        }
+      }
+      if (
+        lostConditions.length === 0 &&
+        truncation.records.some(
+          (record) =>
+            record.requiredEvidenceLost &&
+            record.affectedGroup === 'responsibility-mappings'
+        )
+      ) {
+        missingConditions.push('critical responsibility mapping truncated')
+      }
+    }
     status = downgrade(status, 'context insufficient and more retrieval required')
   }
 

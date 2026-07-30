@@ -1030,11 +1030,13 @@ export interface GroupTruncationEntry {
   unusedReservationContributed?: number
   /** Additional items this group received from the shared spillover pool. */
   borrowedCapacity?: number
-  /** Qualified required evidence for this group that remained unselected after spillover. */
+  /** Minimum condition-required witness deficit attributable to bounded omission.
+   * Additive schema-major-1 diagnostic; legacy paths may conservatively classify
+   * every omission from a required group as required. */
   requiredOmittedCount?: number
-  /** Qualified optional evidence for this group that remained unselected (0 unless an optional tier shares this group's pool). */
+  /** All remaining bounded omissions after condition-required loss is attributed. */
   optionalOmittedCount?: number
-  /** True when this group's required evidence was omitted after full allocation (reduces role adequacy). */
+  /** True only when requiredOmittedCount is greater than zero. */
   adequacyAffected?: boolean
   /** The real finite bound governing this allocation pass (sum of all participating groups' reservations). */
   governingHardBound?: number
@@ -1210,6 +1212,9 @@ export interface TruncationRecord {
 
 export interface TruncationSummary {
   truncated: boolean
+  /** Additive schema-major-1 rollup. Current output always supplies it; legacy
+   * artifacts may omit it. */
+  requiredEvidenceLost?: boolean
   records: TruncationRecord[]
   warnings: string[]
 }
