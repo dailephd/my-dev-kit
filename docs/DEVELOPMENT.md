@@ -216,6 +216,14 @@ For the v1.10.3 corrective patch, keep these regression suites in the focused co
 - `tests/context/contextDirectedEvidence.spec.ts` — canonical file graph identity, dependency/caller direction, deduplication, and symbol/file parity.
 - `tests/context/contextV1103IntegrationMatrix.spec.ts` — end-to-end producer coverage for the repository-owned historical context cases represented by permanent fixtures.
 
+For the unreleased v1.10.4 condition-aware correction, the directly owned regression suites are:
+
+- `tests/context/contextRoleConditionCoverage.spec.ts` — stable condition definitions, retained witness identities, coverage, determinism, and shared capsule/audit serialization.
+- `tests/context/contextConditionAwareTruncation.spec.ts` — required-versus-optional omission classification, count invariants, actual last-witness loss, no-candidate distinction, compatibility overflow, and conservative fallback.
+- `tests/context/contextRoleAdequacy.spec.ts` — optional-only truncation, genuine condition loss, missing candidates, stale context, critical responsibility failures, and fail-closed missing/empty current coverage.
+- `tests/context/rawEvidenceParity.spec.ts` — current agreement, legacy both-absent compatibility, one-sided absence, and deterministic actionable mismatches.
+- `tests/context/contextBatch1FalseNegativeRegression.spec.ts` — portable hash-verified real-world allocation/adequacy regression plus historical and negative controls.
+
 Do not depend on transient external fixture paths. Permanent regressions belong in repository-owned tests or fixtures, and generated capsule, audit, index, benchmark, and temporary request outputs must remain ignored and uncommitted.
 
 Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.

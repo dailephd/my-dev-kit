@@ -1085,6 +1085,14 @@ Version 1.10.3 does not add runtime proof, LLM-based owner selection, automatic 
 
 Behavior-derived validation covers neutral and false-owner cases, deterministic multiple-owner ordering, required-first allocation and spillover, finite aggregate bounds and genuine overflow, additive allocation diagnostics, duplicate/unknown responsibility diagnostics and first-occurrence mapping order, directed file-level dependency/caller identity, capsule/audit parity, legacy schema-major-1 compatibility, deterministic output, focused context regression suites, full tests, typecheck, build, documentation checks, retrieval benchmarks, and package verification.
 
+## Version 1.10.4
+
+**Status: implemented on the correction branch; unreleased.**
+
+Version 1.10.4 corrects false-negative implementation-role adequacy by adding deterministic required-condition witness coverage and separating optional surplus omission from allocation-caused loss of required evidence. It preserves the existing bounded allocation, group reservations, deterministic spillover, ranking, command syntax, and schema major `1`.
+
+The patch is limited to the my-dev-kit producer contract, condition-aware omission/truncation diagnostics, role adequacy, capsule/audit agreement, legacy compatibility, and permanent producer regression coverage. It does not implement orchestrator readiness/recovery/lifecycle enforcement, judge or final-report enforcement, lab cross-system agreement validation, Compose retrieval, release actions, or publication.
+
 ## Version 1.11.0
 
 Version 1.11.0 adds Jetpack Compose semantic retrieval and Android UI-test indexing.

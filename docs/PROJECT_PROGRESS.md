@@ -6,6 +6,16 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.10.3` is the latest published release. It includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity). Version 1.10.1 introduced deterministic, role-specific repository-evidence retrieval, while v1.10.0 introduced the completed Android/Kotlin/Java/Gradle/manifest/resource/navigation surface.
 
+## Implemented, unreleased: v1.10.4
+
+The v1.10.4 producer correction is implementation-complete on `fix/v1.10.4-context-adequacy-semantics`. Package metadata and the CLI remain at `1.10.3`; v1.10.4 has not passed its separate repository-specific pre-release-readiness workflow, release preparation, version bump, tag, publication, or published-package verification.
+
+The correction adds condition-aware coverage for the required implementation owner and contract. General bounded truncation remains visible, while surplus contract and compatibility-surface omissions are optional when adequate required witnesses remain. `requiredEvidenceLost` now represents allocation-caused loss of required condition coverage, no-candidate absence remains a distinct inadequacy, and genuine last-witness loss still fails closed. The current producer emits identical condition coverage and truncation summaries in the capsule and audit while retaining schema-major-1 compatibility and conservative legacy fallback.
+
+The permanent regression at `tests/fixtures/context/batch1-false-negative/` and `tests/context/contextBatch1FalseNegativeRegression.spec.ts` preserves the exact v1.11.0 Batch 1 allocation shape (84/84 aggregate; contracts 47/39/8; compatibility surfaces 29/8/21), the historical v1.10.3 false negative, the corrected sufficient result, provenance hashes, portability normalization, and genuine-loss negative controls.
+
+This documentation reconciliation and the final Phase 1 integration gate are the last implementation-branch checks. Separate pre-release readiness remains pending. The future `release/v1.10.4` branch, package version bump, release preparation, and publication are not authorized yet. The downstream my-dev-kit-orchestrator v1.2.3 and my-dev-kit-lab v0.4.5 corrections depend on the published v1.10.4 producer contract. my-dev-kit v1.11.0 remains paused before Batch 2.
+
 ## Shipped: v1.10.3
 
 v1.10.3 is the published release. It includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity).
@@ -59,7 +69,7 @@ Version 1.10.1 shipped as a bounded patch on the v1.10.0 baseline that extends t
 - `limits.responsibilityMappings` is an **enforcing** limit — it actually truncates the number of responsibility mappings produced (`src/context/contextBudget.ts`, `src/context/responsibilityMapping.ts`).
 - `limits.evidenceGroupEntries` is **reporting-only** — the field is validated, normalized, and reported alongside real usage/availability/drop counts in `budget.limits[]`, but the actual per-group truncation caps come from fixed internal values in `src/context/evidenceGroups.ts` (for example owners = 3 or 5 depending on role, contracts = 10). The declared request-level value does not override those internal caps. This is documented in `docs/ROADMAP.md` as an intentional reporting boundary, not a gap.
 - Files that merely match a naming convention (for example a file named similarly to "builder" or "factory") are intentionally excluded from evidence groups and test-infrastructure discovery unless backed by graph, import, or classification evidence. This is a deliberate conservative boundary.
-- For the implementation role in v1.10.3, internal group caps are initial reservations in a shared finite allocation pass. This does not make `limits.evidenceGroupEntries` an enforcing selector.
+- For the implementation role, internal group caps are initial reservations in a shared finite allocation pass. This does not make `limits.evidenceGroupEntries` an enforcing selector. On the v1.10.4 correction branch, overflow remaining after the aggregate bound is classified against explicit role-condition witness coverage rather than treating every omitted candidate from a required group as required loss.
 
 ### Documentation correction
 

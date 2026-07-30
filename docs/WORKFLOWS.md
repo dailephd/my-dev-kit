@@ -337,7 +337,7 @@ Or provide a structured request:
 npx @dailephd/my-dev-kit context --request context-request.json --json
 ```
 
-`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation`, unresolved evidence, provenance, and the matching capsule/audit `index.projectRoot` before using the result. Do not hand-edit either generated artifact: regenerate the pair from the same request and validated index.
+`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation.requiredEvidenceLost`, condition-specific missing/blocking conditions, unresolved evidence, provenance, and the matching capsule/audit `index.projectRoot` before using the result. General `truncation.truncated` alone is not a readiness verdict: optional bounded overflow may coexist with adequate context. Do not hand-edit either generated artifact; regenerate the pair from the same request and validated index.
 
 ### Architecture-stage flow
 
@@ -353,8 +353,8 @@ The primary question is: "Where should the behavior live?"
 1. Refresh the index immediately before production editing.
 2. Retrieve implementation-role context rather than relying only on the earlier architecture capsule.
 3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests. A structurally grounded owner needs request relevance plus independent structural support; a focused or owner-named file is not enough by itself.
-4. Inspect required-group allocation diagnostics. Unused reservation can be borrowed by another required group, but evidence omitted after the finite aggregate bound is exhausted remains genuine required truncation.
-5. Stop if required evidence is inadequate, stale, unknown where freshness is mandatory, or genuinely truncated beyond the task's requirements.
+4. Inspect allocation and role-condition diagnostics. Unused reservation can be borrowed by another group; after the finite aggregate bound is exhausted, omitted surplus candidates remain visible as optional truncation when the required owner and contract witnesses are still covered.
+5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition is missing, context is stale, or freshness is unknown where the workflow requires proof. Do not stop solely because optional truncation is present.
 6. Implement production code outside my-dev-kit context generation.
 
 The primary question is: "What exact current code must be changed or preserved?"
@@ -372,9 +372,9 @@ The primary question is: "How should approved test responsibilities be implement
 
 ### Orchestrator and lab boundary
 
-The current orchestrator does not automatically run my-dev-kit and does not expose implementation-context or test-context as native stages. Initial my-dev-kit-orchestrator v1.2.1 integration is prompt-guided: existing implementation and test-implementation stages require the manual refresh and reference supplemental context artifacts. Workflow catalogs, instruction packets, TaskState, prompts, lifecycle, stage order, judge/correction handling, and freshness policy remain orchestrator-owned.
+The current orchestrator does not automatically run my-dev-kit and does not expose implementation-context or test-context as native stages. Initial my-dev-kit-orchestrator integration is prompt-guided: existing implementation and test-implementation stages require the manual refresh and reference supplemental context artifacts. Workflow catalogs, instruction packets, TaskState, prompts, lifecycle, stage order, judge/correction handling, and freshness policy remain orchestrator-owned. The producer correction documented here does not implement orchestrator readiness reconciliation, recovery routing, judge enforcement, or final-report enforcement.
 
-my-dev-kit-lab v0.4.3 may run controlled comparisons of full/bounded workflow instructions and architecture/implementation/test refresh strategies, then measure size, explicit evidence recall, irrelevant inclusion, mapping completeness, provenance, determinism, truncation/inadequacy, and target immutability. The lab does not become a required production workflow component.
+my-dev-kit-lab may run controlled comparisons of full/bounded workflow instructions and architecture/implementation/test refresh strategies, then measure size, explicit evidence recall, irrelevant inclusion, mapping completeness, provenance, determinism, truncation/inadequacy, and target immutability. The lab does not become a required production workflow component, and this producer patch does not implement lab-side producer/orchestrator agreement or judge/final-report integrity validation.
 
 Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.md). Legacy invocations without `--role` or `--request` remain compatible.
 
