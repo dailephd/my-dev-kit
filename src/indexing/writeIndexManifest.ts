@@ -16,6 +16,7 @@ import type { AndroidGradleArtifact } from '../android/androidGradleTypes.js'
 import type { AndroidManifestArtifact } from '../android/androidManifestTypes.js'
 import type { AndroidResourcesArtifact } from '../android/androidResourceTypes.js'
 import type { AndroidNavigationArtifact } from '../android/androidNavigationTypes.js'
+import type { AndroidComposeSemanticArtifact } from '../android/androidComposeTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import {
   ANDROID_PROJECT_FILENAME,
@@ -24,6 +25,7 @@ import {
   ANDROID_MANIFEST_FILENAME,
   ANDROID_RESOURCES_FILENAME,
   ANDROID_NAVIGATION_FILENAME,
+  ANDROID_COMPOSE_SEMANTIC_FILENAME,
   CALL_GRAPH_FILENAME,
   CLASSIFICATION_FILENAME,
   CODE_GRAPH_FILENAME,
@@ -52,6 +54,7 @@ export interface WriteIndexArtifactsOptions {
   androidManifest?: AndroidManifestArtifact | null
   androidResources?: AndroidResourcesArtifact | null
   androidNavigation?: AndroidNavigationArtifact | null
+  androidComposeSemantic?: AndroidComposeSemanticArtifact | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
@@ -97,6 +100,9 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
   }
   if (options.androidNavigation) {
     writeJson(path.join(options.outputDir, ANDROID_NAVIGATION_FILENAME), options.androidNavigation)
+  }
+  if (options.androidComposeSemantic) {
+    writeJson(path.join(options.outputDir, ANDROID_COMPOSE_SEMANTIC_FILENAME), options.androidComposeSemantic)
   }
 }
 

@@ -58,6 +58,7 @@ import {
   ANDROID_MANIFEST_FILENAME,
   ANDROID_RESOURCES_FILENAME,
   ANDROID_NAVIGATION_FILENAME,
+  ANDROID_COMPOSE_SEMANTIC_FILENAME,
   CLASSIFICATION_FILENAME,
 } from './managedArtifacts.js'
 import type { IndexAnalyzerStatus } from './manifestTypes.js'
@@ -79,6 +80,8 @@ import {
   buildAndroidNavigationXmlEvidenceFingerprint,
   ANDROID_NAVIGATION_SCHEMA_VERSION,
   buildAndroidArtifactRelationships,
+  buildAndroidComposeSemanticProject,
+  ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
   type AndroidComponentsArtifact,
   type CompactAndroidComponentMetadata,
   type BuildAndroidGradleProjectResult,
@@ -86,6 +89,7 @@ import {
   type BuildAndroidResourceProjectResult,
   type BuildAndroidNavigationProjectResult,
   type BuildAndroidArtifactRelationshipsResult,
+  type BuildAndroidComposeSemanticProjectResult,
 } from '../android/index.js'
 
 export interface RunIndexCommandOptions {
@@ -145,6 +149,8 @@ export interface RunIndexCommandIndexResult {
   androidResourcesPath: string | null
   /** Path to `android-navigation.json`, or `null` when no Android navigation evidence was detected (v1.10.0 Batch 4). */
   androidNavigationPath: string | null
+  /** Path to `android-compose-semantic.json`, or `null` when no supported Compose declaration evidence was detected (v1.11.0 Batch 1). */
+  androidComposeSemanticPath: string | null
   cache: IndexCacheSummary
   cacheReset: CacheResetResult | null
 }
@@ -595,6 +601,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     androidManifestPath: resolveAndroidManifestPathFromManifest(existingManifest, outputDir),
     androidResourcesPath: resolveAndroidResourcesPathFromManifest(existingManifest, outputDir),
     androidNavigationPath: resolveAndroidNavigationPathFromManifest(existingManifest, outputDir),
+    androidComposeSemanticPath: resolveAndroidComposeSemanticPathFromManifest(existingManifest, outputDir),
     cache: {
       requested: true,
       mode: 'incremental-no-change',
@@ -644,6 +651,10 @@ function resolveAndroidResourcesPathFromManifest(manifest: IndexManifest, output
 
 function resolveAndroidNavigationPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
   return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-navigation')
+}
+
+function resolveAndroidComposeSemanticPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-compose-semantic')
 }
 
 function resolveAnalyzerArtifactPathFromManifest(manifest: IndexManifest, outputDir: string, analyzerId: string): string | null {
@@ -871,6 +882,20 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   })
   const androidNavigationAnalyzerStatus = buildAndroidNavigationAnalyzerStatus(androidNavigationResult)
 
+  // Compose declaration-level semantic evidence (v1.11.0 Batch 1). Computed
+  // here, alongside android-navigation, since it needs the already-built
+  // symbol index to enumerate Kotlin files. Declaration-only: does not
+  // extract state/effects/ViewModels/UI markers/navigation calls/tests, and
+  // does not participate in code-graph projection, retrieval, or graph-diff
+  // (all deferred to later batches). A sibling of android-navigation.json,
+  // never a replacement for it.
+  const { androidComposeSemantic, androidComposeSemanticAnalyzerStatus } = runAndroidComposeSemanticAnalyzer({
+    projectRoot,
+    symbolIndex: roledSymbolIndex,
+    androidProject: androidResult.artifact,
+    createdAt,
+  })
+
   // Android artifact relationships (v1.10.0 Batch 5). Connects all six
   // Android artifacts into the existing code-graph architecture — compact
   // artifact-backed nodes plus deterministic relationship edges, merged
@@ -913,6 +938,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
         androidManifestAnalyzerStatus,
         androidResourcesAnalyzerStatus,
         androidNavigationAnalyzerStatus,
+        androidComposeSemanticAnalyzerStatus,
         androidRelationshipsAnalyzerStatus,
       ],
       semanticResult.analyzers
@@ -947,6 +973,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidManifest: androidManifestResult.artifact.detected ? androidManifestResult.artifact : null,
     androidResources: androidResourcesResult.artifact.detected ? androidResourcesResult.artifact : null,
     androidNavigation: androidNavigationResult.artifact.detected ? androidNavigationResult.artifact : null,
+    androidComposeSemantic: androidComposeSemantic && androidComposeSemantic.detected ? androidComposeSemantic : null,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -1000,6 +1027,9 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
       : null,
     androidNavigationPath: androidNavigationResult.artifact.detected
       ? toForwardSlash(path.join(outputDir, ANDROID_NAVIGATION_FILENAME))
+      : null,
+    androidComposeSemanticPath: androidComposeSemantic && androidComposeSemantic.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_COMPOSE_SEMANTIC_FILENAME))
       : null,
   }
 }
@@ -1282,6 +1312,70 @@ function buildAndroidRelationshipsAnalyzerStatus(
       addedNodeCount: relationships.nodes.length,
       addedEdgeCount: relationships.edges.length,
     },
+  }
+}
+
+interface RunAndroidComposeSemanticAnalyzerOptions {
+  projectRoot: string
+  symbolIndex: SymbolIndex
+  androidProject: DetectAndroidProjectResult['artifact']
+  createdAt: string
+}
+
+/**
+ * Registers Compose declaration-level semantic evidence (v1.11.0 Batch 1)
+ * via the same analyzer-registry pattern `android-navigation` uses. Reports
+ * 'failed' rather than throwing if the builder itself raises (mirrors the
+ * `android-components` failure-mode contract, since this analyzer re-reads
+ * arbitrary Kotlin source files from disk the same way android-components
+ * does) — per-file I/O errors are already handled inside the builder itself
+ * (a file is silently skipped, not a thrown error), so a genuine exception
+ * here indicates a real internal defect, not routine unreadable-file noise.
+ */
+function runAndroidComposeSemanticAnalyzer(options: RunAndroidComposeSemanticAnalyzerOptions): {
+  androidComposeSemantic: BuildAndroidComposeSemanticProjectResult['artifact'] | null
+  androidComposeSemanticAnalyzerStatus: IndexAnalyzerStatus
+} {
+  try {
+    const { artifact } = buildAndroidComposeSemanticProject(options)
+    const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+    return {
+      androidComposeSemantic: artifact,
+      androidComposeSemanticAnalyzerStatus: {
+        id: 'android-compose-semantic',
+        status,
+        version: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+        schemaVersion: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+        artifacts: artifact.detected
+          ? [{ name: 'androidComposeSemantic', path: ANDROID_COMPOSE_SEMANTIC_FILENAME, artifactKind: 'my-dev-kit-v1-android-compose-semantic' }]
+          : [],
+        warningCount: artifact.warnings.length,
+        errorCount: 0,
+        summary: {
+          detected: artifact.detected,
+          declarationCount: artifact.summary.declarationCount,
+          previewCount: artifact.summary.previewCount,
+          topLevelCount: artifact.summary.topLevelCount,
+          functionLocalCount: artifact.summary.functionLocalCount,
+          childCallCount: artifact.summary.childCallCount,
+          structuralRegionCallCount: artifact.summary.structuralRegionCallCount,
+        },
+      },
+    }
+  } catch (error) {
+    return {
+      androidComposeSemantic: null,
+      androidComposeSemanticAnalyzerStatus: {
+        id: 'android-compose-semantic',
+        status: 'failed',
+        version: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+        schemaVersion: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+        artifacts: [],
+        warningCount: 0,
+        errorCount: 1,
+        summary: { errorMessage: error instanceof Error ? error.message : String(error) },
+      },
+    }
   }
 }
 

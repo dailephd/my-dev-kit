@@ -171,3 +171,24 @@ export {
   type AndroidComponentRoleRef,
   type CompactAndroidComponentMetadata,
 } from './androidComponentTypes.js'
+export {
+  buildAndroidComposeSemanticProject,
+  type BuildAndroidComposeSemanticProjectOptions,
+} from './buildAndroidComposeSemanticProject.js'
+export {
+  ANDROID_COMPOSE_SEMANTIC_ARTIFACT_KIND,
+  ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+  ANDROID_COMPOSE_SEMANTIC_FILENAME,
+  type AndroidComposeSemanticArtifact,
+  type BuildAndroidComposeSemanticProjectResult,
+  type ComposeDeclarationScope,
+  type ComposeDeclarationVisibility,
+  type ComposeAnnotationEvidence,
+  type ComposeParameterSummary,
+  type ComposeSourceRange,
+  type ComposeChildCallEvidence,
+  type ComposeStructuralRegionKind,
+  type ComposeStructuralRegionEvidence,
+  type ComposeDeclarationEntry,
+  type ComposeSemanticSummary,
+} from './androidComposeTypes.js'
