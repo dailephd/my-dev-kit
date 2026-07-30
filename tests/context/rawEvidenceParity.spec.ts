@@ -35,6 +35,23 @@ function matchingPair(): { capsule: ContextCapsule; audit: RetrievalAuditRecord 
     truncation: { truncated: false, records: [] },
     fullFileFallback: { used: 0 },
     provenance: [{ id: 'prov-1' }],
+    roleConditionCoverage: [
+      {
+        conditionId: 'implementation.selected-owner',
+        role: 'implementation',
+        required: true,
+        evidenceGroupIds: ['implementation-owners'],
+        witnessPolicy: 'at-least-one',
+        requiredWitnessCount: 1,
+        availableWitnessCount: 2,
+        retainedWitnessCount: 1,
+        retainedWitnessIds: ['symbol:src/owner.ts#Owner'],
+        conditionSatisfied: true,
+        lostRequiredCondition: false,
+        lossReason: null,
+        evaluationOrder: 10,
+      },
+    ],
   }
   const index = {
     indexPath: 'C:/repo/after',
@@ -84,6 +101,7 @@ describe('raw evidence producer parity', () => {
 
   it.each([
     ['contextAdequacy', (audit: RetrievalAuditRecord) => { audit.contextAdequacy = { ...audit.contextAdequacy, summary: 'different' } }],
+    ['roleConditionCoverage', (audit: RetrievalAuditRecord) => { audit.roleConditionCoverage = [] }],
     ['responsibilityMappings', (audit: RetrievalAuditRecord) => { audit.responsibilityMappings = { ...audit.responsibilityMappings, truncated: true } }],
     ['roleAdequacy', (audit: RetrievalAuditRecord) => { audit.roleAdequacy = { ...audit.roleAdequacy, freshnessImpact: true } }],
     ['freshness', (audit: RetrievalAuditRecord) => { audit.freshness = { ...audit.freshness, state: 'stale' } }],
@@ -119,6 +137,18 @@ describe('raw evidence producer parity', () => {
     expect(findRawEvidenceParityIssues(capsule, audit).map((issue) => issue.field)).toEqual([
       'index.manifestSchemaVersion',
       'index.projectRoot',
+    ])
+  })
+
+  it('keeps a both-absent legacy condition-coverage field compatible without hiding one-sided absence', () => {
+    const { capsule, audit } = matchingPair()
+    delete capsule.roleConditionCoverage
+    delete audit.roleConditionCoverage
+    expect(findRawEvidenceParityIssues(capsule, audit)).toEqual([])
+
+    audit.roleConditionCoverage = []
+    expect(findRawEvidenceParityIssues(capsule, audit).map((issue) => issue.field)).toEqual([
+      'roleConditionCoverage',
     ])
   })
 })

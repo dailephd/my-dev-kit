@@ -12,6 +12,7 @@ import { isContractLike, isOwnerLike, isTestLike } from './roleCandidates.js'
 import { DEFAULT_TEST_INFRA_LIMITS, discoverTestInfrastructure, type BoundedList } from './testInfrastructureDiscovery.js'
 import { CONSTANT_PATTERN, ERROR_PATTERN, SCHEMA_PATTERN, SIDE_EFFECT_PATTERN, VALIDATOR_PATTERN } from './evidencePatterns.js'
 import { isFixtureLike, isGeneratedLike, isMockLike, isTestScoped } from './evidenceClassification.js'
+import { evaluateRoleConditionCoverage } from './roleConditionCoverage.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -27,6 +28,7 @@ import type {
   GroupTruncationEntry,
   PackageScriptEvidenceEntry,
   RequestedEvidenceKind,
+  RoleConditionCoverage,
   SelectedGraph,
   TestCommandEvidenceEntry,
   TestConfigurationEvidenceEntry,
@@ -442,6 +444,7 @@ export interface BuildEvidenceGroupsResult {
   selectedOwners: EvidenceItemRef[]
   selectedContracts: EvidenceItemRef[]
   selectedTests: EvidenceItemRef[]
+  roleConditionCoverage: RoleConditionCoverage[]
   testInfrastructure: TestInfrastructureSummary
   unresolvedItems: UnresolvedEvidenceItem[]
   groupTruncation: GroupTruncationEntry[]
@@ -454,6 +457,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const retainedNodes = options.candidateNodes.filter((n) => n.retained)
   const requestedSet = new Set(requestedEvidenceKinds)
   const warnings: string[] = []
+  let roleConditionCoverage: RoleConditionCoverage[] = []
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
 
@@ -585,6 +589,14 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       { kind: 'compatibility-surfaces', items: exportedSymbolItems, reservation: 8 },
       { kind: 'closest-tests', items: closestTestItems, reservation: 8 },
     ])
+    roleConditionCoverage = evaluateRoleConditionCoverage({
+      role,
+      evidenceGroups: allocations.map((allocation) => ({
+        groupId: `${role}-${allocation.kind}`,
+        availableItems: allocation.dedupedItems,
+        retainedItems: allocation.selectedItems,
+      })),
+    })
     const allocationByKind = new Map(allocations.map((a) => [a.kind, a]))
     const governingHardBound = allocations.reduce((sum, a) => sum + a.reservation, 0)
     const aggregateCapacityUsed = allocations.reduce((sum, a) => sum + a.selectedItems.length, 0)
@@ -803,6 +815,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       selectedOwners,
       selectedContracts,
       selectedTests,
+      roleConditionCoverage,
       testInfrastructure: {
         relatedTests: relatedTestsGroup.items,
         fixtures: fixturesGroup.items,
@@ -828,6 +841,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       selectedOwners: [],
       selectedContracts: [],
       selectedTests: [],
+      roleConditionCoverage: [],
       testInfrastructure: emptyTestInfrastructure(),
       unresolvedItems: [],
       warnings: [],
@@ -859,7 +873,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     }
   }
 
-  return finalizeResult({ groups, selectedOwners, selectedContracts, selectedTests, testInfrastructure, unresolvedItems, warnings }, allocationDiagnostics)
+  return finalizeResult({ groups, selectedOwners, selectedContracts, selectedTests, roleConditionCoverage, testInfrastructure, unresolvedItems, warnings }, allocationDiagnostics)
 }
 
 function boundedGroupOptions<T>(list: BoundedList<T>, required: boolean, provenance: string): MakeGroupOptions {

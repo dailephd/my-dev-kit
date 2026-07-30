@@ -13,6 +13,7 @@ export type RawEvidenceParityField =
   | 'index.projectRoot'
   | 'contextAdequacy'
   | 'roleContext'
+  | 'roleConditionCoverage'
   | 'responsibilityMappings'
   | 'roleAdequacy'
   | 'freshness'
@@ -49,6 +50,9 @@ export function findRawEvidenceParityIssues(
     ['index.projectRoot', capsule.index.projectRoot, audit.index.projectRoot],
     ['contextAdequacy', capsule.contextAdequacy, audit.contextAdequacy],
     ['roleContext', capsule.roleContext, audit.roleContext],
+    // Both absent is a compatible legacy pair. One absent and one present is a
+    // contradiction; absence is never normalized to an empty current result.
+    ['roleConditionCoverage', capsule.roleConditionCoverage, audit.roleConditionCoverage],
     ['responsibilityMappings', capsule.responsibilityMappings, audit.responsibilityMappings],
     ['roleAdequacy', capsule.roleAdequacy, audit.roleAdequacy],
     ['freshness', capsule.freshness, audit.freshness],

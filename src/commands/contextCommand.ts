@@ -865,6 +865,7 @@ export function registerContextCommand(program: Command): void {
         testInfrastructure: evidenceResult.testInfrastructure,
         unresolvedItems: evidenceResult.unresolvedItems,
         groupTruncation: evidenceResult.groupTruncation,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
         responsibilityMappings,
         roleAdequacy,
         freshness,
@@ -928,6 +929,7 @@ export function registerContextCommand(program: Command): void {
           // capsule's real verdict; see final report section 44.22.)
           contextAdequacy: capsule.contextAdequacy,
           responsibilityMappings: capsule.responsibilityMappings,
+          roleConditionCoverage: capsule.roleConditionCoverage,
           roleAdequacy: capsule.roleAdequacy,
           freshness: capsule.freshness,
           budget: capsule.budget,
