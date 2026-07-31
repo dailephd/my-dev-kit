@@ -854,7 +854,7 @@ The current repository keeps context capsule and retrieval-audit schema version 
 
 These additions are optional for schema-major-1 consumers. Existing fields retain their meanings, legacy no-role output stays compatible, and the retrieval audit carries the same responsibility, allocation/truncation, adequacy, and direction-derived summaries as the capsule.
 
-### Additive role-condition coverage fields (v1.10.4, implemented but unreleased)
+### Additive role-condition coverage fields (v1.10.4)
 
 The context capsule and retrieval audit remain schema version `"1.0.0"`. Current producer output adds the same ordered `roleConditionCoverage` array to both artifacts. The serialized `RoleConditionCoverage` shape is:
 

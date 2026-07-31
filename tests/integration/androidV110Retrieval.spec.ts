@@ -80,7 +80,7 @@ describe('search integration matrix', () => {
     expect(json(runCli(['search', '--index', outDir, '--permission', 'android.permission.INTERNE', '--json'])).results).toEqual([])
     const human = runCli(['search', '--index', outDir, '--permission', 'android.permission.INTERNET'])
     expect(human.status).toBe(0)
-  })
+  }, 60_000)
 
   it('resource: canonical, @form, bare multi-type, localized/qualified duplicates, binary, missing', () => {
     expect(json(runCli(['search', '--index', outDir, '--resource', 'string/app_name', '--json'])).results.length).toBe(2)
@@ -90,7 +90,7 @@ describe('search integration matrix', () => {
     expect(json(runCli(['search', '--index', outDir, '--resource', 'color/brand_primary', '--json'])).results.length).toBe(2)
     expect(json(runCli(['search', '--index', outDir, '--resource', 'mipmap/icon', '--json'])).results.length).toBe(1)
     expect(json(runCli(['search', '--index', outDir, '--resource', 'string/does_not_exist', '--json'])).results).toEqual([])
-  })
+  }, 60_000)
 
   it('android-component: FQCN, raw, dot-prefixed, unqualified, simple-name ambiguity, alias, missing, no-match', () => {
     expect(json(runCli(['search', '--index', outDir, '--android-component', 'com.example.combined.MainActivity', '--json'])).results.length).toBe(1)

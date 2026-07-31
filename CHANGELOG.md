@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.4 (Unreleased)
+## 1.10.4
 
 This corrective patch fixes false-negative implementation-role adequacy without changing bounded allocation, ranking, command syntax, or schema major.
 
@@ -10,7 +10,7 @@ This corrective patch fixes false-negative implementation-role adequacy without 
 - Corrected implementation-role adequacy so optional-only truncation can coexist with `context sufficient with listed assumptions`; missing candidates, stale evidence, critical mapping failures, and actual last-witness loss remain fail-closed.
 - Added identical `roleConditionCoverage` and truncation-loss summaries to context capsules and retrieval audits, with deterministic raw-evidence parity.
 - Preserved schema `"1.0.0"` compatibility: legacy pairs may omit both additive fields, while one-sided absence or disagreement is rejected and current missing or empty implementation coverage fails closed.
-- Added a portable, SHA-256-verified frozen regression for the v1.11.0 Batch 1 false negative and its genuine-loss negative controls.
+- Added a portable, SHA-256-verified frozen regression for the captured false-negative allocation and its genuine-loss negative controls.
 
 ## 1.10.3 - 2026-07-28
 

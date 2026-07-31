@@ -216,7 +216,7 @@ For the v1.10.3 corrective patch, keep these regression suites in the focused co
 - `tests/context/contextDirectedEvidence.spec.ts` — canonical file graph identity, dependency/caller direction, deduplication, and symbol/file parity.
 - `tests/context/contextV1103IntegrationMatrix.spec.ts` — end-to-end producer coverage for the repository-owned historical context cases represented by permanent fixtures.
 
-For the unreleased v1.10.4 condition-aware correction, the directly owned regression suites are:
+For the v1.10.4 condition-aware correction, the directly owned regression suites are:
 
 - `tests/context/contextRoleConditionCoverage.spec.ts` — stable condition definitions, retained witness identities, coverage, determinism, and shared capsule/audit serialization.
 - `tests/context/contextConditionAwareTruncation.spec.ts` — required-versus-optional omission classification, count invariants, actual last-witness loss, no-candidate distinction, compatibility overflow, and conservative fallback.

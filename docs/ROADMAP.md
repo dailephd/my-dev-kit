@@ -1087,7 +1087,7 @@ Behavior-derived validation covers neutral and false-owner cases, deterministic 
 
 ## Version 1.10.4
 
-**Status: implemented on the correction branch; unreleased.**
+**Status: published.**
 
 Version 1.10.4 corrects false-negative implementation-role adequacy by adding deterministic required-condition witness coverage and separating optional surplus omission from allocation-caused loss of required evidence. It preserves the existing bounded allocation, group reservations, deterministic spillover, ranking, command syntax, and schema major `1`.
 
