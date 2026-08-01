@@ -6,10 +6,10 @@ const repoRoot = path.resolve(__dirname, '..', '..')
 const workflow = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8')
 
 describe('cross-platform CI workflow contract', () => {
-  it('runs Linux, macOS, and Windows on the supported Node 24 matrix', () => {
+  it('runs Linux, macOS, and Windows on the supported Node 22 and 24 matrix', () => {
     expect(workflow).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
-    expect(workflow).toContain('node-version: [24.x]')
-    expect(workflow).not.toMatch(/\b(?:20|22)\.x\b/)
+    expect(workflow).toContain('node-version: [22.x, 24.x]')
+    expect(workflow).not.toMatch(/\b20\.x\b/)
     expect(workflow).toContain('fail-fast: false')
   })
 
