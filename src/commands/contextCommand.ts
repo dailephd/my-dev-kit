@@ -766,6 +766,7 @@ export function registerContextCommand(program: Command): void {
         evidenceGroups: evidenceResult.groups,
         groupTruncation: evidenceResult.groupTruncation,
         responsibilityMappings,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
       })
       steps.push({
         id: 'step-apply-budget',
@@ -816,6 +817,7 @@ export function registerContextCommand(program: Command): void {
         responsibilityMappings,
         freshness,
         truncation,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
       })
       steps.push({
         id: 'step-evaluate-adequacy',
@@ -865,6 +867,7 @@ export function registerContextCommand(program: Command): void {
         testInfrastructure: evidenceResult.testInfrastructure,
         unresolvedItems: evidenceResult.unresolvedItems,
         groupTruncation: evidenceResult.groupTruncation,
+        roleConditionCoverage: evidenceResult.roleConditionCoverage,
         responsibilityMappings,
         roleAdequacy,
         freshness,
@@ -928,6 +931,7 @@ export function registerContextCommand(program: Command): void {
           // capsule's real verdict; see final report section 44.22.)
           contextAdequacy: capsule.contextAdequacy,
           responsibilityMappings: capsule.responsibilityMappings,
+          roleConditionCoverage: capsule.roleConditionCoverage,
           roleAdequacy: capsule.roleAdequacy,
           freshness: capsule.freshness,
           budget: capsule.budget,

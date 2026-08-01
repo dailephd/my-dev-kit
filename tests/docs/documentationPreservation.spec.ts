@@ -467,10 +467,10 @@ describe('documentation preservation checker', () => {
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain('## Latest release: v1.10.3')
+      expect(readme).toContain('## Latest release: v1.10.4')
       expect(readme).toContain('## Stage-specific bounded context retrieval')
       expect(readme).toContain('Version 1.10.1 introduced this shipped capability')
-      expect(readme).toContain('Runtime and CLI behavior are unchanged from v1.10.2')
+      expect(readme).toContain('The command syntax and artifact schema major remain unchanged.')
       expect(commands).toContain('v1.10.1 Batch 1: request-file and context-role contracts')
       expect(workflows).toContain('Stage-role context refresh')
       expect(workflows).toContain('does not automatically run my-dev-kit')

@@ -240,6 +240,9 @@ export interface ContextCapsule {
   unresolvedItems: UnresolvedEvidenceItem[]
   /** v1.10.1 Batch 3: per-group cap/truncation rollup, mirroring `evidenceGroups[].limit/usedCount/truncated/droppedCount`. */
   groupTruncation: GroupTruncationEntry[]
+  /** v1.10.4 Phase 1: condition-level retained-witness coverage. Additive and
+   * optional so schema-major-1 artifacts produced before v1.10.4 remain readable. */
+  roleConditionCoverage?: RoleConditionCoverage[]
   /** v1.10.1 Batch 4: deterministic responsibility-to-evidence mapping. Empty/not-requested for legacy and non-responsibility requests. */
   responsibilityMappings: ResponsibilityMappingSummary
   /** v1.10.1 Batch 4: role-specific adequacy verdict, additive to (never replacing) `contextAdequacy`. */
@@ -345,6 +348,9 @@ export interface RetrievalAuditRecord {
   roleContext: RoleContextSummary
   /** v1.10.1 Batch 4: same responsibility-mapping summary written to the capsule. */
   responsibilityMappings: ResponsibilityMappingSummary
+  /** v1.10.4 Phase 1: same condition-level coverage written to the capsule.
+   * Absent in legacy schema-major-1 audits and never inferred by readers. */
+  roleConditionCoverage?: RoleConditionCoverage[]
   /** v1.10.1 Batch 4: same role-specific adequacy verdict written to the capsule. */
   roleAdequacy: RoleAdequacyStatement
   /** v1.10.1 Batch 4: same freshness classification written to the capsule. */
@@ -914,6 +920,50 @@ export interface EvidenceGroup {
   provenance: string
 }
 
+/** Stable identifiers for evidence-backed role conditions introduced in v1.10.4.
+ * New conditions must be added through the canonical definition owner rather than
+ * re-declared by allocation, adequacy, or serialization modules. */
+export type RoleConditionId =
+  | 'implementation.selected-owner'
+  | 'implementation.required-contract'
+
+/** Current witness-policy vocabulary is intentionally narrow. The required count
+ * remains explicit so a bounded minimum can be represented when a real condition
+ * needs one without changing the result shape. */
+export type RoleConditionWitnessPolicy = 'at-least-one'
+
+export interface RoleConditionDefinition {
+  conditionId: RoleConditionId
+  role: ContextRole
+  required: boolean
+  witnessPolicy: RoleConditionWitnessPolicy
+  requiredWitnessCount: number
+  evidenceGroupIds: string[]
+  conditionLabel: string
+  description: string
+  evaluationOrder: number
+}
+
+export type RoleConditionCoverageLossReason = 'bounded-allocation-omitted-required-witnesses'
+
+/** Additive diagnostic contract. This deliberately does not change the legacy
+ * truncation or role-adequacy verdict in v1.10.4 Phase 1, Batch 1. */
+export interface RoleConditionCoverage {
+  conditionId: RoleConditionId
+  role: ContextRole
+  required: boolean
+  evidenceGroupIds: string[]
+  witnessPolicy: RoleConditionWitnessPolicy
+  requiredWitnessCount: number
+  availableWitnessCount: number
+  retainedWitnessCount: number
+  retainedWitnessIds: string[]
+  conditionSatisfied: boolean
+  lostRequiredCondition: boolean
+  lossReason: RoleConditionCoverageLossReason | null
+  evaluationOrder: number
+}
+
 export interface TestConfigurationEvidenceEntry {
   path: string
   framework: string
@@ -980,11 +1030,13 @@ export interface GroupTruncationEntry {
   unusedReservationContributed?: number
   /** Additional items this group received from the shared spillover pool. */
   borrowedCapacity?: number
-  /** Qualified required evidence for this group that remained unselected after spillover. */
+  /** Minimum condition-required witness deficit attributable to bounded omission.
+   * Additive schema-major-1 diagnostic; legacy paths may conservatively classify
+   * every omission from a required group as required. */
   requiredOmittedCount?: number
-  /** Qualified optional evidence for this group that remained unselected (0 unless an optional tier shares this group's pool). */
+  /** All remaining bounded omissions after condition-required loss is attributed. */
   optionalOmittedCount?: number
-  /** True when this group's required evidence was omitted after full allocation (reduces role adequacy). */
+  /** True only when requiredOmittedCount is greater than zero. */
   adequacyAffected?: boolean
   /** The real finite bound governing this allocation pass (sum of all participating groups' reservations). */
   governingHardBound?: number
@@ -1160,6 +1212,9 @@ export interface TruncationRecord {
 
 export interface TruncationSummary {
   truncated: boolean
+  /** Additive schema-major-1 rollup. Current output always supplies it; legacy
+   * artifacts may omit it. */
+  requiredEvidenceLost?: boolean
   records: TruncationRecord[]
   warnings: string[]
 }

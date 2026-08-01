@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.10.3 is the latest published release. It includes the v1.10.2 documentation corrections plus v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity). The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior. The current repository supports:
+Version 1.10.4 is the latest published release. It includes the v1.10.2 documentation corrections, the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity), and condition-aware adequacy that separates optional surplus omission from allocation-caused required-witness loss. The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior. The current repository supports:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations

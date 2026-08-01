@@ -14,6 +14,7 @@ import type {
   ResponsibilityMappingSummary,
   RetrievalAuditRecord,
   RoleAdequacyStatement,
+  RoleConditionCoverage,
   RoleContextSummary,
   TruncationSummary,
 } from './types.js'
@@ -31,6 +32,9 @@ export interface BuildRetrievalAuditRecordOptions {
    * do not pass it keep their prior behavior. */
   contextAdequacy?: ContextAdequacyStatement
   responsibilityMappings?: ResponsibilityMappingSummary
+  /** v1.10.4 Phase 1: the same computed condition coverage written to the
+   * capsule. Optional for legacy schema-major-1 builder callers. */
+  roleConditionCoverage?: RoleConditionCoverage[]
   roleAdequacy?: RoleAdequacyStatement
   freshness?: FreshnessSummary
   budget?: BudgetSummary
@@ -101,6 +105,7 @@ export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOpti
     roleContext,
     contextAdequacy = LEGACY_CONTEXT_ADEQUACY,
     responsibilityMappings = EMPTY_RESPONSIBILITY_MAPPINGS,
+    roleConditionCoverage,
     roleAdequacy = emptyRoleAdequacy(contextAdequacy.status),
     freshness = EMPTY_FRESHNESS,
     budget = EMPTY_BUDGET,
@@ -126,6 +131,7 @@ export function buildRetrievalAuditRecord(options: BuildRetrievalAuditRecordOpti
     roleContext,
     contextAdequacy,
     responsibilityMappings,
+    ...(roleConditionCoverage === undefined ? {} : { roleConditionCoverage }),
     roleAdequacy,
     freshness,
     budget,

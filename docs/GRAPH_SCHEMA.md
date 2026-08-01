@@ -847,12 +847,34 @@ Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reas
 The current repository keeps context capsule and retrieval-audit schema version `"1.0.0"` while correcting implementation-role readiness:
 
 - Implementation-role `groupTruncation[]` entries may include optional allocation fields: `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`.
-- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other required groups; `requiredOmittedCount` is qualified required evidence still omitted after spillover. `governingHardBound` is the finite sum of participating reservations, not the request's reporting-only `limits.evidenceGroupEntries` value.
+- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other groups. In the published v1.10.3 contract, `requiredOmittedCount` conservatively counts qualified evidence still omitted after spillover. `governingHardBound` is the finite sum of participating reservations, not the request's reporting-only `limits.evidenceGroupEntries` value.
 - `responsibilityMappings.duplicateResponsibilityIds` remains the public duplicate diagnostic. Normalization preserves duplicate references until mapping, actual mappings stay unique in first-occurrence order, and duplicate and `unknownResponsibilityIds` diagnostics can both describe the same input.
 - `EvidenceItemRef.id` remains the public evidence identity. For directed file-edge classification, a plain file item is matched to the code graph through canonical `file:<path>` node identity; symbol items use their existing symbol node ID. No new public ID format is introduced.
 - Retrieval-audit `index.manifestSchemaVersion` and `index.projectRoot` are additive optional fields for schema-major-1 compatibility. Current generation always populates them; old supported-major audits can omit them and remain parseable, with identity unavailable rather than inferred.
 
 These additions are optional for schema-major-1 consumers. Existing fields retain their meanings, legacy no-role output stays compatible, and the retrieval audit carries the same responsibility, allocation/truncation, adequacy, and direction-derived summaries as the capsule.
+
+### Additive role-condition coverage fields (v1.10.4)
+
+The context capsule and retrieval audit remain schema version `"1.0.0"`. Current producer output adds the same ordered `roleConditionCoverage` array to both artifacts. The serialized `RoleConditionCoverage` shape is:
+
+- `conditionId`: stable `RoleConditionId`; currently `implementation.selected-owner` or `implementation.required-contract`.
+- `role`, `required`, and `evidenceGroupIds`: the role, requiredness, and associated group identity from the canonical internal `RoleConditionDefinition`.
+- `witnessPolicy`: `RoleConditionWitnessPolicy`, currently only `at-least-one`.
+- `requiredWitnessCount`, `availableWitnessCount`, and `retainedWitnessCount`: the required minimum and adequate witness counts before and after allocation.
+- `retainedWitnessIds`: sorted, deduplicated stable evidence identities (`EvidenceItemRef.id`), never ranking positions or machine-specific absolute paths.
+- `conditionSatisfied`: whether retained evidence meets the required minimum.
+- `lostRequiredCondition`: true only when the condition is required, enough adequate witnesses existed before allocation, and bounded allocation retained fewer than the required minimum.
+- `lossReason`: `bounded-allocation-omitted-required-witnesses` only for that allocation-caused loss, otherwise `null`.
+- `evaluationOrder`: the stable canonical condition order.
+
+`RoleConditionDefinition` itself is internal and is not serialized as a separate artifact field. Its canonical owner is `src/context/roleConditionCoverage.ts`; the public artifacts serialize only the evaluated coverage result.
+
+For current condition-aware output, `groupTruncation[].requiredOmittedCount` is the minimum required witness deficit attributable to bounded omission, capped by the group's dropped count. `optionalOmittedCount` is every remaining dropped candidate, so the two counts are nonnegative and sum to `droppedCount`. `adequacyAffected` is true only when the required count is nonzero. A required group may therefore be truncated while all of its dropped candidates are optional surplus.
+
+`TruncationSummary.requiredEvidenceLost` is an additive rollup emitted by current output. It equals whether any `truncation.records[]` entry reports `requiredEvidenceLost: true`; `TruncationSummary.truncated` remains independently true for general bounded overflow.
+
+Legacy schema-major-1 capsule/audit pairs may omit both `roleConditionCoverage` and `TruncationSummary.requiredEvidenceLost`. Both-absent pairs remain readable and use conservative legacy evaluation. One-sided absence or any value/order/witness disagreement is a raw-evidence parity error; absence is never normalized to an empty current result. Current implementation-role generation supplies nonempty owner/contract coverage, and a missing or empty current coverage array fails closed.
 
 ## Stable node IDs and compatibility
 
