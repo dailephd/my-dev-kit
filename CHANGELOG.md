@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.4
+## 1.10.4 - 2026-08-01
 
 This corrective patch fixes false-negative implementation-role adequacy without changing bounded allocation, ranking, command syntax, or schema major.
 
