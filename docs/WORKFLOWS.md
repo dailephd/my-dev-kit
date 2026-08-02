@@ -382,7 +382,7 @@ Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.
 
 ## Workflow 12: Compose semantic retrieval (v1.11.0)
 
-This workflow documents the implemented but unreleased v1.11.0 feature branch. Build the repository and invoke `node dist/cli.js`; the latest published `@dailephd/my-dev-kit@1.10.4` package does not yet include these additions.
+This workflow documents the Compose and Android-test retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0`. From a source checkout, build the repository and invoke `node dist/cli.js`.
 
 For an Android project with Jetpack Compose UI, `index` also writes `android-compose-semantic.json`: composable declarations (Batch 1), state/effect/ViewModel/test-tag/visible-text/string-resource facts (Batch 2), and click-handler/navigation-call facts cross-referenced to `android-navigation.json` (Batch 3) — all conservative static evidence, attached to the innermost enclosing composable, never a runtime rendering or reachability claim.
 

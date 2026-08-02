@@ -256,7 +256,7 @@ Files:
 
 Runs after Kotlin/Java structural indexing (Batches 2/3) and Android project detection (Batch 1). Detects 14 conservative static roles (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module) for already-indexed Kotlin/Java top-level symbols, using an evidence-priority order (annotation > superclass/interface > import > package/path hint > naming suffix). Writes `android-components.json` only when at least one role is detected, and embeds compact `androidComponentRoles`/`androidComponentRefs` on the corresponding `SymbolDefinition`/`GraphSymbolRecord`/`CodeGraphNode` entries — the same compact-projection-plus-artifact-ref pattern `classificationRoles`/`classificationRefs` established. Does not read Gradle, does not execute a compiler, and does not guarantee manifest registration, dependency-injection correctness, or navigation correctness.
 
-### Compose and Android-test semantic layers (implemented/unreleased v1.11.0)
+### Compose and Android-test semantic layers (v1.11.0)
 
 Files:
 
@@ -341,8 +341,8 @@ Current analyzers:
 - `classification` — conservative static schema/layer classification of files and symbols, produces `classification.json` (v1.5.0), runs after the analyzers above so their output is available as evidence
 - `android-project` — static Android/Gradle project, module, and source-set detection, produces `android-project.json` (v1.9.0 Batch 1), runs against `--root` on every `index`
 - `android-components` — conservative static Android component-role detection over already-indexed Kotlin/Java symbols, produces `android-components.json` (v1.9.0 Batch 4), runs after Kotlin/Java structural indexing
-- `android-compose-semantic` — supported Compose declarations and conservative static state/effect/ViewModel/UI/click/navigation facts, produces `android-compose-semantic.json` schema `1.2.0` when detected (implemented/unreleased v1.11.0)
-- `android-test-semantic` — Android unit/instrumented test structure and conservative JUnit/Compose/Espresso/Robolectric/assertion/route/test-double facts, produces `android-test-semantic.json` schema `1.0.0` when detected (implemented/unreleased v1.11.0)
+- `android-compose-semantic` — supported Compose declarations and conservative static state/effect/ViewModel/UI/click/navigation facts, produces `android-compose-semantic.json` schema `1.2.0` when detected (v1.11.0)
+- `android-test-semantic` — Android unit/instrumented test structure and conservative JUnit/Compose/Espresso/Robolectric/assertion/route/test-double facts, produces `android-test-semantic.json` schema `1.0.0` when detected (v1.11.0)
 - `android-relationships` — projects compact Android, Compose, and Android-test nodes and exact candidate edges into `code-graph.json`; it owns no separate relationship artifact
 
 Analyzer output feeds two paths:
@@ -659,7 +659,7 @@ React/TSX facts extracted by the frontend analyzer are conservative static evide
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
 
-Android support introduced through v1.10.0 includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. The implemented/unreleased v1.11.0 branch adds bounded Compose and Android-test semantic evidence while preserving the same local static posture: no Gradle or test execution; Android build, application, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; or runtime UI/navigation/test proof.
+Android support introduced through v1.10.0 includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. v1.11.0 adds bounded Compose and Android-test semantic evidence while preserving the same local static posture: no Gradle or test execution; Android build, application, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; or runtime UI/navigation/test proof.
 
 ## Runtime and artifact-size considerations
 

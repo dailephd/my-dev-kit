@@ -1095,7 +1095,7 @@ The patch is limited to the my-dev-kit producer contract, condition-aware omissi
 
 ## Version 1.11.0
 
-**Status: Implementation and documentation reconciliation complete; unreleased; awaiting separate pre-release readiness.**
+**Status: published.**
 
 Version 1.11.0 adds Jetpack Compose semantic retrieval and Android UI-test indexing.
 

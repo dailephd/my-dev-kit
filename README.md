@@ -132,13 +132,13 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.10.4
+## Latest release: v1.11.0
 
-`@dailephd/my-dev-kit@1.10.4` is the latest published release. It includes the v1.10.3 implementation-role context readiness refinements and adds condition-level owner and contract witness coverage. Bounded surplus omissions remain visible without being mislabeled as required evidence loss, so optional-only truncation can coexist with sufficient context while missing or allocation-lost required witnesses still fail closed. The command syntax and artifact schema major remain unchanged.
+`@dailephd/my-dev-kit@1.11.0` is the latest published release. It adds Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views. The command syntax and artifact schema major remain unchanged.
 
-## Unreleased v1.11.0 implementation
+## v1.11.0 Compose and Android-test retrieval
 
-v1.11.0 implementation is complete on the feature branch and remains unreleased. Package metadata and the locally built CLI continue to report `1.10.4` until the separate release-preparation workflow changes them. These development-branch capabilities are therefore not claims about the published `@dailephd/my-dev-kit@1.10.4` package.
+v1.11.0 is the current published release. Package metadata and the CLI report `1.11.0`.
 
 The implementation adds two conditional Android artifacts:
 
@@ -159,7 +159,7 @@ node dist/cli.js view --index .my-dev-kit --graph compose-navigation --format do
 node dist/cli.js view --index .my-dev-kit --graph android-test --format dot
 ```
 
-Matching is exact and ambiguity is preserved. All evidence is local, deterministic, read-only static analysis: it does not execute Gradle, Compose, tests, applications, or emulators; prove runtime UI visibility, click behavior, navigation, test success, or coverage; resolve rendered resource values; or provide the v1.12 Android architecture/data-flow capability. See [docs/COMMANDS.md](docs/COMMANDS.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the complete development-branch contract.
+Matching is exact and ambiguity is preserved. All evidence is local, deterministic, read-only static analysis: it does not execute Gradle, Compose, tests, applications, or emulators; prove runtime UI visibility, click behavior, navigation, test success, or coverage; resolve rendered resource values; or provide the v1.12 Android architecture/data-flow capability. See [docs/COMMANDS.md](docs/COMMANDS.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the complete release contract.
 
 ### Android capability introduced in v1.10.0
 
@@ -183,11 +183,11 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.exam
 npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --format dot
 ```
 
-This published v1.10.4 capability is static evidence, not runtime proof. The published package does not include the unreleased v1.11.0 Compose/test additions described above. Neither surface executes Gradle or starts a Gradle daemon; resolves or downloads dependencies; builds Android projects; runs emulators/devices; inspects APK/AAB files; performs signing, Play Store, App Links, or Android security validation; produces a final merged runtime manifest; selects runtime resource overlays; or proves runtime route, intent, or deep-link dispatch. Android architecture classification and data-flow retrieval remain v1.12.0 scope.
+The shipped Android capability is static evidence, not runtime proof. It does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run tests or emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; or prove runtime UI, route, intent, or deep-link behavior. Android architecture classification and data-flow retrieval remain v1.12.0 scope.
 
 ## Stage-specific bounded context retrieval
 
-Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.4 package includes the v1.10.2 documentation corrections, the v1.10.3 implementation-role context readiness refinements, and condition-aware adequacy without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The current package retains the v1.10.2 documentation corrections, the v1.10.3 implementation-role context readiness refinements, and v1.10.4 condition-aware adequacy without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 
@@ -226,8 +226,8 @@ The `index` command writes:
 | `android-manifest.json` | Static source-set manifest declarations, components, permissions, features, intent filters, deep-link and launcher candidates, metadata, and resource references; no manifest merging |
 | `android-resources.json` | Static resource directories, qualifiers, values/layout/file resources, IDs, references, and FileProvider/network-security records; no overlay selection or binary decoding |
 | `android-navigation.json` | Static XML navigation graphs and narrow Compose route evidence, including destinations, actions, arguments, includes, deep links, candidates, and direct screen candidates; no runtime reachability proof |
-| `android-compose-semantic.json` | Unreleased v1.11.0 conservative Compose declarations and static state/effect/ViewModel/UI/click/navigation evidence; conditional on supported Compose evidence in a detected Android project |
-| `android-test-semantic.json` | Unreleased v1.11.0 Android unit/instrumented test structure and static JUnit/Compose/Espresso/Robolectric/assertion/route/test-double evidence; conditional on detected Android test source sets |
+| `android-compose-semantic.json` | v1.11.0 conservative Compose declarations and static state/effect/ViewModel/UI/click/navigation evidence; conditional on supported Compose evidence in a detected Android project |
+| `android-test-semantic.json` | v1.11.0 Android unit/instrumented test structure and static JUnit/Compose/Espresso/Robolectric/assertion/route/test-double evidence; conditional on detected Android test source sets |
 
 `manifest.json` is the authoritative registry for the current artifact set. Stale artifacts from previous runs are removed when `index` refreshes the directory.
 
@@ -235,7 +235,7 @@ Compact semantic roles (`semanticRoles`/`artifactRefs`) and compact classificati
 
 `view` renders `code-graph.json` by default. Use `--graph data-model` or `--graph model-view-lineage` for data-model graphs. Use `--graph react-component`, `--graph react-flow`, `--graph react-prop-event-flow`, or `--graph frontend-test` for frontend semantic graphs. Graph artifacts remain separate; `view` does not merge semantic or lineage nodes into the code graph.
 
-Android relationships enrich `code-graph.json` directly. Use `--graph android-module`, `--graph android-manifest`, or `--graph android-navigation` for the published v1.10.4 Android views. The unreleased development branch also supports `--graph compose-ui`, `--graph compose-navigation`, and `--graph android-test`, all as bounded projections of that same code graph.
+Android relationships enrich `code-graph.json` directly. Use `--graph android-module`, `--graph android-manifest`, or `--graph android-navigation` for the original Android views. v1.11.0 adds `--graph compose-ui`, `--graph compose-navigation`, and `--graph android-test`, all as bounded projections of that same code graph.
 
 ## Semantic integration
 
@@ -568,7 +568,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.10.4 is the latest published release. v1.11.0 implementation is complete on the feature branch and remains unreleased. Later versions retain their separate planned scopes: v1.12.0 Android architecture/data-flow evidence, v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.11.0 is the latest published release. Later versions retain their separate planned scopes: v1.12.0 Android architecture/data-flow evidence, v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

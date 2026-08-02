@@ -23,9 +23,9 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.10.4 is the latest published release. It includes the v1.10.2 documentation corrections, the v1.10.3 implementation-role context readiness refinements (structurally credible owners, required-first evidence allocation, duplicate responsibility diagnostics, directed file evidence identity, and capsule/audit parity), and condition-aware adequacy that separates optional surplus omission from allocation-caused required-witness loss. The stage-specific bounded context capability introduced in v1.10.1 remains current shipped behavior.
+Version 1.11.0 is the latest published release. It retains the stage-specific bounded context work through v1.10.4 and adds Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views.
 
-v1.11.0 implementation is complete on the feature branch and remains unreleased. Package metadata and local `--version` output remain `1.10.4` pending separate release preparation. The current repository therefore contains the published v1.10.4 baseline plus these unreleased implementation capabilities:
+The current repository and package metadata contain these shipped implementation capabilities:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
@@ -115,8 +115,8 @@ The `index` command writes:
 - `android-resources.json` — static resource definitions, references, qualifiers, and security-related resource records without runtime overlay selection
 - `android-navigation.json` — static XML navigation and bounded Compose route evidence without runtime reachability proof
 
-- `android-compose-semantic.json` - unreleased v1.11.0 conservative static Compose declaration, structure, state/effect/ViewModel/UI/click/navigation evidence when supported Compose source is detected
-- `android-test-semantic.json` - unreleased v1.11.0 Android `test`/`androidTest` structure and static JUnit/Compose/Espresso/Robolectric/assertion/route/test-double evidence when detected
+- `android-compose-semantic.json` - v1.11.0 conservative static Compose declaration, structure, state/effect/ViewModel/UI/click/navigation evidence when supported Compose source is detected
+- `android-test-semantic.json` - v1.11.0 Android `test`/`androidTest` structure and static JUnit/Compose/Espresso/Robolectric/assertion/route/test-double evidence when detected
 
 The `context` command writes `context-capsule.json` and, when requested, `retrieval-audit-record.json`. These are bounded retrieval outputs, not index artifacts registered in `manifest.json`.
 
@@ -196,7 +196,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current repository scope (published through v1.10.4, plus implemented/unreleased v1.11.0):
+Current repository scope (published through v1.11.0):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -220,8 +220,8 @@ Current repository scope (published through v1.10.4, plus implemented/unreleased
 - conservative static Android component-role detection over already-indexed Kotlin/Java top-level symbols (14 roles: Activity/Fragment/ViewModel/Service/BroadcastReceiver/ContentProvider/Worker/Repository/UseCase/Room-Entity/Room-DAO/Room-Database/Retrofit-service/Hilt-module), producing `android-components.json` plus compact role metadata on the matching `symbol-index.json`/`code-graph.json` symbols — evidence-tiered confidence (annotation/superclass > import > path > name-suffix), never claims manifest declaration or runtime DI/navigation correctness (v1.9.0 Batch 4)
 - hardened and tested retrieval/command compatibility for `index`/`search`/`lookup`/`source`/`slice`/`context`/`graph-diff`/`--incremental` when Android project facts, Kotlin symbols, Java symbols, and Android component roles coexist in one index — no new commands, flags, or artifacts (v1.9.0 Batch 5)
 - static Android Gradle/manifest/resource/navigation artifacts, unified Android graph relationships, exact Android retrieval selectors, Android-aware context, and Android graph views (v1.10.0 Batches 1-7)
-- conservative Compose semantic artifact production, code-graph projection, exact selectors/source bundles/slices, generic retrieval/context/graph-diff participation, and three bounded graph views (unreleased v1.11.0)
-- conservative Android unit/instrumented test semantic artifact production and generic graph/retrieval participation without inserting test files into the core symbol index (unreleased v1.11.0)
+- conservative Compose semantic artifact production, code-graph projection, exact selectors/source bundles/slices, generic retrieval/context/graph-diff participation, and three bounded graph views (v1.11.0)
+- conservative Android unit/instrumented test semantic artifact production and generic graph/retrieval participation without inserting test files into the core symbol index (v1.11.0)
 - warnings for unsupported, ambiguous, or low-confidence patterns
 
 Current scope does not claim:
@@ -271,7 +271,7 @@ my-dev-kit does not own workflow-stage progression, prompt assembly, judge inter
 
 ## Current limitations
 
-The v1.11.0 development-branch evidence is conservative static analysis. Dynamic or unsupported Compose/test expressions remain unresolved or omitted with warnings; exact-match ambiguity is preserved; resource values and runtime UI visibility are not inferred. ViewModel-to-repository, repository-to-DAO/Retrofit, Room/network flow, and Compose-specific edit guidance remain v1.12.0 responsibilities. Android benchmark expansion and public example coverage remain v1.13.0 responsibilities.
+The v1.11.0 evidence is conservative static analysis. Dynamic or unsupported Compose/test expressions remain unresolved or omitted with warnings; exact-match ambiguity is preserved; resource values and runtime UI visibility are not inferred. ViewModel-to-repository, repository-to-DAO/Retrofit, Room/network flow, and Compose-specific edit guidance remain v1.12.0 responsibilities. Android benchmark expansion and public example coverage remain v1.13.0 responsibilities.
 
 - Symbol records include start lines but not complete end-line bounds.
 - Symbol-mode source retrieval returns a bounded preview from the symbol start line and may include a capped-preview warning.

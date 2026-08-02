@@ -136,7 +136,7 @@ Android component-role detection (`android-components.json`) reads only symbol d
 
 None of the v1.9.0 Android/Kotlin/Java work executes Gradle, `javac`, the Kotlin compiler, an Android build, an emulator, or any Android runtime; it does not inspect APK/AAB files and does not perform Android security validation.
 
-The implemented/unreleased v1.11.0 Compose and Android-test analyzers keep the same posture. They read Kotlin/Java source as text, never evaluate Gradle scripts, never load application classes, and never start JUnit, Compose, Espresso, Robolectric, an Activity, an application, or an emulator/device. `android-compose-semantic.json` and `android-test-semantic.json` contain static source evidence only; their projected graph nodes do not prove UI visibility, click/navigation behavior, test execution, assertion success, dependency injection, or coverage. The three new graph views read `code-graph.json` only and use the existing escaped DOT/isolated Graphviz path.
+The v1.11.0 Compose and Android-test analyzers keep the same posture. They read Kotlin/Java source as text, never evaluate Gradle scripts, never load application classes, and never start JUnit, Compose, Espresso, Robolectric, an Activity, an application, or an emulator/device. `android-compose-semantic.json` and `android-test-semantic.json` contain static source evidence only; their projected graph nodes do not prove UI visibility, click/navigation behavior, test execution, assertion success, dependency injection, or coverage. The three new graph views read `code-graph.json` only and use the existing escaped DOT/isolated Graphviz path.
 
 ## User responsibilities for private repositories
 

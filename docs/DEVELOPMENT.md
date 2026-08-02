@@ -228,7 +228,7 @@ Do not depend on transient external fixture paths. Permanent regressions belong 
 
 ### v1.11.0 Compose and Android-test validation
 
-The implemented/unreleased v1.11.0 owners live under `src/android/`, with retrieval integration in `src/commands/`, `src/lookup/`, `src/source/`, and `src/graph/`. When changing these analyzers or their documentation, keep these focused suites together:
+The v1.11.0 owners live under `src/android/`, with retrieval integration in `src/commands/`, `src/lookup/`, `src/source/`, and `src/graph/`. When changing these analyzers or their documentation, keep these focused suites together:
 
 - `tests/android/composeSemanticFacts.spec.ts` and `composeClickNavigationFacts.spec.ts` - declaration ownership, state/effects/ViewModels/UI markers, click/navigation facts, unresolved evidence, and deterministic IDs/order
 - `tests/android/composeGraphProjection.spec.ts` and `composeRetrieval.spec.ts` - compact node/edge projection, exact/ambiguous candidate preservation, selector conflicts, and non-Android compatibility

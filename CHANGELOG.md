@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-v1.11.0 implementation is complete on the feature branch and remains unreleased. Package metadata remains `1.10.4`; release preparation, final dating, and publication are separate later work.
+## 1.11.0 - 2026-08-02
+
+- Corrected Graphviz PNG subprocess handling for Node 24 by preserving binary stdout, kept DOT/SVG/fallback behavior unchanged, and made `npm pack --dry-run --json` directly parseable while retaining the required prepack build.
+- Added Node 24 validation on Windows, macOS, and Linux for the v1.11 Compose and Android-test retrieval surface, plus exact isolated-package invocation guidance that cannot be shadowed by a stale global installation.
 
 - Extended `android-compose-semantic.json` (schema `"1.1.0"`) with additive, conservative, source-grounded fact evidence attached to Batch 1's existing composable declarations: Compose state acquisition (`remember`, `rememberSaveable`, `collectAsState`, `collectAsStateWithLifecycle`), lifecycle effects (`LaunchedEffect`, `DisposableEffect`, including direct `onDispose` presence), ViewModel references (`viewModel()`, `hiltViewModel()`, and statically-typed parameters), `Modifier.testTag(...)` values, direct `Text(...)` visible-text literals, and `stringResource(R.string.<name>)` usage. Every fact is statically attributed to its innermost enclosing recognized composable; unsupported or dynamic forms are recorded unresolved (or omitted with a warning), never guessed.
 - Further extended `android-compose-semantic.json` (schema `"1.2.0"`) with additive click-handler evidence (`Modifier.clickable { ... }`, `clickable(onClick = ...)`, and direct `onClick = ...` call arguments — lambda, function-reference, or identifier callback forms) and navigation-call evidence (`navigate(...)` call sites, reusing `android-navigation.json`'s existing route-expression resolution and exact-match candidate cross-reference — zero, one, or every ambiguous candidate, never a guessed winner). A navigation call lexically inside a click callback is linked to it bidirectionally; the relationship is lexical evidence only, not a runtime execution or click-reachability claim.
