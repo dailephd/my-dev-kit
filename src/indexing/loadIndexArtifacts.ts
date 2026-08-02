@@ -69,7 +69,15 @@ export function readRequiredJson<T>(filePath: string, label: string): T {
 }
 
 function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: GraphArtifactSelection): string {
-  if (graph === 'code' || graph === 'android-module' || graph === 'android-manifest' || graph === 'android-navigation') {
+  if (
+    graph === 'code' ||
+    graph === 'android-module' ||
+    graph === 'android-manifest' ||
+    graph === 'android-navigation' ||
+    graph === 'compose-ui' ||
+    graph === 'compose-navigation' ||
+    graph === 'android-test'
+  ) {
     return resolved.artifactPaths.codeGraph
   }
   if (graph === 'data-model') {
@@ -109,7 +117,15 @@ function resolveViewGraphArtifactPath(resolved: ResolvedIndexManifest, graph: Gr
 }
 
 function viewGraphLabel(graph: GraphArtifactSelection): string {
-  if (graph === 'code' || graph === 'android-module' || graph === 'android-manifest' || graph === 'android-navigation') {
+  if (
+    graph === 'code' ||
+    graph === 'android-module' ||
+    graph === 'android-manifest' ||
+    graph === 'android-navigation' ||
+    graph === 'compose-ui' ||
+    graph === 'compose-navigation' ||
+    graph === 'android-test'
+  ) {
     return 'code graph'
   }
   if (graph === 'data-model') return 'data-model graph'

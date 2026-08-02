@@ -418,7 +418,25 @@ npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "android-test-method:a
 
 A test-method slice naturally includes real edges (`android-test-references-composable`, `android-test-references-route`, `android-test-references-viewmodel`, `android-test-uses-double`) whenever the test statically references production evidence — zero, one, or every ambiguous candidate is preserved, never a guessed winner. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change, with no dedicated diff section.
 
-This remains static analysis: indexing never executes a test, launches an Activity, or proves an assertion passed, a mock was injected, or a Compose rule initialized at runtime. Android UI-test graph views (`view --graph android-test`) are not implemented yet.
+This remains static analysis: indexing never executes a test, launches an Activity, or proves an assertion passed, a mock was injected, or a Compose rule initialized at runtime. See Workflow 14 below for the `view --graph android-test` graph.
+
+## Workflow 14: Compose and Android-test graph views (v1.11.0 Batch 6)
+
+`view` accepts three additional `--graph` values, each a bounded filter over the already-projected `code-graph.json` (no source or semantic-artifact reparsing, no new artifact):
+
+```sh
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph compose-ui --format dot --out compose-ui.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph compose-navigation --format dot --out compose-navigation.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-test --format dot --out android-test.dot --json
+```
+
+- `compose-ui`: every composable and Compose fact (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, UI region), plus the defining source and any exact ViewModel-symbol/resource-definition target an existing edge already connects.
+- `compose-navigation`: the static chain `composable -> click-handler fact -> navigation-call fact -> route/destination candidate -> screen candidate` only — unrelated state/effect/test-tag/visible-text/string-resource facts on the same composable are excluded. Every ambiguous route or screen candidate is preserved; an unresolved navigation call is still rendered, never given a fabricated target.
+- `android-test`: the full test file/class/method/fact hierarchy (unit vs. instrumented, JUnit/Compose-rule/Espresso/Robolectric/assertion/route/test-double facts all distinguishable via node label/shape), plus the exact production composable/route/ViewModel-symbol nodes a test fact statically references.
+
+All three support the existing `--format dot|svg|png`, `--out`, `--edge-style semantic|labeled|minimal`, `--allow-dot-fallback`, and `--json` behavior unchanged. A non-Android index, an Android index without Compose or test evidence, or Compose evidence without navigation evidence all render an empty bounded graph (zero nodes, zero edges) at exit 0 — never an error, never an invented placeholder node. None of the three views render a legend, matching the exact precedent the three v1.10.0 `android-module`/`android-manifest`/`android-navigation` views already established.
+
+This remains static analysis: no view claims a composable renders, a click occurs, navigation succeeds, a destination is reachable, a test executed or passed, or a test's referenced production node is fully covered.
 
 ---
 
