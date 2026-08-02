@@ -1,5 +1,7 @@
 # Commands
 
+`@dailephd/my-dev-kit@1.10.4` is the latest published release. Sections labeled v1.11.0 describe implementation that is complete on the feature branch and remains unreleased; build the repository and use `node dist/cli.js` when reproducing those local command contracts. Package metadata and local `--version` output remain `1.10.4` until separate release preparation.
+
 my-dev-kit provides nine public CLI commands:
 
 - `index`

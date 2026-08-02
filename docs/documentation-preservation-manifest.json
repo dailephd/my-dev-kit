@@ -45,7 +45,7 @@
       "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.6.1",
       "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.10.1", "1.10.2", "1.10.3", "1.10.4"
     ],
-    "implementedUnreleasedVersions": [],
+    "implementedUnreleasedVersions": ["1.11.0"],
     "futureVersionScopeKeywords": {
       "1.11.0": ["Compose semantic retrieval", "Android UI-test indexing"],
       "1.12.0": ["Android architecture classification", "Android data-flow retrieval"],
@@ -95,6 +95,7 @@
       "Java",
       "Android detection layer",
       "Android component-role layer",
+      "Compose and Android-test semantic layers",
       "Incremental indexing and cache layer",
       "Graph comparison layer",
       "Context artifacts",
@@ -125,13 +126,17 @@
       "android-gradle.json",
       "android-manifest.json",
       "android-resources.json",
-      "android-navigation.json"
+      "android-navigation.json",
+      "android-compose-semantic.json",
+      "android-test-semantic.json"
     ]
   },
   "commands": {
     "path": "docs/COMMANDS.md",
     "requiredCommandFamilies": [
-      "index", "search", "lookup", "source", "slice", "view", "data-model", "context", "graph-diff"
+      "index", "search", "lookup", "source", "slice", "view", "data-model", "context", "graph-diff",
+      "--composable", "--android-ui", "--test-tag", "--include-compose-tree", "--include-viewmodel", "--include-navigation",
+      "compose-ui", "compose-navigation", "android-test"
     ]
   },
   "workflows": {
@@ -146,17 +151,21 @@
       "Context capsule and retrieval audit",
       "Stage-role context refresh",
       "graph-diff",
-      "Android/Kotlin/Java"
+      "Android/Kotlin/Java",
+      "Compose semantic retrieval",
+      "Android test-evidence retrieval",
+      "Compose and Android-test graph views"
     ]
   },
   "statusBoundaries": {
     "documentKeywords": {
-      "README.md": ["latest published release", "planned scopes"],
+      "README.md": ["latest published release", "v1.11.0 implementation is complete on the feature branch and remains unreleased", "planned scopes"],
       "docs/ROADMAP.md": [
         "**Status: published.**",
-        "## Version 1.11.0"
+        "## Version 1.11.0",
+        "Implementation and documentation reconciliation complete; unreleased; awaiting separate pre-release readiness"
       ],
-      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Shipped: v1.10.3", "## Shipped: v1.10.4"]
+      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Implemented and unreleased: v1.11.0", "pre-release readiness has not run", "## Shipped: v1.10.3", "## Shipped: v1.10.4"]
     },
     "requiredBoundaryKeywords": [
       "local-first",
@@ -190,7 +199,10 @@
       "## 1.6.0", "## 1.6.1", "## 1.7.0", "## 1.8.0", "## 1.9.0", "## 1.10.0",
       "## 1.10.1", "## 1.10.2", "## 1.10.3", "## 1.10.4"
     ],
-    "requiredUnreleasedVersionHeadings": []
+    "requiredUnreleasedVersionHeadings": [
+      "## Unreleased",
+      "v1.11.0 implementation is complete on the feature branch and remains unreleased"
+    ]
   },
   "security": {
     "path": "docs/SECURITY.md",
@@ -198,7 +210,9 @@
       "Classification security notes",
       "Context capsule and retrieval audit security notes",
       "Graph-diff security notes",
-      "Android, Kotlin, and Java security notes"
+      "Android, Kotlin, and Java security notes",
+      "android-compose-semantic.json",
+      "android-test-semantic.json"
     ]
   }
 }

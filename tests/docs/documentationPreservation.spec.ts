@@ -344,6 +344,39 @@ describe('documentation preservation checker', () => {
       expect(violations.some((v) => v.rule === 'command-family-present')).toBe(true)
     })
 
+    it('fails when an implemented v1.11 Compose selector is deleted', () => {
+      const mutated: DocumentContents = {
+        ...realDocuments,
+        [manifest.commands.path]: realDocuments[manifest.commands.path].replace(
+          /`--include-compose-tree`/g,
+          '`--removed-compose-tree`',
+        ),
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'command-family-present')).toBe(true)
+    })
+
+    it('fails when an implemented v1.11 artifact family is deleted from all owners', () => {
+      const mutated: DocumentContents = { ...realDocuments }
+      for (const docPath of manifest.artifacts.paths) {
+        mutated[docPath] = realDocuments[docPath].replace(/android-test-semantic\.json/g, 'removed-test-artifact.json')
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'artifact-family-present')).toBe(true)
+    })
+
+    it('fails when README loses the published-versus-unreleased v1.11 boundary', () => {
+      const mutated: DocumentContents = {
+        ...realDocuments,
+        [manifest.readme.path]: realDocuments[manifest.readme.path].replace(
+          /v1\.11\.0 implementation is complete on the feature branch and remains unreleased/g,
+          'v1.11.0 status removed for test',
+        ),
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'current-future-status-boundary')).toBe(true)
+    })
+
     it('fails when a workflow family is deleted', () => {
       const mutated: DocumentContents = {
         ...realDocuments,

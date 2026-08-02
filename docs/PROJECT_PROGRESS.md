@@ -6,15 +6,21 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.10.4` is the latest published release. It includes the v1.10.3 implementation-role context readiness refinements and adds condition-aware adequacy that separates optional surplus omission from allocation-caused loss of required owner or contract witnesses. Version 1.10.1 introduced deterministic, role-specific repository-evidence retrieval, while v1.10.0 introduced the completed Android/Kotlin/Java/Gradle/manifest/resource/navigation surface.
 
+## Implemented and unreleased: v1.11.0
+
+Batches 1-6 are complete on `feature/v1.11.0-compose-semantic-retrieval`; the implementation candidate is commit `aa277fc`. The final focused Batch 6 suite passed 21/21, the full suite passed 184 files and 2,114 tests with zero failures, and `npm run verify` passed. The published-package binding correction confirmed that the isolated `@dailephd/my-dev-kit@1.10.4` package reports `1.10.4` and exposes all nine public commands, including `context` and `graph-diff`; no production correction was required.
+
+Documentation reconciliation is the current stage. Package and lockfile versions remain `1.10.4`, and pre-release readiness has not run. Completion here means only that the implementation and tracked documentation are internally consistent enough to enter that separate workflow; it does not mean release preparation, cross-platform validation, security validation, packaging approval, or publication is complete.
+
 ## Shipped: v1.10.4
 
-Version 1.10.4 is the current release represented by this repository. The package metadata and CLI report `1.10.4`.
+Version 1.10.4 is the current published baseline. The package metadata and CLI report `1.10.4` even though the feature branch also contains the unreleased v1.11.0 implementation.
 
 The correction adds condition-aware coverage for the required implementation owner and contract. General bounded truncation remains visible, while surplus contract and compatibility-surface omissions are optional when adequate required witnesses remain. `requiredEvidenceLost` now represents allocation-caused loss of required condition coverage, no-candidate absence remains a distinct inadequacy, and genuine last-witness loss still fails closed. The current producer emits identical condition coverage and truncation summaries in the capsule and audit while retaining schema-major-1 compatibility and conservative legacy fallback.
 
 The permanent regression at `tests/fixtures/context/batch1-false-negative/` and `tests/context/contextBatch1FalseNegativeRegression.spec.ts` preserves the exact captured allocation shape (84/84 aggregate; contracts 47/39/8; compatibility surfaces 29/8/21), the historical v1.10.3 false negative, the corrected sufficient result, provenance hashes, portability normalization, and genuine-loss negative controls.
 
-The downstream my-dev-kit-orchestrator v1.2.3 and my-dev-kit-lab v0.4.5 corrections remain separate work and depend on the v1.10.4 producer contract. This release does not claim those consumer-side corrections. my-dev-kit v1.11.0 remains paused.
+The downstream my-dev-kit-orchestrator v1.2.3 and my-dev-kit-lab v0.4.5 corrections remain separate work and depend on the v1.10.4 producer contract. This published release does not claim those consumer-side corrections.
 
 ## Shipped: v1.10.3
 

@@ -256,6 +256,23 @@ Files:
 
 Runs after Kotlin/Java structural indexing (Batches 2/3) and Android project detection (Batch 1). Detects 14 conservative static roles (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker, Repository, UseCase, Room Entity, Room DAO, Room Database, Retrofit service, Hilt/Dagger module) for already-indexed Kotlin/Java top-level symbols, using an evidence-priority order (annotation > superclass/interface > import > package/path hint > naming suffix). Writes `android-components.json` only when at least one role is detected, and embeds compact `androidComponentRoles`/`androidComponentRefs` on the corresponding `SymbolDefinition`/`GraphSymbolRecord`/`CodeGraphNode` entries — the same compact-projection-plus-artifact-ref pattern `classificationRoles`/`classificationRefs` established. Does not read Gradle, does not execute a compiler, and does not guarantee manifest registration, dependency-injection correctness, or navigation correctness.
 
+### Compose and Android-test semantic layers (implemented/unreleased v1.11.0)
+
+Files:
+
+- `src/android/buildAndroidComposeSemanticProject.ts`
+- `src/android/buildAndroidTestSemanticProject.ts`
+- `src/android/androidComposeTypes.ts`
+- `src/android/androidTestTypes.ts`
+- `src/android/buildAndroidArtifactRelationships.ts`
+- `src/indexing/runIndexCommand.ts`
+
+The Compose builder consumes the completed core symbol index, detected Android modules/source sets, and `android-navigation.json`. It scans indexed Kotlin files in deterministic path order, owns `android-compose-semantic.json` schema `1.2.0`, and emits declarations plus bounded static state/effect/ViewModel/UI/click/navigation facts. Production Compose facts remain separate from navigation definitions and resource definitions; exact candidate references link projected code-graph nodes without copying those owners' payloads.
+
+The Android-test builder discovers only Kotlin/Java files under `test` and `androidTest` roots already established by Android project detection. It owns `android-test-semantic.json` schema `1.0.0`, keeps unit and instrumented categories distinct, and never inserts those test files into the core symbol index. It consumes production Compose/navigation/symbol evidence only to build exact candidate references; ambiguity remains an array of candidates rather than a selected winner.
+
+`runIndexCommand` registers both analyzer results in `manifest.json`, writes a semantic artifact only when its `detected` contract is true, and passes both artifacts to the Android relationship projector. `managedArtifacts.ts` owns stale-file cleanup for both filenames. Compose evidence follows the normal Kotlin changed-file path; test-source content has its own early `androidTestEvidenceFingerprint` because detected `test`/`androidTest` roots may sit outside the core `--src` file set. Full and incremental runs converge on the same normalized artifacts and projected graph.
+
 ## CLI layer
 
 Files:
@@ -324,11 +341,14 @@ Current analyzers:
 - `classification` — conservative static schema/layer classification of files and symbols, produces `classification.json` (v1.5.0), runs after the analyzers above so their output is available as evidence
 - `android-project` — static Android/Gradle project, module, and source-set detection, produces `android-project.json` (v1.9.0 Batch 1), runs against `--root` on every `index`
 - `android-components` — conservative static Android component-role detection over already-indexed Kotlin/Java symbols, produces `android-components.json` (v1.9.0 Batch 4), runs after Kotlin/Java structural indexing
+- `android-compose-semantic` — supported Compose declarations and conservative static state/effect/ViewModel/UI/click/navigation facts, produces `android-compose-semantic.json` schema `1.2.0` when detected (implemented/unreleased v1.11.0)
+- `android-test-semantic` — Android unit/instrumented test structure and conservative JUnit/Compose/Espresso/Robolectric/assertion/route/test-double facts, produces `android-test-semantic.json` schema `1.0.0` when detected (implemented/unreleased v1.11.0)
+- `android-relationships` — projects compact Android, Compose, and Android-test nodes and exact candidate edges into `code-graph.json`; it owns no separate relationship artifact
 
 Analyzer output feeds two paths:
 
 1. Compact role metadata (`semanticRoles`, `artifactRefs`, and — since v1.5.0 — `classificationRoles`, `classificationRefs`) is embedded on symbols in `symbol-index.json` and on symbol nodes in `code-graph.json`.
-2. Detailed semantic artifacts (`data-model.json`, `data-model-graph.json`, `frontend-semantic.json`, `frontend-reachability.json`, `classification.json`) are written to the output directory and registered in `manifest.json`.
+2. Detailed semantic artifacts (`data-model.json`, `data-model-graph.json`, `frontend-semantic.json`, `frontend-reachability.json`, `classification.json`, `android-compose-semantic.json`, and `android-test-semantic.json`) are written conditionally to the output directory and registered in `manifest.json`.
 
 Analyzer status is recorded in `manifest.json` under the `analyzers` array.
 
@@ -388,13 +408,13 @@ Files:
 - `src/graph/codeGraphTypes.ts`
 - `src/indexing/`
 
-The code graph is a typed directed graph over file and symbol nodes.
+The code graph is a typed directed graph over core file/symbol nodes plus compact artifact-backed relationship nodes.
 
-Node kinds: `file`, `symbol`
+Core node kinds are `file` and `symbol`. Android projection adds compact node kinds for modules, manifests, resources, navigation, Compose, and tests. The v1.11.0 additions are `android-composable`, `android-compose-fact`, `android-test-file`, `android-test-class`, `android-test-method`, and `android-test-fact`; projected nodes reuse stable artifact IDs.
 
 Core edge kinds: `defines`, `imports`, `exports`, `calls`, `depends-on`, `related-to`
 
-Symbol nodes carry compact `semanticRoles` and `artifactRefs` arrays when the TypeScript model analyzer has classified the corresponding symbol. The code graph stays focused on static code structure; data-model and lineage edges are not added to it.
+Symbol nodes carry compact `semanticRoles` and `artifactRefs` arrays when the TypeScript model analyzer has classified the corresponding symbol. Compose and Android-test relationships are additive static edges in this same graph, including containment, child-composable, fact ownership, exact ViewModel/resource/route references, and lexical click-to-navigation evidence. Data-model and lineage edges are still not added to it.
 
 ## Search, lookup, source, slice, and view layers
 
@@ -413,7 +433,7 @@ Responsibilities:
 - `lookup`: exact node lookup with bounded neighbor expansion, semantic and classification metadata in the result, and an opt-in `--resolve-classification` flag to resolve the full `classification.json` entry
 - `source`: bounded read-only source retrieval with path containment, semantic and classification metadata propagated when present
 - `slice`: bounded graph-neighborhood extraction, semantic and classification metadata preserved on nodes
-- `view`: DOT, SVG, or PNG rendering of `code-graph.json`, `data-model-graph.json`, or `model-view-lineage.json`
+- `view`: DOT, SVG, or PNG rendering of `code-graph.json`, `data-model-graph.json`, `model-view-lineage.json`, or frontend artifacts through graph-specific adapters
 
 The view layer uses a small renderable graph adapter layer:
 
@@ -421,11 +441,14 @@ The view layer uses a small renderable graph adapter layer:
 - data-model graph artifact -> renderable graph model
 - model-view-lineage artifact -> renderable graph model
 - frontend-semantic artifact -> renderable graph model (react-component, react-flow, react-prop-event-flow, frontend-test views)
+- code graph -> bounded Android/Compose/test projections (`android-module`, `android-manifest`, `android-navigation`, `compose-ui`, `compose-navigation`, `android-test`)
 - shared DOT/SVG/PNG renderer consumes the renderable graph model
 
 `data-model-graph.json` is not merged into `code-graph.json`. `model-view-lineage.json` is not merged into `code-graph.json`. `frontend-semantic.json` is not merged into any other graph artifact. Each graph artifact keeps its own node and edge ID space, and `view --graph` selects which manifest-referenced artifact to render.
 
 The four frontend graph views (`react-component`, `react-flow`, `react-prop-event-flow`, `frontend-test`) are all derived from the same `frontend-semantic.json` artifact at render time. They differ in which facts and relationships they include. They do not claim runtime React behavior, route reachability, or browser-state behavior.
+
+Compose target resolution is shared through `src/android/androidRetrieval.ts` and `src/lookup/resolveSourceTarget.ts`. `source --composable --include-compose-tree` delegates bounded root-first child expansion to `src/source/composeTreeSource.ts`; `slice --composable` delegates normal traversal to the existing slice engine and only widens the allowed relationship set for `--include-viewmodel`/`--include-navigation`. Generic search, exact lookup, source-by-node, ordinary slice, context ranking, and graph-diff consume the projected node/edge records without a Compose- or test-specific parallel engine. The three v1.11 graph views read only `code-graph.json` at command time and never reparse source or either semantic artifact.
 
 Search includes `semanticRole`, `semanticSubtype`, `semanticSource`, `semanticArtifactRef`, `classificationRole`, and `classificationEditGuidance` as weighted fields. Results include `semanticRoles`/`artifactRefs` and `classificationRoles`/`classificationRefs` on matched items when present.
 
@@ -636,7 +659,7 @@ React/TSX facts extracted by the frontend analyzer are conservative static evide
 
 The main design rule is to keep indexing deterministic, downstream artifacts inspectable, retrieval bounded, and unsupported patterns explicit.
 
-Android support introduced through v1.10.0 includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. It remains local and static in v1.10.2: no Gradle execution or dependency resolution; Android build, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; runtime navigation/intent/deep-link proof; or full Compose semantics.
+Android support introduced through v1.10.0 includes static Gradle, manifest, resource, navigation, unified graph relationship, retrieval, context, and graph-view evidence. The implemented/unreleased v1.11.0 branch adds bounded Compose and Android-test semantic evidence while preserving the same local static posture: no Gradle or test execution; Android build, application, emulator/device, APK/AAB, signing, Play Store, or security validation; manifest merging; runtime resource selection; or runtime UI/navigation/test proof.
 
 ## Runtime and artifact-size considerations
 

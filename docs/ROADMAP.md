@@ -1095,6 +1095,8 @@ The patch is limited to the my-dev-kit producer contract, condition-aware omissi
 
 ## Version 1.11.0
 
+**Status: Implementation and documentation reconciliation complete; unreleased; awaiting separate pre-release readiness.**
+
 Version 1.11.0 adds Jetpack Compose semantic retrieval and Android UI-test indexing.
 
 The goal is to make Android UI work feel similar to the existing React/TSX workflow: retrieve the screen, state, handlers, UI strings, test tags, child composables, and related tests without reading random whole files.
