@@ -24,6 +24,8 @@ import * as path from 'node:path'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { AndroidProjectArtifact } from './androidProjectTypes.js'
+import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
+import { extractRouteArgument, parseStringLiteral, collectStringConstants } from './buildComposeNavigationRoutes.js'
 import {
   ANDROID_COMPOSE_SEMANTIC_ARTIFACT_KIND,
   ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
@@ -31,6 +33,9 @@ import {
   type BuildAndroidComposeSemanticProjectResult,
   type ComposeAnnotationEvidence,
   type ComposeChildCallEvidence,
+  type ComposeClickApiForm,
+  type ComposeClickCallbackForm,
+  type ComposeClickHandlerFactEntry,
   type ComposeDeclarationEntry,
   type ComposeDeclarationScope,
   type ComposeDeclarationVisibility,
@@ -38,6 +43,9 @@ import {
   type ComposeEffectKeyEvidence,
   type ComposeEffectKind,
   type ComposeFactResolutionStatus,
+  type ComposeNavigationCallFactEntry,
+  type ComposeNavigationCandidateMatchStatus,
+  type ComposeNavigationRouteClassification,
   type ComposeParameterSummary,
   type ComposeSemanticSummary,
   type ComposeStateBindingForm,
@@ -55,6 +63,8 @@ export interface BuildAndroidComposeSemanticProjectOptions {
   projectRoot: string
   symbolIndex: SymbolIndex
   androidProject: AndroidProjectArtifact
+  /** `android-navigation.json`'s already-built artifact (v1.11.0 Batch 3), used only to exact-match `navigate(...)` call-site routes against its existing `composeRoutes[]`/`destinations[]` IDs. Optional so pre-Batch-3 direct callers (and existing tests) keep working unchanged; when omitted, navigation-call facts are still emitted but never resolve a candidate. */
+  androidNavigation?: AndroidNavigationArtifact
   createdAt?: string
 }
 
@@ -105,7 +115,7 @@ const RAW_SUMMARY_MAX_LENGTH = 160
 export function buildAndroidComposeSemanticProject(
   options: BuildAndroidComposeSemanticProjectOptions
 ): BuildAndroidComposeSemanticProjectResult {
-  const { projectRoot, symbolIndex, androidProject, createdAt = new Date().toISOString() } = options
+  const { projectRoot, symbolIndex, androidProject, androidNavigation, createdAt = new Date().toISOString() } = options
 
   if (!androidProject.detected) {
     return { artifact: emptyArtifact(projectRoot, createdAt) }
@@ -116,6 +126,8 @@ export function buildAndroidComposeSemanticProject(
     .slice()
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 
+  const navRouteIndex = buildNavigationRouteIndex(androidNavigation)
+
   const allDeclarations: InternalDeclaration[] = []
   const fileWarnings: string[] = []
   const filesExamined: string[] = []
@@ -125,6 +137,8 @@ export function buildAndroidComposeSemanticProject(
   const allTestTagFacts: ComposeTestTagFactEntry[] = []
   const allVisibleTextFacts: ComposeVisibleTextFactEntry[] = []
   const allStringResourceFacts: ComposeStringResourceFactEntry[] = []
+  const allClickHandlerFacts: ComposeClickHandlerFactEntry[] = []
+  const allNavigationCallFacts: ComposeNavigationCallFactEntry[] = []
 
   for (const file of kotlinFiles) {
     const text = readFileSafely(projectRoot, file.path)
@@ -135,13 +149,15 @@ export function buildAndroidComposeSemanticProject(
     fileWarnings.push(...warnings)
 
     if (declarations.length > 0) {
-      const facts = extractComposeFactsForFile(text, declarations)
+      const facts = extractComposeFactsForFile(text, declarations, navRouteIndex)
       allStateFacts.push(...facts.stateFacts)
       allEffectFacts.push(...facts.effectFacts)
       allViewModelReferences.push(...facts.viewModelReferences)
       allTestTagFacts.push(...facts.testTagFacts)
       allVisibleTextFacts.push(...facts.visibleTextFacts)
       allStringResourceFacts.push(...facts.stringResourceFacts)
+      allClickHandlerFacts.push(...facts.clickHandlerFacts)
+      allNavigationCallFacts.push(...facts.navigationCallFacts)
     }
   }
 
@@ -157,6 +173,8 @@ export function buildAndroidComposeSemanticProject(
   const testTagFacts = detected ? sortById(allTestTagFacts) : []
   const visibleTextFacts = detected ? sortById(allVisibleTextFacts) : []
   const stringResourceFacts = detected ? sortById(allStringResourceFacts) : []
+  const clickHandlerFacts = detected ? sortById(allClickHandlerFacts) : []
+  const navigationCallFacts = detected ? sortById(allNavigationCallFacts) : []
 
   const factWarnings = detected
     ? [
@@ -166,6 +184,8 @@ export function buildAndroidComposeSemanticProject(
         ...testTagFacts.flatMap((f) => f.warnings),
         ...visibleTextFacts.flatMap((f) => f.warnings),
         ...stringResourceFacts.flatMap((f) => f.warnings),
+        ...clickHandlerFacts.flatMap((f) => f.warnings),
+        ...navigationCallFacts.flatMap((f) => f.warnings),
       ]
     : []
   const combinedWarnings = dedupeSort([...fileWarnings, ...declWarnings, ...factWarnings])
@@ -184,6 +204,8 @@ export function buildAndroidComposeSemanticProject(
     testTagFacts,
     visibleTextFacts,
     stringResourceFacts,
+    clickHandlerFacts,
+    navigationCallFacts,
     warnings: combinedWarnings,
     summary: computeSummary(
       publicDeclarations,
@@ -193,7 +215,9 @@ export function buildAndroidComposeSemanticProject(
       viewModelReferences,
       testTagFacts,
       visibleTextFacts,
-      stringResourceFacts
+      stringResourceFacts,
+      clickHandlerFacts,
+      navigationCallFacts
     ),
   }
 
@@ -505,15 +529,25 @@ interface ComposeFactsForFile {
   testTagFacts: ComposeTestTagFactEntry[]
   visibleTextFacts: ComposeVisibleTextFactEntry[]
   stringResourceFacts: ComposeStringResourceFactEntry[]
+  clickHandlerFacts: ComposeClickHandlerFactEntry[]
+  navigationCallFacts: ComposeNavigationCallFactEntry[]
 }
 
-function extractComposeFactsForFile(sourceText: string, declarations: InternalDeclaration[]): ComposeFactsForFile {
+function extractComposeFactsForFile(
+  sourceText: string,
+  declarations: InternalDeclaration[],
+  navRouteIndex: NavigationRouteIndex
+): ComposeFactsForFile {
   const rawLines = sourceText.split('\n')
   const truncated = rawLines.length > MAX_SCAN_LINES
   const lines = truncated ? rawLines.slice(0, MAX_SCAN_LINES) : rawLines
   const state: StripState = { inBlockComment: false }
   const commentStrippedLines = lines.map((raw) => stripCommentsOnlyLine(raw, state))
   const topLevelConstants = extractTopLevelStringConstants(commentStrippedLines)
+  // Reuses `android-navigation.json`'s own same-file `const val` route-constant
+  // collector (v1.11.0 Batch 3), so `navigate(SOME_CONST)` resolves identically
+  // to how `composable(SOME_CONST)` already resolves in that artifact.
+  const navConstants = collectStringConstants(commentStrippedLines.join('\n'))
 
   const result: ComposeFactsForFile = {
     stateFacts: [],
@@ -522,6 +556,8 @@ function extractComposeFactsForFile(sourceText: string, declarations: InternalDe
     testTagFacts: [],
     visibleTextFacts: [],
     stringResourceFacts: [],
+    clickHandlerFacts: [],
+    navigationCallFacts: [],
   }
 
   for (const d of declarations) {
@@ -535,9 +571,50 @@ function extractComposeFactsForFile(sourceText: string, declarations: InternalDe
     result.testTagFacts.push(...extractTestTagFacts(d, bodyText, counters, topLevelConstants))
     result.visibleTextFacts.push(...extractVisibleTextFacts(d, bodyText, counters))
     result.stringResourceFacts.push(...extractStringResourceFacts(d, bodyText, counters))
+
+    const clickHandlers = extractClickHandlerFacts(d, bodyText, counters)
+    const navigationCalls = extractNavigationCallFacts(d, bodyText, counters, navConstants, navRouteIndex, clickHandlers)
+    linkClickHandlersToNavigationCalls(clickHandlers, navigationCalls)
+    result.clickHandlerFacts.push(...clickHandlers.map((c) => c.entry))
+    result.navigationCallFacts.push(...navigationCalls)
   }
 
   return result
+}
+
+// ---------------------------------------------------------------------------
+// v1.11.0 Batch 3 -- navigate(...) route-candidate cross-reference index.
+// Built once per `buildAndroidComposeSemanticProject` run from the
+// already-built `android-navigation.json` artifact (never re-parsed or
+// re-derived here) so navigation-call facts can be exact-matched against its
+// existing `composeRoutes[]`/`destinations[]` IDs without this file ever
+// becoming a second route-definition owner.
+// ---------------------------------------------------------------------------
+
+interface NavigationRouteIndex {
+  byResolvedRoute: Map<string, string[]>
+  byTypeRouteName: Map<string, string[]>
+}
+
+function buildNavigationRouteIndex(androidNavigation: AndroidNavigationArtifact | undefined): NavigationRouteIndex {
+  const byResolvedRoute = new Map<string, string[]>()
+  const byTypeRouteName = new Map<string, string[]>()
+  if (!androidNavigation) return { byResolvedRoute, byTypeRouteName }
+
+  const add = (map: Map<string, string[]>, key: string, id: string) => {
+    const list = map.get(key)
+    if (list) list.push(id)
+    else map.set(key, [id])
+  }
+
+  for (const route of androidNavigation.composeRoutes) {
+    if (route.resolvedRoute !== null) add(byResolvedRoute, route.resolvedRoute, route.id)
+    if (route.typeRouteName !== null) add(byTypeRouteName, route.typeRouteName, route.id)
+  }
+  for (const destination of androidNavigation.destinations) {
+    if (destination.route !== null) add(byResolvedRoute, destination.route, destination.id)
+  }
+  return { byResolvedRoute, byTypeRouteName }
 }
 
 function buildMaskedBodyLines(
@@ -1034,6 +1111,327 @@ function extractStringResourceFacts(
   return results
 }
 
+// ---------------------------------------------------------------------------
+// v1.11.0 Batch 3 -- click-handler and navigation-call fact extraction.
+// Reuses the same masked-body/raw-text scanning primitives as Batch 2 above.
+// ---------------------------------------------------------------------------
+
+const CLICKABLE_CALL_PATTERN = /\bclickable\s*[({]/g
+const ONCLICK_ARG_PATTERN = /\bonClick\s*=\s*/g
+const NAVIGATE_CALL_PATTERN = /\b(?:([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)\s*\.\s*)?navigate\s*\(/g
+
+interface InternalClickHandler {
+  entry: ComposeClickHandlerFactEntry
+  spanStart: number
+  spanEnd: number
+}
+
+interface CallbackParseResult {
+  form: ComposeClickCallbackForm
+  end: number
+  raw: string
+  handlerName: string | null
+}
+
+function parseCallbackExpression(text: string, fromIndex: number): CallbackParseResult | null {
+  const first = firstNonSpaceCharRaw(text, fromIndex)
+  if (first.char === null) return null
+
+  if (first.char === '{') {
+    const close = findMatchingBraceRaw(text, first.index)
+    const end = close === -1 ? first.index + 1 : close + 1
+    return { form: 'lambda', end, raw: boundText(text.slice(first.index, end)), handlerName: null }
+  }
+
+  if (first.char === ':' && text[first.index + 1] === ':') {
+    const m = /^::([A-Za-z_]\w*)/.exec(text.slice(first.index))
+    if (m) {
+      const end = first.index + m[0].length
+      return { form: 'function-reference', end, raw: m[0], handlerName: m[1]! }
+    }
+  }
+
+  const identMatch = /^[A-Za-z_]\w*/.exec(text.slice(first.index))
+  if (identMatch) {
+    const end = first.index + identMatch[0].length
+    const after = firstNonSpaceCharRaw(text, end)
+    if (after.char !== '(' && after.char !== '.') {
+      return { form: 'identifier', end, raw: identMatch[0], handlerName: identMatch[0] }
+    }
+  }
+
+  const end = findUnresolvedExpressionEndRaw(text, first.index)
+  return { form: 'unresolved', end, raw: boundText(text.slice(first.index, end)), handlerName: null }
+}
+
+function findUnresolvedExpressionEndRaw(text: string, fromIndex: number): number {
+  let depth = 0
+  let i = fromIndex
+  while (i < text.length) {
+    const ch = text[i]!
+    if (ch === '"') {
+      i = skipStringLiteralRaw(text, i)
+      continue
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      if (depth === 0) break
+      depth--
+    } else if ((ch === ',' || ch === '\n') && depth === 0) break
+    i++
+  }
+  return i
+}
+
+function extractClickHandlerFacts(
+  d: InternalDeclaration,
+  bodyText: string,
+  counters: Map<string, number>
+): InternalClickHandler[] {
+  const results: InternalClickHandler[] = []
+  const claimedRanges: Array<[number, number]> = []
+
+  for (const m of bodyText.matchAll(CLICKABLE_CALL_PATTERN)) {
+    if (m.index === undefined) continue
+    const matchStart = m.index
+    const opener = m[0]![m[0]!.length - 1]!
+    let apiForm: ComposeClickApiForm
+    let callback: CallbackParseResult | null = null
+    let spanEnd = matchStart + m[0]!.length
+
+    if (opener === '(') {
+      const openParen = matchStart + m[0]!.length - 1
+      const closeParen = findMatchingParenRaw(bodyText, openParen)
+      if (closeParen === -1) continue
+      claimedRanges.push([openParen, closeParen])
+      const argsText = bodyText.slice(openParen + 1, closeParen)
+      const onClickInArgs = /(?:^|,)\s*onClick\s*=\s*/.exec(argsText)
+      if (onClickInArgs) {
+        apiForm = 'clickable-onClick-arg'
+        const callbackStart = openParen + 1 + onClickInArgs.index + onClickInArgs[0].length
+        callback = parseCallbackExpression(bodyText, callbackStart)
+        spanEnd = callback ? callback.end : closeParen
+      } else {
+        const after = firstNonSpaceCharRaw(bodyText, closeParen + 1)
+        if (after.char === '{') {
+          apiForm = 'clickable-trailing-lambda'
+          callback = parseCallbackExpression(bodyText, after.index)
+          spanEnd = callback ? callback.end : closeParen
+        } else {
+          continue // clickable(...) call with no statically visible onClick evidence
+        }
+      }
+    } else {
+      apiForm = 'clickable-trailing-lambda'
+      const braceIdx = matchStart + m[0]!.length - 1
+      callback = parseCallbackExpression(bodyText, braceIdx)
+      spanEnd = callback ? callback.end : braceIdx + 1
+      claimedRanges.push([matchStart, spanEnd])
+    }
+
+    if (!callback) continue
+    const line = lineNumberInBody(bodyText, d.bodyStartLine, matchStart)
+    const endLine = lineNumberInBody(bodyText, d.bodyStartLine, spanEnd)
+    const status: ComposeFactResolutionStatus = callback.form === 'unresolved' ? 'unresolved' : 'resolved'
+    const warnings =
+      callback.form === 'unresolved'
+        ? [`${d.file}:${line}: "clickable" callback expression is not a statically recognizable lambda, function reference, or identifier; preserved as an unresolved raw expression, not guessed.`]
+        : []
+
+    results.push({
+      entry: {
+        id: factId(d.id, 'click', counters, line),
+        composableId: d.id,
+        sourceRange: { file: d.file, startLine: line, endLine },
+        apiForm,
+        callbackForm: callback.form,
+        rawCallbackSummary: callback.raw,
+        handlerName: callback.handlerName,
+        status,
+        navigationCallIds: [],
+        warnings,
+      },
+      spanStart: matchStart,
+      spanEnd,
+    })
+  }
+
+  for (const m of bodyText.matchAll(ONCLICK_ARG_PATTERN)) {
+    if (m.index === undefined) continue
+    if (claimedRanges.some(([s, e]) => m.index! >= s && m.index! <= e)) continue
+
+    const lineStart = bodyText.lastIndexOf('\n', m.index) + 1
+    const linePrefix = bodyText.slice(lineStart, m.index)
+    if (/\b(val|var)\s*$/.test(linePrefix)) continue // a local variable named onClick, not a call-site argument
+
+    const callbackStart = m.index + m[0].length
+    const callback = parseCallbackExpression(bodyText, callbackStart)
+    if (!callback) continue
+
+    const line = lineNumberInBody(bodyText, d.bodyStartLine, m.index)
+    const endLine = lineNumberInBody(bodyText, d.bodyStartLine, callback.end)
+    const status: ComposeFactResolutionStatus = callback.form === 'unresolved' ? 'unresolved' : 'resolved'
+    const warnings =
+      callback.form === 'unresolved'
+        ? [`${d.file}:${line}: "onClick" callback expression is not a statically recognizable lambda, function reference, or identifier; preserved as an unresolved raw expression, not guessed.`]
+        : []
+
+    results.push({
+      entry: {
+        id: factId(d.id, 'click', counters, line),
+        composableId: d.id,
+        sourceRange: { file: d.file, startLine: line, endLine },
+        apiForm: 'onClick-arg',
+        callbackForm: callback.form,
+        rawCallbackSummary: callback.raw,
+        handlerName: callback.handlerName,
+        status,
+        navigationCallIds: [],
+        warnings,
+      },
+      spanStart: m.index,
+      spanEnd: callback.end,
+    })
+  }
+
+  results.sort((a, b) => a.spanStart - b.spanStart)
+  return results
+}
+
+function extractNavigationCallFacts(
+  d: InternalDeclaration,
+  bodyText: string,
+  counters: Map<string, number>,
+  navConstants: Map<string, string>,
+  navRouteIndex: NavigationRouteIndex,
+  clickHandlers: InternalClickHandler[]
+): ComposeNavigationCallFactEntry[] {
+  const results: ComposeNavigationCallFactEntry[] = []
+
+  for (const m of bodyText.matchAll(NAVIGATE_CALL_PATTERN)) {
+    if (m.index === undefined) continue
+    const receiverText = m[1] ? m[1].replace(/\s+/g, '') : null
+    const openParen = m.index + m[0].length - 1
+    const closeParen = findMatchingParenRaw(bodyText, openParen)
+    const line = lineNumberInBody(bodyText, d.bodyStartLine, m.index)
+
+    if (closeParen === -1) {
+      results.push({
+        id: factId(d.id, 'navcall', counters, line),
+        composableId: d.id,
+        clickHandlerId: null,
+        sourceRange: { file: d.file, startLine: line, endLine: line },
+        receiverText,
+        callName: 'navigate',
+        rawRouteExpression: null,
+        routeClassification: 'unresolved-recognized-call',
+        resolvedRoute: null,
+        typeRouteName: null,
+        status: 'unresolved',
+        candidateIds: [],
+        candidateMatchStatus: 'not-attempted',
+        warnings: [`${d.file}:${line}: "navigate" call has no statically matched closing parenthesis; recorded as unresolved.`],
+      })
+      continue
+    }
+
+    const endLine = lineNumberInBody(bodyText, d.bodyStartLine, closeParen)
+    const argsText = bodyText.slice(openParen + 1, closeParen)
+    const routeArg = extractRouteArgument(argsText)
+
+    let routeClassification: ComposeNavigationRouteClassification
+    let resolvedRoute: string | null = null
+    let typeRouteName: string | null = null
+    let status: ComposeFactResolutionStatus
+    const warnings: string[] = []
+
+    if (routeArg === null) {
+      routeClassification = 'unresolved-recognized-call'
+      status = 'unresolved'
+      warnings.push(`${d.file}:${line}: No statically recognizable route argument for this "navigate" call.`)
+    } else {
+      const literal = parseStringLiteral(routeArg)
+      if (literal !== null) {
+        routeClassification = 'string-route'
+        resolvedRoute = literal
+        status = 'resolved'
+      } else if (/^[A-Za-z_]\w*$/.test(routeArg) && navConstants.has(routeArg)) {
+        routeClassification = 'resolved-local-constant-route'
+        resolvedRoute = navConstants.get(routeArg)!
+        status = 'resolved'
+      } else {
+        const typeMatch = /^([A-Za-z_][\w.]*)(?:\([^()]*\))?$/.exec(routeArg)
+        const baseIdent = typeMatch ? typeMatch[1]! : null
+        if (baseIdent && navRouteIndex.byTypeRouteName.has(baseIdent)) {
+          routeClassification = 'type-safe-route'
+          typeRouteName = baseIdent
+          status = 'resolved'
+        } else {
+          routeClassification = 'unresolved-recognized-call'
+          status = 'unresolved'
+          warnings.push(
+            `${d.file}:${line}: Route expression "${routeArg}" is not a direct string literal, a resolvable local const val, or a known type-safe route.`
+          )
+        }
+      }
+    }
+
+    let candidateIds: string[] = []
+    let candidateMatchStatus: ComposeNavigationCandidateMatchStatus
+    if (routeClassification === 'unresolved-recognized-call') {
+      candidateMatchStatus = 'not-attempted'
+    } else {
+      candidateIds =
+        routeClassification === 'type-safe-route'
+          ? (navRouteIndex.byTypeRouteName.get(typeRouteName!) ?? [])
+          : (navRouteIndex.byResolvedRoute.get(resolvedRoute!) ?? [])
+      candidateIds = [...new Set(candidateIds)].sort()
+      candidateMatchStatus = candidateIds.length === 0 ? 'no-match' : candidateIds.length === 1 ? 'exact-one' : 'ambiguous'
+    }
+
+    let enclosingClick: InternalClickHandler | null = null
+    let bestSpan = Infinity
+    for (const ch of clickHandlers) {
+      if (m.index >= ch.spanStart && m.index <= ch.spanEnd) {
+        const span = ch.spanEnd - ch.spanStart
+        if (span < bestSpan) {
+          bestSpan = span
+          enclosingClick = ch
+        }
+      }
+    }
+
+    results.push({
+      id: factId(d.id, 'navcall', counters, line),
+      composableId: d.id,
+      clickHandlerId: enclosingClick ? enclosingClick.entry.id : null,
+      sourceRange: { file: d.file, startLine: line, endLine },
+      receiverText,
+      callName: 'navigate',
+      rawRouteExpression: routeArg,
+      routeClassification,
+      resolvedRoute,
+      typeRouteName,
+      status,
+      candidateIds,
+      candidateMatchStatus,
+      warnings,
+    })
+  }
+
+  return results
+}
+
+function linkClickHandlersToNavigationCalls(
+  clickHandlers: InternalClickHandler[],
+  navigationCalls: ComposeNavigationCallFactEntry[]
+): void {
+  for (const ch of clickHandlers) {
+    const ids = navigationCalls.filter((n) => n.clickHandlerId === ch.entry.id).map((n) => n.id)
+    ch.entry.navigationCallIds = [...new Set(ids)].sort()
+  }
+}
+
 function stripCommentsOnlyLine(rawLine: string, state: StripState): string {
   let line = rawLine
   if (state.inBlockComment) {
@@ -1378,7 +1776,9 @@ function computeSummary(
   viewModelReferences: ComposeViewModelReferenceEntry[] = [],
   testTagFacts: ComposeTestTagFactEntry[] = [],
   visibleTextFacts: ComposeVisibleTextFactEntry[] = [],
-  stringResourceFacts: ComposeStringResourceFactEntry[] = []
+  stringResourceFacts: ComposeStringResourceFactEntry[] = [],
+  clickHandlerFacts: ComposeClickHandlerFactEntry[] = [],
+  navigationCallFacts: ComposeNavigationCallFactEntry[] = []
 ): ComposeSemanticSummary {
   return {
     declarationCount: declarations.length,
@@ -1394,6 +1794,8 @@ function computeSummary(
     testTagFactCount: testTagFacts.length,
     visibleTextFactCount: visibleTextFacts.length,
     stringResourceFactCount: stringResourceFacts.length,
+    clickHandlerFactCount: clickHandlerFacts.length,
+    navigationCallFactCount: navigationCallFacts.length,
     warningCount: warnings.length,
   }
 }
@@ -1413,6 +1815,8 @@ function emptyArtifact(projectRoot: string, createdAt: string): AndroidComposeSe
     testTagFacts: [],
     visibleTextFacts: [],
     stringResourceFacts: [],
+    clickHandlerFacts: [],
+    navigationCallFacts: [],
     warnings: [],
     summary: computeSummary([], []),
   }

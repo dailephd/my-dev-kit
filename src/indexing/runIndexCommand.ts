@@ -882,17 +882,20 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   })
   const androidNavigationAnalyzerStatus = buildAndroidNavigationAnalyzerStatus(androidNavigationResult)
 
-  // Compose declaration-level semantic evidence (v1.11.0 Batch 1). Computed
-  // here, alongside android-navigation, since it needs the already-built
-  // symbol index to enumerate Kotlin files. Declaration-only: does not
-  // extract state/effects/ViewModels/UI markers/navigation calls/tests, and
-  // does not participate in code-graph projection, retrieval, or graph-diff
-  // (all deferred to later batches). A sibling of android-navigation.json,
-  // never a replacement for it.
+  // Compose declaration-level semantic evidence (v1.11.0 Batch 1), extended in
+  // Batch 2 with state/effect/ViewModel/UI-marker facts and in Batch 3 with
+  // click-handler and navigation-call usage facts. Computed here, alongside
+  // android-navigation, since it needs the already-built symbol index to
+  // enumerate Kotlin files, and (Batch 3) the already-built
+  // `androidNavigationResult.artifact` to exact-match `navigate(...)`
+  // call-site routes against its existing `composeRoutes[]`/`destinations[]`
+  // IDs. Still does not participate in code-graph projection, retrieval, or
+  // graph-diff. A sibling of android-navigation.json, never a replacement.
   const { androidComposeSemantic, androidComposeSemanticAnalyzerStatus } = runAndroidComposeSemanticAnalyzer({
     projectRoot,
     symbolIndex: roledSymbolIndex,
     androidProject: androidResult.artifact,
+    androidNavigation: androidNavigationResult.artifact,
     createdAt,
   })
 
@@ -1319,6 +1322,7 @@ interface RunAndroidComposeSemanticAnalyzerOptions {
   projectRoot: string
   symbolIndex: SymbolIndex
   androidProject: DetectAndroidProjectResult['artifact']
+  androidNavigation: BuildAndroidNavigationProjectResult['artifact']
   createdAt: string
 }
 

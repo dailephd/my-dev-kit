@@ -1,5 +1,5 @@
 export const ANDROID_COMPOSE_SEMANTIC_ARTIFACT_KIND = 'my-dev-kit-v1-android-compose-semantic'
-export const ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION = '1.1.0'
+export const ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION = '1.2.0'
 export const ANDROID_COMPOSE_SEMANTIC_FILENAME = 'android-compose-semantic.json'
 
 export type ComposeDeclarationScope = 'top-level' | 'function-local'
@@ -134,6 +134,52 @@ export interface ComposeStringResourceFactEntry {
   warnings: string[]
 }
 
+// ---------------------------------------------------------------------------
+// v1.11.0 Batch 3 -- click-handler and navigation-call usage evidence.
+// `android-navigation.json` remains the sole owner of route/destination
+// *definitions*; these facts record only Compose call-site *usage* evidence,
+// cross-referenced to that artifact's existing IDs through exact static
+// matching (never fuzzy, never a single guessed winner from an ambiguous set).
+// ---------------------------------------------------------------------------
+
+export type ComposeClickApiForm = 'clickable-trailing-lambda' | 'clickable-onClick-arg' | 'onClick-arg'
+export type ComposeClickCallbackForm = 'lambda' | 'function-reference' | 'identifier' | 'unresolved'
+
+export interface ComposeClickHandlerFactEntry {
+  id: string
+  composableId: string
+  sourceRange: ComposeSourceRange
+  apiForm: ComposeClickApiForm
+  callbackForm: ComposeClickCallbackForm
+  rawCallbackSummary: string | null
+  handlerName: string | null
+  status: ComposeFactResolutionStatus
+  navigationCallIds: string[]
+  warnings: string[]
+}
+
+/** Reuses `android-navigation.json`'s own `ComposeRouteEvidenceKind` vocabulary so a route-definition and a route-usage site are always classified with identical terminology. */
+export type ComposeNavigationRouteClassification = 'string-route' | 'resolved-local-constant-route' | 'type-safe-route' | 'unresolved-recognized-call'
+
+export type ComposeNavigationCandidateMatchStatus = 'exact-one' | 'ambiguous' | 'no-match' | 'not-attempted'
+
+export interface ComposeNavigationCallFactEntry {
+  id: string
+  composableId: string
+  clickHandlerId: string | null
+  sourceRange: ComposeSourceRange
+  receiverText: string | null
+  callName: string
+  rawRouteExpression: string | null
+  routeClassification: ComposeNavigationRouteClassification
+  resolvedRoute: string | null
+  typeRouteName: string | null
+  status: ComposeFactResolutionStatus
+  candidateIds: string[]
+  candidateMatchStatus: ComposeNavigationCandidateMatchStatus
+  warnings: string[]
+}
+
 export interface ComposeSemanticSummary {
   declarationCount: number
   previewCount: number
@@ -148,6 +194,8 @@ export interface ComposeSemanticSummary {
   testTagFactCount: number
   visibleTextFactCount: number
   stringResourceFactCount: number
+  clickHandlerFactCount: number
+  navigationCallFactCount: number
   warningCount: number
 }
 
@@ -165,6 +213,8 @@ export interface AndroidComposeSemanticArtifact {
   testTagFacts: ComposeTestTagFactEntry[]
   visibleTextFacts: ComposeVisibleTextFactEntry[]
   stringResourceFacts: ComposeStringResourceFactEntry[]
+  clickHandlerFacts: ComposeClickHandlerFactEntry[]
+  navigationCallFacts: ComposeNavigationCallFactEntry[]
   warnings: string[]
   summary: ComposeSemanticSummary
 }

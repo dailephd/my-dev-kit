@@ -189,7 +189,14 @@ export function buildComposeNavigationRoutes(options: BuildComposeNavigationRout
   }
 }
 
-function extractRouteArgument(argsText: string): string | null {
+/**
+ * Reused as-is by `buildAndroidComposeSemanticProject.ts` (v1.11.0 Batch 3)
+ * for `navigate(...)` call-site route-argument extraction, so Compose
+ * call-site route evidence stays classified with exactly the same rules as
+ * `composable(...)`/`navigation(...)`/`dialog(...)` route definitions here —
+ * never a second, independently-drifting route-expression resolver.
+ */
+export function extractRouteArgument(argsText: string): string | null {
   const trimmed = argsText.trim()
   if (trimmed === '') return null
 
@@ -215,7 +222,8 @@ function findTopLevelCommaOrEnd(text: string): number {
   return text.length
 }
 
-function parseStringLiteral(token: string): string | null {
+/** Reused by `buildAndroidComposeSemanticProject.ts` (v1.11.0 Batch 3) for navigation-call route-literal parsing. */
+export function parseStringLiteral(token: string): string | null {
   const match = /^"((?:[^"\\]|\\.)*)"$/.exec(token.trim())
   if (!match) return null
   const inner = match[1]!
@@ -223,7 +231,8 @@ function parseStringLiteral(token: string): string | null {
   return inner.replace(/\\"/g, '"').replace(/\\\\/g, '\\')
 }
 
-function collectStringConstants(text: string): Map<string, string> {
+/** Reused by `buildAndroidComposeSemanticProject.ts` (v1.11.0 Batch 3) so navigate(...) same-file `const val` route-constant resolution matches this artifact's existing rules exactly. */
+export function collectStringConstants(text: string): Map<string, string> {
   const constants = new Map<string, string>()
   for (const match of text.matchAll(CONST_VAL_PATTERN)) {
     const name = match[1]
