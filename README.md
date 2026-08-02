@@ -132,9 +132,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.10.3
+## Latest release: v1.10.4
 
-`@dailephd/my-dev-kit@1.10.3` is the latest published release. v1.10.3 is a corrective patch that refines implementation-role context readiness while preserving the v1.10.1 command and artifact contracts. It keeps structurally credible owners even when their filenames are neutral, rejects owner candidates supported only by focus or naming, allocates the finite required-evidence capacity before reporting genuine required truncation, preserves duplicate responsibility-ID diagnostics, classifies directed file-level dependency and caller evidence by canonical graph identity, and makes each newly generated capsule/audit pair prove the same repository and index identity before output is written. Runtime and CLI behavior are unchanged from v1.10.2.
+`@dailephd/my-dev-kit@1.10.4` is the latest published release. It includes the v1.10.3 implementation-role context readiness refinements and adds condition-level owner and contract witness coverage. Bounded surplus omissions remain visible without being mislabeled as required evidence loss, so optional-only truncation can coexist with sufficient context while missing or allocation-lost required witnesses still fail closed. The command syntax and artifact schema major remain unchanged.
 
 ### Android capability introduced in v1.10.0
 
@@ -162,7 +162,7 @@ This is static evidence, not runtime proof. my-dev-kit does not execute Gradle o
 
 ## Stage-specific bounded context retrieval
 
-Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.3 package includes the v1.10.2 documentation corrections plus the v1.10.3 implementation-role context readiness refinements (capsule/audit repository identity alignment and duplicated contract field validation) without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
+Version 1.10.1 introduced this shipped capability by extending the existing `context` command and artifacts. It added `ContextRole` and `ContextRequest`, `context --request <path>`, `context --role <role>`, deterministic input normalization, role-aware and changed-surface evidence, responsibility mapping, adequacy, freshness, bounded fallback and truncation reporting, and provenance. The published v1.10.4 package includes the v1.10.2 documentation corrections, the v1.10.3 implementation-role context readiness refinements, and condition-aware adequacy without changing command syntax or schema major. See [docs/COMMANDS.md](docs/COMMANDS.md) for the complete command contract.
 
 The patch separates three repository-evidence roles that have different freshness and evidence needs:
 
@@ -170,7 +170,7 @@ The patch separates three repository-evidence roles that have different freshnes
 - **implementation** - refresh immediately before production editing and retrieve exact owners, callers/callees, validators, constants, defaults, errors, serializers, schemas, compatibility surfaces, and closest tests; answers "What current code must change or be preserved?"
 - **test-implementation** - refresh after production changes and focus on changed files/symbols, failure and side-effect boundaries, related tests, fixtures, factories, mocks, setup, configuration, commands, and explicit test-responsibility mappings; answers "How should approved test responsibilities be implemented against final production code?"
 
-The additive structured `ContextRequest` is accepted through `context --request <request.json>` and supports focus files/symbols, caller-provided changed files/symbols, before/after index identities, requested evidence kinds, responsibility references, limits, output paths, and audit output. Results include graph-diff evidence, role-specific evidence groups, adequacy, freshness (`fresh`, `stale`, or `unknown`), truncation, unresolved evidence, and selection provenance. Existing `context` syntax and its `general`, `feature-add`, and `subsystem` modes remain compatible; role is a separate concept.
+The additive structured `ContextRequest` is accepted through `context --request <request.json>` and supports focus files/symbols, caller-provided changed files/symbols, before/after index identities, requested evidence kinds, responsibility references, limits, output paths, and audit output. Results include graph-diff evidence, role-specific evidence groups, adequacy, freshness (`fresh`, `stale`, or `unknown`), truncation, unresolved evidence, and selection provenance. In v1.10.4, implementation output also includes role-condition witness coverage: general truncation may remain true while adequacy remains sufficient when the required owner and contract witnesses are retained. Existing `context` syntax and its `general`, `feature-add`, and `subsystem` modes remain compatible; role is a separate concept.
 
 Ownership stays narrow:
 
@@ -540,7 +540,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.10.3 is the latest published release. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.10.4 is the latest published release. Later versions retain their separate planned scopes, including Compose retrieval, Android architecture and data-flow evidence, Android retrieval benchmarks and examples, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

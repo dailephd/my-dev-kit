@@ -34,6 +34,7 @@ import type {
   TestInfrastructureSummary,
   UnresolvedEvidenceItem,
   GroupTruncationEntry,
+  RoleConditionCoverage,
   ResponsibilityMappingSummary,
   RoleAdequacyStatement,
   FreshnessSummary,
@@ -67,6 +68,9 @@ export interface BuildContextCapsuleOptions {
   testInfrastructure: TestInfrastructureSummary
   unresolvedItems: UnresolvedEvidenceItem[]
   groupTruncation: GroupTruncationEntry[]
+  /** v1.10.4 Phase 1: shared post-allocation condition coverage. Optional only
+   * for schema-major-1 callers that predate the additive contract. */
+  roleConditionCoverage?: RoleConditionCoverage[]
   /** v1.10.1 Batch 4: deterministic responsibility-to-evidence mapping. */
   responsibilityMappings: ResponsibilityMappingSummary
   /** v1.10.1 Batch 4: role-specific adequacy verdict. */
@@ -151,6 +155,7 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
     testInfrastructure,
     unresolvedItems,
     groupTruncation,
+    roleConditionCoverage,
     responsibilityMappings,
     roleAdequacy,
     freshness,
@@ -253,6 +258,7 @@ export function buildContextCapsule(options: BuildContextCapsuleOptions): Contex
     testInfrastructure,
     unresolvedItems,
     groupTruncation,
+    ...(roleConditionCoverage === undefined ? {} : { roleConditionCoverage }),
     responsibilityMappings,
     roleAdequacy,
     freshness,

@@ -1387,7 +1387,7 @@ When `--audit-out` is supplied, the command builds both artifacts in memory and 
 
 ### Output
 
-`context-capsule.json` includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `limits`, `requiredContext`, `optionalSupportContext`, `droppedContext`, `warnings`, `deferredRequestFields`, `roleContext`, `contextAdequacy`, `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, and `sourceControl`.
+`context-capsule.json` includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `limits`, `requiredContext`, `optionalSupportContext`, `droppedContext`, `warnings`, `deferredRequestFields`, `roleContext`, `contextAdequacy`, `queryPlan`, `candidateFiles`, `candidateNodes`, `focus`, `selectedGraph`, `retention`, `selectedSource`, `selectedSourceBundles`, `semanticSummary`, `classificationSummary`, `artifactReferenceSummary`, `pruning`, `conflicts`, `modeEffects`, and `sourceControl`. Version 1.10.4 output also includes the additive `roleConditionCoverage` array described below.
 
 - `request.role` (**v1.10.1 Batch 1**) is `architecture`/`implementation`/`test-implementation`, or `null` for a legacy invocation. `request.requestFilePath` is the `--request` file path used, or `null`.
 - `deferredRequestFields` (**v1.10.1 Batch 1**; narrowed in **Batch 2**) names any `ContextRequest` fields that were supplied, validated, and normalized but are not yet operational; always `[]` for a legacy invocation. Each deferred field also produces a matching entry in `warnings`.
@@ -1404,7 +1404,7 @@ When `--audit-out` is supplied, the command builds both artifacts in memory and 
 - `modeEffects` records every non-zero adjustment and reason. `sourceControl` records default-enabled or intentional disablement. `conflicts` contains only conservative static edit-guidance conflicts and is normally empty.
 - `contextAdequacy.status` reflects candidate/focus/graph/source/metadata sufficiency and explicit conflicts. `--no-source` becomes a listed assumption rather than a retrieval failure. A detected static conflict uses `context conflict found and user or upstream stage decision required`.
 
-`retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, `roleContext` (**v1.10.1 Batch 2**), `contextAdequacy`, and (**v1.10.1 Batch 4**) `responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance`. The ordered step sequence contains the v1.6-era source-evidence generation steps, `apply-mode-ranking-adjustment`, `resolve-focus`/`merge-changed-surface`/`apply-role-ranking` (**v1.10.1 Batch 2**, between ranking and focus selection), `build-evidence-groups`/`discover-test-infrastructure`/`derive-test-commands` (**v1.10.1 Batch 3**, immediately after), `skip-source-evidence`, `detect-context-conflicts`, `update-context-adequacy`, and `map-responsibilities`/`classify-freshness`/`apply-budget`/`evaluate-adequacy`/`record-provenance` (**v1.10.1 Batch 4**, immediately after `update-context-adequacy`). Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
+`retrieval-audit-record.json` (when `--audit-out` is provided) includes `schemaVersion`, `generatedAt`, `tool`, `request`, `index`, `steps`, `fallbacks`, `fullFileReadRecommendations`, `warnings`, `roleContext` (**v1.10.1 Batch 2**), `contextAdequacy`, and (**v1.10.1 Batch 4**) `responsibilityMappings`/`roleAdequacy`/`freshness`/`budget`/`truncation`/`fullFileFallback`/`provenance`. Version 1.10.4 output carries the same `roleConditionCoverage` as the capsule. The ordered step sequence contains the v1.6-era source-evidence generation steps, `apply-mode-ranking-adjustment`, `resolve-focus`/`merge-changed-surface`/`apply-role-ranking` (**v1.10.1 Batch 2**, between ranking and focus selection), `build-evidence-groups`/`discover-test-infrastructure`/`derive-test-commands` (**v1.10.1 Batch 3**, immediately after), `skip-source-evidence`, `detect-context-conflicts`, `update-context-adequacy`, and `map-responsibilities`/`classify-freshness`/`apply-budget`/`evaluate-adequacy`/`record-provenance` (**v1.10.1 Batch 4**, immediately after `update-context-adequacy`). Every step contains a stable id/kind, description, inputs, outputs, status, and warnings. Full-file recommendations are normally empty.
 
 ### Android integration (v1.10.0 Batch 6)
 
@@ -1520,6 +1520,19 @@ These additive corrections are part of the published v1.10.3 package:
 - **Directed file evidence:** plain file evidence retains its repository-relative evidence item ID but uses canonical `file:<path>` graph-node identity to classify dependency versus caller edges. Symbol evidence continues to use its symbol node ID. Capsule and retrieval-audit summaries use the same computed results.
 
 The request schema major remains `1`, output schema version remains `"1.0.0"`, and the command syntax, modes, roles, evidence-kind vocabulary, and legacy behavior are unchanged. This correction does not add responsibility criticality to `testResponsibilityRefs`, runtime proof, LLM owner selection, source editing, or automatic orchestrator integration.
+
+### v1.10.4 condition-aware adequacy corrections
+
+The command has no new flag. Version 1.10.4 output adds deterministic condition coverage for the required implementation owner and required contract and writes the same result to the capsule and audit.
+
+- `roleConditionCoverage[]` reports stable `conditionId`, associated `evidenceGroupIds`, `witnessPolicy`, required/available/retained witness counts, stable retained witness IDs, satisfaction, and allocation-caused loss.
+- `groupTruncation[].requiredOmittedCount` now counts only the minimum required witness deficit caused by bounded allocation. `optionalOmittedCount` accounts for every remaining dropped candidate, including surplus owner/contract evidence and compatibility-surface overflow with no required compatibility condition.
+- `truncation.truncated` still reports any bounded omission. The additive `truncation.requiredEvidenceLost` is true only when a record reports actual required-condition or critical-responsibility loss.
+- Implementation `roleAdequacy` may be `context sufficient with listed assumptions` while optional truncation is present. Missing owner/contract candidates, stale evidence, critical responsibility failures, and allocation that loses the last adequate required witness remain inadequate.
+- Missing candidates and lost candidates are distinct: an unavailable condition is inadequate but is not labeled truncation-caused required loss.
+- Current implementation-role generation supplies nonempty coverage. Missing or empty current coverage fails closed. Legacy callers and schema-major-1 artifact pairs without both additive fields remain conservatively compatible; one-sided absence or disagreement fails raw-evidence parity.
+
+Consumers should inspect `roleAdequacy`, `truncation.requiredEvidenceLost`, and the condition-specific diagnostics. General `truncation.truncated` alone does not establish inadequacy. Version 1.10.4 reports the corrected behavior while preserving the existing command contract.
 
 ## graph-diff
 

@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [22.x, 24.x]
+        node-version: [24.x]
 
     steps:
       - name: Checkout
@@ -32,20 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Type check
-        run: npm run typecheck
+      - name: Verify
+        run: npm run verify
 
       - name: Test
         run: npm run test
 
-      - name: Build
-        run: npm run build
-
-      - name: Verify
-        run: npm run verify
-
       - name: Package dry run
-        run: npm pack --dry-run
+        run: npm pack --dry-run --json
 
       - name: CLI help
         run: node dist/cli.js --help
@@ -58,6 +52,12 @@ jobs:
 
       - name: Smoke - search TypeScript example
         run: node dist/cli.js search --index examples/basic-ts/.my-dev-kit-ci --query user --limit 5 --json
+
+      - name: Smoke - source TypeScript example
+        run: node dist/cli.js source --index examples/basic-ts/.my-dev-kit-ci --contains User --format json
+
+      - name: Smoke - context TypeScript example
+        run: node dist/cli.js context --index examples/basic-ts/.my-dev-kit-ci --query "user service" --out examples/basic-ts/.my-dev-kit-ci/context-capsule.json --json
 
       - name: Smoke - view TypeScript example (DOT)
         run: node dist/cli.js view --index examples/basic-ts/.my-dev-kit-ci --format dot --out examples/basic-ts/.my-dev-kit-ci/graph.dot --edge-style semantic --json

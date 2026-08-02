@@ -46,6 +46,8 @@ CI validates the following:
 - the built CLI responds to `--version`
 - the TypeScript example can be indexed with call graph generation
 - search returns results from the indexed TypeScript example
+- source retrieval returns results from the indexed TypeScript example
+- context generation succeeds against the indexed TypeScript example
 - graph view can generate DOT output from the indexed TypeScript example
 - the Python example can be indexed when Python is available
 - temporary example artifacts are removed after the smoke checks
@@ -55,15 +57,15 @@ CI validates the following:
 The CI workflow runs the equivalent of the following commands from the repository root:
 
     npm ci
-    npm run typecheck
-    npm run test
-    npm run build
     npm run verify
-    npm pack --dry-run
+    npm run test
+    npm pack --dry-run --json
     node dist/cli.js --help
     node dist/cli.js --version
     node dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-ci --call-graph --json
     node dist/cli.js search --index examples/basic-ts/.my-dev-kit-ci --query user --limit 5 --json
+    node dist/cli.js source --index examples/basic-ts/.my-dev-kit-ci --contains User --format json
+    node dist/cli.js context --index examples/basic-ts/.my-dev-kit-ci --query "user service" --out examples/basic-ts/.my-dev-kit-ci/context-capsule.json --json
     node dist/cli.js view --index examples/basic-ts/.my-dev-kit-ci --format dot --out examples/basic-ts/.my-dev-kit-ci/graph.dot --edge-style semantic --json
     node dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-ci --json
 
@@ -101,6 +103,8 @@ After building, run the same CLI smoke checks locally:
     node dist/cli.js --version
     node dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-local-ci --call-graph --json
     node dist/cli.js search --index examples/basic-ts/.my-dev-kit-local-ci --query user --limit 5 --json
+    node dist/cli.js source --index examples/basic-ts/.my-dev-kit-local-ci --contains User --format json
+    node dist/cli.js context --index examples/basic-ts/.my-dev-kit-local-ci --query "user service" --out examples/basic-ts/.my-dev-kit-local-ci/context-capsule.json --json
     node dist/cli.js view --index examples/basic-ts/.my-dev-kit-local-ci --format dot --out examples/basic-ts/.my-dev-kit-local-ci/graph.dot --edge-style semantic --json
     node dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-local-ci --json
 

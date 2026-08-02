@@ -17,6 +17,7 @@ import type {
   EvidenceGroup,
   GroupTruncationEntry,
   ResponsibilityMappingSummary,
+  RoleConditionCoverage,
   RetentionSummary,
   SelectedSource,
   SelectedSourceBundles,
@@ -147,10 +148,13 @@ export interface BuildTruncationOptions {
   evidenceGroups: EvidenceGroup[]
   groupTruncation: GroupTruncationEntry[]
   responsibilityMappings: ResponsibilityMappingSummary
+  /** Current pipeline supplies shared condition coverage. Optional only for
+   * conservative legacy-compatible callers. */
+  roleConditionCoverage?: RoleConditionCoverage[]
 }
 
 export function buildTruncation(options: BuildTruncationOptions): TruncationSummary {
-  const { evidenceGroups, groupTruncation, responsibilityMappings } = options
+  const { evidenceGroups, groupTruncation, responsibilityMappings, roleConditionCoverage } = options
   const records: TruncationRecord[] = []
   const warnings: string[] = []
 
@@ -158,7 +162,21 @@ export function buildTruncation(options: BuildTruncationOptions): TruncationSumm
     if (!entry.truncated) continue
     const group = evidenceGroups.find((g) => g.id === entry.groupId)
     const droppedEvidenceIds = entry.droppedEvidenceIds ?? []
-    const requiredEvidenceLost = group?.required === true
+    const sharedClassificationAvailable =
+      entry.requiredOmittedCount !== undefined &&
+      entry.optionalOmittedCount !== undefined
+    const requiredEvidenceLost = sharedClassificationAvailable
+      ? entry.requiredOmittedCount! > 0
+      : group?.required === true
+    if (
+      !sharedClassificationAvailable &&
+      roleConditionCoverage !== undefined &&
+      group?.role === 'implementation'
+    ) {
+      warnings.push(
+        `Condition coverage was available but omission classification was absent for group "${entry.groupId}"; conservative required-group fallback was used.`
+      )
+    }
     records.push({
       id: `truncation-group:${entry.groupId}`,
       affectedGroup: entry.groupId,
@@ -168,11 +186,13 @@ export function buildTruncation(options: BuildTruncationOptions): TruncationSumm
       droppedCount: entry.droppedCount,
       droppedEvidenceIds,
       requiredEvidenceLost,
-      adequacyImpact: requiredEvidenceLost ? `Required evidence group "${entry.groupId}" was truncated; role adequacy may be reduced.` : null,
+      adequacyImpact: requiredEvidenceLost
+        ? `Required role-condition witness evidence was lost from group "${entry.groupId}" during bounded selection.`
+        : null,
       reason: `Group "${entry.groupId}" exceeded its bounded limit (${entry.limit}); ${entry.droppedCount} item(s) were dropped in deterministic (score/path) order.`,
     })
     if (requiredEvidenceLost) {
-      warnings.push(`Required evidence was truncated in group "${entry.groupId}" (${entry.droppedCount} item(s) dropped).`)
+      warnings.push(`Required role-condition witness evidence was lost in group "${entry.groupId}" (${entry.requiredOmittedCount ?? entry.droppedCount} required item(s) dropped).`)
     }
   }
 
@@ -199,5 +219,10 @@ export function buildTruncation(options: BuildTruncationOptions): TruncationSumm
   }
 
   records.sort((a, b) => a.id.localeCompare(b.id))
-  return { truncated: records.length > 0, records, warnings }
+  return {
+    truncated: records.length > 0,
+    requiredEvidenceLost: records.some((record) => record.requiredEvidenceLost),
+    records,
+    warnings,
+  }
 }

@@ -104,7 +104,7 @@ describe('required-first evidence allocation (Batch 2)', () => {
     expect(capsule.roleAdequacy.status).not.toBe('context insufficient and more retrieval required')
   })
 
-  it('TST-B1202-002 (CASE-005): required evidence beyond the real finite bound is genuinely truncated and adequacy is insufficient', () => {
+  it('TST-B1202-002 (CASE-005): bounded overflow stays visible without fabricating required-condition loss', () => {
     const root = createTempRoot('my-dev-kit-v1-alloc-case005-')
     const src = join(root, 'src')
     mkdirSync(src, { recursive: true })
@@ -128,9 +128,9 @@ describe('required-first evidence allocation (Batch 2)', () => {
     expect(result.status).toBe(0)
     const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
 
-    // Total qualified required evidence across groups vastly exceeds the governing
-    // hard bound (sum of all required-group reservations): this is genuine overflow,
-    // not an artifact of any single group's fixed cap.
+    // Total qualified evidence across groups vastly exceeds the governing hard
+    // bound. Overflow remains visible, while the retained owner and contract
+    // witnesses keep the mapped conditions covered.
     const anyEntry = capsule.groupTruncation[0]
     expect(anyEntry.aggregateCapacityRemaining).toBe(0)
     expect(anyEntry.governingHardBound).toBeGreaterThan(0)
@@ -138,14 +138,15 @@ describe('required-first evidence allocation (Batch 2)', () => {
     const truncatedGroups = (capsule.groupTruncation as GroupTruncationLike[]).filter((g) => g.truncated)
     expect(truncatedGroups.length).toBeGreaterThan(0)
     for (const g of truncatedGroups) {
-      expect(g.requiredOmittedCount).toBeGreaterThan(0)
-      expect(g.adequacyAffected).toBe(true)
+      expect(g.requiredOmittedCount).toBe(0)
+      expect(g.optionalOmittedCount).toBe(g.droppedCount)
+      expect(g.adequacyAffected).toBe(false)
     }
 
     expect(capsule.truncation.truncated).toBe(true)
-    expect(capsule.truncation.records.some((r: { requiredEvidenceLost: boolean }) => r.requiredEvidenceLost)).toBe(true)
-    expect(capsule.roleAdequacy.missingConditions).toContain('required evidence truncated')
-    expect(capsule.roleAdequacy.status).toBe('context insufficient and more retrieval required')
+    expect(capsule.truncation.records.some((r: { requiredEvidenceLost: boolean }) => r.requiredEvidenceLost)).toBe(false)
+    expect(capsule.roleAdequacy.missingConditions).not.toContain('required evidence truncated')
+    expect(capsule.roleAdequacy.status).toBe('context sufficient for implementation')
   })
 
   it('TST-B1202-003 (CASE-001 shape): neutral owner plus allocation fix together produce adequate implementation context', () => {
@@ -263,8 +264,10 @@ describe('required-first evidence allocation (Batch 2)', () => {
     const validators = findGroup(capsule.groupTruncation, 'implementation-validators-and-constants')
     const errors = findGroup(capsule.groupTruncation, 'implementation-errors')
     expect(contracts.borrowedCapacity).toBeGreaterThan(0)
-    expect(validators.requiredOmittedCount).toBeGreaterThan(0)
-    expect(errors.requiredOmittedCount).toBeGreaterThan(0)
+    expect(validators.optionalOmittedCount).toBeGreaterThan(0)
+    expect(errors.optionalOmittedCount).toBeGreaterThan(0)
+    expect(validators.requiredOmittedCount).toBe(0)
+    expect(errors.requiredOmittedCount).toBe(0)
     // Lower-priority groups only borrow what remains after higher-priority groups' claims.
     expect(validators.borrowedCapacity).toBe(0)
     expect(errors.borrowedCapacity).toBe(0)

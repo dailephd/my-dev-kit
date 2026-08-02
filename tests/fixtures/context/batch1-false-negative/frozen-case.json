@@ -1,0 +1,388 @@
+{
+  "fixtureSchemaVersion": "1.0.0",
+  "fixtureId": "v1.11.0-batch-1-implementation-adequacy-false-negative",
+  "provenance": {
+    "sourceInvestigationReport": "<INVESTIGATION_ROOT>/context-readiness-fix-planning-report.txt",
+    "originalProducerVersion": "1.10.3",
+    "sourceRepositoryIdentity": "<REPOSITORY_ROOT>",
+    "originalActiveIndexIdentity": "<REPOSITORY_ROOT>/.my-dev-kit-context/v1.11.0-batch-1-compose-artifact-foundation/implementation",
+    "indexedRepositoryCommit": "75b29272b2133f6f8d2944362ec12e5e89ebf283",
+    "productionCommitAfterIndexing": "c2e6a4990320a00045b0c77ecfe969219dc69d6d",
+    "captureDate": "2026-07-30",
+    "originalArtifacts": {
+      "request": {
+        "source": "<INVESTIGATION_ROOT>/runtime-evidence/batch-context/implementation-request.json",
+        "sha256": "D2E5CFFD1DA4DCFD6E8DE396657E0BFD509CE81CFCD6AF18B53854D8D5864085"
+      },
+      "capsule": {
+        "source": "<INVESTIGATION_ROOT>/runtime-evidence/batch-context/implementation-capsule.json",
+        "sha256": "FD37E981FEEA6E8CF605295DDC367754CE56E932DA327807D65261A05636F2A9"
+      },
+      "audit": {
+        "source": "<INVESTIGATION_ROOT>/runtime-evidence/batch-context/implementation-audit.json",
+        "sha256": "CABF607CC4D1827E0B0E35D86138034DDEB254F014AF18CCD78DBF91A19F5DD7"
+      }
+    },
+    "correctedReproductionArtifacts": {
+      "requestSha256": "9534B67B21CA675D1C7788618F71942C7C18C9C38AC6ABDADBC84C16AFCCA34A",
+      "capsuleSha256": "EA377F1A24016FEFA35DB4D1457EDF6AE4757760E1668734052D3D63F0E30E7B",
+      "auditSha256": "2256FAC575D336DE4C4315294168C9DFFB2C711B022E152067FF1D21ED2D4BA8"
+    },
+    "normalization": {
+      "performed": true,
+      "fields": [
+        "provenance.sourceInvestigationReport",
+        "provenance.originalArtifacts.*.source",
+        "provenance.sourceRepositoryIdentity",
+        "provenance.originalActiveIndexIdentity",
+        "request.index",
+        "request.beforeIndex",
+        "request.afterIndex",
+        "request.output",
+        "request.auditOutput"
+      ],
+      "replacements": [
+        {
+          "originalKind": "investigation workspace root",
+          "replacement": "<INVESTIGATION_ROOT>"
+        },
+        {
+          "originalKind": "source repository root",
+          "replacement": "<REPOSITORY_ROOT>"
+        },
+        {
+          "originalKind": "generated capsule output path",
+          "replacement": "<OUTPUT_PATH>"
+        },
+        {
+          "originalKind": "generated audit output path",
+          "replacement": "<AUDIT_PATH>"
+        }
+      ],
+      "decisionRelevantFieldsChanged": false
+    }
+  },
+  "request": {
+    "schemaVersion": "1.0.0",
+    "role": "implementation",
+    "query": "Retrieve the exact current contracts, types, call sites, validators, constants, artifact-writing behavior, stale-cleanup behavior, analyzer-status behavior, incremental invalidation behavior, and closest tests needed to implement the optional android-compose-semantic.json declaration-only analyzer in the approved files.",
+    "index": "<REPOSITORY_ROOT>/.my-dev-kit-context/v1.11.0-batch-1-compose-artifact-foundation/implementation",
+    "mode": "feature-add",
+    "focusFiles": [
+      "src/android/androidNavigationTypes.ts",
+      "src/android/buildComposeNavigationRoutes.ts",
+      "src/android/buildAndroidNavigationProject.ts",
+      "src/android/index.ts",
+      "src/indexing/managedArtifacts.ts",
+      "src/indexing/writeIndexManifest.ts",
+      "src/indexing/runIndexCommand.ts",
+      "src/indexing/manifestTypes.ts"
+    ],
+    "beforeIndex": "<REPOSITORY_ROOT>/.my-dev-kit-context/v1.11.0-batch-1-compose-artifact-foundation/baseline",
+    "afterIndex": "<REPOSITORY_ROOT>/.my-dev-kit-context/v1.11.0-batch-1-compose-artifact-foundation/implementation",
+    "requestedEvidenceKinds": [
+      "owner",
+      "dependencies",
+      "contracts",
+      "validators",
+      "constants",
+      "errors",
+      "schemas",
+      "callers",
+      "callees",
+      "closest-tests"
+    ],
+    "output": "<OUTPUT_PATH>",
+    "auditOutput": "<AUDIT_PATH>"
+  },
+  "allocation": {
+    "governingHardBound": 84,
+    "aggregateCapacityUsed": 84,
+    "aggregateCapacityRemaining": 0,
+    "groups": [
+      {
+        "groupId": "implementation-owners",
+        "required": true,
+        "reservation": 3,
+        "availableCount": 15,
+        "usedCount": 15,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 3,
+        "unusedReservationContributed": 0,
+        "borrowedCapacity": 12,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-dependencies",
+        "required": true,
+        "reservation": 10,
+        "availableCount": 11,
+        "usedCount": 11,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 10,
+        "unusedReservationContributed": 0,
+        "borrowedCapacity": 1,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-callers-and-callees",
+        "required": true,
+        "reservation": 15,
+        "availableCount": 11,
+        "usedCount": 11,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 11,
+        "unusedReservationContributed": 4,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-contracts",
+        "required": true,
+        "reservation": 10,
+        "availableCount": 47,
+        "usedCount": 39,
+        "truncated": true,
+        "droppedCount": 8,
+        "initiallySelectedCount": 10,
+        "unusedReservationContributed": 0,
+        "borrowedCapacity": 29,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 8,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-validators-and-constants",
+        "required": true,
+        "reservation": 10,
+        "availableCount": 0,
+        "usedCount": 0,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 0,
+        "unusedReservationContributed": 10,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-errors",
+        "required": true,
+        "reservation": 10,
+        "availableCount": 0,
+        "usedCount": 0,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 0,
+        "unusedReservationContributed": 10,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-schemas-and-serializers",
+        "required": true,
+        "reservation": 10,
+        "availableCount": 0,
+        "usedCount": 0,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 0,
+        "unusedReservationContributed": 10,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-compatibility-surfaces",
+        "required": true,
+        "reservation": 8,
+        "availableCount": 29,
+        "usedCount": 8,
+        "truncated": true,
+        "droppedCount": 21,
+        "initiallySelectedCount": 8,
+        "unusedReservationContributed": 0,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 21,
+        "adequacyAffected": false
+      },
+      {
+        "groupId": "implementation-closest-tests",
+        "required": true,
+        "reservation": 8,
+        "availableCount": 0,
+        "usedCount": 0,
+        "truncated": false,
+        "droppedCount": 0,
+        "initiallySelectedCount": 0,
+        "unusedReservationContributed": 8,
+        "borrowedCapacity": 0,
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 0,
+        "adequacyAffected": false
+      }
+    ]
+  },
+  "roleConditionCoverage": [
+    {
+      "conditionId": "implementation.selected-owner",
+      "role": "implementation",
+      "required": true,
+      "evidenceGroupIds": [
+        "implementation-owners"
+      ],
+      "witnessPolicy": "at-least-one",
+      "requiredWitnessCount": 1,
+      "availableWitnessCount": 15,
+      "retainedWitnessCount": 15,
+      "retainedWitnessIds": [
+        "file:src/android/androidNavigationTypes.ts",
+        "file:src/context/types.ts",
+        "file:src/indexing/manifestTypes.ts",
+        "file:src/symbol-index/types.ts",
+        "src/android/androidNavigationTypes.ts",
+        "src/android/buildAndroidNavigationProject.ts",
+        "src/android/buildComposeNavigationRoutes.ts",
+        "src/indexing/managedArtifacts.ts",
+        "src/indexing/manifestTypes.ts",
+        "src/indexing/runIndexCommand.ts",
+        "src/indexing/writeIndexManifest.ts",
+        "symbol:src/android/androidNavigationTypes.ts#ANDROID_NAVIGATION_ARTIFACT_KIND",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidComposeRoute",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidComposeScreenCandidate",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidNavigationArtifact"
+      ],
+      "conditionSatisfied": true,
+      "lostRequiredCondition": false,
+      "lossReason": null,
+      "evaluationOrder": 10
+    },
+    {
+      "conditionId": "implementation.required-contract",
+      "role": "implementation",
+      "required": true,
+      "evidenceGroupIds": [
+        "implementation-contracts"
+      ],
+      "witnessPolicy": "at-least-one",
+      "requiredWitnessCount": 1,
+      "availableWitnessCount": 47,
+      "retainedWitnessCount": 39,
+      "retainedWitnessIds": [
+        "file:src/android/androidComponentTypes.ts",
+        "file:src/android/androidGradleTypes.ts",
+        "file:src/android/androidManifestTypes.ts",
+        "file:src/android/androidNavigationTypes.ts",
+        "file:src/android/androidProjectTypes.ts",
+        "file:src/android/androidResourceTypes.ts",
+        "file:src/context/types.ts",
+        "file:src/frontend/frontendTypes.ts",
+        "file:src/indexing/manifestTypes.ts",
+        "file:src/semantics/semanticTypes.ts",
+        "file:src/symbol-index/types.ts",
+        "src/android/androidGradleTypes.ts",
+        "src/android/androidNavigationTypes.ts",
+        "src/android/androidResourceTypes.ts",
+        "symbol:src/android/androidComponentTypes.ts#ANDROID_COMPONENTS_ARTIFACT_KIND",
+        "symbol:src/android/androidComponentTypes.ts#AndroidComponentsArtifact",
+        "symbol:src/android/androidGradleTypes.ts#ANDROID_GRADLE_ARTIFACT_KIND",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleArtifact",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleIncludedBuild",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleIncludedModule",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradlePlugin",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleSettingsEvidence",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleSourceSetOverride",
+        "symbol:src/android/androidGradleTypes.ts#AndroidGradleVersionCatalogPlugin",
+        "symbol:src/android/androidManifestTypes.ts#ANDROID_MANIFEST_ARTIFACT_KIND",
+        "symbol:src/android/androidManifestTypes.ts#AndroidManifestArtifact",
+        "symbol:src/android/androidManifestTypes.ts#AndroidManifestDeepLinkCandidate",
+        "symbol:src/android/androidManifestTypes.ts#AndroidManifestIntentFilterEvidence",
+        "symbol:src/android/androidNavigationTypes.ts#ANDROID_NAVIGATION_ARTIFACT_KIND",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidComposeRoute",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidComposeScreenCandidate",
+        "symbol:src/android/androidNavigationTypes.ts#AndroidNavigationArtifact",
+        "symbol:src/android/androidProjectTypes.ts#ANDROID_PROJECT_ARTIFACT_KIND",
+        "symbol:src/android/androidProjectTypes.ts#AndroidProjectArtifact",
+        "symbol:src/android/androidResourceTypes.ts#ANDROID_RESOURCES_ARTIFACT_KIND",
+        "symbol:src/android/androidResourceTypes.ts#AndroidResourceDirectory",
+        "symbol:src/android/androidResourceTypes.ts#AndroidResourceDirectoryQualifierInfo",
+        "symbol:src/android/androidResourceTypes.ts#AndroidResourceFileProviderPathEntry",
+        "symbol:src/android/androidResourceTypes.ts#AndroidResourcesArtifact"
+      ],
+      "conditionSatisfied": true,
+      "lostRequiredCondition": false,
+      "lossReason": null,
+      "evaluationOrder": 20
+    }
+  ],
+  "historicalV1103Outcome": {
+    "groupOmissions": [
+      {
+        "groupId": "implementation-contracts",
+        "requiredOmittedCount": 8,
+        "optionalOmittedCount": 0,
+        "requiredEvidenceLost": true
+      },
+      {
+        "groupId": "implementation-compatibility-surfaces",
+        "requiredOmittedCount": 21,
+        "optionalOmittedCount": 0,
+        "requiredEvidenceLost": true
+      }
+    ],
+    "truncated": true,
+    "requiredEvidenceLost": true,
+    "requiredConditions": [
+      "selected owner evidence exists",
+      "required contract evidence exists",
+      "no critical unresolved implementation requirement remains",
+      "context is not stale"
+    ],
+    "satisfiedConditions": [
+      "selected owner evidence exists",
+      "required contract evidence exists",
+      "no critical unresolved implementation requirement remains",
+      "context is not stale"
+    ],
+    "missingConditions": [
+      "required evidence truncated"
+    ],
+    "blockingConditions": [],
+    "roleAdequacyStatus": "context insufficient and more retrieval required"
+  },
+  "correctedOutcome": {
+    "groupOmissions": [
+      {
+        "groupId": "implementation-contracts",
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 8,
+        "requiredEvidenceLost": false
+      },
+      {
+        "groupId": "implementation-compatibility-surfaces",
+        "requiredOmittedCount": 0,
+        "optionalOmittedCount": 21,
+        "requiredEvidenceLost": false
+      }
+    ],
+    "truncated": true,
+    "requiredEvidenceLost": false,
+    "missingConditions": [],
+    "blockingConditions": [],
+    "roleAdequacyStatus": "context sufficient with listed assumptions"
+  }
+}
