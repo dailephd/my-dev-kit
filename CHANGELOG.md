@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Work in progress toward v1.11.0 (Jetpack Compose semantic retrieval and Android UI-test indexing). Not yet released or published.
+
+- Extended `android-compose-semantic.json` (schema `"1.1.0"`) with additive, conservative, source-grounded fact evidence attached to Batch 1's existing composable declarations: Compose state acquisition (`remember`, `rememberSaveable`, `collectAsState`, `collectAsStateWithLifecycle`), lifecycle effects (`LaunchedEffect`, `DisposableEffect`, including direct `onDispose` presence), ViewModel references (`viewModel()`, `hiltViewModel()`, and statically-typed parameters), `Modifier.testTag(...)` values, direct `Text(...)` visible-text literals, and `stringResource(R.string.<name>)` usage. Every fact is statically attributed to its innermost enclosing recognized composable; unsupported or dynamic forms are recorded unresolved (or omitted with a warning), never guessed.
+- Does not yet implement: public Compose retrieval selectors (`source --composable`, `slice --composable`, etc.), Compose `code-graph.json` nodes/edges or graph views, Android unit/instrumented/UI-test indexing, click-handler or navigation-call extraction, or any ViewModel-to-repository/Android classification data flow — those remain later v1.11.0/v1.12.0 scope.
+
 ## 1.10.4 - 2026-08-01
 
 This corrective patch fixes false-negative implementation-role adequacy without changing bounded allocation, ranking, command syntax, or schema major.

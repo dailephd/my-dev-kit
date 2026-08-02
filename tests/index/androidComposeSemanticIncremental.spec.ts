@@ -69,10 +69,14 @@ describe('android-compose-semantic.json manifest registration and stale cleanup'
     expect(names).toEqual(expect.arrayContaining(['HomeScreen', 'Greeting', 'HomeScreenPreview']))
     expect(names).not.toContain('helperNotComposable')
 
-    // No Batch 2-6 fields appear on this greenfield artifact.
-    expect(artifact).not.toHaveProperty('stateReferences')
-    expect(artifact).not.toHaveProperty('effects')
-    expect(artifact).not.toHaveProperty('viewModelReferences')
+    // Batch 2 additive fact arrays are present (possibly empty) on every detected artifact;
+    // Batch 3-6 retrieval/graph/test-indexing surfaces remain absent.
+    expect(artifact).toHaveProperty('stateFacts')
+    expect(artifact).toHaveProperty('effectFacts')
+    expect(artifact).toHaveProperty('viewModelReferences')
+    expect(artifact).toHaveProperty('testTagFacts')
+    expect(artifact).toHaveProperty('visibleTextFacts')
+    expect(artifact).toHaveProperty('stringResourceFacts')
 
     // Existing Android navigation artifact behavior is unaffected.
     expect(existsSync(join(root, 'out', 'android-navigation.json'))).toBe(false)
