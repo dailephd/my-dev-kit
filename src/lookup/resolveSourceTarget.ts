@@ -72,6 +72,10 @@ const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
   'android-compose-route',
   'android-composable',
   'android-compose-fact',
+  'android-test-file',
+  'android-test-class',
+  'android-test-method',
+  'android-test-fact',
 ])
 
 const ANDROID_DEFAULT_WINDOW = 12

@@ -632,6 +632,12 @@ npx @dailephd/my-dev-kit search --index .my-dev-kit --android-ui "Welcome back" 
 
 Static-analysis limitation: no claim is made that a composable renders, a child is visible, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to displayed text.
 
+### Android test evidence (v1.11.0 Batch 5)
+
+No new selector flags. `android-test-semantic.json`'s compact `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` nodes (test classes, test methods, JUnit/Compose-rule/Espresso/Robolectric evidence, and visible-text/test-tag/route/mock/fake facts) are discoverable exactly like the Compose nodes above through plain `search --query <text>` — test class/method names, framework names, annotation text, assertion values, route strings, and mocked/faked dependency names/types are all generic searchable fields, since every `android-*`-prefixed node is automatically eligible. `lookup --node <id>`, `source --node <id>` (bounded to the node's own recorded source range — never a whole-file fallback), and ordinary `slice --node <id> --depth <n>` all work unchanged; a test-method slice naturally includes real edges such as `android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` when the test statically references production evidence. `context` picks up test evidence as an ordinary candidate the same way. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change — there is no dedicated `android-test-semantic.json` diff section.
+
+Static-analysis limitation: indexing never executes a test. No fact or edge claims a test ran, a Compose rule initialized, an Activity launched, an assertion passed, or a mock/fake was actually injected at runtime.
+
 ### Examples
 
 ```sh

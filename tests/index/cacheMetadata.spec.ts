@@ -23,6 +23,7 @@ describe('computeConfigFingerprint', () => {
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
       androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
       androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
     }
 
     expect(computeConfigFingerprint(input)).toBe(computeConfigFingerprint(input))
@@ -41,6 +42,7 @@ describe('computeConfigFingerprint', () => {
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
       androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
       androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
     })
     const b = computeConfigFingerprint({
       sourceRoots: ['tests', 'src'],
@@ -54,6 +56,7 @@ describe('computeConfigFingerprint', () => {
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
       androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
       androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
     })
 
     expect(a).toBe(b)
@@ -71,6 +74,7 @@ describe('computeConfigFingerprint', () => {
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
       androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
       androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
     }
     const withCallGraph = computeConfigFingerprint({ ...base, callGraphEnabled: true })
     const withoutCallGraph = computeConfigFingerprint({ ...base, callGraphEnabled: false })
@@ -90,6 +94,7 @@ describe('computeConfigFingerprint', () => {
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
       androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
       androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
     }
     const a = computeConfigFingerprint({ ...base, sourceRoots: ['src'] })
     const b = computeConfigFingerprint({ ...base, sourceRoots: ['src', 'lib'] })

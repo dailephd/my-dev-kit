@@ -24,8 +24,12 @@ export type CodeGraphNodeKind =
   | 'android-compose-route'
   | 'android-composable'
   | 'android-compose-fact'
+  | 'android-test-file'
+  | 'android-test-class'
+  | 'android-test-method'
+  | 'android-test-fact'
 
-/** Which Batch 1-4 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
+/** Which Batch 1-5 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
 export type AndroidArtifactId =
   | 'android-project'
   | 'android-components'
@@ -34,6 +38,7 @@ export type AndroidArtifactId =
   | 'android-resources'
   | 'android-navigation'
   | 'android-compose-semantic'
+  | 'android-test-semantic'
 
 export type CodeGraphEdgeKind =
   | 'defines'
@@ -67,6 +72,14 @@ export type CodeGraphEdgeKind =
   | 'click-handler-contains-navigation-call'
   | 'compose-navigation-targets-route'
   | 'compose-string-references-resource'
+  | 'defines-test-class'
+  | 'test-class-defines-method'
+  | 'test-class-uses-rule'
+  | 'test-method-has-fact'
+  | 'android-test-references-composable'
+  | 'android-test-references-route'
+  | 'android-test-references-viewmodel'
+  | 'android-test-uses-double'
 
 export interface CodeGraphNode {
   id: string

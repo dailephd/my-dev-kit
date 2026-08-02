@@ -201,3 +201,26 @@ export {
   type ComposeDeclarationEntry,
   type ComposeSemanticSummary,
 } from './androidComposeTypes.js'
+export {
+  buildAndroidTestSemanticProject,
+  buildAndroidTestEvidenceFingerprint,
+  type BuildAndroidTestSemanticProjectOptions,
+} from './buildAndroidTestSemanticProject.js'
+export {
+  ANDROID_TEST_SEMANTIC_ARTIFACT_KIND,
+  ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+  ANDROID_TEST_SEMANTIC_FILENAME,
+  type AndroidTestSemanticArtifact,
+  type BuildAndroidTestSemanticProjectResult,
+  type AndroidTestSourceSetCategory,
+  type AndroidTestLanguage,
+  type AndroidTestFramework,
+  type AndroidTestFileEntry,
+  type AndroidTestClassEntry,
+  type AndroidTestMethodEntry,
+  type AndroidTestRuleEntry,
+  type AndroidTestAssertionFactEntry,
+  type AndroidTestRouteFactEntry,
+  type AndroidTestDoubleFactEntry,
+  type AndroidTestSemanticSummary,
+} from './androidTestTypes.js'

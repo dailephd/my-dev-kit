@@ -59,6 +59,7 @@ import {
   ANDROID_RESOURCES_FILENAME,
   ANDROID_NAVIGATION_FILENAME,
   ANDROID_COMPOSE_SEMANTIC_FILENAME,
+  ANDROID_TEST_SEMANTIC_FILENAME,
   CLASSIFICATION_FILENAME,
 } from './managedArtifacts.js'
 import type { IndexAnalyzerStatus } from './manifestTypes.js'
@@ -82,6 +83,9 @@ import {
   buildAndroidArtifactRelationships,
   buildAndroidComposeSemanticProject,
   ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+  buildAndroidTestSemanticProject,
+  buildAndroidTestEvidenceFingerprint,
+  ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
   type AndroidComponentsArtifact,
   type CompactAndroidComponentMetadata,
   type BuildAndroidGradleProjectResult,
@@ -90,6 +94,7 @@ import {
   type BuildAndroidNavigationProjectResult,
   type BuildAndroidArtifactRelationshipsResult,
   type BuildAndroidComposeSemanticProjectResult,
+  type BuildAndroidTestSemanticProjectResult,
 } from '../android/index.js'
 
 export interface RunIndexCommandOptions {
@@ -151,6 +156,8 @@ export interface RunIndexCommandIndexResult {
   androidNavigationPath: string | null
   /** Path to `android-compose-semantic.json`, or `null` when no supported Compose declaration evidence was detected (v1.11.0 Batch 1). */
   androidComposeSemanticPath: string | null
+  /** Path to `android-test-semantic.json`, or `null` when no supported Android `test`/`androidTest` evidence was detected (v1.11.0 Batch 5). */
+  androidTestSemanticPath: string | null
   cache: IndexCacheSummary
   cacheReset: CacheResetResult | null
 }
@@ -358,6 +365,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       projectRoot,
       androidResources: androidResourcesResult.artifact,
     }),
+    androidTestEvidenceFingerprint: buildAndroidTestEvidenceFingerprint(projectRoot, androidResult.artifact),
   })
 
   const cacheRead = readCacheMetadata(outputDir)
@@ -602,6 +610,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     androidResourcesPath: resolveAndroidResourcesPathFromManifest(existingManifest, outputDir),
     androidNavigationPath: resolveAndroidNavigationPathFromManifest(existingManifest, outputDir),
     androidComposeSemanticPath: resolveAndroidComposeSemanticPathFromManifest(existingManifest, outputDir),
+    androidTestSemanticPath: resolveAndroidTestSemanticPathFromManifest(existingManifest, outputDir),
     cache: {
       requested: true,
       mode: 'incremental-no-change',
@@ -655,6 +664,10 @@ function resolveAndroidNavigationPathFromManifest(manifest: IndexManifest, outpu
 
 function resolveAndroidComposeSemanticPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
   return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-compose-semantic')
+}
+
+function resolveAndroidTestSemanticPathFromManifest(manifest: IndexManifest, outputDir: string): string | null {
+  return resolveAnalyzerArtifactPathFromManifest(manifest, outputDir, 'android-test-semantic')
 }
 
 function resolveAnalyzerArtifactPathFromManifest(manifest: IndexManifest, outputDir: string, analyzerId: string): string | null {
@@ -899,6 +912,25 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     createdAt,
   })
 
+  // Android test-source semantic evidence (v1.11.0 Batch 5). A separate
+  // artifact from android-compose-semantic.json (production Compose
+  // declarations/facts) — this one owns Android `test`/`androidTest`
+  // source-set evidence only: test classes/methods, JUnit/Compose-rule/
+  // Espresso/Robolectric evidence, and assertion/route/test-double facts.
+  // Computed here since it needs the already-built `androidComposeSemantic`
+  // and `androidNavigationResult.artifact` for exact static cross-reference
+  // matching (never re-parsed). Discovers files only under the already-
+  // detected `test`/`androidTest` source-set roots on `android-project.json`
+  // — it never adds them to `symbol-index.json` or the core `--src` boundary.
+  const { androidTestSemantic, androidTestSemanticAnalyzerStatus } = runAndroidTestSemanticAnalyzer({
+    projectRoot,
+    androidProject: androidResult.artifact,
+    androidComposeSemantic,
+    androidNavigation: androidNavigationResult.artifact,
+    symbolIndex: roledSymbolIndex,
+    createdAt,
+  })
+
   // Android artifact relationships (v1.10.0 Batch 5, extended in v1.11.0
   // Batch 4 with Compose declaration/fact projection). Connects all seven
   // Android artifacts into the existing code-graph architecture — compact
@@ -917,6 +949,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidResources: androidResourcesResult.artifact,
     androidNavigation: androidNavigationResult.artifact,
     androidComposeSemantic: androidComposeSemantic ?? undefined,
+    androidTestSemantic: androidTestSemantic ?? undefined,
     symbolIndex: roledSymbolIndex,
   })
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
@@ -945,6 +978,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
         androidResourcesAnalyzerStatus,
         androidNavigationAnalyzerStatus,
         androidComposeSemanticAnalyzerStatus,
+        androidTestSemanticAnalyzerStatus,
         androidRelationshipsAnalyzerStatus,
       ],
       semanticResult.analyzers
@@ -980,6 +1014,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidResources: androidResourcesResult.artifact.detected ? androidResourcesResult.artifact : null,
     androidNavigation: androidNavigationResult.artifact.detected ? androidNavigationResult.artifact : null,
     androidComposeSemantic: androidComposeSemantic && androidComposeSemantic.detected ? androidComposeSemantic : null,
+    androidTestSemantic: androidTestSemantic && androidTestSemantic.detected ? androidTestSemantic : null,
   })
   progress?.({
     phase: 'artifact-write-complete',
@@ -1036,6 +1071,9 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
       : null,
     androidComposeSemanticPath: androidComposeSemantic && androidComposeSemantic.detected
       ? toForwardSlash(path.join(outputDir, ANDROID_COMPOSE_SEMANTIC_FILENAME))
+      : null,
+    androidTestSemanticPath: androidTestSemantic && androidTestSemantic.detected
+      ? toForwardSlash(path.join(outputDir, ANDROID_TEST_SEMANTIC_FILENAME))
       : null,
   }
 }
@@ -1377,6 +1415,78 @@ function runAndroidComposeSemanticAnalyzer(options: RunAndroidComposeSemanticAna
         status: 'failed',
         version: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
         schemaVersion: ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
+        artifacts: [],
+        warningCount: 0,
+        errorCount: 1,
+        summary: { errorMessage: error instanceof Error ? error.message : String(error) },
+      },
+    }
+  }
+}
+
+interface RunAndroidTestSemanticAnalyzerOptions {
+  projectRoot: string
+  androidProject: DetectAndroidProjectResult['artifact']
+  androidComposeSemantic: BuildAndroidComposeSemanticProjectResult['artifact'] | null
+  androidNavigation: BuildAndroidNavigationProjectResult['artifact']
+  symbolIndex: SymbolIndex
+  createdAt: string
+}
+
+/**
+ * Registers Android test-source semantic evidence (v1.11.0 Batch 5) via the
+ * same analyzer-registry pattern `android-compose-semantic` uses. Reports
+ * 'failed' rather than throwing if the builder itself raises — per-file I/O
+ * errors are already handled inside the builder itself (a file is silently
+ * skipped, not a thrown error), so a genuine exception here indicates a real
+ * internal defect, not routine unreadable-file noise.
+ */
+function runAndroidTestSemanticAnalyzer(options: RunAndroidTestSemanticAnalyzerOptions): {
+  androidTestSemantic: BuildAndroidTestSemanticProjectResult['artifact'] | null
+  androidTestSemanticAnalyzerStatus: IndexAnalyzerStatus
+} {
+  try {
+    const { artifact } = buildAndroidTestSemanticProject({
+      projectRoot: options.projectRoot,
+      androidProject: options.androidProject,
+      androidComposeSemantic: options.androidComposeSemantic ?? undefined,
+      androidNavigation: options.androidNavigation,
+      symbolIndex: options.symbolIndex,
+      createdAt: options.createdAt,
+    })
+    const status: IndexAnalyzerStatus['status'] = !artifact.detected ? 'skipped' : artifact.warnings.length > 0 ? 'partial' : 'complete'
+    return {
+      androidTestSemantic: artifact,
+      androidTestSemanticAnalyzerStatus: {
+        id: 'android-test-semantic',
+        status,
+        version: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+        schemaVersion: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+        artifacts: artifact.detected
+          ? [{ name: 'androidTestSemantic', path: ANDROID_TEST_SEMANTIC_FILENAME, artifactKind: 'my-dev-kit-v1-android-test-semantic' }]
+          : [],
+        warningCount: artifact.warnings.length,
+        errorCount: 0,
+        summary: {
+          detected: artifact.detected,
+          testFileCount: artifact.summary.testFileCount,
+          testClassCount: artifact.summary.testClassCount,
+          testMethodCount: artifact.summary.testMethodCount,
+          composeRuleCount: artifact.summary.composeRuleCount,
+          visibleTextAssertionCount: artifact.summary.visibleTextAssertionCount,
+          testTagAssertionCount: artifact.summary.testTagAssertionCount,
+          routeReferenceCount: artifact.summary.routeReferenceCount,
+        },
+      },
+    }
+  } catch (error) {
+    return {
+      androidTestSemantic: null,
+      androidTestSemanticAnalyzerStatus: {
+        id: 'android-test-semantic',
+        status: 'failed',
+        version: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+        schemaVersion: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
         artifacts: [],
         warningCount: 0,
         errorCount: 1,

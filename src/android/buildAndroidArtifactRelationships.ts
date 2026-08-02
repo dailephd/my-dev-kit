@@ -24,6 +24,7 @@ import type { AndroidManifestArtifact, AndroidManifestComponentEvidence } from '
 import type { AndroidResourcesArtifact } from './androidResourceTypes.js'
 import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
 import type { AndroidComposeSemanticArtifact } from './androidComposeTypes.js'
+import type { AndroidTestSemanticArtifact } from './androidTestTypes.js'
 
 export interface BuildAndroidArtifactRelationshipsOptions {
   projectRoot: string
@@ -34,6 +35,8 @@ export interface BuildAndroidArtifactRelationshipsOptions {
   androidNavigation: AndroidNavigationArtifact
   /** `android-compose-semantic.json`'s already-built artifact (v1.11.0 Batch 4), used only to project compact composable/fact nodes and edges. Optional so pre-Batch-4 direct callers (and existing tests) keep working unchanged. */
   androidComposeSemantic?: AndroidComposeSemanticArtifact
+  /** `android-test-semantic.json`'s already-built artifact (v1.11.0 Batch 5), used only to project compact test file/class/method/fact nodes and edges. Optional so pre-Batch-5 direct callers keep working unchanged. */
+  androidTestSemantic?: AndroidTestSemanticArtifact
   symbolIndex: SymbolIndex
 }
 
@@ -44,7 +47,7 @@ export interface BuildAndroidArtifactRelationshipsResult {
 }
 
 export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactRelationshipsOptions): BuildAndroidArtifactRelationshipsResult {
-  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, symbolIndex } = options
+  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, androidTestSemantic, symbolIndex } = options
   const nodes: CodeGraphNode[] = []
   const edges: CodeGraphEdge[] = []
   const warnings: string[] = []
@@ -75,7 +78,8 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
     androidManifest.detected ||
     androidResources.detected ||
     androidNavigation.detected ||
-    (androidComposeSemantic?.detected ?? false)
+    (androidComposeSemantic?.detected ?? false) ||
+    (androidTestSemantic?.detected ?? false)
   if (!androidProject.detected || !hasRealAndroidEvidence) {
     return { nodes: [], edges: [], warnings: [] }
   }
@@ -756,6 +760,220 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
           target: candidateId,
           kind: 'compose-navigation-targets-route',
           metadata: { evidenceArtifact: 'android-compose-semantic', candidate: fact.candidateIds.length > 1 },
+        })
+      }
+    }
+  }
+
+  // -- 12. Android test-source semantic evidence (v1.11.0 Batch 5) ----------------
+  //
+  // Reuses `android-test-semantic.json`'s own stable IDs for every node
+  // (never re-minted). Four compact node kinds only: `android-test-file`,
+  // `android-test-class`, `android-test-method`, and a single generic
+  // `android-test-fact` covering every rule/assertion/route/test-double
+  // record (distinguished by `androidMetadata.factKind`), mirroring the same
+  // compactness discipline Batch 4 already established for Compose facts.
+  // Test files are never added to `symbol-index.json` (a separate, narrower
+  // discovery boundary than the core `--src` structural indexer), so there
+  // is no existing `file:`/`symbol:` node to reuse for them — every test
+  // node here is genuinely new.
+  if (androidTestSemantic?.detected) {
+    const classById = new Map(androidTestSemantic.testClasses.map((c) => [c.id, c]))
+
+    for (const file of androidTestSemantic.testFiles) {
+      addNode({
+        id: file.id,
+        kind: 'android-test-file',
+        label: basename(file.path),
+        path: file.path,
+        line: file.source.line,
+        androidArtifactId: 'android-test-semantic',
+        androidEntityId: file.id,
+        androidModuleId: file.moduleId ?? undefined,
+        androidMetadata: {
+          factKind: 'test-file',
+          sourceSet: file.sourceSet,
+          category: file.category,
+          language: file.language,
+          frameworks: file.frameworks.join(','),
+        },
+      })
+    }
+
+    for (const cls of androidTestSemantic.testClasses) {
+      addNode({
+        id: cls.id,
+        kind: 'android-test-class',
+        label: cls.name,
+        path: cls.sourceRange.file,
+        line: cls.sourceRange.startLine,
+        androidArtifactId: 'android-test-semantic',
+        androidEntityId: cls.id,
+        androidMetadata: {
+          factKind: 'test-class',
+          endLine: cls.sourceRange.endLine,
+          superclassOrRunner: cls.superclassOrRunner,
+          frameworks: cls.frameworks.join(','),
+        },
+      })
+      addEdge({
+        id: edgeId(cls.fileId, 'defines-test-class', cls.id),
+        source: cls.fileId,
+        target: cls.id,
+        kind: 'defines-test-class',
+        metadata: { evidenceArtifact: 'android-test-semantic' },
+      })
+    }
+
+    for (const rule of androidTestSemantic.testRules) {
+      addNode({
+        id: rule.id,
+        kind: 'android-test-fact',
+        label: rule.variableName ?? rule.ruleKind,
+        path: rule.sourceRange.file,
+        line: rule.sourceRange.startLine,
+        androidArtifactId: 'android-test-semantic',
+        androidEntityId: rule.id,
+        androidMetadata: {
+          factKind: 'compose-rule',
+          ruleKind: rule.ruleKind,
+          variableName: rule.variableName,
+          activityType: rule.activityType,
+          status: rule.status,
+          endLine: rule.sourceRange.endLine,
+        },
+      })
+      addEdge({
+        id: edgeId(rule.classId, 'test-class-uses-rule', rule.id),
+        source: rule.classId,
+        target: rule.id,
+        kind: 'test-class-uses-rule',
+        metadata: { evidenceArtifact: 'android-test-semantic' },
+      })
+    }
+
+    for (const method of androidTestSemantic.testMethods) {
+      addNode({
+        id: method.id,
+        kind: 'android-test-method',
+        label: method.name,
+        path: method.sourceRange.file,
+        line: method.sourceRange.startLine,
+        androidArtifactId: 'android-test-semantic',
+        androidEntityId: method.id,
+        androidMetadata: {
+          factKind: 'test-method',
+          endLine: method.sourceRange.endLine,
+          category: method.category,
+          frameworks: method.frameworks.join(','),
+        },
+      })
+      addEdge({
+        id: edgeId(method.classId, 'test-class-defines-method', method.id),
+        source: method.classId,
+        target: method.id,
+        kind: 'test-class-defines-method',
+        metadata: { evidenceArtifact: 'android-test-semantic', evidenceEntityId: classById.get(method.classId)?.id ?? null },
+      })
+    }
+
+    const addTestFactNode = (
+      id: string,
+      ownerId: string,
+      label: string,
+      sourceRange: { file: string; startLine: number; endLine: number },
+      factKind: string,
+      metadata: Record<string, string | number | boolean | null>
+    ): void => {
+      addNode({
+        id,
+        kind: 'android-test-fact',
+        label,
+        path: sourceRange.file,
+        line: sourceRange.startLine,
+        androidArtifactId: 'android-test-semantic',
+        androidEntityId: id,
+        androidMetadata: { factKind, endLine: sourceRange.endLine, ownerId, ...metadata },
+      })
+      addEdge({
+        id: edgeId(ownerId, 'test-method-has-fact', id),
+        source: ownerId,
+        target: id,
+        kind: 'test-method-has-fact',
+        metadata: { evidenceArtifact: 'android-test-semantic', factKind },
+      })
+    }
+
+    for (const fact of androidTestSemantic.assertionFacts) {
+      addTestFactNode(fact.id, fact.methodId, fact.resolvedValue ?? fact.rawExpression, fact.sourceRange, fact.kind, {
+        api: fact.api,
+        resolvedValue: fact.resolvedValue,
+        status: fact.status,
+      })
+      for (const candidateId of fact.candidateComposableIds) {
+        if (!nodeIds.has(candidateId)) continue
+        addEdge({
+          id: edgeId(fact.id, 'android-test-references-composable', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'android-test-references-composable',
+          metadata: { evidenceArtifact: 'android-test-semantic', candidate: fact.candidateComposableIds.length > 1 },
+        })
+      }
+    }
+
+    for (const fact of androidTestSemantic.routeFacts) {
+      addTestFactNode(fact.id, fact.methodId, fact.resolvedRoute ?? fact.rawExpression ?? 'route', fact.sourceRange, 'route-reference', {
+        routeType: fact.routeType,
+        resolvedRoute: fact.resolvedRoute,
+        status: fact.status,
+      })
+      for (const candidateId of fact.candidateNavigationIds) {
+        if (!nodeIds.has(candidateId)) continue
+        addEdge({
+          id: edgeId(fact.id, 'android-test-references-route', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'android-test-references-route',
+          metadata: { evidenceArtifact: 'android-test-semantic', candidate: fact.candidateNavigationIds.length > 1 },
+        })
+      }
+      for (const candidateId of fact.candidateComposableIds) {
+        if (!nodeIds.has(candidateId)) continue
+        addEdge({
+          id: edgeId(fact.id, 'android-test-references-composable', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'android-test-references-composable',
+          metadata: { evidenceArtifact: 'android-test-semantic', candidate: fact.candidateComposableIds.length > 1 },
+        })
+      }
+    }
+
+    for (const fact of androidTestSemantic.testDoubleFacts) {
+      addTestFactNode(fact.id, fact.ownerId, fact.variableName ?? fact.referencedType ?? fact.kind, fact.sourceRange, fact.kind, {
+        variableName: fact.variableName,
+        referencedType: fact.referencedType,
+        confidence: fact.confidence,
+      })
+      addEdge({
+        id: edgeId(fact.ownerId, 'android-test-uses-double', fact.id),
+        source: fact.ownerId,
+        target: fact.id,
+        kind: 'android-test-uses-double',
+        metadata: { evidenceArtifact: 'android-test-semantic', doubleKind: fact.kind },
+      })
+      for (const candidateId of fact.candidateSymbolIds) {
+        addEdge({
+          id: edgeId(fact.id, 'android-test-references-viewmodel', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'android-test-references-viewmodel',
+          metadata: {
+            evidenceArtifact: 'android-test-semantic',
+            matchBasis: 'exact-simple-class-name',
+            candidate: fact.candidateSymbolIds.length > 1,
+          },
         })
       }
     }

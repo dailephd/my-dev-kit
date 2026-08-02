@@ -142,6 +142,16 @@ export interface ConfigFingerprintInput {
    * relevant `--src` file changes.
    */
   androidNavigationXmlEvidenceFingerprint: string
+  /**
+   * Fingerprint of every discovered Android `test`/`androidTest` file's path
+   * and content (v1.11.0 Batch 5). Computed early — like the four Android
+   * fingerprints above — because these files live outside the core `--src`
+   * boundary and aren't tracked by the normal changed-file mechanism, so a
+   * test-only edit (e.g. an assertion literal change) must still invalidate
+   * the cache and regenerate `android-test-semantic.json` and its projected
+   * graph facts.
+   */
+  androidTestEvidenceFingerprint: string
 }
 
 /**
@@ -162,6 +172,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     androidManifestEvidenceFingerprint: input.androidManifestEvidenceFingerprint,
     androidResourcesEvidenceFingerprint: input.androidResourcesEvidenceFingerprint,
     androidNavigationXmlEvidenceFingerprint: input.androidNavigationXmlEvidenceFingerprint,
+    androidTestEvidenceFingerprint: input.androidTestEvidenceFingerprint,
   }
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
 }

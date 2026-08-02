@@ -399,7 +399,26 @@ npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --i
 
 `--composable`, `--android-ui`, and `--test-tag` are exact-match only and mutually exclusive with the other selectors; zero matches returns `not-found`, more than one returns `ambiguous` with every candidate — never a picked winner. `--include-compose-tree` (requires `--composable`) returns a bounded, capped, deterministic root-first bundle of the composable and its reachable children, the same bundle/cap contract `--include-local-component-tree` already uses for React. `--include-viewmodel`/`--include-navigation` (both require slice `--composable`) extend the normal depth-bounded slice to directly-resolved ViewModel candidates and navigation-call route candidates respectively — no repository/data-flow expansion. Composable and fact evidence also participates in plain `search --query`, `context`, and exact `lookup --node` automatically, with no new flags needed there.
 
-This remains static analysis: no claim is made that a composable renders, a child composable is displayed, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to on-screen text. Android UI-test/instrumented-test indexing and Compose graph views are not implemented yet.
+This remains static analysis: no claim is made that a composable renders, a child composable is displayed, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to on-screen text. Compose graph views are not implemented yet.
+
+## Workflow 13: Android test-evidence retrieval (v1.11.0 Batch 5)
+
+For an Android project with `test`/`androidTest` source sets, `index` also writes `android-test-semantic.json`: test classes/methods, JUnit4/JUnit5/lifecycle annotations, Compose test rules, visible-text/test-tag assertions, route references, and fake/mock test-double evidence — discovered only under `android-project.json`'s already-detected `test`/`androidTest` roots (never a repository-wide scan, never added to `symbol-index.json`), and exact-matched against production Compose/navigation/ViewModel evidence.
+
+That evidence is projected into `code-graph.json` as compact `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` nodes. No new selector flags exist for it — it is retrievable through the exact same generic commands as any other indexed evidence:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "HomeScreenTest" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "login_button" --json
+
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --format numbered
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --depth 2 --direction both --json
+```
+
+A test-method slice naturally includes real edges (`android-test-references-composable`, `android-test-references-route`, `android-test-references-viewmodel`, `android-test-uses-double`) whenever the test statically references production evidence — zero, one, or every ambiguous candidate is preserved, never a guessed winner. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change, with no dedicated diff section.
+
+This remains static analysis: indexing never executes a test, launches an Activity, or proves an assertion passed, a mock was injected, or a Compose rule initialized at runtime. Android UI-test graph views (`view --graph android-test`) are not implemented yet.
 
 ---
 
