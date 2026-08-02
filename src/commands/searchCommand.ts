@@ -36,6 +36,9 @@ export function registerSearchCommand(program: Command): void {
     .option('--permission <name>', 'search Android permission declarations and references (exact match)')
     .option('--resource <name>', 'search Android resource definitions (canonical "type/name", "@type/name", or bare name)')
     .option('--android-component <name>', 'search Android manifest components (exact FQCN, raw manifest name, or simple name)')
+    .option('--composable <name>', 'search Compose composables (exact name or stable declaration id)')
+    .option('--test-tag <tag>', 'search Compose resolved Modifier.testTag values (exact match)')
+    .option('--android-ui <value>', 'search Compose resolved visible-text/string-resource evidence (exact match)')
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
     .action((options: SearchCommandOptions) => {
@@ -60,7 +63,7 @@ export function registerSearchCommand(program: Command): void {
       if (androidMode) {
         if (options.query !== undefined) {
           throw new Error(
-            'The Android selector flags (--android-route, --permission, --resource, --android-component) cannot be combined with --query.'
+            'The Android selector flags (--android-route, --permission, --resource, --android-component, --composable, --test-tag, --android-ui) cannot be combined with --query.'
           )
         }
         const graphData = loadAndroidGraphData(options.index)
@@ -75,7 +78,7 @@ export function registerSearchCommand(program: Command): void {
 
       if (!options.query) {
         throw new Error(
-          'The search command requires --query <text> (or --route, --storage-key, --ui, --android-route, --permission, --resource, or --android-component).'
+          'The search command requires --query <text> (or --route, --storage-key, --ui, --android-route, --permission, --resource, --android-component, --composable, --test-tag, or --android-ui).'
         )
       }
       const resolved = readIndexManifest(options.index)
@@ -106,6 +109,9 @@ interface SearchCommandOptions {
   permission?: string
   resource?: string
   androidComponent?: string
+  composable?: string
+  testTag?: string
+  androidUi?: string
   limit: number
   json?: boolean
 }

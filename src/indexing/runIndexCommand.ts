@@ -899,14 +899,16 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     createdAt,
   })
 
-  // Android artifact relationships (v1.10.0 Batch 5). Connects all six
+  // Android artifact relationships (v1.10.0 Batch 5, extended in v1.11.0
+  // Batch 4 with Compose declaration/fact projection). Connects all seven
   // Android artifacts into the existing code-graph architecture — compact
   // artifact-backed nodes plus deterministic relationship edges, merged
   // additively into `roledCodeGraph`. Computed last among the Android
-  // builders since it consumes every other Android artifact plus the fully
-  // role-enriched symbol index. No new top-level artifact is produced; this
-  // only enriches `code-graph.json` and reports status via the existing
-  // analyzer-registry convention (`android-relationships`).
+  // builders since it consumes every other Android artifact (including the
+  // just-built `androidComposeSemantic`) plus the fully role-enriched symbol
+  // index. No new top-level artifact is produced; this only enriches
+  // `code-graph.json` and reports status via the existing analyzer-registry
+  // convention (`android-relationships`).
   const androidRelationships = buildAndroidArtifactRelationships({
     projectRoot,
     androidProject: androidResult.artifact,
@@ -914,6 +916,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidManifest: androidManifestResult.artifact,
     androidResources: androidResourcesResult.artifact,
     androidNavigation: androidNavigationResult.artifact,
+    androidComposeSemantic: androidComposeSemantic ?? undefined,
     symbolIndex: roledSymbolIndex,
   })
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)

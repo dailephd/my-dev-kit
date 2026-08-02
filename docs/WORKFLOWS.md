@@ -380,6 +380,29 @@ Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.
 
 ---
 
+## Workflow 12: Compose semantic retrieval (v1.11.0)
+
+For an Android project with Jetpack Compose UI, `index` also writes `android-compose-semantic.json`: composable declarations (Batch 1), state/effect/ViewModel/test-tag/visible-text/string-resource facts (Batch 2), and click-handler/navigation-call facts cross-referenced to `android-navigation.json` (Batch 3) — all conservative static evidence, attached to the innermost enclosing composable, never a runtime rendering or reachability claim.
+
+That evidence is projected into `code-graph.json` as compact `android-composable`/`android-compose-fact` nodes, retrievable through the same commands as any other Android evidence:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --composable "HomeScreen" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --test-tag "login_button" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-ui "Welcome back" --json
+
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --include-compose-tree --max-bundle-lines 200 --format json
+
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --include-viewmodel --include-navigation --depth 2 --json
+```
+
+`--composable`, `--android-ui`, and `--test-tag` are exact-match only and mutually exclusive with the other selectors; zero matches returns `not-found`, more than one returns `ambiguous` with every candidate — never a picked winner. `--include-compose-tree` (requires `--composable`) returns a bounded, capped, deterministic root-first bundle of the composable and its reachable children, the same bundle/cap contract `--include-local-component-tree` already uses for React. `--include-viewmodel`/`--include-navigation` (both require slice `--composable`) extend the normal depth-bounded slice to directly-resolved ViewModel candidates and navigation-call route candidates respectively — no repository/data-flow expansion. Composable and fact evidence also participates in plain `search --query`, `context`, and exact `lookup --node` automatically, with no new flags needed there.
+
+This remains static analysis: no claim is made that a composable renders, a child composable is displayed, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to on-screen text. Android UI-test/instrumented-test indexing and Compose graph views are not implemented yet.
+
+---
+
 ## Bundled examples
 
 The examples are for cloned repositories, documentation writers, and package smoke tests. Normal npm users should run my-dev-kit inside their own project.

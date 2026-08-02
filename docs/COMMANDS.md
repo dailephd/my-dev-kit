@@ -614,6 +614,24 @@ No-match behavior: zero exact matches returns `status: "ok"` with an empty `resu
 
 Static-analysis limitation: these selectors read static graph evidence only. They never claim a component is active at runtime, a permission is granted or enforced, a route is reachable, or a resource definition is the runtime-selected value.
 
+### Compose selectors (v1.11.0 Batch 4)
+
+`search` accepts three additional Compose selectors, joining the same mutual-exclusivity group as the Android selectors above (only one selector, or `--query`, at a time). They read Batch 4's compact `android-composable`/`android-compose-fact` nodes projected from `android-compose-semantic.json` — no new artifact, no second search index. Matching is exact only.
+
+- `--composable <name>`: exact match against a composable's declared name, or its own stable declaration ID (`matchKind: "composable-name"` or `"composable-id"`).
+- `--test-tag <tag>`: exact match against a resolved `Modifier.testTag(...)` value (`androidMetadata.resolvedValue`). A dynamic/unresolved tag has no resolved value and can never be matched.
+- `--android-ui <value>`: exact match against a resolved visible-text literal, a string-resource logical key, or a string-resource qualified identifier (`R.string.name`) — `matchKind` is `"visible-text"`, `"string-resource-key"`, or `"string-resource-identifier"` respectively. Never fuzzy text matching, never Android resource-value resolution.
+
+Composable and fact evidence is also discoverable through plain `search --query <text>` (composable names, test-tag values, visible text, resource keys, ViewModel reference names/types, and resolved navigation routes are all indexed as generic searchable fields) — the three flags above exist for exact, unambiguous lookup, not as the only way in.
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --composable "HomeScreen" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --test-tag "login_button" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-ui "Welcome back" --json
+```
+
+Static-analysis limitation: no claim is made that a composable renders, a child is visible, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to displayed text.
+
 ### Examples
 
 ```sh
@@ -856,6 +874,26 @@ For an XML element (navigation destination/graph/action/deep-link), the excerpt 
 
 Static-analysis limitation: excerpts are static source at a recorded declaration line — not proof of runtime reachability, not a resolved effective resource value, and not a merged manifest.
 
+### Compose selectors (v1.11.0 Batch 4)
+
+`source` accepts `--composable <name>`, `--android-ui <value>`, and `--test-tag <tag>`, each mutually exclusive with the other retrieval modes and with each other, resolved through the same `AndroidSelectorMode` dispatcher and `ok`/`not-found`/`ambiguous` contract as `--android-route`/`--resource` above (`artifactKind: "my-dev-kit-v1-android-source-result"`). Each retrieves a bounded excerpt using the composable's/fact's own recorded `path`/`line`/`endLine` — a composable's excerpt spans its full recorded declaration range (not a fixed small window), since that range is already known exactly from `android-compose-semantic.json`.
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --android-ui "Welcome back" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --test-tag "login_button" --json
+```
+
+#### `--include-compose-tree`
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --include-compose-tree --max-bundle-lines 200 --max-blocks 10 --format json
+```
+
+Requires `--composable <name>` (an error otherwise); mutually exclusive with `--node`, `--file`, `--symbol`, `--contains`, `--react-region`, `--start`/`--end`, and continuation flags, same as the other Compose/Android selectors. Once the root composable resolves uniquely, it returns a bounded multi-block bundle (`artifactKind: "my-dev-kit-v1-compose-tree-result"`, `tree.mode: "compose-tree"`) built the same way `--include-local-component-tree` builds a React tree: a root block, then every composable reachable through Batch 1's `childCalls[]` (projected as `composable-calls-composable` code-graph edges) in deterministic root-first breadth-first order, each composable included at most once (cycle-protected). `--max-bundle-lines`/`--max-blocks` are the existing bundle caps; every omitted block is reported in `skippedBlocks[]` with a reason (`"max-block cap reached"`, `"max-line cap reached"`, or `"invalid source range"`). An ambiguous or unresolved child-composable call is never guessed into an edge in the first place (Batch 1 already omits it, recording a declaration-level warning instead) — any such warning reached by the walk is forwarded in the result's `warnings[]` rather than inventing a target. The tree never crosses into an unrelated composable merely because it shares the same file, and never claims a reachable child is always rendered or ever visible at runtime.
+
+Static-analysis limitation: `--composable`/`--android-ui`/`--test-tag`/`--include-compose-tree` are static source-and-graph evidence only — no proof of rendering, visibility, click execution, navigation success, or runtime test discoverability.
+
 ### Semantic metadata propagation
 
 When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output.
@@ -1081,6 +1119,20 @@ Root resolution behavior:
 - More than one exact candidate (e.g. a component simple-name collision): prints `{ status: "ambiguous", candidates: [...] }` listing every candidate's graph node ID and match kind — no candidate is chosen and no slice is built.
 
 Because the traversal is the unmodified `sliceGraph` engine, a route slice naturally includes real Batch 5 edges like `navigation-destination-resolves-to-screen`/`compose-route-resolves-to-screen`, and a component slice naturally includes `manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission` — never invented edges.
+
+### Compose selector (v1.11.0 Batch 4)
+
+`slice` accepts `--composable <name>`, mutually exclusive with `--node` and the other slice-root selectors, resolved through the same root-resolution contract as `--android-route`/`--android-component` above (`not-found`/`ambiguous`/exactly-one, with `androidSelector: { mode: "composable", query, matchKind }` on success). The default `--composable` slice already includes every relationship the requested `--depth`/`--direction` reaches, including the composable's defining source (`defines-composable`), direct child composables (`composable-calls-composable`), and directly contained facts (`composable-has-fact`) — no special-casing needed, since these are ordinary `code-graph.json` edges.
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --include-viewmodel --include-navigation --depth 3 --direction both --json
+```
+
+Two optional modifiers, both requiring `--composable` (an error otherwise) and combinable together, extend traversal exactly the way `--include-prop-flow`/`--include-event-handlers` already extend a React slice: `sliceGraph`'s existing `includeEdgeKinds` mechanism runs a second, deeper additive pass restricted to a specific edge-kind allowlist, on top of (never instead of) the normal depth-bounded slice.
+
+- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` edges only — Batch 4's own directly-resolved ViewModel candidates (one edge per exact class-name match; every candidate preserved when ambiguous, none when unresolved). No repository/DAO/data-flow expansion.
+- `--include-navigation`: extends reachability along `click-handler-contains-navigation-call` and `compose-navigation-targets-route` edges — the lexical click-to-navigation-call link, then the navigation call's own exact route candidate(s) from `android-navigation.json`. No runtime navigation-reachability claim.
 
 ## view
 

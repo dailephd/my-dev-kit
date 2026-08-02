@@ -23,6 +23,7 @@ import type { AndroidGradleArtifact } from './androidGradleTypes.js'
 import type { AndroidManifestArtifact, AndroidManifestComponentEvidence } from './androidManifestTypes.js'
 import type { AndroidResourcesArtifact } from './androidResourceTypes.js'
 import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
+import type { AndroidComposeSemanticArtifact } from './androidComposeTypes.js'
 
 export interface BuildAndroidArtifactRelationshipsOptions {
   projectRoot: string
@@ -31,6 +32,8 @@ export interface BuildAndroidArtifactRelationshipsOptions {
   androidManifest: AndroidManifestArtifact
   androidResources: AndroidResourcesArtifact
   androidNavigation: AndroidNavigationArtifact
+  /** `android-compose-semantic.json`'s already-built artifact (v1.11.0 Batch 4), used only to project compact composable/fact nodes and edges. Optional so pre-Batch-4 direct callers (and existing tests) keep working unchanged. */
+  androidComposeSemantic?: AndroidComposeSemanticArtifact
   symbolIndex: SymbolIndex
 }
 
@@ -41,7 +44,7 @@ export interface BuildAndroidArtifactRelationshipsResult {
 }
 
 export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactRelationshipsOptions): BuildAndroidArtifactRelationshipsResult {
-  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, symbolIndex } = options
+  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, symbolIndex } = options
   const nodes: CodeGraphNode[] = []
   const edges: CodeGraphEdge[] = []
   const warnings: string[] = []
@@ -68,7 +71,11 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
   // a spurious `android-module`/`android-source-set` node pair.
   const hasConfirmedAndroidModule = androidProject.modules.some((m) => m.type === 'app' || m.type === 'library')
   const hasRealAndroidEvidence =
-    hasConfirmedAndroidModule || androidManifest.detected || androidResources.detected || androidNavigation.detected
+    hasConfirmedAndroidModule ||
+    androidManifest.detected ||
+    androidResources.detected ||
+    androidNavigation.detected ||
+    (androidComposeSemantic?.detected ?? false)
   if (!androidProject.detected || !hasRealAndroidEvidence) {
     return { nodes: [], edges: [], warnings: [] }
   }
@@ -532,6 +539,228 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
     }
   }
 
+  // -- 11. Compose declarations and facts (v1.11.0 Batch 4) -----------------------
+  //
+  // Reuses `android-compose-semantic.json`'s own stable IDs for every node
+  // (never re-minted). Two node kinds only, per the batch contract: one
+  // compact `android-composable` per declaration, and one generic
+  // `android-compose-fact` per Batch 2/3 fact record plus each Batch 1
+  // structural UI-region call — distinguished by `androidMetadata.factKind`
+  // rather than one top-level node kind per fact subtype. Never duplicates a
+  // Kotlin `file`/`symbol` node; a function-local composable (no structural
+  // symbol) always defines from its `file:` node instead.
+  if (androidComposeSemantic?.detected) {
+    const declarationById = new Map(androidComposeSemantic.declarations.map((d) => [d.id, d]))
+
+    for (const decl of androidComposeSemantic.declarations) {
+      addNode({
+        id: decl.id,
+        kind: 'android-composable',
+        label: decl.name,
+        path: decl.sourceRange.file,
+        line: decl.sourceRange.startLine,
+        androidArtifactId: 'android-compose-semantic',
+        androidEntityId: decl.id,
+        androidModuleId: decl.moduleId ?? undefined,
+        androidSourceSetId: decl.moduleId && decl.sourceSet ? sourceSetNodeId(decl.moduleId, decl.sourceSet) : undefined,
+        androidMetadata: {
+          factKind: 'composable',
+          scope: decl.scope,
+          visibility: decl.visibility,
+          isPreview: decl.isPreview,
+          endLine: decl.sourceRange.endLine,
+          childCallCount: decl.childCalls.length,
+        },
+      })
+
+      const definingNode = resolveComposableDefiningNodeId(decl, symbolIndex)
+      addEdge({
+        id: edgeId(definingNode.nodeId, 'defines-composable', decl.id),
+        source: definingNode.nodeId,
+        target: decl.id,
+        kind: 'defines-composable',
+        metadata: { evidenceArtifact: 'android-compose-semantic', matchBasis: definingNode.matchBasis },
+      })
+
+      for (const child of decl.childCalls) {
+        if (!declarationById.has(child.calleeDeclarationId)) continue
+        addEdge({
+          id: edgeId(decl.id, 'composable-calls-composable', child.calleeDeclarationId),
+          source: decl.id,
+          target: child.calleeDeclarationId,
+          kind: 'composable-calls-composable',
+          metadata: { evidenceArtifact: 'android-compose-semantic', calleeName: child.calleeName, line: child.line },
+        })
+      }
+
+      for (const region of decl.structuralRegions) {
+        const factId = `${decl.id}::ui-region:${region.kind}@L${region.line}`
+        addNode({
+          id: factId,
+          kind: 'android-compose-fact',
+          label: region.kind,
+          path: decl.sourceRange.file,
+          line: region.line,
+          androidArtifactId: 'android-compose-semantic',
+          androidEntityId: factId,
+          androidModuleId: decl.moduleId ?? undefined,
+          androidSourceSetId: decl.moduleId && decl.sourceSet ? sourceSetNodeId(decl.moduleId, decl.sourceSet) : undefined,
+          androidMetadata: { factKind: 'ui-region', composableId: decl.id, regionKind: region.kind },
+        })
+        addEdge({
+          id: edgeId(decl.id, 'composable-has-fact', factId),
+          source: decl.id,
+          target: factId,
+          kind: 'composable-has-fact',
+          metadata: { evidenceArtifact: 'android-compose-semantic', factKind: 'ui-region' },
+        })
+      }
+    }
+
+    const addComposeFact = (
+      id: string,
+      composableId: string,
+      label: string,
+      sourceRange: { file: string; startLine: number; endLine: number },
+      factKind: string,
+      metadata: Record<string, string | number | boolean | null>
+    ): void => {
+      const decl = declarationById.get(composableId)
+      addNode({
+        id,
+        kind: 'android-compose-fact',
+        label,
+        path: sourceRange.file,
+        line: sourceRange.startLine,
+        androidArtifactId: 'android-compose-semantic',
+        androidEntityId: id,
+        androidModuleId: decl?.moduleId ?? undefined,
+        androidSourceSetId: decl?.moduleId && decl?.sourceSet ? sourceSetNodeId(decl.moduleId, decl.sourceSet) : undefined,
+        androidMetadata: { factKind, composableId, endLine: sourceRange.endLine, ...metadata },
+      })
+      addEdge({
+        id: edgeId(composableId, 'composable-has-fact', id),
+        source: composableId,
+        target: id,
+        kind: 'composable-has-fact',
+        metadata: { evidenceArtifact: 'android-compose-semantic', factKind },
+      })
+    }
+
+    for (const fact of androidComposeSemantic.stateFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.callName, fact.sourceRange, 'state', {
+        callName: fact.callName,
+        variableName: fact.variableName,
+        bindingForm: fact.bindingForm,
+        status: fact.status,
+      })
+    }
+    for (const fact of androidComposeSemantic.effectFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.kind, fact.sourceRange, 'effect', {
+        effectKind: fact.kind,
+        status: fact.status,
+        hasOnDispose: fact.hasOnDispose,
+      })
+    }
+    for (const fact of androidComposeSemantic.testTagFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.resolvedValue ?? fact.rawExpression, fact.sourceRange, 'test-tag', {
+        resolvedValue: fact.resolvedValue,
+        rawExpression: fact.rawExpression,
+        status: fact.status,
+      })
+    }
+    for (const fact of androidComposeSemantic.visibleTextFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.text, fact.sourceRange, 'visible-text', {
+        callName: fact.callName,
+        text: fact.text,
+      })
+    }
+    for (const fact of androidComposeSemantic.stringResourceFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.resourceIdentifierText, fact.sourceRange, 'string-resource', {
+        resourceName: fact.resourceName,
+        resourceIdentifierText: fact.resourceIdentifierText,
+      })
+      const candidates = resourceCandidateIndex.get(`string/${fact.resourceName}`) ?? []
+      for (const candidateId of candidates) {
+        addEdge({
+          id: edgeId(fact.id, 'compose-string-references-resource', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'compose-string-references-resource',
+          metadata: { evidenceArtifact: 'android-compose-semantic', matchBasis: 'exact-resource-name', candidate: candidates.length > 1 },
+        })
+      }
+    }
+    for (const fact of androidComposeSemantic.viewModelReferences) {
+      addComposeFact(fact.id, fact.composableId, fact.variableOrParameterName ?? fact.typeText ?? fact.kind, fact.sourceRange, 'viewmodel', {
+        kind: fact.kind,
+        variableOrParameterName: fact.variableOrParameterName,
+        typeText: fact.typeText,
+        status: fact.status,
+      })
+      if (fact.typeText) {
+        const candidates = resolveViewModelClassCandidates(fact.typeText, symbolIndex)
+        for (const candidateId of candidates) {
+          addEdge({
+            id: edgeId(fact.composableId, 'composable-references-viewmodel', candidateId),
+            source: fact.composableId,
+            target: candidateId,
+            kind: 'composable-references-viewmodel',
+            metadata: {
+              evidenceArtifact: 'android-compose-semantic',
+              evidenceEntityId: fact.id,
+              matchBasis: 'exact-simple-class-name',
+              candidate: candidates.length > 1,
+            },
+          })
+        }
+      }
+    }
+    for (const fact of androidComposeSemantic.clickHandlerFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.handlerName ?? fact.apiForm, fact.sourceRange, 'click-handler', {
+        apiForm: fact.apiForm,
+        callbackForm: fact.callbackForm,
+        handlerName: fact.handlerName,
+        status: fact.status,
+      })
+      for (const navigationCallId of fact.navigationCallIds) {
+        addEdge({
+          id: edgeId(fact.id, 'click-handler-contains-navigation-call', navigationCallId),
+          source: fact.id,
+          target: navigationCallId,
+          kind: 'click-handler-contains-navigation-call',
+          metadata: { evidenceArtifact: 'android-compose-semantic' },
+        })
+      }
+    }
+    for (const fact of androidComposeSemantic.navigationCallFacts) {
+      addComposeFact(fact.id, fact.composableId, fact.resolvedRoute ?? fact.typeRouteName ?? fact.rawRouteExpression ?? fact.callName, fact.sourceRange, 'navigation-call', {
+        callName: fact.callName,
+        receiverText: fact.receiverText,
+        routeClassification: fact.routeClassification,
+        resolvedRoute: fact.resolvedRoute,
+        typeRouteName: fact.typeRouteName,
+        status: fact.status,
+        candidateMatchStatus: fact.candidateMatchStatus,
+      })
+      for (const candidateId of fact.candidateIds) {
+        if (!nodeIds.has(candidateId)) {
+          warnings.push(
+            `${fact.sourceRange.file}:${fact.sourceRange.startLine}: navigation-call fact "${fact.id}" references candidate "${candidateId}" not found in the projected graph; skipped rather than inventing a target.`
+          )
+          continue
+        }
+        addEdge({
+          id: edgeId(fact.id, 'compose-navigation-targets-route', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'compose-navigation-targets-route',
+          metadata: { evidenceArtifact: 'android-compose-semantic', candidate: fact.candidateIds.length > 1 },
+        })
+      }
+    }
+  }
+
   sortNodes(nodes)
   sortEdges(edges)
 
@@ -583,6 +812,41 @@ function resolveScreenSymbolCandidates(name: string, symbolIndex: SymbolIndex): 
     if (file.language !== 'kotlin' && file.language !== 'java') continue
     for (const symbol of file.symbols) {
       if (symbol.name === name && (symbol.kind === 'function' || symbol.kind === 'class')) {
+        results.push(`symbol:${file.path}#${symbol.name}`)
+      }
+    }
+  }
+  return [...new Set(results)].sort()
+}
+
+/** `defines-composable` source resolution (v1.11.0 Batch 4): a top-level composable's exact same-file, same-name function symbol when the base structural indexer captured one; otherwise (including always for a `function-local` composable, which has no structural symbol node) the existing `file:` node — never an invented symbol. */
+function resolveComposableDefiningNodeId(
+  decl: { name: string; scope: 'top-level' | 'function-local'; sourceRange: { file: string } },
+  symbolIndex: SymbolIndex
+): { nodeId: string; matchBasis: 'exact-symbol' | 'file' } {
+  if (decl.scope === 'top-level') {
+    for (const file of symbolIndex.files) {
+      if (file.path !== decl.sourceRange.file) continue
+      for (const symbol of file.symbols) {
+        if (symbol.name === decl.name && symbol.kind === 'function') {
+          return { nodeId: `symbol:${file.path}#${symbol.name}`, matchBasis: 'exact-symbol' }
+        }
+      }
+    }
+  }
+  return { nodeId: `file:${decl.sourceRange.file}`, matchBasis: 'file' }
+}
+
+/** `composable-references-viewmodel` target resolution (v1.11.0 Batch 4): exact simple-class-name match against indexed Kotlin/Java `class` symbols project-wide (mirrors `resolveScreenSymbolCandidates`'s existing precedent) — a Compose parameter/local `typeText` is ordinarily an unqualified name resolved through an import, so a fully-qualified match (`resolveExactClassCandidates`) isn't applicable here. Never fuzzy, never a suffix-only ("...ViewModel") match. */
+function resolveViewModelClassCandidates(typeText: string, symbolIndex: SymbolIndex): string[] {
+  const bare = typeText.trim().replace(/[?]$/, '')
+  const simpleName = bare.includes('.') ? bare.slice(bare.lastIndexOf('.') + 1) : bare
+  if (!/^[A-Za-z_]\w*$/.test(simpleName)) return []
+  const results: string[] = []
+  for (const file of symbolIndex.files) {
+    if (file.language !== 'kotlin' && file.language !== 'java') continue
+    for (const symbol of file.symbols) {
+      if (symbol.name === simpleName && symbol.kind === 'class') {
         results.push(`symbol:${file.path}#${symbol.name}`)
       }
     }

@@ -36,11 +36,19 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
   if (ANDROID_LINE_RETRIEVABLE_KINDS.has(node.kind) && node.path) {
     const startLine = node.line ?? 1
     const window = Math.max(1, Math.min(maxLines, ANDROID_DEFAULT_WINDOW))
+    // Batch 1/2/3's Compose nodes record their own declaration/fact `endLine`
+    // in `androidMetadata` (v1.11.0 Batch 4) — prefer that exact bound over
+    // the generic fixed window so a multi-line composable isn't cut short.
+    const metadataEndLine = typeof node.androidMetadata?.endLine === 'number' ? node.androidMetadata.endLine : null
+    const endLine =
+      metadataEndLine !== null && metadataEndLine >= startLine
+        ? Math.min(metadataEndLine, startLine + maxLines - 1)
+        : startLine + window - 1
     return {
       mode: 'node',
       filePath: node.path,
       startLine,
-      endLine: startLine + window - 1,
+      endLine,
       warnings: [
         'Android artifact-backed node retrieval returns a bounded excerpt near the declaration line, not the full file and not a proven runtime range.',
       ],
@@ -50,7 +58,7 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
   throw new Error('Node is not a source-retrievable file or symbol node.')
 }
 
-/** `android-*` node kinds whose Batch 5 code-graph projection carries a `path`/`line` pointing at their own static declaration (v1.10.0 Batch 6). Module/source-set/permission nodes are excluded: they have no single retrievable declaration site. */
+/** `android-*` node kinds whose Batch 5/Batch 4 (v1.11.0) code-graph projection carries a `path`/`line` pointing at their own static declaration. Module/source-set/permission nodes are excluded: they have no single retrievable declaration site. */
 const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
   'android-manifest-file',
   'android-manifest-component',
@@ -62,6 +70,8 @@ const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
   'android-navigation-action',
   'android-navigation-deep-link',
   'android-compose-route',
+  'android-composable',
+  'android-compose-fact',
 ])
 
 const ANDROID_DEFAULT_WINDOW = 12

@@ -22,6 +22,8 @@ export type CodeGraphNodeKind =
   | 'android-navigation-action'
   | 'android-navigation-deep-link'
   | 'android-compose-route'
+  | 'android-composable'
+  | 'android-compose-fact'
 
 /** Which Batch 1-4 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
 export type AndroidArtifactId =
@@ -31,6 +33,7 @@ export type AndroidArtifactId =
   | 'android-manifest'
   | 'android-resources'
   | 'android-navigation'
+  | 'android-compose-semantic'
 
 export type CodeGraphEdgeKind =
   | 'defines'
@@ -57,6 +60,13 @@ export type CodeGraphEdgeKind =
   | 'manifest-deep-link-matches-navigation-deep-link'
   | 'navigation-destination-resolves-to-screen'
   | 'compose-route-resolves-to-screen'
+  | 'defines-composable'
+  | 'composable-calls-composable'
+  | 'composable-has-fact'
+  | 'composable-references-viewmodel'
+  | 'click-handler-contains-navigation-call'
+  | 'compose-navigation-targets-route'
+  | 'compose-string-references-resource'
 
 export interface CodeGraphNode {
   id: string
