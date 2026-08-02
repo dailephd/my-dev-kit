@@ -283,6 +283,30 @@ describe('view command', () => {
     expect(readFileSync(fallbackOut, 'utf8')).toContain('digraph CodeGraph')
   })
 
+  it('handles PNG rendering as binary output or DOT fallback', () => {
+    const pngOut = join(outDir, 'graph.png')
+    const result = runCli([
+      'view',
+      '--index',
+      outDir,
+      '--format',
+      'png',
+      '--out',
+      pngOut,
+      '--allow-dot-fallback',
+      '--json',
+    ])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.actualFormat === 'png' || parsed.dotFallbackUsed).toBe(true)
+    expect(existsSync(parsed.outputPath)).toBe(true)
+    if (parsed.actualFormat === 'png') {
+      expect(readFileSync(parsed.outputPath).subarray(0, 8)).toEqual(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      )
+    }
+  })
+
   it('handles data-model SVG rendering or DOT fallback', () => {
     const graphOut = join(semanticOutDir, 'data-model.svg')
     const result = runCli([

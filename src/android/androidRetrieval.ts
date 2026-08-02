@@ -255,31 +255,115 @@ function simpleClassName(fullyQualifiedName: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Selector-mode dispatch (search/lookup/source/slice --android-route|--permission|--resource|--android-component)
+// Composable resolution (search/source/slice --composable) (v1.11.0 Batch 4)
 // ---------------------------------------------------------------------------
 
-export type AndroidSelectorMode = 'android-route' | 'permission' | 'resource' | 'android-component'
+export type AndroidComposableMatchKind = 'composable-name' | 'composable-id'
+
+export interface AndroidComposableCandidate extends AndroidCandidateBase {
+  matchKind: AndroidComposableMatchKind
+}
+
+/** Exact match only: the composable's declared name (`node.label`), or - since Batch 1's declaration IDs are already stable, deterministic, and exposed - the composable's own graph node id directly, mirroring how other exact selectors accept a stable ID input where current conventions allow it. Never a simple-name-across-modules narrowing, never fuzzy. */
+export function resolveAndroidComposableCandidates(graphData: AndroidGraphData, query: string): AndroidComposableCandidate[] {
+  const results: AndroidComposableCandidate[] = []
+  for (const node of graphData.androidNodes) {
+    if (node.kind !== 'android-composable') continue
+    if (node.label === query) {
+      results.push({ ...candidateFrom(node, 'composable-name', node.label), matchKind: 'composable-name' })
+    } else if (node.id === query) {
+      results.push({ ...candidateFrom(node, 'composable-id', node.id), matchKind: 'composable-id' })
+    }
+  }
+  return dedupeCandidates(results)
+}
+
+// ---------------------------------------------------------------------------
+// Test-tag resolution (search/source --test-tag) (v1.11.0 Batch 4)
+// ---------------------------------------------------------------------------
+
+export type AndroidTestTagMatchKind = 'resolved-test-tag'
+
+export interface AndroidTestTagCandidate extends AndroidCandidateBase {
+  matchKind: AndroidTestTagMatchKind
+}
+
+/** Exact match against `Modifier.testTag(...)` facts already resolved to a static string by Batch 2/4 (`androidMetadata.resolvedValue`). A dynamic/unresolved test tag has no `resolvedValue` and can never be matched - there is no way to select it by an invented value. */
+export function resolveAndroidTestTagCandidates(graphData: AndroidGraphData, query: string): AndroidTestTagCandidate[] {
+  const results: AndroidTestTagCandidate[] = []
+  for (const node of graphData.androidNodes) {
+    if (node.kind !== 'android-compose-fact') continue
+    const meta = node.androidMetadata ?? {}
+    if (meta.factKind !== 'test-tag') continue
+    if (typeof meta.resolvedValue === 'string' && meta.resolvedValue === query) {
+      results.push({ ...candidateFrom(node, 'resolved-test-tag', meta.resolvedValue), matchKind: 'resolved-test-tag' })
+    }
+  }
+  return dedupeCandidates(results)
+}
+
+// ---------------------------------------------------------------------------
+// Compose UI-text/resource resolution (search/source --android-ui) (v1.11.0 Batch 4)
+// ---------------------------------------------------------------------------
+
+export type AndroidUiMatchKind = 'visible-text' | 'string-resource-key' | 'string-resource-identifier'
+
+export interface AndroidUiCandidate extends AndroidCandidateBase {
+  matchKind: AndroidUiMatchKind
+}
+
+/** Exact match against resolved `visibleTextFacts`/`stringResourceFacts` evidence only - never fuzzy text matching, never Android resource-value resolution, never a locale/qualifier winner. An unresolved or dynamic expression is never recorded as one of these facts in the first place (Batch 2/3), so it can never surface here. */
+export function resolveAndroidUiCandidates(graphData: AndroidGraphData, query: string): AndroidUiCandidate[] {
+  const results: AndroidUiCandidate[] = []
+  for (const node of graphData.androidNodes) {
+    if (node.kind !== 'android-compose-fact') continue
+    const meta = node.androidMetadata ?? {}
+    if (meta.factKind === 'visible-text' && typeof meta.text === 'string' && meta.text === query) {
+      results.push({ ...candidateFrom(node, 'visible-text', meta.text), matchKind: 'visible-text' })
+    } else if (meta.factKind === 'string-resource') {
+      if (typeof meta.resourceName === 'string' && meta.resourceName === query) {
+        results.push({ ...candidateFrom(node, 'string-resource-key', meta.resourceName), matchKind: 'string-resource-key' })
+      }
+      if (typeof meta.resourceIdentifierText === 'string' && meta.resourceIdentifierText === query) {
+        results.push({ ...candidateFrom(node, 'string-resource-identifier', meta.resourceIdentifierText), matchKind: 'string-resource-identifier' })
+      }
+    }
+  }
+  return dedupeCandidates(results)
+}
+
+// ---------------------------------------------------------------------------
+// Selector-mode dispatch (search/lookup/source/slice --android-route|--permission|--resource|--android-component|--composable|--test-tag|--android-ui)
+// ---------------------------------------------------------------------------
+
+export type AndroidSelectorMode = 'android-route' | 'permission' | 'resource' | 'android-component' | 'composable' | 'test-tag' | 'android-ui'
 
 export interface AndroidSelectorFlags {
   androidRoute?: string
   permission?: string
   resource?: string
   androidComponent?: string
+  composable?: string
+  testTag?: string
+  androidUi?: string
 }
 
-/** Mirrors `resolveReachabilityMode`'s mutual-exclusivity contract for the four new Android selector flags. Returns null when none are present. */
+/** Mirrors `resolveReachabilityMode`'s mutual-exclusivity contract for the Android selector flags. Returns null when none are present. */
 export function resolveAndroidSelectorMode(flags: AndroidSelectorFlags): { mode: AndroidSelectorMode; query: string } | null {
   const supplied: Array<{ mode: AndroidSelectorMode; query: string; flag: string }> = []
   if (flags.androidRoute !== undefined) supplied.push({ mode: 'android-route', query: flags.androidRoute, flag: '--android-route' })
   if (flags.permission !== undefined) supplied.push({ mode: 'permission', query: flags.permission, flag: '--permission' })
   if (flags.resource !== undefined) supplied.push({ mode: 'resource', query: flags.resource, flag: '--resource' })
   if (flags.androidComponent !== undefined) supplied.push({ mode: 'android-component', query: flags.androidComponent, flag: '--android-component' })
+  if (flags.composable !== undefined) supplied.push({ mode: 'composable', query: flags.composable, flag: '--composable' })
+  if (flags.testTag !== undefined) supplied.push({ mode: 'test-tag', query: flags.testTag, flag: '--test-tag' })
+  if (flags.androidUi !== undefined) supplied.push({ mode: 'android-ui', query: flags.androidUi, flag: '--android-ui' })
 
   if (supplied.length === 0) return null
   if (supplied.length > 1) {
     const flagList = supplied.map((s) => s.flag).join(', ')
     throw new Error(
-      `The Android selector flags ${flagList} are mutually exclusive. Provide only one of --android-route, --permission, --resource, or --android-component.`
+      `The Android selector flags ${flagList} are mutually exclusive. Provide only one of --android-route, --permission, --resource, --android-component, --composable, --test-tag, or --android-ui.`
     )
   }
   return { mode: supplied[0].mode, query: supplied[0].query }
@@ -289,7 +373,10 @@ export function resolveAndroidCandidates(graphData: AndroidGraphData, mode: Andr
   if (mode === 'android-route') return resolveAndroidRouteCandidates(graphData, query)
   if (mode === 'permission') return resolveAndroidPermissionCandidates(graphData, query)
   if (mode === 'resource') return resolveAndroidResourceCandidates(graphData, query)
-  return resolveAndroidComponentCandidates(graphData, query)
+  if (mode === 'android-component') return resolveAndroidComponentCandidates(graphData, query)
+  if (mode === 'composable') return resolveAndroidComposableCandidates(graphData, query)
+  if (mode === 'test-tag') return resolveAndroidTestTagCandidates(graphData, query)
+  return resolveAndroidUiCandidates(graphData, query)
 }
 
 // ---------------------------------------------------------------------------

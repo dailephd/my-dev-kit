@@ -4,17 +4,21 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.10.4` is the latest published release. It includes the v1.10.3 implementation-role context readiness refinements and adds condition-aware adequacy that separates optional surplus omission from allocation-caused loss of required owner or contract witnesses. Version 1.10.1 introduced deterministic, role-specific repository-evidence retrieval, while v1.10.0 introduced the completed Android/Kotlin/Java/Gradle/manifest/resource/navigation surface.
+`@dailephd/my-dev-kit@1.11.0` is the latest published release.
+
+## Shipped: v1.11.0
+
+v1.11.0 ships Compose semantic indexing and retrieval, Android unit/instrumented test semantic indexing, their projections into the existing code graph, and the `compose-ui`, `compose-navigation`, and `android-test` graph views. Package metadata and the CLI report `1.11.0`; implementation, documentation reconciliation, readiness, cross-platform validation, security/package validation, and release gates are complete.
 
 ## Shipped: v1.10.4
 
-Version 1.10.4 is the current release represented by this repository. The package metadata and CLI report `1.10.4`.
+Version 1.10.4 is the preceding published baseline.
 
 The correction adds condition-aware coverage for the required implementation owner and contract. General bounded truncation remains visible, while surplus contract and compatibility-surface omissions are optional when adequate required witnesses remain. `requiredEvidenceLost` now represents allocation-caused loss of required condition coverage, no-candidate absence remains a distinct inadequacy, and genuine last-witness loss still fails closed. The current producer emits identical condition coverage and truncation summaries in the capsule and audit while retaining schema-major-1 compatibility and conservative legacy fallback.
 
 The permanent regression at `tests/fixtures/context/batch1-false-negative/` and `tests/context/contextBatch1FalseNegativeRegression.spec.ts` preserves the exact captured allocation shape (84/84 aggregate; contracts 47/39/8; compatibility surfaces 29/8/21), the historical v1.10.3 false negative, the corrected sufficient result, provenance hashes, portability normalization, and genuine-loss negative controls.
 
-The downstream my-dev-kit-orchestrator v1.2.3 and my-dev-kit-lab v0.4.5 corrections remain separate work and depend on the v1.10.4 producer contract. This release does not claim those consumer-side corrections. my-dev-kit v1.11.0 remains paused.
+The downstream my-dev-kit-orchestrator v1.2.3 and my-dev-kit-lab v0.4.5 corrections remain separate work and depend on the v1.10.4 producer contract. This published release does not claim those consumer-side corrections.
 
 ## Shipped: v1.10.3
 

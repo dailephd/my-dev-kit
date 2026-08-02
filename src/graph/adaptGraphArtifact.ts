@@ -19,6 +19,9 @@ export type GraphArtifactSelection =
   | 'android-module'
   | 'android-manifest'
   | 'android-navigation'
+  | 'compose-ui'
+  | 'compose-navigation'
+  | 'android-test'
 
 export function adaptCodeGraph(graph: CodeGraph): RenderableGraph {
   if (!graph || typeof graph !== 'object') throw new Error('Invalid code-graph.json: expected an object.')
@@ -65,7 +68,7 @@ function toRenderableEdge(edge: CodeGraph['edges'][number]) {
   return { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind, label: edge.label ?? edge.kind }
 }
 
-/** Bounded-expansion filter: starts from nodes matching `seedKinds`, then follows only `expandEdgeKinds` edges one hop to pull in connected exact source classes/screens/deep-link matches (Batch 5 relationships), without inventing new edges. Every included edge is an actual `code-graph.json` edge - never a visual-only relationship. */
+/** Bounded-expansion filter: starts from nodes matching `seedKinds`, then follows only `expandEdgeKinds` edges one hop to pull in connected exact source classes/screens/deep-link matches, without inventing new edges. Every included edge is an actual `code-graph.json` edge - never a visual-only relationship. */
 function filterByRelationship(
   graph: CodeGraph,
   seedKinds: Set<string>,
@@ -203,6 +206,129 @@ export function adaptAndroidNavigationGraph(graph: CodeGraph): RenderableGraph {
   }
 }
 
+const COMPOSE_UI_SEED_KINDS = new Set(['android-composable', 'android-compose-fact'])
+const COMPOSE_UI_EDGE_KINDS = new Set([
+  'defines-composable',
+  'composable-calls-composable',
+  'composable-has-fact',
+  'composable-references-viewmodel',
+  'compose-string-references-resource',
+])
+
+/** `view --graph compose-ui` (v1.11.0 Batch 6): every `android-composable`/`android-compose-fact` node (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, and UI-region facts alike - distinguished by node label/`androidMetadata.factKind`, not by a dedicated node kind per fact), plus the defining Kotlin file/symbol, exact ViewModel symbol, and exact resource-definition nodes an existing edge already connects to them. Never the whole `code-graph.json`, never Android test evidence, never an invented relationship. */
+export function adaptComposeUiGraph(graph: CodeGraph): RenderableGraph {
+  validateCodeGraph(graph)
+  const { nodes, edges } = filterByRelationship(graph, COMPOSE_UI_SEED_KINDS, COMPOSE_UI_EDGE_KINDS)
+  return {
+    id: 'compose-ui',
+    label: 'ComposeUiGraph',
+    nodes: nodes.map(toRenderableNode),
+    edges: edges.map(toRenderableEdge),
+  }
+}
+
+function isComposeNavigationSeed(node: CodeGraphNode): boolean {
+  if (node.kind === 'android-composable') return true
+  if (node.kind === 'android-compose-route' || node.kind === 'android-navigation-destination' || node.kind === 'android-navigation-graph') return true
+  if (node.kind === 'android-compose-fact') {
+    const factKind = node.androidMetadata?.factKind
+    return factKind === 'click-handler' || factKind === 'navigation-call'
+  }
+  return false
+}
+/** Edge kinds allowed to appear in the rendered compose-navigation graph, once both endpoints are already included. */
+const COMPOSE_NAVIGATION_DISPLAY_EDGE_KINDS = new Set([
+  'defines-composable',
+  'composable-has-fact',
+  'click-handler-contains-navigation-call',
+  'compose-navigation-targets-route',
+  'navigation-graph-contains-destination',
+  'navigation-destination-resolves-to-screen',
+  'compose-route-resolves-to-screen',
+])
+/**
+ * Edge kinds allowed to pull in a genuinely new (non-seeded) node - only the
+ * composable's defining file/symbol and an exact screen-symbol target.
+ * Deliberately narrower than the display set above: `composable-has-fact`
+ * connects every composable to *all* of its facts (state/effect/test-tag/
+ * visible-text/string-resource included), and if it were allowed to expand
+ * the seed set here it would silently pull every unrelated fact into a
+ * "navigation" view. Both endpoints of a `composable-has-fact` edge relevant
+ * to navigation are already seeded directly by `isComposeNavigationSeed`
+ * (the composable, and the click-handler/navigation-call fact), so the edge
+ * still renders via the display set - it just never expands who gets seeded.
+ */
+const COMPOSE_NAVIGATION_EXPANSION_EDGE_KINDS = new Set([
+  'defines-composable',
+  'navigation-destination-resolves-to-screen',
+  'compose-route-resolves-to-screen',
+])
+
+/**
+ * `view --graph compose-navigation` (v1.11.0 Batch 6): the static chain
+ * `composable -> click-handler fact -> navigation-call fact -> route/destination
+ * candidate -> screen candidate`, seeded from `android-composable` nodes and only
+ * the click-handler/navigation-call `android-compose-fact` nodes (never the
+ * unrelated state/effect/test-tag/visible-text/string-resource facts on the
+ * same composable), plus existing `android-compose-route`/
+ * `android-navigation-destination`/`android-navigation-graph` nodes and their
+ * already-projected screen/deep-link relationships. Every ambiguous
+ * candidate is preserved (Batch 3/4 never picked a winner when building
+ * these edges, and this view does not either); an unresolved navigation call
+ * simply has no outgoing `compose-navigation-targets-route` edge - it is
+ * still rendered, never given a fabricated target.
+ */
+export function adaptComposeNavigationGraph(graph: CodeGraph): RenderableGraph {
+  validateCodeGraph(graph)
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]))
+  const includedIds = new Set(graph.nodes.filter(isComposeNavigationSeed).map((node) => node.id))
+
+  for (const edge of graph.edges) {
+    if (!COMPOSE_NAVIGATION_EXPANSION_EDGE_KINDS.has(edge.kind)) continue
+    if (includedIds.has(edge.source)) includedIds.add(edge.target)
+    if (includedIds.has(edge.target)) includedIds.add(edge.source)
+  }
+
+  const nodes = [...includedIds]
+    .map((id) => nodesById.get(id))
+    .filter((node): node is CodeGraphNode => node !== undefined)
+    .sort((a, b) => a.id.localeCompare(b.id))
+  const edges = graph.edges
+    .filter((edge) => COMPOSE_NAVIGATION_DISPLAY_EDGE_KINDS.has(edge.kind) && includedIds.has(edge.source) && includedIds.has(edge.target))
+    .sort((a, b) => a.id.localeCompare(b.id))
+
+  return {
+    id: 'compose-navigation',
+    label: 'ComposeNavigationGraph',
+    nodes: nodes.map(toRenderableNode),
+    edges: edges.map(toRenderableEdge),
+  }
+}
+
+const ANDROID_TEST_SEED_KINDS = new Set(['android-test-file', 'android-test-class', 'android-test-method', 'android-test-fact'])
+const ANDROID_TEST_EDGE_KINDS = new Set([
+  'defines-test-class',
+  'test-class-defines-method',
+  'test-class-uses-rule',
+  'test-method-has-fact',
+  'android-test-uses-double',
+  'android-test-references-composable',
+  'android-test-references-route',
+  'android-test-references-viewmodel',
+])
+
+/** `view --graph android-test` (v1.11.0 Batch 6): the full test file/class/method/fact hierarchy plus exact production composable/route/ViewModel-symbol nodes an existing `android-test-references-*`/`android-test-uses-double` edge already connects to a test fact - never every production Compose/navigation/resource node, never a runtime coverage or pass/fail claim. */
+export function adaptAndroidTestGraph(graph: CodeGraph): RenderableGraph {
+  validateCodeGraph(graph)
+  const { nodes, edges } = filterByRelationship(graph, ANDROID_TEST_SEED_KINDS, ANDROID_TEST_EDGE_KINDS)
+  return {
+    id: 'android-test',
+    label: 'AndroidTestGraph',
+    nodes: nodes.map(toRenderableNode),
+    edges: edges.map(toRenderableEdge),
+  }
+}
+
 export function adaptDataModelGraph(graph: DataModelGraphArtifact): RenderableGraph {
   if (!graph || typeof graph !== 'object') throw new Error('Invalid data-model-graph.json: expected an object.')
   if (graph.artifactKind !== DATA_MODEL_GRAPH_ARTIFACT_KIND) {
@@ -264,6 +390,14 @@ function codeNodeLabel(node: CodeGraphNode): string {
     const roles = compactSemanticRoles(node)
     return roles ? `${base}\n[${roles}]` : base
   }
+  if (node.kind === 'android-compose-fact' || node.kind === 'android-test-fact') {
+    const factKind = node.androidMetadata?.factKind
+    return factKind ? `${node.label}\n[${factKind}]` : node.label
+  }
+  if (node.kind === 'android-test-file') {
+    const category = node.androidMetadata?.category
+    return category ? `${node.label}\n[${category}]` : node.label
+  }
   return node.label
 }
 
@@ -277,6 +411,12 @@ function compactSemanticRoles(node: CodeGraphNode): string | null {
 function codeNodeShape(node: CodeGraphNode): string {
   if (node.kind === 'file') return 'box'
   if (node.kind === 'symbol') return 'ellipse'
+  if (node.kind === 'android-composable') return 'component'
+  if (node.kind === 'android-compose-fact') return 'note'
+  if (node.kind === 'android-test-file') return 'folder'
+  if (node.kind === 'android-test-class') return 'box3d'
+  if (node.kind === 'android-test-method') return 'cds'
+  if (node.kind === 'android-test-fact') return 'note'
   return 'oval'
 }
 

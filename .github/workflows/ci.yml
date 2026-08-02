@@ -62,6 +62,19 @@ jobs:
       - name: Smoke - view TypeScript example (DOT)
         run: node dist/cli.js view --index examples/basic-ts/.my-dev-kit-ci --format dot --out examples/basic-ts/.my-dev-kit-ci/graph.dot --edge-style semantic --json
 
+      - name: Smoke - v1.11 Compose and Android test retrieval
+        run: |
+          node dist/cli.js index --root tests/fixtures/compose-retrieval/basic-app --src app/src/main --out .my-dev-kit-ci-v1.11 --call-graph --json
+          node -e "const fs=require('fs');const p='tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11';for(const f of ['android-compose-semantic.json','code-graph.json','manifest.json'])if(!fs.existsSync(p+'/'+f))throw new Error('missing '+f)"
+          node dist/cli.js source --index tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11 --composable HomeScreen --include-compose-tree --format json
+          node dist/cli.js slice --index tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11 --composable HomeScreen --include-viewmodel --include-navigation --json
+          node dist/cli.js view --index tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11 --graph compose-ui --format dot --out tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11/compose-ui.dot --json
+          node dist/cli.js view --index tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11 --graph compose-navigation --format dot --out tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11/compose-navigation.dot --json
+          node dist/cli.js index --root tests/fixtures/android-test-semantic/basic-app --src app/src/main --out .my-dev-kit-ci-v1.11 --json
+          node -e "const fs=require('fs');const p='tests/fixtures/android-test-semantic/basic-app/.my-dev-kit-ci-v1.11';for(const f of ['android-compose-semantic.json','android-test-semantic.json','code-graph.json','manifest.json'])if(!fs.existsSync(p+'/'+f))throw new Error('missing '+f)"
+          node dist/cli.js search --index tests/fixtures/android-test-semantic/basic-app/.my-dev-kit-ci-v1.11 --query HomeScreenTest --json
+          node dist/cli.js view --index tests/fixtures/android-test-semantic/basic-app/.my-dev-kit-ci-v1.11 --graph android-test --format dot --out tests/fixtures/android-test-semantic/basic-app/.my-dev-kit-ci-v1.11/android-test.dot --json
+
       - name: Smoke - index Python example
         run: node dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-ci --json
 
@@ -69,3 +82,5 @@ jobs:
         run: |
           node -e "require('fs').rmSync('examples/basic-ts/.my-dev-kit-ci', { recursive: true, force: true })"
           node -e "require('fs').rmSync('examples/basic-python/.my-dev-kit-ci', { recursive: true, force: true })"
+          node -e "require('fs').rmSync('tests/fixtures/compose-retrieval/basic-app/.my-dev-kit-ci-v1.11', { recursive: true, force: true })"
+          node -e "require('fs').rmSync('tests/fixtures/android-test-semantic/basic-app/.my-dev-kit-ci-v1.11', { recursive: true, force: true })"

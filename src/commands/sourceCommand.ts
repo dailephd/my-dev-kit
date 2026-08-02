@@ -34,11 +34,12 @@ import {
 import {
   loadAndroidGraphData,
   resolveAndroidSelectorMode,
-  resolveAndroidRouteCandidates,
-  resolveAndroidResourceCandidates,
+  resolveAndroidCandidates,
   type AndroidCandidateBase,
   type AndroidGraphData,
+  type AndroidSelectorMode,
 } from '../android/index.js'
+import { buildComposeTreeSource, renderComposeTreeSource } from '../source/composeTreeSource.js'
 import { buildSourceBundle } from '../source/sourceBundle.js'
 import { renderSourceBundle } from '../source/renderSourceBundle.js'
 import type { IndexManifest } from '../indexing/manifestTypes.js'
@@ -60,6 +61,10 @@ export function registerSourceCommand(program: Command): void {
     .option('--ui <value>', 'retrieve source for a frontend-reachability UI marker fact')
     .option('--android-route <route>', 'retrieve bounded source for a uniquely-resolved Android route (exact match)')
     .option('--resource <name>', 'retrieve bounded source for a uniquely-resolved Android resource definition')
+    .option('--composable <name>', 'retrieve bounded source for a uniquely-resolved Compose composable (exact name match)')
+    .option('--include-compose-tree', 'include a bounded Compose child-composable tree bundle for --composable')
+    .option('--android-ui <value>', 'retrieve bounded source for a uniquely-resolved Compose visible-text or string-resource fact (exact match)')
+    .option('--test-tag <tag>', 'retrieve bounded source for a uniquely-resolved Compose Modifier.testTag value (exact match)')
     .option('--file <path>', 'file path')
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
@@ -96,9 +101,22 @@ export function registerSourceCommand(program: Command): void {
         return
       }
 
-      const androidMode = resolveAndroidSelectorMode({ androidRoute: options.androidRoute, resource: options.resource })
+      const androidMode = resolveAndroidSelectorMode({
+        androidRoute: options.androidRoute,
+        resource: options.resource,
+        composable: options.composable,
+        testTag: options.testTag,
+        androidUi: options.androidUi,
+      })
+      if (options.includeComposeTree && (!androidMode || androidMode.mode !== 'composable')) {
+        throw new Error('--include-compose-tree requires --composable <name>.')
+      }
       if (androidMode) {
-        handleAndroidSource(options, androidMode as { mode: 'android-route' | 'resource'; query: string })
+        if (androidMode.mode === 'composable' && options.includeComposeTree) {
+          handleComposeTreeSource(options, androidMode.query)
+          return
+        }
+        handleAndroidSource(options, androidMode)
         return
       }
 
@@ -729,7 +747,7 @@ interface AndroidSourceResultItem {
 interface AndroidSourceResult {
   artifactKind: 'my-dev-kit-v1-android-source-result'
   version: '1.0.0'
-  mode: 'android-route' | 'resource'
+  mode: AndroidSelectorMode
   query: string
   status: 'ok' | 'not-found' | 'ambiguous'
   result: AndroidSourceResultItem | null
@@ -737,7 +755,18 @@ interface AndroidSourceResult {
   warnings: string[]
 }
 
-function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode: 'android-route' | 'resource'; query: string }): void {
+const ANDROID_SOURCE_SELECTOR_FLAG_NAMES: Record<AndroidSelectorMode, string> = {
+  'android-route': '--android-route',
+  permission: '--permission',
+  resource: '--resource',
+  'android-component': '--android-component',
+  composable: '--composable',
+  'test-tag': '--test-tag',
+  'android-ui': '--android-ui',
+}
+
+function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode: AndroidSelectorMode; query: string }): void {
+  const flagName = ANDROID_SOURCE_SELECTOR_FLAG_NAMES[androidMode.mode]
   for (const [flag, present] of [
     ['--node', options.node !== undefined],
     ['--file', options.file !== undefined],
@@ -750,16 +779,13 @@ function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode:
     ['--continue', options.continue === true],
   ] as const) {
     if (present) {
-      throw new Error(`--android-route/--resource cannot be combined with ${flag}.`)
+      throw new Error(`${flagName} cannot be combined with ${flag}.`)
     }
   }
 
   const graphData = loadAndroidGraphData(options.index)
   const resolved = readIndexManifest(options.index)
-  const candidates: AndroidCandidateBase[] =
-    androidMode.mode === 'android-route'
-      ? resolveAndroidRouteCandidates(graphData, androidMode.query)
-      : resolveAndroidResourceCandidates(graphData, androidMode.query)
+  const candidates: AndroidCandidateBase[] = resolveAndroidCandidates(graphData, androidMode.mode, androidMode.query)
 
   const wantsJson = options.json || options.format === 'json'
   const format = resolveFormat(options)
@@ -773,7 +799,7 @@ function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode:
       status: 'not-found',
       result: null,
       candidates: [],
-      warnings: [`No exact Android ${androidMode.mode === 'android-route' ? 'route' : 'resource'} match for "${androidMode.query}".`],
+      warnings: [`No exact Android ${androidMode.mode} match for "${androidMode.query}".`],
     }
     emitAndroidSourceResult(result, wantsJson, options)
     return
@@ -807,6 +833,116 @@ function handleAndroidSource(options: SourceCommandOptions, androidMode: { mode:
     warnings: [],
   }
   emitAndroidSourceResult(result, wantsJson, options)
+}
+
+interface ComposeTreeResult {
+  artifactKind: 'my-dev-kit-v1-compose-tree-result'
+  version: '1.0.0'
+  query: string
+  status: 'ok' | 'not-found' | 'ambiguous'
+  candidates: Array<{ graphNodeId: string; matchKind: string; kind: string; path?: string }>
+  tree: ReturnType<typeof buildComposeTreeSource> | null
+  warnings: string[]
+}
+
+function handleComposeTreeSource(options: SourceCommandOptions, query: string): void {
+  for (const [flag, present] of [
+    ['--node', options.node !== undefined],
+    ['--file', options.file !== undefined],
+    ['--symbol', options.symbol !== undefined],
+    ['--contains', options.contains !== undefined],
+    ['--react-region', options.reactRegion !== undefined],
+    ['--start', options.start !== undefined],
+    ['--end', options.end !== undefined],
+    ['--continue-from', options.continueFrom !== undefined],
+    ['--continue', options.continue === true],
+  ] as const) {
+    if (present) {
+      throw new Error(`--composable --include-compose-tree cannot be combined with ${flag}.`)
+    }
+  }
+
+  const graphData = loadAndroidGraphData(options.index)
+  const resolved = readIndexManifest(options.index)
+  const candidates = resolveAndroidCandidates(graphData, 'composable', query)
+  const wantsJson = options.json || options.format === 'json'
+  const maxLinesPerBundle = options.maxBundleLines ?? DEFAULT_MAX_BUNDLE_LINES
+
+  if (candidates.length === 0) {
+    emitComposeTreeResult(
+      { artifactKind: 'my-dev-kit-v1-compose-tree-result', version: '1.0.0', query, status: 'not-found', candidates: [], tree: null, warnings: [`No exact composable match for "${query}".`] },
+      wantsJson,
+      options
+    )
+    return
+  }
+  if (candidates.length > 1) {
+    emitComposeTreeResult(
+      {
+        artifactKind: 'my-dev-kit-v1-compose-tree-result',
+        version: '1.0.0',
+        query,
+        status: 'ambiguous',
+        candidates: candidates.map((c) => ({ graphNodeId: c.graphNodeId, matchKind: c.matchKind, kind: c.kind, path: c.path })),
+        tree: null,
+        warnings: [`Multiple exact composable matches for "${query}"; no candidate was selected.`],
+      },
+      wantsJson,
+      options
+    )
+    return
+  }
+
+  const tree = buildComposeTreeSource({
+    projectRoot: resolved.manifest.projectRoot,
+    graphData,
+    rootNodeId: candidates[0]!.graphNodeId,
+    requestedComposable: query,
+    maxLines: maxLinesPerBundle,
+  })
+  emitComposeTreeResult(
+    { artifactKind: 'my-dev-kit-v1-compose-tree-result', version: '1.0.0', query, status: 'ok', candidates: [], tree, warnings: [] },
+    wantsJson,
+    options
+  )
+}
+
+function emitComposeTreeResult(result: ComposeTreeResult, wantsJson: boolean, options: SourceCommandOptions): void {
+  const format = resolveFormat(options) ?? 'numbered'
+  if (wantsJson || format === 'json') {
+    const rendered = JSON.stringify(result, null, 2) + '\n'
+    if (options.out) {
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote Compose tree result to ${writtenPath}`)
+      return
+    }
+    process.stdout.write(rendered)
+    return
+  }
+
+  if (result.status !== 'ok' || !result.tree) {
+    const lines: string[] = [`Compose tree: ${result.query}`, `Status: ${result.status}`]
+    for (const warning of result.warnings) lines.push(`Warning: ${warning}`)
+    if (result.status === 'ambiguous') {
+      for (const candidate of result.candidates) lines.push(`- ${candidate.graphNodeId} (${candidate.matchKind})`)
+    }
+    const rendered = lines.join('\n') + '\n'
+    if (options.out) {
+      const writtenPath = writeSourceOutput(options.out, rendered)
+      console.log(`Wrote Compose tree result to ${writtenPath}`)
+      return
+    }
+    process.stdout.write(rendered)
+    return
+  }
+
+  const rendered = renderComposeTreeSource(result.tree, format === 'plain' ? 'plain' : 'numbered')
+  if (options.out) {
+    const writtenPath = writeSourceOutput(options.out, rendered)
+    console.log(`Wrote Compose tree source to ${writtenPath}`)
+    return
+  }
+  process.stdout.write(rendered)
 }
 
 function buildAndroidSourceResultItem(
@@ -1001,6 +1137,10 @@ interface SourceCommandOptions {
   ui?: string
   androidRoute?: string
   resource?: string
+  composable?: string
+  includeComposeTree?: boolean
+  androidUi?: string
+  testTag?: string
   file?: string
   start?: number
   end?: number

@@ -380,6 +380,68 @@ Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.
 
 ---
 
+## Workflow 12: Compose semantic retrieval (v1.11.0)
+
+This workflow documents the Compose and Android-test retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0`. From a source checkout, build the repository and invoke `node dist/cli.js`.
+
+For an Android project with Jetpack Compose UI, `index` also writes `android-compose-semantic.json`: composable declarations (Batch 1), state/effect/ViewModel/test-tag/visible-text/string-resource facts (Batch 2), and click-handler/navigation-call facts cross-referenced to `android-navigation.json` (Batch 3) — all conservative static evidence, attached to the innermost enclosing composable, never a runtime rendering or reachability claim.
+
+That evidence is projected into `code-graph.json` as compact `android-composable`/`android-compose-fact` nodes, retrievable through the same commands as any other Android evidence:
+
+```sh
+node dist/cli.js search --index .my-dev-kit --composable "HomeScreen" --json
+node dist/cli.js search --index .my-dev-kit --test-tag "login_button" --json
+node dist/cli.js search --index .my-dev-kit --android-ui "Welcome back" --json
+
+node dist/cli.js source --index .my-dev-kit --composable "HomeScreen" --format numbered
+node dist/cli.js source --index .my-dev-kit --composable "HomeScreen" --include-compose-tree --max-bundle-lines 200 --format json
+
+node dist/cli.js slice --index .my-dev-kit --composable "HomeScreen" --include-viewmodel --include-navigation --depth 2 --json
+```
+
+`--composable`, `--android-ui`, and `--test-tag` are exact-match only and mutually exclusive with the other selectors; zero matches returns `not-found`, more than one returns `ambiguous` with every candidate — never a picked winner. `--include-compose-tree` (requires `--composable`) returns a bounded, capped, deterministic root-first bundle of the composable and its reachable children, the same bundle/cap contract `--include-local-component-tree` already uses for React. `--include-viewmodel`/`--include-navigation` (both require slice `--composable`) extend the normal depth-bounded slice to directly-resolved ViewModel candidates and navigation-call route candidates respectively — no repository/data-flow expansion. Composable and fact evidence also participates in plain `search --query`, `context`, and exact `lookup --node` automatically, with no new flags needed there.
+
+This remains static analysis: no claim is made that a composable renders, a child composable is displayed, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to on-screen text. The implemented graph views are described in Workflow 14 and carry the same static boundary.
+
+## Workflow 13: Android test-evidence retrieval (v1.11.0 Batch 5)
+
+For an Android project with `test`/`androidTest` source sets, `index` also writes `android-test-semantic.json`: test classes/methods, JUnit4/JUnit5/lifecycle annotations, Compose test rules, visible-text/test-tag assertions, route references, and fake/mock test-double evidence — discovered only under `android-project.json`'s already-detected `test`/`androidTest` roots (never a repository-wide scan, never added to `symbol-index.json`), and exact-matched against production Compose/navigation/ViewModel evidence.
+
+That evidence is projected into `code-graph.json` as compact `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` nodes. No new selector flags exist for it — it is retrievable through the exact same generic commands as any other indexed evidence:
+
+```sh
+node dist/cli.js search --index .my-dev-kit --query "HomeScreenTest" --json
+node dist/cli.js search --index .my-dev-kit --query "login_button" --json
+
+node dist/cli.js lookup --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --json
+node dist/cli.js source --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --format numbered
+node dist/cli.js slice --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --depth 2 --direction both --json
+```
+
+A test-method slice naturally includes real edges (`android-test-references-composable`, `android-test-references-route`, `android-test-references-viewmodel`, `android-test-uses-double`) whenever the test statically references production evidence — zero, one, or every ambiguous candidate is preserved, never a guessed winner. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change, with no dedicated diff section.
+
+This remains static analysis: indexing never executes a test, launches an Activity, or proves an assertion passed, a mock was injected, or a Compose rule initialized at runtime. See Workflow 14 below for the `view --graph android-test` graph.
+
+## Workflow 14: Compose and Android-test graph views (v1.11.0 Batch 6)
+
+`view` accepts three additional `--graph` values, each a bounded filter over the already-projected `code-graph.json` (no source or semantic-artifact reparsing, no new artifact):
+
+```sh
+node dist/cli.js view --index .my-dev-kit --graph compose-ui --format dot --out compose-ui.dot --json
+node dist/cli.js view --index .my-dev-kit --graph compose-navigation --format dot --out compose-navigation.dot --json
+node dist/cli.js view --index .my-dev-kit --graph android-test --format dot --out android-test.dot --json
+```
+
+- `compose-ui`: every composable and Compose fact (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, UI region), plus the defining source and any exact ViewModel-symbol/resource-definition target an existing edge already connects.
+- `compose-navigation`: the static chain `composable -> click-handler fact -> navigation-call fact -> route/destination candidate -> screen candidate` only — unrelated state/effect/test-tag/visible-text/string-resource facts on the same composable are excluded. Every ambiguous route or screen candidate is preserved; an unresolved navigation call is still rendered, never given a fabricated target.
+- `android-test`: the full test file/class/method/fact hierarchy (unit vs. instrumented, JUnit/Compose-rule/Espresso/Robolectric/assertion/route/test-double facts all distinguishable via node label/shape), plus the exact production composable/route/ViewModel-symbol nodes a test fact statically references.
+
+All three support the existing `--format dot|svg|png`, `--out`, `--edge-style semantic|labeled|minimal`, `--allow-dot-fallback`, and `--json` behavior unchanged. A non-Android index, an Android index without Compose or test evidence, or Compose evidence without navigation evidence all render an empty bounded graph (zero nodes, zero edges) at exit 0 — never an error, never an invented placeholder node. None of the three views render a legend, matching the exact precedent the three v1.10.0 `android-module`/`android-manifest`/`android-navigation` views already established.
+
+This remains static analysis: no view claims a composable renders, a click occurs, navigation succeeds, a destination is reachable, a test executed or passed, or a test's referenced production node is fully covered.
+
+---
+
 ## Bundled examples
 
 The examples are for cloned repositories, documentation writers, and package smoke tests. Normal npm users should run my-dev-kit inside their own project.

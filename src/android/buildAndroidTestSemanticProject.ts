@@ -1,0 +1,1114 @@
+/**
+ * Conservative, deterministic static Android test-source extractor (v1.11.0
+ * Batch 5). Discovers files only under the `test`/`androidTest` source-set
+ * roots `android-project.json` already recorded (`AndroidSourceSet.kotlinRoots`/
+ * `.javaRoots`) — it never scans arbitrary repository folders, and it never
+ * adds these files to `symbol-index.json` or the core `--src` boundary.
+ *
+ * Follows the same bounded, non-compiler scanning precedent as
+ * `buildAndroidComposeSemanticProject.ts`: re-reads already-discovered files'
+ * raw text, recognizes exactly the class/method/annotation/rule/assertion/
+ * route/test-double shapes named in the batch contract, and degrades
+ * unsupported-but-recognizable patterns to a warning or omission rather than
+ * inventing test semantics. Does not execute Gradle, javac, the Kotlin
+ * compiler, JUnit, Espresso, or Robolectric.
+ */
+
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { createHash } from 'node:crypto'
+import { toForwardSlash } from '../io/pathUtils.js'
+import type { AndroidProjectArtifact, AndroidModule } from './androidProjectTypes.js'
+import type { AndroidComposeSemanticArtifact } from './androidComposeTypes.js'
+import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
+import { extractRouteArgument, parseStringLiteral, collectStringConstants } from './buildComposeNavigationRoutes.js'
+import {
+  ANDROID_TEST_SEMANTIC_ARTIFACT_KIND,
+  ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+  type AndroidTestSemanticArtifact,
+  type AndroidTestSemanticSummary,
+  type AndroidTestFileEntry,
+  type AndroidTestClassEntry,
+  type AndroidTestMethodEntry,
+  type AndroidTestRuleEntry,
+  type AndroidTestRuleKind,
+  type AndroidTestAssertionFactEntry,
+  type AndroidTestAssertionKind,
+  type AndroidTestRouteFactEntry,
+  type AndroidTestRouteType,
+  type AndroidTestDoubleFactEntry,
+  type AndroidTestDoubleKind,
+  type AndroidTestSourceSetCategory,
+  type AndroidTestLanguage,
+  type AndroidTestFramework,
+  type AndroidTestAnnotationEvidence,
+  type AndroidTestFactResolutionStatus,
+  type BuildAndroidTestSemanticProjectResult,
+} from './androidTestTypes.js'
+import type { SymbolIndex } from '../symbol-index/types.js'
+
+export interface BuildAndroidTestSemanticProjectOptions {
+  projectRoot: string
+  androidProject: AndroidProjectArtifact
+  /** Reused only for exact static cross-reference matching (testTagFacts/visibleTextFacts) — never re-parsed. Optional so pre-Batch-5 callers keep working unchanged. */
+  androidComposeSemantic?: AndroidComposeSemanticArtifact
+  /** Reused only for exact route candidate matching — never re-parsed. */
+  androidNavigation?: AndroidNavigationArtifact
+  /** Reused only for exact simple-class-name mocked-dependency candidate matching. */
+  symbolIndex?: SymbolIndex
+  createdAt?: string
+}
+
+const MAX_SCAN_LINES = 2000
+const MAX_TEST_FILES = 2000
+const RAW_SUMMARY_MAX_LENGTH = 160
+
+export function buildAndroidTestSemanticProject(options: BuildAndroidTestSemanticProjectOptions): BuildAndroidTestSemanticProjectResult {
+  const { projectRoot, androidProject, androidComposeSemantic, androidNavigation, symbolIndex, createdAt = new Date().toISOString() } = options
+
+  if (!androidProject.detected) {
+    return { artifact: emptyArtifact(projectRoot, createdAt) }
+  }
+
+  const discovered = discoverTestFiles(projectRoot, androidProject)
+
+  const testFiles: AndroidTestFileEntry[] = []
+  const testClasses: AndroidTestClassEntry[] = []
+  const testMethods: AndroidTestMethodEntry[] = []
+  const testRules: AndroidTestRuleEntry[] = []
+  const assertionFacts: AndroidTestAssertionFactEntry[] = []
+  const routeFacts: AndroidTestRouteFactEntry[] = []
+  const testDoubleFacts: AndroidTestDoubleFactEntry[] = []
+  const fileWarnings: string[] = []
+
+  const navIndex = buildNavigationRouteIndex(androidNavigation)
+  const testTagIndex = buildTestTagIndex(androidComposeSemantic)
+  const visibleTextIndex = buildVisibleTextIndex(androidComposeSemantic)
+  const navCallProductionIndex = buildNavCallProductionIndex(androidComposeSemantic)
+
+  for (const discoveredFile of discovered) {
+    const text = readFileSafely(projectRoot, discoveredFile.path)
+    if (text === null) continue
+
+    const scan = scanTestFile({
+      filePath: discoveredFile.path,
+      moduleId: discoveredFile.moduleId,
+      sourceSetName: discoveredFile.sourceSetName,
+      category: discoveredFile.category,
+      language: discoveredFile.language,
+      text,
+      navIndex,
+      testTagIndex,
+      visibleTextIndex,
+      navCallProductionIndex,
+      symbolIndex,
+    })
+
+    testFiles.push(scan.file)
+    testClasses.push(...scan.classes)
+    testMethods.push(...scan.methods)
+    testRules.push(...scan.rules)
+    assertionFacts.push(...scan.assertionFacts)
+    routeFacts.push(...scan.routeFacts)
+    testDoubleFacts.push(...scan.testDoubleFacts)
+    fileWarnings.push(...scan.warnings)
+  }
+
+  const detected = testFiles.length > 0
+  const sortedFiles = sortById(testFiles)
+  const sortedClasses = sortById(testClasses)
+  const sortedMethods = sortById(testMethods)
+  const sortedRules = sortById(testRules)
+  const sortedAssertionFacts = sortById(assertionFacts)
+  const sortedRouteFacts = sortById(routeFacts)
+  const sortedTestDoubleFacts = sortById(testDoubleFacts)
+
+  const factWarnings = [
+    ...sortedRules.flatMap((r) => r.warnings),
+    ...sortedAssertionFacts.flatMap((f) => f.warnings),
+    ...sortedRouteFacts.flatMap((f) => f.warnings),
+    ...sortedTestDoubleFacts.flatMap((f) => f.warnings),
+    ...sortedClasses.flatMap((c) => c.warnings),
+    ...sortedMethods.flatMap((m) => m.warnings),
+  ]
+  const combinedWarnings = dedupeSort([...fileWarnings, ...factWarnings])
+
+  const artifact: AndroidTestSemanticArtifact = {
+    artifactKind: ANDROID_TEST_SEMANTIC_ARTIFACT_KIND,
+    schemaVersion: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+    createdAt,
+    projectRoot: toForwardSlash(projectRoot),
+    detected,
+    testFiles: detected ? sortedFiles : [],
+    testClasses: detected ? sortedClasses : [],
+    testMethods: detected ? sortedMethods : [],
+    testRules: detected ? sortedRules : [],
+    assertionFacts: detected ? sortedAssertionFacts : [],
+    routeFacts: detected ? sortedRouteFacts : [],
+    testDoubleFacts: detected ? sortedTestDoubleFacts : [],
+    warnings: detected ? combinedWarnings : [],
+    summary: computeSummary(
+      detected ? sortedFiles : [],
+      detected ? sortedClasses : [],
+      detected ? sortedMethods : [],
+      detected ? sortedRules : [],
+      detected ? sortedAssertionFacts : [],
+      detected ? sortedRouteFacts : [],
+      detected ? sortedTestDoubleFacts : [],
+      detected ? combinedWarnings : []
+    ),
+  }
+
+  return { artifact }
+}
+
+/**
+ * Fingerprint of every discovered `test`/`androidTest` file's path and
+ * content, computed early (like `buildAndroidNavigationXmlEvidenceFingerprint`)
+ * because these files live outside the core `--src` boundary and therefore
+ * aren't tracked by the normal `--incremental` changed-file mechanism. A
+ * test-only edit (e.g. an assertion literal change) would otherwise leave
+ * `--incremental` believing nothing relevant changed and silently reusing a
+ * stale `android-test-semantic.json` / stale projected graph facts.
+ */
+export function buildAndroidTestEvidenceFingerprint(projectRoot: string, androidProject: AndroidProjectArtifact): string {
+  if (!androidProject.detected) return 'no-android-project'
+  const discovered = discoverTestFiles(projectRoot, androidProject)
+  const hash = createHash('sha256')
+  for (const file of discovered) {
+    const text = readFileSafely(projectRoot, file.path)
+    hash.update(file.path)
+    hash.update('\0')
+    hash.update(text ?? '')
+    hash.update('\x01')
+  }
+  return hash.digest('hex')
+}
+
+// ---------------------------------------------------------------------------
+// Source-set-scoped discovery (never arbitrary repository scanning)
+// ---------------------------------------------------------------------------
+
+interface DiscoveredTestFile {
+  path: string
+  moduleId: string | null
+  sourceSetName: string
+  category: AndroidTestSourceSetCategory
+  language: AndroidTestLanguage
+}
+
+function discoverTestFiles(projectRoot: string, androidProject: AndroidProjectArtifact): DiscoveredTestFile[] {
+  const results: DiscoveredTestFile[] = []
+  const seenPaths = new Set<string>()
+
+  for (const module of androidProject.modules as AndroidModule[]) {
+    for (const sourceSet of module.sourceSets) {
+      if (sourceSet.name !== 'test' && sourceSet.name !== 'androidTest') continue
+      const category: AndroidTestSourceSetCategory = sourceSet.name === 'test' ? 'unit' : 'instrumented'
+
+      for (const root of sourceSet.kotlinRoots) {
+        collectFilesUnderRoot(projectRoot, root, '.kt', (relPath) => {
+          if (seenPaths.has(relPath)) return
+          seenPaths.add(relPath)
+          results.push({ path: relPath, moduleId: module.id, sourceSetName: sourceSet.name, category, language: 'kotlin' })
+        })
+      }
+      for (const root of sourceSet.javaRoots) {
+        collectFilesUnderRoot(projectRoot, root, '.java', (relPath) => {
+          if (seenPaths.has(relPath)) return
+          seenPaths.add(relPath)
+          results.push({ path: relPath, moduleId: module.id, sourceSetName: sourceSet.name, category, language: 'java' })
+        })
+      }
+    }
+  }
+
+  return results.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).slice(0, MAX_TEST_FILES)
+}
+
+const EXCLUDED_DIR_NAMES = new Set(['build', 'generated', '.gradle', 'node_modules', 'reports', 'test-results', 'coverage', 'tmp', '.git'])
+
+function collectFilesUnderRoot(projectRoot: string, relRoot: string, extension: string, onFile: (relPath: string) => void): void {
+  const absoluteRoot = path.join(projectRoot, ...relRoot.split('/'))
+  walkDirectory(absoluteRoot, relRoot, extension, onFile, 0)
+}
+
+function walkDirectory(absoluteDir: string, relDir: string, extension: string, onFile: (relPath: string) => void, depth: number): void {
+  if (depth > 12) return
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(absoluteDir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.isDirectory()) {
+      if (EXCLUDED_DIR_NAMES.has(entry.name)) continue
+      walkDirectory(path.join(absoluteDir, entry.name), `${relDir}/${entry.name}`, extension, onFile, depth + 1)
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(extension)) {
+      onFile(toForwardSlash(`${relDir}/${entry.name}`))
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Framework detection
+// ---------------------------------------------------------------------------
+
+const FRAMEWORK_PATTERNS: Array<{ framework: AndroidTestFramework; pattern: RegExp }> = [
+  { framework: 'junit5', pattern: /\borg\.junit\.jupiter\b/ },
+  { framework: 'junit4', pattern: /\borg\.junit\.(?:Test|Before|After|BeforeClass|AfterClass|Rule|runner)\b|\bimport\s+org\.junit\.\*/ },
+  { framework: 'compose-ui', pattern: /\bandroidx\.compose\.ui\.test\b|\bcreateComposeRule\b|\bcreateAndroidComposeRule\b|\bcreateEmptyComposeRule\b/ },
+  { framework: 'espresso', pattern: /\bandroidx\.test\.espresso\b|\bEspresso\.onView\b/ },
+  { framework: 'robolectric', pattern: /\borg\.robolectric\b|\bRobolectricTestRunner\b/ },
+]
+
+function detectFrameworks(text: string): AndroidTestFramework[] {
+  const found: AndroidTestFramework[] = []
+  for (const { framework, pattern } of FRAMEWORK_PATTERNS) {
+    if (pattern.test(text)) found.push(framework)
+  }
+  return found.length > 0 ? found : ['unknown']
+}
+
+// ---------------------------------------------------------------------------
+// Per-file scan
+// ---------------------------------------------------------------------------
+
+const CLASS_PATTERN_G = /\bclass\s+([A-Za-z_]\w*)/g
+const TEST_ANNOTATION_PATTERN = /^@(?:[\w.]+\.)?Test\b/
+const RECOGNIZED_METHOD_ANNOTATIONS = new Set([
+  'Test', 'Before', 'After', 'BeforeClass', 'AfterClass', 'BeforeEach', 'AfterEach', 'BeforeAll', 'AfterAll',
+])
+const RUN_WITH_PATTERN = /@RunWith\s*\(\s*([A-Za-z_][\w.]*)/
+const EXTEND_WITH_PATTERN = /@ExtendWith\s*\(\s*([A-Za-z_][\w.]*)/
+const RULE_ANNOTATION_PATTERN = /@(?:get:)?(?:Class)?Rule\b/
+const KOTLIN_METHOD_PATTERN_G = /\bfun\s+([A-Za-z_]\w*)\s*\(/g
+const JAVA_METHOD_PATTERN_G = /\b(?:public|protected|private)?\s*(?:static\s+)?void\s+([A-Za-z_]\w*)\s*\(\s*\)\s*(?:throws\s+[\w.,\s]+)?\s*\{/g
+const RULE_FACTORY_PATTERN_G = /\b(createComposeRule|createAndroidComposeRule|createEmptyComposeRule)\s*(?:<\s*([\w.]+)\s*>)?\s*\(/g
+const RULE_TYPED_DECL_PATTERN = /\b(?:val|var)\s+([A-Za-z_]\w*)\s*:\s*(ComposeContentTestRule|AndroidComposeTestRule)\s*(?:<\s*([\w.]+)\s*>)?/g
+
+const ASSERTION_PATTERNS: Array<{ kind: AndroidTestAssertionKind; api: string; pattern: RegExp }> = [
+  { kind: 'visible-text', api: 'onNodeWithText', pattern: /\bonNodeWithText\s*\(/g },
+  { kind: 'visible-text', api: 'hasText', pattern: /\bhasText\s*\(/g },
+  { kind: 'visible-text', api: 'assertTextEquals', pattern: /\bassertTextEquals\s*\(/g },
+  { kind: 'visible-text', api: 'assertTextContains', pattern: /\bassertTextContains\s*\(/g },
+  { kind: 'visible-text', api: 'Espresso.withText', pattern: /\bwithText\s*\(/g },
+  { kind: 'test-tag', api: 'onNodeWithTag', pattern: /\bonNodeWithTag\s*\(/g },
+  { kind: 'test-tag', api: 'hasTestTag', pattern: /\bhasTestTag\s*\(/g },
+]
+
+const ROUTE_CALL_PATTERN_G = /\b(?:navigate|assertCurrentRouteEquals|setCurrentDestination)\s*\(/g
+
+const DOUBLE_MOCKK_PATTERN_G = /\bmockk\s*<\s*([A-Za-z_][\w.]*)\s*>\s*\(/g
+const DOUBLE_MOCK_GENERIC_PATTERN_G = /\bmock\s*<\s*([A-Za-z_][\w.]*)\s*>\s*\(/g
+const DOUBLE_MOCKITO_PATTERN_G = /\bMockito\.mock\s*\(\s*([A-Za-z_][\w.]*?)(?:::class\.java|\.class)?\s*\)/g
+const DOUBLE_NAMED_CTOR_PATTERN_G = /\b(Fake|Mock|Stub)([A-Za-z]\w*?)\s*\(/g
+
+interface ScanContext {
+  filePath: string
+  moduleId: string | null
+  sourceSetName: string
+  category: AndroidTestSourceSetCategory
+  language: AndroidTestLanguage
+  text: string
+  navIndex: NavigationRouteIndex
+  testTagIndex: Map<string, Array<{ id: string; composableId: string }>>
+  visibleTextIndex: Map<string, Array<{ id: string; composableId: string }>>
+  navCallProductionIndex: Map<string, string[]>
+  symbolIndex: SymbolIndex | undefined
+}
+
+interface ScanResult {
+  file: AndroidTestFileEntry
+  classes: AndroidTestClassEntry[]
+  methods: AndroidTestMethodEntry[]
+  rules: AndroidTestRuleEntry[]
+  assertionFacts: AndroidTestAssertionFactEntry[]
+  routeFacts: AndroidTestRouteFactEntry[]
+  testDoubleFacts: AndroidTestDoubleFactEntry[]
+  warnings: string[]
+}
+
+function scanTestFile(ctx: ScanContext): ScanResult {
+  const warnings: string[] = []
+  const rawLines = ctx.text.split('\n')
+  const truncated = rawLines.length > MAX_SCAN_LINES
+  const lines = truncated ? rawLines.slice(0, MAX_SCAN_LINES) : rawLines
+  if (truncated) warnings.push(`${ctx.filePath}: Android test scan bounded to the first ${MAX_SCAN_LINES} lines.`)
+
+  const state: StripState = { inBlockComment: false }
+  const strippedLines = lines.map((raw) => stripCommentsOnly(raw, state))
+  const strippedText = strippedLines.join('\n')
+
+  const depthBeforeLine: number[] = []
+  let depth = 0
+  for (const line of strippedLines) {
+    depthBeforeLine.push(depth)
+    depth += countNetBraces(line)
+  }
+
+  const frameworks = detectFrameworks(strippedText)
+  const fileConstants = collectStringConstants(strippedText)
+
+  const fileId = `android-test-file:${ctx.filePath}`
+  const classes: AndroidTestClassEntry[] = []
+  const methods: AndroidTestMethodEntry[] = []
+  const rules: AndroidTestRuleEntry[] = []
+  const assertionFacts: AndroidTestAssertionFactEntry[] = []
+  const routeFacts: AndroidTestRouteFactEntry[] = []
+  const testDoubleFacts: AndroidTestDoubleFactEntry[] = []
+
+  const annotationBlocks = collectAnnotationBlocks(strippedLines)
+
+  for (const match of strippedText.matchAll(CLASS_PATTERN_G)) {
+    if (match.index === undefined) continue
+    const lineNumber = lineNumberAt(strippedText, match.index)
+    const depthHere = depthBeforeLine[lineNumber - 1] ?? 0
+    if (depthHere !== 0) continue // nested class: unsupported, conservatively skipped
+
+    const className = match[1]!
+    const headerEnd = strippedText.indexOf('{', match.index)
+    if (headerEnd === -1) continue
+    const bodyEnd = findMatchingBraceRaw(strippedText, headerEnd)
+    if (bodyEnd === -1) continue
+    const bodyStart = headerEnd + 1
+
+    const classAnnotations = annotationsPrecedingLine(annotationBlocks, strippedLines, lineNumber)
+    const headerText = strippedText.slice(match.index, headerEnd)
+    const superclassOrRunner = extractSuperclassOrRunner(headerText, ctx.language)
+    const runWithMatch = RUN_WITH_PATTERN.exec(classAnnotations.map((a) => a.raw).join(' '))
+    const extendWithMatch = EXTEND_WITH_PATTERN.exec(classAnnotations.map((a) => a.raw).join(' '))
+
+    const classId = `android-test-class:${ctx.filePath}#${className}`
+    const startLine = classAnnotations.length > 0 ? classAnnotations[0]!.startLine : lineNumber
+    const endLine = lineNumberAt(strippedText, bodyEnd)
+    const bodyText = strippedText.slice(bodyStart, bodyEnd)
+    const bodyStartLine = lineNumberAt(strippedText, bodyStart)
+
+    const classFrameworks = new Set<AndroidTestFramework>(frameworks)
+    if (runWithMatch && /Robolectric/.test(runWithMatch[1]!)) classFrameworks.add('robolectric')
+
+    const classWarnings: string[] = []
+
+    classes.push({
+      id: classId,
+      fileId,
+      name: className,
+      sourceRange: { file: ctx.filePath, startLine, endLine },
+      annotations: classAnnotations.map((a) => ({ raw: a.raw.slice(0, RAW_SUMMARY_MAX_LENGTH) })),
+      frameworks: [...classFrameworks].sort(),
+      superclassOrRunner: superclassOrRunner ?? (runWithMatch ? runWithMatch[1]! : extendWithMatch ? extendWithMatch[1]! : null),
+      warnings: classWarnings,
+    })
+
+    // -- Compose test rules (class-body fields) --
+    const ruleCounters = new Map<string, number>()
+    for (const m of bodyText.matchAll(RULE_FACTORY_PATTERN_G)) {
+      if (m.index === undefined) continue
+      const ruleKind = m[1] as AndroidTestRuleKind
+      const activityType = m[2] ?? null
+      const line = lineNumberInBody(bodyText, bodyStartLine, m.index)
+      const lineStart = bodyText.lastIndexOf('\n', m.index) + 1
+      const linePrefix = bodyText.slice(lineStart, m.index)
+      const nameMatch = /(?:val|var)\s+([A-Za-z_]\w*)\s*(?::\s*[A-Za-z_][\w.<>?]*)?\s*=\s*(?:[A-Za-z_]\w*\s*\.\s*)*$/.exec(linePrefix)
+      const variableName = nameMatch ? nameMatch[1]! : null
+      const hasRuleAnnotation = hasNearbyAnnotation(strippedLines, bodyStartLine + countNewlines(bodyText.slice(0, lineStart)), RULE_ANNOTATION_PATTERN)
+      const ruleWarnings = hasRuleAnnotation ? [] : [`${ctx.filePath}:${line}: Compose test rule "${variableName ?? ruleKind}" has no directly visible @Rule/@get:Rule association.`]
+      rules.push({
+        id: `${classId}::rule#${nextOrdinal(ruleCounters, 'rule')}@L${line}`,
+        classId,
+        variableName,
+        ruleKind,
+        activityType,
+        sourceRange: { file: ctx.filePath, startLine: line, endLine: line },
+        status: 'resolved',
+        warnings: ruleWarnings,
+      })
+    }
+    for (const m of bodyText.matchAll(RULE_TYPED_DECL_PATTERN)) {
+      if (m.index === undefined) continue
+      const variableName = m[1]!
+      const line = lineNumberInBody(bodyText, bodyStartLine, m.index)
+      rules.push({
+        id: `${classId}::rule#${nextOrdinal(ruleCounters, 'rule')}@L${line}`,
+        classId,
+        variableName,
+        ruleKind: 'other',
+        activityType: m[3] ?? null,
+        sourceRange: { file: ctx.filePath, startLine: line, endLine: line },
+        status: 'resolved',
+        warnings: [],
+      })
+    }
+
+    // -- Class-level test doubles (fields) --
+    const classDoubleCounters = new Map<string, number>()
+    testDoubleFacts.push(...extractTestDoubles(classId, ctx.filePath, bodyText, bodyStartLine, classDoubleCounters))
+
+    // -- Methods --
+    const methodPattern = ctx.language === 'kotlin' ? KOTLIN_METHOD_PATTERN_G : JAVA_METHOD_PATTERN_G
+    for (const m of bodyText.matchAll(new RegExp(methodPattern.source, 'g'))) {
+      if (m.index === undefined) continue
+      const methodName = m[1]!
+      const methodLineInFile = bodyStartLine + countNewlines(bodyText.slice(0, m.index))
+      const methodAnnotations = annotationsPrecedingLine(annotationBlocks, strippedLines, methodLineInFile)
+      const recognizedAnnotations = methodAnnotations.filter((a) => {
+        const nameMatch = /^@(?:[\w.]+\.)?([A-Za-z]+)/.exec(a.raw)
+        return nameMatch ? RECOGNIZED_METHOD_ANNOTATIONS.has(nameMatch[1]!) : false
+      })
+      if (recognizedAnnotations.length === 0) continue // not a recognized test/lifecycle method
+
+      const openBrace = ctx.language === 'kotlin' ? bodyText.indexOf('{', m.index) : m.index + m[0].length - 1
+      if (openBrace === -1) continue
+      const methodBodyEnd = findMatchingBraceRaw(bodyText, openBrace)
+      if (methodBodyEnd === -1) continue
+      const methodStartLine = methodAnnotations.length > 0 ? methodAnnotations[0]!.startLine : methodLineInFile
+      const methodEndLine = bodyStartLine + countNewlines(bodyText.slice(0, methodBodyEnd))
+      const methodBodyText = bodyText.slice(openBrace + 1, methodBodyEnd)
+      const methodBodyStartLine = bodyStartLine + countNewlines(bodyText.slice(0, openBrace))
+
+      const hasTest = recognizedAnnotations.some((a) => TEST_ANNOTATION_PATTERN.test(a.raw))
+      const methodId = `android-test-method:${ctx.filePath}#${className}.${methodName}`
+
+      const methodFactCounters = new Map<string, number>()
+      const methodAssertions: AndroidTestAssertionFactEntry[] = []
+      const methodRoutes: AndroidTestRouteFactEntry[] = []
+
+      if (hasTest) {
+        methodAssertions.push(
+          ...extractAssertionFacts(methodId, ctx.filePath, methodBodyText, methodBodyStartLine, methodFactCounters, ctx.testTagIndex, ctx.visibleTextIndex)
+        )
+        methodRoutes.push(
+          ...extractRouteFacts(methodId, ctx.filePath, methodBodyText, methodBodyStartLine, methodFactCounters, fileConstants, ctx.navIndex, ctx.navCallProductionIndex)
+        )
+      }
+      const methodDoubles = extractTestDoubles(methodId, ctx.filePath, methodBodyText, methodBodyStartLine, methodFactCounters)
+
+      assertionFacts.push(...methodAssertions)
+      routeFacts.push(...methodRoutes)
+      testDoubleFacts.push(...methodDoubles)
+
+      methods.push({
+        id: methodId,
+        classId,
+        name: methodName,
+        sourceRange: { file: ctx.filePath, startLine: methodStartLine, endLine: methodEndLine },
+        annotations: methodAnnotations.map((a) => ({ raw: a.raw.slice(0, RAW_SUMMARY_MAX_LENGTH) })),
+        category: ctx.category,
+        frameworks: [...classFrameworks].sort(),
+        assertionFactIds: methodAssertions.map((f) => f.id).sort(),
+        routeFactIds: methodRoutes.map((f) => f.id).sort(),
+        testDoubleFactIds: methodDoubles.map((f) => f.id).sort(),
+        warnings: [],
+      })
+    }
+  }
+
+  const resolveCandidateSymbols = (typeText: string): string[] => resolveSimpleClassCandidates(typeText, ctx.symbolIndex)
+  for (const fact of testDoubleFacts) {
+    if (fact.referencedType && fact.candidateSymbolIds.length === 0) {
+      fact.candidateSymbolIds.push(...resolveCandidateSymbols(fact.referencedType))
+    }
+  }
+
+  const file: AndroidTestFileEntry = {
+    id: fileId,
+    path: ctx.filePath,
+    moduleId: ctx.moduleId,
+    sourceSet: ctx.sourceSetName,
+    category: ctx.category,
+    language: ctx.language,
+    frameworks,
+    source: { file: ctx.filePath, line: 1 },
+    warnings: [],
+  }
+
+  return { file, classes, methods, rules, assertionFacts, routeFacts, testDoubleFacts, warnings }
+}
+
+function extractSuperclassOrRunner(headerText: string, language: AndroidTestLanguage): string | null {
+  if (language === 'kotlin') {
+    const m = /:\s*([A-Za-z_][\w.]*)/.exec(headerText)
+    return m ? m[1]! : null
+  }
+  const m = /\bextends\s+([A-Za-z_][\w.]*)/.exec(headerText)
+  return m ? m[1]! : null
+}
+
+function hasNearbyAnnotation(strippedLines: string[], nearLine: number, pattern: RegExp): boolean {
+  for (let ln = Math.max(1, nearLine - 3); ln <= nearLine; ln++) {
+    if (pattern.test(strippedLines[ln - 1] ?? '')) return true
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Assertion facts (visible-text / test-tag)
+// ---------------------------------------------------------------------------
+
+function extractAssertionFacts(
+  methodId: string,
+  filePath: string,
+  bodyText: string,
+  bodyStartLine: number,
+  counters: Map<string, number>,
+  testTagIndex: Map<string, Array<{ id: string; composableId: string }>>,
+  visibleTextIndex: Map<string, Array<{ id: string; composableId: string }>>
+): AndroidTestAssertionFactEntry[] {
+  const results: AndroidTestAssertionFactEntry[] = []
+  for (const { kind, api, pattern } of ASSERTION_PATTERNS) {
+    for (const m of bodyText.matchAll(new RegExp(pattern.source, 'g'))) {
+      if (m.index === undefined) continue
+      const openParen = m.index + m[0].length - 1
+      const closeParen = findMatchingParenRaw(bodyText, openParen)
+      const line = lineNumberInBody(bodyText, bodyStartLine, m.index)
+      if (closeParen === -1) continue
+
+      const argsText = bodyText.slice(openParen + 1, closeParen)
+      const firstArg = splitTopLevelByCommaRaw(argsText)[0]?.trim() ?? ''
+      const literal = parseStringLiteral(firstArg)
+      const endLine = lineNumberInBody(bodyText, bodyStartLine, closeParen)
+      const status: AndroidTestFactResolutionStatus = literal !== null ? 'resolved' : 'unresolved'
+      const warnings =
+        literal === null
+          ? [`${filePath}:${line}: "${api}" argument is not a direct string literal; preserved as an unresolved raw expression, not guessed.`]
+          : []
+
+      let candidateProductionFactIds: string[] = []
+      let candidateComposableIds: string[] = []
+      if (literal !== null) {
+        const matches = (kind === 'test-tag' ? testTagIndex : visibleTextIndex).get(literal) ?? []
+        candidateProductionFactIds = [...new Set(matches.map((mm) => mm.id))].sort()
+        candidateComposableIds = [...new Set(matches.map((mm) => mm.composableId))].sort()
+      }
+
+      results.push({
+        id: `${methodId}::assertion#${nextOrdinal(counters, 'assertion')}@L${line}`,
+        methodId,
+        kind,
+        api,
+        resolvedValue: literal,
+        rawExpression: boundText(firstArg),
+        sourceRange: { file: filePath, startLine: line, endLine },
+        status,
+        candidateProductionFactIds,
+        candidateComposableIds,
+        warnings,
+      })
+    }
+  }
+  return results
+}
+
+// ---------------------------------------------------------------------------
+// Route facts
+// ---------------------------------------------------------------------------
+
+interface NavigationRouteIndex {
+  byResolvedRoute: Map<string, string[]>
+  byTypeRouteName: Map<string, string[]>
+}
+
+function buildNavigationRouteIndex(androidNavigation: AndroidNavigationArtifact | undefined): NavigationRouteIndex {
+  const byResolvedRoute = new Map<string, string[]>()
+  const byTypeRouteName = new Map<string, string[]>()
+  if (!androidNavigation) return { byResolvedRoute, byTypeRouteName }
+  const add = (map: Map<string, string[]>, key: string, id: string) => {
+    const list = map.get(key)
+    if (list) list.push(id)
+    else map.set(key, [id])
+  }
+  for (const route of androidNavigation.composeRoutes) {
+    if (route.resolvedRoute !== null) add(byResolvedRoute, route.resolvedRoute, route.id)
+    if (route.typeRouteName !== null) add(byTypeRouteName, route.typeRouteName, route.id)
+  }
+  for (const destination of androidNavigation.destinations) {
+    if (destination.route !== null) add(byResolvedRoute, destination.route, destination.id)
+  }
+  return { byResolvedRoute, byTypeRouteName }
+}
+
+function buildNavCallProductionIndex(androidComposeSemantic: AndroidComposeSemanticArtifact | undefined): Map<string, string[]> {
+  const index = new Map<string, string[]>()
+  if (!androidComposeSemantic) return index
+  for (const fact of androidComposeSemantic.navigationCallFacts) {
+    if (fact.resolvedRoute === null) continue
+    const list = index.get(fact.resolvedRoute)
+    if (list) list.push(fact.composableId)
+    else index.set(fact.resolvedRoute, [fact.composableId])
+  }
+  return index
+}
+
+function extractRouteFacts(
+  methodId: string,
+  filePath: string,
+  bodyText: string,
+  bodyStartLine: number,
+  counters: Map<string, number>,
+  fileConstants: Map<string, string>,
+  navIndex: NavigationRouteIndex,
+  navCallProductionIndex: Map<string, string[]>
+): AndroidTestRouteFactEntry[] {
+  const results: AndroidTestRouteFactEntry[] = []
+  for (const m of bodyText.matchAll(ROUTE_CALL_PATTERN_G)) {
+    if (m.index === undefined) continue
+    const openParen = m.index + m[0].length - 1
+    const closeParen = findMatchingParenRaw(bodyText, openParen)
+    const line = lineNumberInBody(bodyText, bodyStartLine, m.index)
+    if (closeParen === -1) continue
+
+    const argsText = bodyText.slice(openParen + 1, closeParen)
+    const routeArg = extractRouteArgument(argsText)
+
+    let routeType: AndroidTestRouteType
+    let resolvedRoute: string | null = null
+    let status: AndroidTestFactResolutionStatus
+    const warnings: string[] = []
+
+    if (routeArg === null) {
+      routeType = 'unresolved-recognized-call'
+      status = 'unresolved'
+    } else {
+      const literal = parseStringLiteral(routeArg)
+      if (literal !== null) {
+        routeType = 'string-route'
+        resolvedRoute = literal
+        status = 'resolved'
+      } else if (/^[A-Za-z_]\w*$/.test(routeArg) && fileConstants.has(routeArg)) {
+        routeType = 'resolved-local-constant-route'
+        resolvedRoute = fileConstants.get(routeArg)!
+        status = 'resolved'
+      } else {
+        const typeMatch = /^([A-Za-z_][\w.]*)(?:\([^()]*\))?$/.exec(routeArg)
+        const baseIdent = typeMatch ? typeMatch[1]! : null
+        if (baseIdent && navIndex.byTypeRouteName.has(baseIdent)) {
+          routeType = 'type-safe-route'
+          status = 'resolved'
+        } else {
+          routeType = 'unresolved-recognized-call'
+          status = 'unresolved'
+          warnings.push(`${filePath}:${line}: Route expression "${routeArg}" is not a direct string literal, resolvable local const val, or known type-safe route.`)
+        }
+      }
+    }
+
+    const candidateNavigationIds =
+      routeType === 'string-route' || routeType === 'resolved-local-constant-route'
+        ? (navIndex.byResolvedRoute.get(resolvedRoute!) ?? []).slice().sort()
+        : routeType === 'type-safe-route'
+          ? (navIndex.byTypeRouteName.get(/^([A-Za-z_][\w.]*)/.exec(routeArg!)![1]!) ?? []).slice().sort()
+          : []
+    const candidateComposableIds = resolvedRoute !== null ? [...new Set(navCallProductionIndex.get(resolvedRoute) ?? [])].sort() : []
+
+    const endLine = lineNumberInBody(bodyText, bodyStartLine, closeParen)
+    results.push({
+      id: `${methodId}::route#${nextOrdinal(counters, 'route')}@L${line}`,
+      methodId,
+      rawExpression: routeArg,
+      resolvedRoute,
+      routeType,
+      sourceRange: { file: filePath, startLine: line, endLine },
+      candidateNavigationIds,
+      candidateComposableIds,
+      status,
+      warnings,
+    })
+  }
+  return results
+}
+
+// ---------------------------------------------------------------------------
+// Test doubles
+// ---------------------------------------------------------------------------
+
+function extractTestDoubles(
+  ownerId: string,
+  filePath: string,
+  bodyText: string,
+  bodyStartLine: number,
+  counters: Map<string, number>
+): AndroidTestDoubleFactEntry[] {
+  const results: AndroidTestDoubleFactEntry[] = []
+  const claimed = new Set<number>()
+
+  const pushDouble = (
+    matchIndex: number,
+    kind: AndroidTestDoubleKind,
+    referencedType: string | null,
+    confidence: 'high' | 'medium' | 'low'
+  ) => {
+    if (claimed.has(matchIndex)) return
+    claimed.add(matchIndex)
+    const line = lineNumberInBody(bodyText, bodyStartLine, matchIndex)
+    const lineStart = bodyText.lastIndexOf('\n', matchIndex) + 1
+    const linePrefix = bodyText.slice(lineStart, matchIndex)
+    const nameMatch = /(?:val|var)\s+([A-Za-z_]\w*)\s*(?::\s*[A-Za-z_][\w.<>?]*)?\s*=\s*(?:[A-Za-z_]\w*\s*\.\s*)*$/.exec(linePrefix)
+    const variableName = nameMatch ? nameMatch[1]! : null
+    results.push({
+      id: `${ownerId}::double#${nextOrdinal(counters, 'double')}@L${line}`,
+      ownerId,
+      kind,
+      variableName,
+      referencedType,
+      dependencyCategory: null,
+      candidateSymbolIds: [],
+      sourceRange: { file: filePath, startLine: line, endLine: line },
+      confidence,
+      warnings: [],
+    })
+  }
+
+  for (const m of bodyText.matchAll(DOUBLE_MOCKK_PATTERN_G)) {
+    if (m.index !== undefined) pushDouble(m.index, 'mock', m[1]!, 'high')
+  }
+  for (const m of bodyText.matchAll(DOUBLE_MOCKITO_PATTERN_G)) {
+    if (m.index !== undefined) pushDouble(m.index, 'mock', m[1]!, 'high')
+  }
+  for (const m of bodyText.matchAll(DOUBLE_MOCK_GENERIC_PATTERN_G)) {
+    if (m.index !== undefined) pushDouble(m.index, 'mock', m[1]!, 'medium')
+  }
+  for (const m of bodyText.matchAll(DOUBLE_NAMED_CTOR_PATTERN_G)) {
+    if (m.index === undefined) continue
+    const prefix = m[1]! as 'Fake' | 'Mock' | 'Stub'
+    const kind: AndroidTestDoubleKind = prefix === 'Fake' ? 'fake' : prefix === 'Mock' ? 'mock' : 'stub'
+    const referencedType = `${prefix}${m[2]!}`
+    pushDouble(m.index, kind, referencedType, 'high')
+  }
+
+  return results
+}
+
+function resolveSimpleClassCandidates(typeText: string, symbolIndex: SymbolIndex | undefined): string[] {
+  if (!symbolIndex) return []
+  const bare = typeText.trim().replace(/[?]$/, '')
+  const simpleName = bare.includes('.') ? bare.slice(bare.lastIndexOf('.') + 1) : bare
+  if (!/^[A-Za-z_]\w*$/.test(simpleName)) return []
+  const results: string[] = []
+  for (const file of symbolIndex.files) {
+    if (file.language !== 'kotlin' && file.language !== 'java') continue
+    for (const symbol of file.symbols) {
+      if (symbol.name === simpleName && symbol.kind === 'class') {
+        results.push(`symbol:${file.path}#${symbol.name}`)
+      }
+    }
+  }
+  return [...new Set(results)].sort()
+}
+
+// ---------------------------------------------------------------------------
+// Production cross-reference indexes
+// ---------------------------------------------------------------------------
+
+function buildTestTagIndex(androidComposeSemantic: AndroidComposeSemanticArtifact | undefined): Map<string, Array<{ id: string; composableId: string }>> {
+  const index = new Map<string, Array<{ id: string; composableId: string }>>()
+  if (!androidComposeSemantic) return index
+  for (const fact of androidComposeSemantic.testTagFacts) {
+    if (fact.resolvedValue === null) continue
+    const list = index.get(fact.resolvedValue)
+    const entry = { id: fact.id, composableId: fact.composableId }
+    if (list) list.push(entry)
+    else index.set(fact.resolvedValue, [entry])
+  }
+  return index
+}
+
+function buildVisibleTextIndex(androidComposeSemantic: AndroidComposeSemanticArtifact | undefined): Map<string, Array<{ id: string; composableId: string }>> {
+  const index = new Map<string, Array<{ id: string; composableId: string }>>()
+  if (!androidComposeSemantic) return index
+  for (const fact of androidComposeSemantic.visibleTextFacts) {
+    const list = index.get(fact.text)
+    const entry = { id: fact.id, composableId: fact.composableId }
+    if (list) list.push(entry)
+    else index.set(fact.text, [entry])
+  }
+  return index
+}
+
+// ---------------------------------------------------------------------------
+// Bounded, string-aware text-scanning primitives (independently duplicated
+// from the same conventions in buildAndroidComposeSemanticProject.ts).
+// ---------------------------------------------------------------------------
+
+interface StripState {
+  inBlockComment: boolean
+}
+
+function stripCommentsOnly(rawLine: string, state: StripState): string {
+  let line = rawLine
+  if (state.inBlockComment) {
+    const end = line.indexOf('*/')
+    if (end === -1) return ''
+    line = line.slice(end + 2)
+    state.inBlockComment = false
+  }
+  line = stripBlockCommentSpans(line)
+  const openBlockStart = line.indexOf('/*')
+  if (openBlockStart !== -1) {
+    line = line.slice(0, openBlockStart)
+    state.inBlockComment = true
+  }
+  return stripLineComment(line)
+}
+
+function stripBlockCommentSpans(line: string): string {
+  let result = line
+  let start = result.indexOf('/*')
+  while (start !== -1) {
+    const end = result.indexOf('*/', start + 2)
+    if (end === -1) break
+    result = result.slice(0, start) + result.slice(end + 2)
+    start = result.indexOf('/*')
+  }
+  return result
+}
+
+function stripLineComment(line: string): string {
+  const index = line.indexOf('//')
+  return index === -1 ? line : line.slice(0, index)
+}
+
+function skipStringLiteralRaw(text: string, quoteIndex: number): number {
+  let i = quoteIndex + 1
+  while (i < text.length) {
+    if (text[i] === '\\') {
+      i += 2
+      continue
+    }
+    if (text[i] === '"') return i + 1
+    i++
+  }
+  return text.length
+}
+
+function findMatchingParenRaw(text: string, openIndex: number): number {
+  let depth = 1
+  let i = openIndex + 1
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '"') {
+      i = skipStringLiteralRaw(text, i)
+      continue
+    }
+    if (ch === '(') depth++
+    else if (ch === ')') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  return -1
+}
+
+function findMatchingBraceRaw(text: string, openIndex: number): number {
+  let depth = 1
+  let i = openIndex + 1
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '"') {
+      i = skipStringLiteralRaw(text, i)
+      continue
+    }
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return i
+    }
+    i++
+  }
+  return -1
+}
+
+function splitTopLevelByCommaRaw(text: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let current = ''
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]!
+    if (ch === '"') {
+      const end = skipStringLiteralRaw(text, i)
+      current += text.slice(i, end)
+      i = end
+      continue
+    }
+    if (ch === '(' || ch === '[' || ch === '{' || ch === '<') depth++
+    else if (ch === ')' || ch === ']' || ch === '}' || ch === '>') depth = Math.max(0, depth - 1)
+    if (ch === ',' && depth === 0) {
+      parts.push(current)
+      current = ''
+      i++
+      continue
+    }
+    current += ch
+    i++
+  }
+  if (text.trim() !== '' || parts.length > 0) parts.push(current)
+  return parts.map((p) => p.trim()).filter((p) => p !== '')
+}
+
+interface AnnotationBlock {
+  raw: string
+  startLine: number
+  endLine: number
+}
+
+function collectAnnotationBlocks(strippedLines: string[]): AnnotationBlock[] {
+  const blocks: AnnotationBlock[] = []
+  let i = 0
+  while (i < strippedLines.length) {
+    const trimmed = strippedLines[i]!.trim()
+    if (trimmed.startsWith('@')) {
+      const startLine = i + 1
+      const parts = [trimmed]
+      let openParens = countChar(trimmed, '(') - countChar(trimmed, ')')
+      let j = i
+      while (openParens > 0 && j + 1 < strippedLines.length) {
+        j++
+        const next = strippedLines[j]!.trim()
+        parts.push(next)
+        openParens += countChar(next, '(') - countChar(next, ')')
+      }
+      blocks.push({ raw: parts.join(' '), startLine, endLine: j + 1 })
+      i = j + 1
+    } else {
+      i++
+    }
+  }
+  return blocks
+}
+
+function countChar(s: string, ch: string): number {
+  let n = 0
+  for (const c of s) if (c === ch) n++
+  return n
+}
+
+function annotationsPrecedingLine(blocks: AnnotationBlock[], strippedLines: string[], functionLine: number): AnnotationBlock[] {
+  const collected: AnnotationBlock[] = []
+  let cursor = functionLine
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!
+    if (block.endLine >= cursor) continue
+    let gapIsBlank = true
+    for (let ln = block.endLine + 1; ln < cursor; ln++) {
+      if ((strippedLines[ln - 1] ?? '').trim() !== '') {
+        gapIsBlank = false
+        break
+      }
+    }
+    if (!gapIsBlank) break
+    collected.unshift(block)
+    cursor = block.startLine
+  }
+  return collected
+}
+
+function countNetBraces(line: string): number {
+  let net = 0
+  for (const ch of line) {
+    if (ch === '{') net++
+    else if (ch === '}') net--
+  }
+  return net
+}
+
+function lineNumberAt(text: string, index: number): number {
+  let line = 1
+  for (let i = 0; i < index && i < text.length; i++) {
+    if (text[i] === '\n') line++
+  }
+  return line
+}
+
+function lineNumberInBody(bodyText: string, bodyFirstLine: number, offset: number): number {
+  return bodyFirstLine + countNewlines(bodyText.slice(0, offset))
+}
+
+function countNewlines(text: string): number {
+  return (text.match(/\n/g) ?? []).length
+}
+
+function boundText(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim()
+  return collapsed.length > RAW_SUMMARY_MAX_LENGTH ? `${collapsed.slice(0, RAW_SUMMARY_MAX_LENGTH)}...` : collapsed
+}
+
+function nextOrdinal(counters: Map<string, number>, key: string): number {
+  const n = counters.get(key) ?? 0
+  counters.set(key, n + 1)
+  return n
+}
+
+function readFileSafely(projectRoot: string, relPath: string): string | null {
+  try {
+    return fs.readFileSync(path.join(projectRoot, ...relPath.split('/')), 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function dedupeSort(values: string[]): string[] {
+  return [...new Set(values)].sort()
+}
+
+function sortById<T extends { id: string }>(items: T[]): T[] {
+  return items.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+function computeSummary(
+  testFiles: AndroidTestFileEntry[],
+  testClasses: AndroidTestClassEntry[],
+  testMethods: AndroidTestMethodEntry[],
+  testRules: AndroidTestRuleEntry[],
+  assertionFacts: AndroidTestAssertionFactEntry[],
+  routeFacts: AndroidTestRouteFactEntry[],
+  testDoubleFacts: AndroidTestDoubleFactEntry[],
+  warnings: string[]
+): AndroidTestSemanticSummary {
+  const junitAnnotationCount = testClasses.reduce((sum, c) => sum + c.annotations.length, 0) + testMethods.reduce((sum, m) => sum + m.annotations.length, 0)
+  const unresolvedFactCount =
+    testRules.filter((r) => r.status === 'unresolved').length +
+    assertionFacts.filter((f) => f.status === 'unresolved').length +
+    routeFacts.filter((f) => f.status === 'unresolved').length
+
+  return {
+    testFileCount: testFiles.length,
+    unitTestFileCount: testFiles.filter((f) => f.category === 'unit').length,
+    instrumentedTestFileCount: testFiles.filter((f) => f.category === 'instrumented').length,
+    testClassCount: testClasses.length,
+    testMethodCount: testMethods.length,
+    junitAnnotationCount,
+    composeRuleCount: testRules.length,
+    composeUiTestCount: testFiles.filter((f) => f.frameworks.includes('compose-ui')).length,
+    espressoTestCount: testFiles.filter((f) => f.frameworks.includes('espresso')).length,
+    robolectricTestCount: testFiles.filter((f) => f.frameworks.includes('robolectric')).length,
+    visibleTextAssertionCount: assertionFacts.filter((f) => f.kind === 'visible-text').length,
+    testTagAssertionCount: assertionFacts.filter((f) => f.kind === 'test-tag').length,
+    routeReferenceCount: routeFacts.length,
+    fakeCount: testDoubleFacts.filter((f) => f.kind === 'fake').length,
+    mockCount: testDoubleFacts.filter((f) => f.kind === 'mock').length,
+    unresolvedFactCount,
+    warningCount: warnings.length,
+  }
+}
+
+function emptyArtifact(projectRoot: string, createdAt: string): AndroidTestSemanticArtifact {
+  return {
+    artifactKind: ANDROID_TEST_SEMANTIC_ARTIFACT_KIND,
+    schemaVersion: ANDROID_TEST_SEMANTIC_SCHEMA_VERSION,
+    createdAt,
+    projectRoot: toForwardSlash(projectRoot),
+    detected: false,
+    testFiles: [],
+    testClasses: [],
+    testMethods: [],
+    testRules: [],
+    assertionFacts: [],
+    routeFacts: [],
+    testDoubleFacts: [],
+    warnings: [],
+    summary: computeSummary([], [], [], [], [], [], [], []),
+  }
+}

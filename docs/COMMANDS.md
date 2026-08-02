@@ -1,5 +1,7 @@
 # Commands
 
+`@dailephd/my-dev-kit@1.11.0` is the latest published release and includes the v1.11.0 command contracts documented here.
+
 my-dev-kit provides nine public CLI commands:
 
 - `index`
@@ -614,6 +616,30 @@ No-match behavior: zero exact matches returns `status: "ok"` with an empty `resu
 
 Static-analysis limitation: these selectors read static graph evidence only. They never claim a component is active at runtime, a permission is granted or enforced, a route is reachable, or a resource definition is the runtime-selected value.
 
+### Compose selectors (v1.11.0 Batch 4)
+
+`search` accepts three additional Compose selectors, joining the same mutual-exclusivity group as the Android selectors above (only one selector, or `--query`, at a time). They read Batch 4's compact `android-composable`/`android-compose-fact` nodes projected from `android-compose-semantic.json` — no new artifact, no second search index. Matching is exact only.
+
+- `--composable <name>`: exact match against a composable's declared name, or its own stable declaration ID (`matchKind: "composable-name"` or `"composable-id"`).
+- `--test-tag <tag>`: exact match against a resolved `Modifier.testTag(...)` value (`androidMetadata.resolvedValue`). A dynamic/unresolved tag has no resolved value and can never be matched.
+- `--android-ui <value>`: exact match against a resolved visible-text literal, a string-resource logical key, or a string-resource qualified identifier (`R.string.name`) — `matchKind` is `"visible-text"`, `"string-resource-key"`, or `"string-resource-identifier"` respectively. Never fuzzy text matching, never Android resource-value resolution.
+
+Composable and fact evidence is also discoverable through plain `search --query <text>` (composable names, test-tag values, visible text, resource keys, ViewModel reference names/types, and resolved navigation routes are all indexed as generic searchable fields) — the three flags above exist for exact, unambiguous lookup, not as the only way in.
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --composable "HomeScreen" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --test-tag "login_button" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-ui "Welcome back" --json
+```
+
+Static-analysis limitation: no claim is made that a composable renders, a child is visible, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to displayed text.
+
+### Android test evidence (v1.11.0 Batch 5)
+
+No new selector flags. `android-test-semantic.json`'s compact `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` nodes (test classes, test methods, JUnit/Compose-rule/Espresso/Robolectric evidence, and visible-text/test-tag/route/mock/fake facts) are discoverable exactly like the Compose nodes above through plain `search --query <text>` — test class/method names, framework names, annotation text, assertion values, route strings, and mocked/faked dependency names/types are all generic searchable fields, since every `android-*`-prefixed node is automatically eligible. `lookup --node <id>`, `source --node <id>` (bounded to the node's own recorded source range — never a whole-file fallback), and ordinary `slice --node <id> --depth <n>` all work unchanged; a test-method slice naturally includes real edges such as `android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` when the test statically references production evidence. `context` picks up test evidence as an ordinary candidate the same way. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change — there is no dedicated `android-test-semantic.json` diff section.
+
+Static-analysis limitation: indexing never executes a test. No fact or edge claims a test ran, a Compose rule initialized, an Activity launched, an assertion passed, or a mock/fake was actually injected at runtime.
+
 ### Examples
 
 ```sh
@@ -856,6 +882,26 @@ For an XML element (navigation destination/graph/action/deep-link), the excerpt 
 
 Static-analysis limitation: excerpts are static source at a recorded declaration line — not proof of runtime reachability, not a resolved effective resource value, and not a merged manifest.
 
+### Compose selectors (v1.11.0 Batch 4)
+
+`source` accepts `--composable <name>`, `--android-ui <value>`, and `--test-tag <tag>`, each mutually exclusive with the other retrieval modes and with each other, resolved through the same `AndroidSelectorMode` dispatcher and `ok`/`not-found`/`ambiguous` contract as `--android-route`/`--resource` above (`artifactKind: "my-dev-kit-v1-android-source-result"`). Each retrieves a bounded excerpt using the composable's/fact's own recorded `path`/`line`/`endLine` — a composable's excerpt spans its full recorded declaration range (not a fixed small window), since that range is already known exactly from `android-compose-semantic.json`.
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --android-ui "Welcome back" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --test-tag "login_button" --json
+```
+
+#### `--include-compose-tree`
+
+```sh
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable "HomeScreen" --include-compose-tree --max-bundle-lines 200 --max-blocks 10 --format json
+```
+
+Requires `--composable <name>` (an error otherwise); mutually exclusive with `--node`, `--file`, `--symbol`, `--contains`, `--react-region`, `--start`/`--end`, and continuation flags, same as the other Compose/Android selectors. Once the root composable resolves uniquely, it returns a bounded multi-block bundle (`artifactKind: "my-dev-kit-v1-compose-tree-result"`, `tree.mode: "compose-tree"`) built the same way `--include-local-component-tree` builds a React tree: a root block, then every composable reachable through Batch 1's `childCalls[]` (projected as `composable-calls-composable` code-graph edges) in deterministic root-first breadth-first order, each composable included at most once (cycle-protected). `--max-bundle-lines`/`--max-blocks` are the existing bundle caps; every omitted block is reported in `skippedBlocks[]` with a reason (`"max-block cap reached"`, `"max-line cap reached"`, or `"invalid source range"`). An ambiguous or unresolved child-composable call is never guessed into an edge in the first place (Batch 1 already omits it, recording a declaration-level warning instead) — any such warning reached by the walk is forwarded in the result's `warnings[]` rather than inventing a target. The tree never crosses into an unrelated composable merely because it shares the same file, and never claims a reachable child is always rendered or ever visible at runtime.
+
+Static-analysis limitation: `--composable`/`--android-ui`/`--test-tag`/`--include-compose-tree` are static source-and-graph evidence only — no proof of rendering, visibility, click execution, navigation success, or runtime test discoverability.
+
 ### Semantic metadata propagation
 
 When `--node` or `--symbol` mode is used, the source result propagates `semanticRoles`, `artifactRefs`, and `evidenceRefs` from the symbol when present in the index. These appear in the JSON output.
@@ -1082,6 +1128,20 @@ Root resolution behavior:
 
 Because the traversal is the unmodified `sliceGraph` engine, a route slice naturally includes real Batch 5 edges like `navigation-destination-resolves-to-screen`/`compose-route-resolves-to-screen`, and a component slice naturally includes `manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission` — never invented edges.
 
+### Compose selector (v1.11.0 Batch 4)
+
+`slice` accepts `--composable <name>`, mutually exclusive with `--node` and the other slice-root selectors, resolved through the same root-resolution contract as `--android-route`/`--android-component` above (`not-found`/`ambiguous`/exactly-one, with `androidSelector: { mode: "composable", query, matchKind }` on success). The default `--composable` slice already includes every relationship the requested `--depth`/`--direction` reaches, including the composable's defining source (`defines-composable`), direct child composables (`composable-calls-composable`), and directly contained facts (`composable-has-fact`) — no special-casing needed, since these are ordinary `code-graph.json` edges.
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --include-viewmodel --include-navigation --depth 3 --direction both --json
+```
+
+Two optional modifiers, both requiring `--composable` (an error otherwise) and combinable together, extend traversal exactly the way `--include-prop-flow`/`--include-event-handlers` already extend a React slice: `sliceGraph`'s existing `includeEdgeKinds` mechanism runs a second, deeper additive pass restricted to a specific edge-kind allowlist, on top of (never instead of) the normal depth-bounded slice.
+
+- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` edges only — Batch 4's own directly-resolved ViewModel candidates (one edge per exact class-name match; every candidate preserved when ambiguous, none when unresolved). No repository/DAO/data-flow expansion.
+- `--include-navigation`: extends reachability along `click-handler-contains-navigation-call` and `compose-navigation-targets-route` edges — the lexical click-to-navigation-call link, then the navigation call's own exact route candidate(s) from `android-navigation.json`. No runtime navigation-reachability claim.
+
 ## view
 
 Render graph artifacts as DOT, SVG, or PNG. By default, `view` renders `code-graph.json`.
@@ -1095,7 +1155,7 @@ npx @dailephd/my-dev-kit view --index <artifact-dir> --graph <selection> --forma
 ### Flags
 
 - `--index <dir>`: index artifact directory.
-- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation>`: graph artifact to render. Defaults to `code`.
+- `--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation|compose-ui|compose-navigation|android-test>`: graph artifact to render. Defaults to `code`.
 - `--format <dot|svg|png>`: output format.
 - `--out <path>`: output path.
 - `--edge-style <semantic|labeled|minimal>`: edge visualization style.
@@ -1119,10 +1179,13 @@ Supported `--graph` values:
 - `android-module` (v1.10.0 Batch 6): renders the manifest-referenced `code-graph.json`, filtered to `android-module`/`android-source-set` nodes plus every node with a matching `androidModuleId`, expanded one hop across actual edges to pull in connected exact Kotlin/Java classes. Same artifact as `code`, different node/edge filter — not a new artifact.
 - `android-manifest` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-manifest-file`/`android-manifest-component`/`android-intent-filter`/`android-permission` nodes, expanded across actual `manifest-declares-component`/`manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission`/`manifest-uses-permission`/`manifest-deep-link-matches-navigation-deep-link` edges only. Every manifest XML attribute is not rendered as a node; candidate deep-link matches remain labeled as candidates, never a confirmed runtime link.
 - `android-navigation` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-navigation-graph`/`android-navigation-destination`/`android-navigation-action`/`android-navigation-deep-link`/`android-compose-route` nodes, expanded across actual `navigation-*`/`compose-route-resolves-to-screen`/`manifest-deep-link-matches-navigation-deep-link` edges only. Never simulates a runtime navigation-graph merge and never selects one action target — every static candidate stays a separate edge.
+- `compose-ui` (v1.11.0 Batch 6): renders `code-graph.json` filtered to every `android-composable`/`android-compose-fact` node (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, and UI-region facts alike — distinguished by node label/shape and `androidMetadata.factKind`, not by a separate node kind per fact), expanded across `defines-composable`/`composable-calls-composable`/`composable-has-fact`/`composable-references-viewmodel`/`compose-string-references-resource` edges only, pulling in the composable's defining file/symbol and any exact ViewModel-symbol/resource-definition target an existing edge already connects. Excludes all Android test evidence and unrelated navigation/resource nodes by construction.
+- `compose-navigation` (v1.11.0 Batch 6): renders the static chain `composable -> click-handler fact -> navigation-call fact -> route/destination candidate -> screen candidate`. Seeded from `android-composable` nodes plus only the click-handler/navigation-call `android-compose-fact` nodes (never the unrelated state/effect/test-tag/visible-text/string-resource facts on the same composable) and existing `android-compose-route`/`android-navigation-destination`/`android-navigation-graph` nodes, expanded across `defines-composable`/`composable-has-fact`/`click-handler-contains-navigation-call`/`compose-navigation-targets-route`/`navigation-graph-contains-destination`/`navigation-destination-resolves-to-screen`/`compose-route-resolves-to-screen` edges. Every ambiguous route/screen candidate is preserved as a separate node/edge — never a picked winner; an unresolved navigation call is still rendered with no outgoing target edge, never a fabricated one.
+- `android-test` (v1.11.0 Batch 6): renders `code-graph.json` filtered to the full `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` hierarchy (unit vs. instrumented, and every fact family — JUnit annotation, Compose rule, visible-text/test-tag assertion, route reference, fake/mock/stub/spy — distinguishable through node label/shape and `androidMetadata.factKind`/`category`), expanded across `defines-test-class`/`test-class-defines-method`/`test-class-uses-rule`/`test-method-has-fact`/`android-test-uses-double`/`android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` edges only, pulling in exact production composable/route/ViewModel-symbol nodes an existing edge already connects. Never includes every production Compose/navigation node, and never claims a test executed, passed, or covers a referenced node's behavior.
 
 `--graph` is optional. The default is `code`.
 
-The three Android graph modes (`android-module`, `android-manifest`, `android-navigation`) render `code-graph.json` itself (the same artifact `--graph code` renders) filtered to the relevant Batch 5 `android-*` node/edge subset — they require no additional manifest-referenced artifact, and behave like `--graph code` on a non-Android project (an empty bounded graph: zero Android nodes, zero Android edges, exit 0 — not an error).
+The six Android graph modes (`android-module`, `android-manifest`, `android-navigation`, `compose-ui`, `compose-navigation`, `android-test`) render `code-graph.json` itself (the same artifact `--graph code` renders) filtered to the relevant node/edge subset — they require no additional manifest-referenced artifact, reparse no semantic artifact or source file at view time, and behave like `--graph code` on a non-Android (or Compose/test-evidence-free) project: an empty bounded graph, zero nodes, zero edges, exit 0 — not an error. None of the three v1.11.0 Batch 6 views (`compose-ui`, `compose-navigation`, `android-test`) currently render a legend, matching the exact same precedent the three v1.10.0 Batch 6 Android views already established (`buildRenderableDotGraph` only appends the edge legend for `--graph code`).
 
 The three reachability graph modes (`route`, `browser-storage`, `ui-reachability`) require `manifest.json` to reference `frontendReachability`. When `frontend-reachability.json` is absent, `view` reports an error and exits non-zero (unlike `search`/`lookup`/`slice`/`source`, which return a graceful empty result at exit 0). These graphs record static evidence only; they do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
 

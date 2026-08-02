@@ -226,6 +226,19 @@ For the v1.10.4 condition-aware correction, the directly owned regression suites
 
 Do not depend on transient external fixture paths. Permanent regressions belong in repository-owned tests or fixtures, and generated capsule, audit, index, benchmark, and temporary request outputs must remain ignored and uncommitted.
 
+### v1.11.0 Compose and Android-test validation
+
+The v1.11.0 owners live under `src/android/`, with retrieval integration in `src/commands/`, `src/lookup/`, `src/source/`, and `src/graph/`. When changing these analyzers or their documentation, keep these focused suites together:
+
+- `tests/android/composeSemanticFacts.spec.ts` and `composeClickNavigationFacts.spec.ts` - declaration ownership, state/effects/ViewModels/UI markers, click/navigation facts, unresolved evidence, and deterministic IDs/order
+- `tests/android/composeGraphProjection.spec.ts` and `composeRetrieval.spec.ts` - compact node/edge projection, exact/ambiguous candidate preservation, selector conflicts, and non-Android compatibility
+- `tests/cli/composeRetrievalCommands.spec.ts` and `tests/context/composeContextIntegration.spec.ts` - public source/slice/search/lookup selectors, Compose-tree bundles, generic context, and old-index behavior
+- `tests/android/androidTestSemantic.spec.ts` and `tests/cli/androidTestSemanticCommands.spec.ts` - Kotlin/Java unit/instrumented discovery, JUnit/Compose/Espresso/Robolectric facts, assertions/routes/test doubles, generic retrieval/context/graph-diff, and incremental/full equivalence
+- `tests/index/androidComposeSemanticIncremental.spec.ts` and related cache-metadata coverage - analyzer registration, managed stale-artifact removal, invalidation, old-manifest compatibility, and full/incremental equivalence
+- `tests/view/androidGraphViews.spec.ts` - bounded/deterministic `compose-ui`, `compose-navigation`, and `android-test` projections, edge styles, empty/old-index compatibility, and existing-view preservation
+
+Use the existing fixtures under `tests/fixtures/compose-retrieval/` and `tests/fixtures/android-test-semantic/`. They are test fixtures, not public examples. The analyzers must remain local/read-only and must not acquire Gradle, Android SDK, emulator, runtime test, network, or security-validation dependencies.
+
 Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.
 
 ## Local CLI smoke test
@@ -256,28 +269,29 @@ Build and pack the package:
     npm run build
     npm pack
 
-Install the tarball globally:
+Install the tarball into an isolated project-local prefix so an existing global
+installation cannot shadow the candidate:
 
-    npm install -g ./dailephd-my-dev-kit-<version>.tgz
+    npm install --prefix .my-dev-kit-tarball-install --no-save ./dailephd-my-dev-kit-<version>.tgz
 
-Run installed CLI checks:
+Invoke the installed package's exact Node entry point for every check:
 
-    my-dev-kit --help
-    my-dev-kit --version
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --help
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --version
 
 Run an installed CLI smoke test:
 
-    my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
-    my-dev-kit search --index examples/basic-ts/.my-dev-kit-release --query user --limit 5 --json
-    my-dev-kit view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js search --index examples/basic-ts/.my-dev-kit-release --query user --limit 5 --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
 
 Clean up smoke-test artifacts:
 
     node -e "require('fs').rmSync('examples/basic-ts/.my-dev-kit-release', { recursive: true, force: true })"
 
-Uninstall the local package after testing:
+Remove the isolated install after testing:
 
-    npm uninstall -g @dailephd/my-dev-kit
+    node -e "require('fs').rmSync('.my-dev-kit-tarball-install', { recursive: true, force: true })"
 
 ## npm scripts
 

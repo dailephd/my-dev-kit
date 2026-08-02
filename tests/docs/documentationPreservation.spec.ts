@@ -36,6 +36,11 @@ function loadRealDocuments(manifest: PreservationManifest): DocumentContents {
   return documents
 }
 
+function loadPackageVersion(): string {
+  const packagePath = path.join(repoRoot, 'package.json')
+  return (JSON.parse(fs.readFileSync(packagePath, 'utf8')) as { version: string }).version
+}
+
 describe('documentation preservation checker', () => {
   const manifest = loadManifest()
   const realDocuments = loadRealDocuments(manifest)
@@ -344,6 +349,42 @@ describe('documentation preservation checker', () => {
       expect(violations.some((v) => v.rule === 'command-family-present')).toBe(true)
     })
 
+    it('fails when an implemented v1.11 Compose selector is deleted', () => {
+      const mutated: DocumentContents = {
+        ...realDocuments,
+        [manifest.commands.path]: realDocuments[manifest.commands.path].replace(
+          /`--include-compose-tree`/g,
+          '`--removed-compose-tree`',
+        ),
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'command-family-present')).toBe(true)
+    })
+
+    it('fails when an implemented v1.11 artifact family is deleted from all owners', () => {
+      const mutated: DocumentContents = { ...realDocuments }
+      for (const docPath of manifest.artifacts.paths) {
+        mutated[docPath] = realDocuments[docPath].replace(/android-test-semantic\.json/g, 'removed-test-artifact.json')
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'artifact-family-present')).toBe(true)
+    })
+
+    it('fails when README loses its manifest-owned v1.11 release-state boundary', () => {
+      const releaseStateKeyword = manifest.statusBoundaries.documentKeywords[manifest.readme.path].find((keyword) =>
+        keyword.includes('v1.11.0'),
+      )
+      expect(releaseStateKeyword).toBeDefined()
+      const mutated: DocumentContents = {
+        ...realDocuments,
+        [manifest.readme.path]: realDocuments[manifest.readme.path]
+          .split(releaseStateKeyword!)
+          .join('v1.11.0 status removed for test'),
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'current-future-status-boundary')).toBe(true)
+    })
+
     it('fails when a workflow family is deleted', () => {
       const mutated: DocumentContents = {
         ...realDocuments,
@@ -467,7 +508,7 @@ describe('documentation preservation checker', () => {
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain('## Latest release: v1.10.4')
+      expect(readme).toContain(`## Latest release: v${loadPackageVersion()}`)
       expect(readme).toContain('## Stage-specific bounded context retrieval')
       expect(readme).toContain('Version 1.10.1 introduced this shipped capability')
       expect(readme).toContain('The command syntax and artifact schema major remain unchanged.')

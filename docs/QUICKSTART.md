@@ -85,6 +85,7 @@ Generated artifacts inside `.my-dev-kit/`:
 - `frontend-reachability.json` - static route, browser-storage, and UI-marker evidence, when the frontend analyzer finds qualifying source
 - `classification.json` - conservative static file and symbol classifications
 - `android-project.json`, `android-components.json`, `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` - conditional Android static-evidence artifacts
+- `android-compose-semantic.json` and `android-test-semantic.json` - conditional Compose and Android test static-evidence artifacts shipped in v1.11.0
 
 Re-run the same command to refresh the artifact directory when source changes.
 
@@ -179,6 +180,19 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --symbol MyComponent --file 
 
 Source retrieval never modifies source files. The `--max-lines` limit is enforced, and file paths that escape the project root are rejected.
 
+### v1.11.0 Compose retrieval
+
+`@dailephd/my-dev-kit@1.11.0` is the latest published release. The examples below may also be run from a source checkout built with `npm run build`.
+
+```sh
+node dist/cli.js source --index .my-dev-kit --composable HomeScreen --include-compose-tree --format numbered
+node dist/cli.js source --index .my-dev-kit --android-ui "Welcome back" --format numbered
+node dist/cli.js source --index .my-dev-kit --test-tag login_button --format numbered
+node dist/cli.js slice --index .my-dev-kit --composable HomeScreen --include-viewmodel --include-navigation --json
+```
+
+These selectors use exact static evidence and preserve ambiguity. They do not prove that a composable renders, text is visible, a click occurs, navigation succeeds, or a test executes.
+
 ## 7. Render the graph as DOT
 
 DOT output does not require Graphviz:
@@ -195,6 +209,8 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-flow --format do
 npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-prop-event-flow --format dot --out .my-dev-kit/react-prop-event-flow.dot
 npx @dailephd/my-dev-kit view --index .my-dev-kit --graph frontend-test --format dot --out .my-dev-kit/frontend-test.dot
 ```
+
+v1.11.0 also supports bounded `compose-ui`, `compose-navigation`, and `android-test` views through `view --graph <name>` (or `node dist/cli.js view` from a source checkout). These views filter the existing `code-graph.json`; they do not execute or reparse Android source at view time.
 
 ## 8. Render SVG or PNG with Graphviz
 

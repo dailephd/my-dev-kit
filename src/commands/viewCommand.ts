@@ -7,6 +7,9 @@ import {
   adaptAndroidModuleGraph,
   adaptAndroidManifestGraph,
   adaptAndroidNavigationGraph,
+  adaptComposeUiGraph,
+  adaptComposeNavigationGraph,
+  adaptAndroidTestGraph,
   type GraphArtifactSelection,
 } from '../graph/adaptGraphArtifact.js'
 import {
@@ -36,7 +39,7 @@ export function registerViewCommand(program: Command): void {
     .command('view')
     .description('Render code graph artifacts as DOT, SVG, or PNG.')
     .option('--index <dir>', 'index artifact directory', '.my-dev-kit')
-    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation>', 'graph artifact to render', 'code')
+    .option('--graph <code|data-model|model-view-lineage|react-component|react-flow|react-prop-event-flow|frontend-test|route|browser-storage|ui-reachability|android-module|android-manifest|android-navigation|compose-ui|compose-navigation|android-test>', 'graph artifact to render', 'code')
     .option('--format <dot|svg|png>', 'output format', 'dot')
     .option('--out <path>', 'output path')
     .option('--edge-style <semantic|labeled|minimal>', 'edge visualization style', 'semantic')
@@ -122,6 +125,9 @@ function adaptSelectedGraph(graph: GraphArtifactSelection, artifact: unknown) {
   if (graph === 'android-module') return adaptAndroidModuleGraph(artifact as CodeGraph)
   if (graph === 'android-manifest') return adaptAndroidManifestGraph(artifact as CodeGraph)
   if (graph === 'android-navigation') return adaptAndroidNavigationGraph(artifact as CodeGraph)
+  if (graph === 'compose-ui') return adaptComposeUiGraph(artifact as CodeGraph)
+  if (graph === 'compose-navigation') return adaptComposeNavigationGraph(artifact as CodeGraph)
+  if (graph === 'android-test') return adaptAndroidTestGraph(artifact as CodeGraph)
   return adaptFrontendTestGraph(artifact as FrontendSemanticArtifact)
 }
 
@@ -139,10 +145,13 @@ function parseGraph(value: string): GraphArtifactSelection {
     value === 'ui-reachability' ||
     value === 'android-module' ||
     value === 'android-manifest' ||
-    value === 'android-navigation'
+    value === 'android-navigation' ||
+    value === 'compose-ui' ||
+    value === 'compose-navigation' ||
+    value === 'android-test'
   ) return value
   throw new Error(
-    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test, route, browser-storage, ui-reachability, android-module, android-manifest, android-navigation.`
+    `Unsupported --graph value "${value}". Supported values: code, data-model, model-view-lineage, react-component, react-flow, react-prop-event-flow, frontend-test, route, browser-storage, ui-reachability, android-module, android-manifest, android-navigation, compose-ui, compose-navigation, android-test.`
   )
 }
 

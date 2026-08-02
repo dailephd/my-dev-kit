@@ -15,9 +15,9 @@ import {
 import {
   loadAndroidGraphData,
   resolveAndroidSelectorMode,
-  resolveAndroidRouteCandidates,
-  resolveAndroidComponentCandidates,
+  resolveAndroidCandidates,
   type AndroidCandidateBase,
+  type AndroidSelectorMode,
 } from '../android/index.js'
 
 export function registerSliceCommand(program: Command): void {
@@ -31,6 +31,9 @@ export function registerSliceCommand(program: Command): void {
     .option('--ui <value>', 'slice around a frontend-reachability UI marker fact')
     .option('--android-route <route>', 'slice around a uniquely-resolved Android route (exact match)')
     .option('--android-component <name>', 'slice around a uniquely-resolved Android manifest component (exact match)')
+    .option('--composable <name>', 'slice around a uniquely-resolved Compose composable (exact name match)')
+    .option('--include-viewmodel', 'extend a --composable slice to directly resolved ViewModel candidates')
+    .option('--include-navigation', 'extend a --composable slice through navigation-call facts to exact route candidates')
     .option('--include-tests', 'include test evidence refs (reachability slice only)')
     .option('--include-storage', 'include storage key facts in route/UI reachability slice')
     .option('--include-ui', 'include UI marker facts in route reachability slice')
@@ -68,19 +71,24 @@ export function registerSliceCommand(program: Command): void {
         )
       }
 
-      const androidMode = resolveAndroidSelectorMode({ androidRoute: options.androidRoute, androidComponent: options.androidComponent })
-      let androidSelector: { mode: 'android-route' | 'android-component'; query: string; matchKind: string } | undefined
+      if ((options.includeViewmodel || options.includeNavigation) && options.composable === undefined) {
+        throw new Error('--include-viewmodel and --include-navigation require --composable <name>.')
+      }
+
+      const androidMode = resolveAndroidSelectorMode({
+        androidRoute: options.androidRoute,
+        androidComponent: options.androidComponent,
+        composable: options.composable,
+      })
+      let androidSelector: { mode: AndroidSelectorMode; query: string; matchKind: string } | undefined
       let focusNodeId: string
 
       if (androidMode) {
         if (options.node !== undefined) {
-          throw new Error('The Android selector flags (--android-route, --android-component) cannot be combined with --node.')
+          throw new Error('The Android selector flags (--android-route, --android-component, --composable) cannot be combined with --node.')
         }
         const graphData = loadAndroidGraphData(options.index)
-        const candidates: AndroidCandidateBase[] =
-          androidMode.mode === 'android-route'
-            ? resolveAndroidRouteCandidates(graphData, androidMode.query)
-            : resolveAndroidComponentCandidates(graphData, androidMode.query)
+        const candidates: AndroidCandidateBase[] = resolveAndroidCandidates(graphData, androidMode.mode, androidMode.query)
 
         if (candidates.length === 0) {
           const result = {
@@ -90,7 +98,7 @@ export function registerSliceCommand(program: Command): void {
             query: androidMode.query,
             status: 'not-found' as const,
             candidates: [] as Array<{ graphNodeId: string; matchKind: string; kind: string }>,
-            warnings: [`No exact Android ${androidMode.mode === 'android-route' ? 'route' : 'component'} match for "${androidMode.query}".`],
+            warnings: [`No exact Android ${androidMode.mode} match for "${androidMode.query}".`],
           }
           if (options.json) console.log(JSON.stringify(result, null, 2))
           else console.log(`Android slice (${result.mode}): ${result.status} - ${result.warnings.join(' ')}`)
@@ -115,21 +123,21 @@ export function registerSliceCommand(program: Command): void {
         }
         focusNodeId = candidates[0]!.graphNodeId
         androidSelector = {
-          mode: androidMode.mode as 'android-route' | 'android-component',
+          mode: androidMode.mode,
           query: androidMode.query,
           matchKind: candidates[0]!.matchKind,
         }
       } else {
         if (!options.node) {
           throw new Error(
-            'The slice command requires --node <node-id> (or --route, --storage-key, --ui, --android-route, or --android-component).'
+            'The slice command requires --node <node-id> (or --route, --storage-key, --ui, --android-route, --android-component, or --composable).'
           )
         }
         focusNodeId = options.node
       }
 
       const artifacts = loadLookupArtifacts(options.index)
-      const includeEdgeKinds = selectedReactFlowKinds(options)
+      const includeEdgeKinds = mergeEdgeKindSets(selectedReactFlowKinds(options), selectedComposeEdgeKinds(options))
       const core = sliceGraph({
         graph: artifacts.codeGraph,
         focusNodeId,
@@ -173,6 +181,9 @@ interface SliceCommandOptions {
   ui?: string
   androidRoute?: string
   androidComponent?: string
+  composable?: string
+  includeViewmodel?: boolean
+  includeNavigation?: boolean
   includeTests?: boolean
   includeStorage?: boolean
   includeUi?: boolean
@@ -196,6 +207,23 @@ function printReachabilitySliceResult(result: ReachabilitySliceResult): void {
     `Routes: ${routeCount}, storage keys: ${storageKeyCount}, UI markers: ${uiCount}, edges: ${edgeCount}.`
   )
   if (result.testEvidence.length > 0) console.log(`Test evidence: ${result.testEvidence.length}`)
+}
+
+/** `--include-viewmodel`/`--include-navigation` (v1.11.0 Batch 4): the same additive-second-pass `includeEdgeKinds` mechanism `sliceGraph` already uses for React prop/event flow — each flag only *extends* reachability along its own real edge kinds, it never restricts the normal depth-bounded slice. Direct-only: `composable-references-viewmodel` and `compose-navigation-targets-route`/`click-handler-contains-navigation-call` are exactly Batch 4's projected candidate edges, never a repository/data-flow expansion. */
+function selectedComposeEdgeKinds(options: SliceCommandOptions): Set<string> | undefined {
+  if (!options.includeViewmodel && !options.includeNavigation) return undefined
+  const kinds = new Set<string>()
+  if (options.includeViewmodel) kinds.add('composable-references-viewmodel')
+  if (options.includeNavigation) {
+    kinds.add('compose-navigation-targets-route')
+    kinds.add('click-handler-contains-navigation-call')
+  }
+  return kinds
+}
+
+function mergeEdgeKindSets(a: Set<string> | undefined, b: Set<string> | undefined): Set<string> | undefined {
+  if (!a && !b) return undefined
+  return new Set([...(a ?? []), ...(b ?? [])])
 }
 
 function selectedReactFlowKinds(options: SliceCommandOptions): Set<string> | undefined {
