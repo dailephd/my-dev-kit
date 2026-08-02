@@ -8,7 +8,7 @@ export function isGraphvizAvailable(): boolean {
 export function renderGraphviz(dotText: string, format: 'svg' | 'png'): Buffer {
   const result = spawnSync('dot', [`-T${format}`], {
     input: dotText,
-    encoding: format === 'svg' ? 'utf8' : 'buffer',
+    encoding: format === 'svg' ? 'utf8' : null,
     shell: false,
     maxBuffer: 20 * 1024 * 1024,
   })

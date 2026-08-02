@@ -269,28 +269,29 @@ Build and pack the package:
     npm run build
     npm pack
 
-Install the tarball globally:
+Install the tarball into an isolated project-local prefix so an existing global
+installation cannot shadow the candidate:
 
-    npm install -g ./dailephd-my-dev-kit-<version>.tgz
+    npm install --prefix .my-dev-kit-tarball-install --no-save ./dailephd-my-dev-kit-<version>.tgz
 
-Run installed CLI checks:
+Invoke the installed package's exact Node entry point for every check:
 
-    my-dev-kit --help
-    my-dev-kit --version
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --help
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --version
 
 Run an installed CLI smoke test:
 
-    my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
-    my-dev-kit search --index examples/basic-ts/.my-dev-kit-release --query user --limit 5 --json
-    my-dev-kit view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js search --index examples/basic-ts/.my-dev-kit-release --query user --limit 5 --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
 
 Clean up smoke-test artifacts:
 
     node -e "require('fs').rmSync('examples/basic-ts/.my-dev-kit-release', { recursive: true, force: true })"
 
-Uninstall the local package after testing:
+Remove the isolated install after testing:
 
-    npm uninstall -g @dailephd/my-dev-kit
+    node -e "require('fs').rmSync('.my-dev-kit-tarball-install', { recursive: true, force: true })"
 
 ## npm scripts
 

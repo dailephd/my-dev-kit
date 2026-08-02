@@ -150,14 +150,15 @@ Create the tarball.
 
     npm pack
 
-Install the tarball globally.
+Install the tarball into an isolated repository-local prefix. This prevents a
+stale global installation from shadowing the candidate under test.
 
-    npm install -g ./dailephd-my-dev-kit-<version>.tgz
+    npm install --prefix .my-dev-kit-tarball-install --no-save ./dailephd-my-dev-kit-<version>.tgz
 
-Run basic CLI checks.
+Run basic CLI checks through the installed package's exact Node entry point.
 
-    my-dev-kit --help
-    my-dev-kit --version
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --help
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js --version
 
 The version command should print the intended release version.
 
@@ -169,26 +170,26 @@ DOT output never requires Graphviz. SVG and PNG output require Graphviz (the `do
 
 Run TypeScript indexing against the packaged examples.
 
-    my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
-    my-dev-kit search --index examples/basic-ts/.my-dev-kit-release --query service --limit 5 --json
-    my-dev-kit view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-release --call-graph --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js search --index examples/basic-ts/.my-dev-kit-release --query service --limit 5 --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-ts/.my-dev-kit-release --format dot --out examples/basic-ts/.my-dev-kit-release/graph.dot --edge-style semantic --json
 
 Run Python indexing if the package includes the Python example.
 
-    my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit-release --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js index --root examples/basic-python --src src --language python --out .my-dev-kit-release --json
 
 Run React/TSX indexing and frontend retrieval.
 
-    my-dev-kit index --root examples/basic-react-tsx --src src --out .my-dev-kit-release --json
-    my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit-release --contains "workspace-editor-empty-state" --context 3 --format numbered
-    my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit-release --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
-    my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-component.dot
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js index --root examples/basic-react-tsx --src src --out .my-dev-kit-release --json
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js source --index examples/basic-react-tsx/.my-dev-kit-release --contains "workspace-editor-empty-state" --context 3 --format numbered
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js source --index examples/basic-react-tsx/.my-dev-kit-release --react-region WorkspaceEditorShell --file "src/WorkspaceEditorShell.tsx" --format numbered
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-component.dot
 
 Smoke-test the remaining frontend graph views before publishing.
 
-    my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-flow --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-flow.dot
-    my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-prop-event-flow --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-prop-event-flow.dot
-    my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit-release --graph frontend-test --format dot --out examples/basic-react-tsx/.my-dev-kit-release/frontend-test.dot
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-flow --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-flow.dot
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-react-tsx/.my-dev-kit-release --graph react-prop-event-flow --format dot --out examples/basic-react-tsx/.my-dev-kit-release/react-prop-event-flow.dot
+    node .my-dev-kit-tarball-install/node_modules/@dailephd/my-dev-kit/dist/cli.js view --index examples/basic-react-tsx/.my-dev-kit-release --graph frontend-test --format dot --out examples/basic-react-tsx/.my-dev-kit-release/frontend-test.dot
 
 Graph visualization docs must also match the implemented renderer. Confirm:
 
@@ -238,9 +239,9 @@ Remove local release-test artifacts after inspection.
     Remove-Item -Recurse -Force examples/basic-python/.my-dev-kit-release
     Remove-Item -Recurse -Force examples/basic-react-tsx/.my-dev-kit-release
 
-Uninstall the global tarball test package.
+Remove the isolated tarball installation.
 
-    npm uninstall -g @dailephd/my-dev-kit
+    node -e "require('fs').rmSync('.my-dev-kit-tarball-install', { recursive: true, force: true })"
 
 If the example directory names differ from examples/basic-ts or examples/basic-python, use the actual packaged example paths and update this guide before release.
 
@@ -283,9 +284,14 @@ Do not publish until local validation, package inspection, and tarball smoke tes
 
 ## Run the published-package baseline check as a compatibility reference
 
-Before publishing a new version, optionally confirm the previously published baseline still installs and runs cleanly, as a compatibility reference point:
+Before publishing a new version, optionally confirm the previously published
+baseline still installs and runs cleanly in an isolated prefix. Do not use raw
+`npx` or `npm exec` as version-binding proof because an existing global shim can
+shadow the requested package:
 
-    npx @dailephd/my-dev-kit@<previously-published-version> --version
+    npm install --prefix .my-dev-kit-published-baseline --no-save --ignore-scripts @dailephd/my-dev-kit@<previously-published-version>
+    node .my-dev-kit-published-baseline/node_modules/@dailephd/my-dev-kit/dist/cli.js --version
+    node -e "require('fs').rmSync('.my-dev-kit-published-baseline', { recursive: true, force: true })"
 
 This confirms the prior baseline is intact; it is not a substitute for validating the new release candidate through the local tarball steps above.
 
