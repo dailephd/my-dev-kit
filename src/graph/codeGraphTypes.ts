@@ -9,6 +9,8 @@ export type CodeGraphNodeKind =
   | 'file'
   | 'symbol'
   | 'frontend-fact'
+  /** v1.12.0 Batch 1: single bounded Android project root, `android-project:root` (BEH-15.1). */
+  | 'android-project'
   | 'android-module'
   | 'android-source-set'
   | 'android-manifest-file'
@@ -28,6 +30,8 @@ export type CodeGraphNodeKind =
   | 'android-test-class'
   | 'android-test-method'
   | 'android-test-fact'
+  /** v1.12.0 Batch 2: bounded generated/build directory evidence, backed by `android-project.json`'s existing `ignoredGeneratedDirectories` - never a repository-wide scan. */
+  | 'android-generated-build-path'
 
 /** Which Batch 1-5 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
 export type AndroidArtifactId =
@@ -48,6 +52,8 @@ export type CodeGraphEdgeKind =
   | 'calls'
   | 'related-to'
   | ReactFlowRelationshipKind
+  /** v1.12.0 Batch 1: `android-project:root` -> an existing `android-module` node, one per current module (BEH-15.1). */
+  | 'android-project-contains-module'
   | 'module-contains-source-set'
   | 'manifest-declares-component'
   | 'manifest-component-resolves-to-source'
@@ -80,6 +86,15 @@ export type CodeGraphEdgeKind =
   | 'android-test-references-route'
   | 'android-test-references-viewmodel'
   | 'android-test-uses-double'
+  /** v1.12.0 Batch 3: the five fixed static component-dependency relationships. Never a synonym. */
+  | 'viewmodel-uses-repository'
+  | 'repository-uses-dao'
+  | 'repository-uses-service'
+  | 'dao-uses-entity'
+  | 'room-database-exposes-dao'
+  /** v1.12.0 Batch 4: Compose state ownership and Activity-to-Compose hosting. Never a synonym. */
+  | 'compose-state-reads-viewmodel'
+  | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
   id: string

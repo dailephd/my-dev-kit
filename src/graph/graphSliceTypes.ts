@@ -29,4 +29,9 @@ export interface GraphSliceCore {
   nodes: CodeGraphNode[]
   edges: CodeGraphEdge[]
   warnings: string[]
+  /** v1.12.0 Batch 5: populated only when `sliceGraph` was called with `dataFlowEdgeKinds`. */
+  dataFlowExpansion?: {
+    addedNodeIds: string[]
+    truncated: boolean
+  }
 }

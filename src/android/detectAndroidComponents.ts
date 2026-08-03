@@ -1,11 +1,13 @@
-import * as fs from 'node:fs'
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
 import type { AndroidModule, AndroidProjectArtifact } from './androidProjectTypes.js'
-import { ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
+import { readBoundedSourceBody } from './boundedSourceBodyScan.js'
+import { detectAndroidComponentDependencies } from './detectAndroidComponentDependencies.js'
 import {
   ANDROID_COMPONENTS_ARTIFACT_KIND,
   ANDROID_COMPONENTS_SCHEMA_VERSION,
   EVIDENCE_KIND_SORT_PRIORITY,
+  type AndroidComponentDependencyFact,
+  type AndroidComponentDependencyRelationshipKind,
   type AndroidComponentEntry,
   type AndroidComponentEvidence,
   type AndroidComponentRole,
@@ -78,7 +80,18 @@ export function detectAndroidComponents(options: DetectAndroidComponentsOptions)
     (a, b) => a.filePath.localeCompare(b.filePath) || a.symbolName.localeCompare(b.symbolName) || a.role.localeCompare(b.role)
   )
 
-  const summary = summarize(components)
+  // v1.12.0 Batch 3: extends this same detection pass with static
+  // ViewModel/Repository/DAO/Database dependency facts, once every
+  // component-role fact is known. Same artifact, same analyzer - never a
+  // second component scanner or a second artifact.
+  const { dependencyFacts, warnings: dependencyWarnings } = detectAndroidComponentDependencies({
+    symbolIndex,
+    components,
+    projectRoot,
+  })
+  for (const w of dependencyWarnings) warnings.add(w)
+
+  const summary = summarize(components, dependencyFacts)
 
   return {
     artifact: {
@@ -87,6 +100,7 @@ export function detectAndroidComponents(options: DetectAndroidComponentsOptions)
       createdAt,
       detected: components.length > 0,
       components,
+      dependencyFacts,
       summary,
       warnings: [...warnings].sort(),
     },
@@ -100,12 +114,30 @@ function buildEmptyArtifact(createdAt: string): AndroidComponentsArtifact {
     createdAt,
     detected: false,
     components: [],
-    summary: { componentCount: 0, highConfidenceCount: 0, mediumConfidenceCount: 0, lowConfidenceCount: 0, roleCounts: {} },
+    dependencyFacts: [],
+    summary: {
+      componentCount: 0,
+      highConfidenceCount: 0,
+      mediumConfidenceCount: 0,
+      lowConfidenceCount: 0,
+      roleCounts: {},
+      dependencyFactCount: 0,
+      resolvedDependencyFactCount: 0,
+      ambiguousDependencyFactCount: 0,
+      unresolvedDependencyFactCount: 0,
+      dependencyFactCountByKind: {
+        'viewmodel-uses-repository': 0,
+        'repository-uses-dao': 0,
+        'repository-uses-service': 0,
+        'dao-uses-entity': 0,
+        'room-database-exposes-dao': 0,
+      },
+    },
     warnings: [],
   }
 }
 
-function summarize(components: readonly AndroidComponentEntry[]) {
+function summarize(components: readonly AndroidComponentEntry[], dependencyFacts: readonly AndroidComponentDependencyFact[]) {
   const roleCounts: Partial<Record<AndroidComponentRole, number>> = {}
   let high = 0
   let medium = 0
@@ -116,12 +148,35 @@ function summarize(components: readonly AndroidComponentEntry[]) {
     else if (c.confidence === 'medium') medium += 1
     else low += 1
   }
+
+  const dependencyFactCountByKind: Record<AndroidComponentDependencyRelationshipKind, number> = {
+    'viewmodel-uses-repository': 0,
+    'repository-uses-dao': 0,
+    'repository-uses-service': 0,
+    'dao-uses-entity': 0,
+    'room-database-exposes-dao': 0,
+  }
+  let resolvedCount = 0
+  let ambiguousCount = 0
+  let unresolvedCount = 0
+  for (const fact of dependencyFacts) {
+    dependencyFactCountByKind[fact.relationshipKind] += 1
+    if (fact.matchStatus === 'resolved') resolvedCount += 1
+    else if (fact.matchStatus === 'ambiguous') ambiguousCount += 1
+    else unresolvedCount += 1
+  }
+
   return {
     componentCount: components.length,
     highConfidenceCount: high,
     mediumConfidenceCount: medium,
     lowConfidenceCount: low,
     roleCounts,
+    dependencyFactCount: dependencyFacts.length,
+    resolvedDependencyFactCount: resolvedCount,
+    ambiguousDependencyFactCount: ambiguousCount,
+    unresolvedDependencyFactCount: unresolvedCount,
+    dependencyFactCountByKind,
   }
 }
 
@@ -172,43 +227,6 @@ function derivePackageNameFromPath(filePath: string, moduleInfo: ModuleInfo): st
   const langRootMatch = filePath.match(/\/(kotlin|java)\/(.+)\/[^/]+\.(kt|java)$/)
   if (!langRootMatch) return null
   return langRootMatch[2].replace(/\//g, '.')
-}
-
-// ---------------------------------------------------------------------------
-// Bounded, brace-depth-scanned body read — used only by Retrofit detection.
-// ---------------------------------------------------------------------------
-
-const MAX_BODY_SCAN_LINES = 400
-
-function readBoundedSymbolBody(projectRoot: string, filePath: string, startLine: number): string | null {
-  try {
-    const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
-    if (!fs.existsSync(absolutePath)) return null
-    const sourceText = fs.readFileSync(absolutePath, 'utf8')
-    const lines = sourceText.split(/\r?\n/)
-    const startIndex = startLine - 1
-    if (startIndex < 0 || startIndex >= lines.length) return null
-
-    let depth = 0
-    let sawOpenBrace = false
-    const collected: string[] = []
-    for (let i = startIndex; i < lines.length && collected.length < MAX_BODY_SCAN_LINES; i++) {
-      const line = lines[i]
-      collected.push(line)
-      for (const char of line) {
-        if (char === '{') {
-          depth += 1
-          sawOpenBrace = true
-        } else if (char === '}') {
-          depth -= 1
-        }
-      }
-      if (sawOpenBrace && depth <= 0) break
-    }
-    return collected.join('\n')
-  } catch {
-    return null
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -511,7 +529,7 @@ const RETROFIT_HTTP_ANNOTATIONS = ['@GET', '@POST', '@PUT', '@DELETE', '@PATCH',
 
 function evaluateRetrofitService(symbol: SymbolDefinition, file: FileSummary, projectRoot: string): RoleMatch | null {
   if (typeof symbol.location?.line === 'number') {
-    const body = readBoundedSymbolBody(projectRoot, file.path, symbol.location.line)
+    const body = readBoundedSourceBody(projectRoot, file.path, symbol.location.line)
     if (body) {
       const bodyMatch = RETROFIT_HTTP_ANNOTATIONS.find((token) => body.includes(token))
       if (bodyMatch) {

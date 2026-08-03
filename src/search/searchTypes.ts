@@ -78,6 +78,8 @@ export interface SearchIndexSummary {
   searchedFileCount: number
   searchedSymbolCount: number
   searchedEdgeCount: number
+  /** v1.12.0 Batch 5: `search --android-role` only - total exact matches before `--limit` is applied. `resultCount` remains the returned (post-limit) count, matching existing convention. */
+  totalMatchCount?: number
 }
 
 export interface SearchIndexResult {
@@ -96,6 +98,8 @@ export interface SearchIndexResult {
     codeGraph: string
   }
   warnings: string[]
+  /** v1.12.0 Batch 5: present only for `search --android-role <role>` - the exact requested role. */
+  androidRole?: string
 }
 
 export interface SearchCandidateField {

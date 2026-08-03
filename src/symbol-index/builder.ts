@@ -194,14 +194,22 @@ export function buildIndex(config: BuildConfig): BuildResult {
 
   const symbolCount = summaries.reduce((n, f) => n + f.symbols.length, 0)
 
+  // v1.12.0 Batch 7: sort by path for deterministic output regardless of the
+  // underlying directory-walk order. Without this, a full rebuild's `files`
+  // array order depends on `discoverSourceFiles`'s traversal order, while
+  // `partialRebuild.ts`'s incremental merge already sorts by path (line ~207
+  // there) - so the same file set could legitimately serialize in a different
+  // order between a full rebuild and an incremental partial rebuild.
+  const sortedSummaries = [...summaries].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+
   const index: SymbolIndex = {
     schemaVersion: SCHEMA_VERSION,
     buildTime,
     repoRoot: config.repoRoot,
     sourceRoots: config.sourceRoots,
-    fileCount: summaries.length,
+    fileCount: sortedSummaries.length,
     symbolCount,
-    files: summaries,
+    files: sortedSummaries,
     graph,
     // callGraphArtifact set by writer after writing the artifact
   }

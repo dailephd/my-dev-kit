@@ -241,6 +241,17 @@ Use the existing fixtures under `tests/fixtures/compose-retrieval/` and `tests/f
 
 Smoke-test the legacy command, each role, structured request input, JSON parsing, capsule and audit output, before/after indexes, missing evidence, a tiny budget, and stale or unknown context. The CLI reports deterministic character budgets rather than exact model-token counts. Focused context validation uses Vitest directly; there is no separate npm script for each scenario.
 
+### v1.12.0 Android architecture, data-flow, and context-ownership validation
+
+The v1.12.0 owners live under `src/classification/` (Android category/risk classification), `src/android/` (component dependency facts, Compose state ownership, the Android-role search selector, the Android data-flow edge allowlist, and the related-tests expansion helper), `src/context/` (`androidContextIntent.ts`, `androidContextOwnerPolicy.ts`, and the Android integration points in `roleCandidates.ts`/`evidenceGroups.ts`/`conflictDetection.ts`), `src/indexing/runIndexCommand.ts` (final classification-entry ordering), and `src/symbol-index/builder.ts` (final `symbol-index.json` file ordering). When changing these, keep these focused suites together:
+
+- `tests/integration/androidV112Batch1Classification.spec.ts` through `androidV112Batch4ComposeOwnership.spec.ts` - project/module classification, the complete Android category vocabulary and risk labels, component-dependency facts, and Compose state-ownership/Activity-hosting classification
+- `tests/integration/androidV112Batch5DataFlowSearch.spec.ts` - `search --android-role`, `slice --include-data-flow`, and the Android-aware `slice --include-tests` extension
+- `tests/context/androidContextIntent.spec.ts`, `androidContextOwnerPolicy.spec.ts`, `androidWrongLayerConflicts.spec.ts`, `androidContextIntegration.spec.ts`, and `androidContextCorrection.spec.ts` - Android intent normalization, owner eligibility, all six wrong-layer conflict kinds, and end-to-end named-screen/generated/test-only owner selection through the real `context` command
+- `tests/integration/androidV112Batch7IntegrationGate.spec.ts` - full-versus-incremental artifact equivalence, no-change stability, a representative Android dependency mutation with `graph-diff` verification, and three-run artifact determinism, all over the canonical combined-app fixture
+
+Use `tests/fixtures/android-retrieval/combined-app` as the representative fixture for full-pipeline scenarios, and `tests/fixtures/android-test-semantic/basic-app` when Android test evidence (unit/instrumented tests referencing a ViewModel) is required. Full-versus-incremental and determinism comparisons normalize only documented volatile fields (timestamps, output paths) - never node/edge/classification-entry ordering, which must remain stable by construction.
+
 ## Local CLI smoke test
 
 After building, run a basic TypeScript smoke test:

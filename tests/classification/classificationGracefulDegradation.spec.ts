@@ -70,7 +70,7 @@ describe('classification graceful degradation (INV-004 / missing optional artifa
       createdAt: '2026-01-01T00:00:00.000Z',
     })
 
-    expect(artifact.schemaVersion).toBe('1.0.0')
+    expect(artifact.schemaVersion).toBe('1.1.0')
     expect(artifact.summary.fileEntryCount).toBe(1)
     expect(artifact.summary.symbolEntryCount).toBe(1)
     // No dataModel means no existing-semantic-role evidence, so the User symbol

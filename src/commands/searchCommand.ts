@@ -18,6 +18,9 @@ import {
   resolveAndroidSelectorMode,
   buildAndroidSearchResult,
   type AndroidSearchResult,
+  isAndroidRoleSearchValue,
+  buildAndroidRoleSearchResult,
+  ANDROID_ROLE_SEARCH_VALUES,
 } from '../android/index.js'
 
 const DEFAULT_LIMIT = 20
@@ -39,9 +42,51 @@ export function registerSearchCommand(program: Command): void {
     .option('--composable <name>', 'search Compose composables (exact name or stable declaration id)')
     .option('--test-tag <tag>', 'search Compose resolved Modifier.testTag values (exact match)')
     .option('--android-ui <value>', 'search Compose resolved visible-text/string-resource evidence (exact match)')
+    .option(
+      '--android-role <role>',
+      `search for an exact Android classification role (exact match; one of: ${ANDROID_ROLE_SEARCH_VALUES.join(', ')})`
+    )
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
     .action((options: SearchCommandOptions) => {
+      const otherSelectorFlags = [
+        options.route,
+        options.storageKey,
+        options.ui,
+        options.androidRoute,
+        options.permission,
+        options.resource,
+        options.androidComponent,
+        options.composable,
+        options.testTag,
+        options.androidUi,
+      ]
+      if (options.androidRole !== undefined) {
+        if (options.query !== undefined || otherSelectorFlags.some((v) => v !== undefined)) {
+          throw new Error(
+            '--android-role is mutually exclusive with --query and every other search selector (--route, --storage-key, --ui, --android-route, --permission, --resource, --android-component, --composable, --test-tag, --android-ui).'
+          )
+        }
+        if (!isAndroidRoleSearchValue(options.androidRole)) {
+          throw new Error(
+            `Invalid --android-role value "${options.androidRole}". Allowed values: ${ANDROID_ROLE_SEARCH_VALUES.join(', ')}.`
+          )
+        }
+        const resolved = readIndexManifest(options.index)
+        const result = buildAndroidRoleSearchResult({
+          resolved,
+          codeGraph: readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph'),
+          role: options.androidRole,
+          limit: options.limit,
+        })
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2))
+          return
+        }
+        printTextResult(result)
+        return
+      }
+
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
         if (options.query !== undefined) {
@@ -112,6 +157,7 @@ interface SearchCommandOptions {
   composable?: string
   testTag?: string
   androidUi?: string
+  androidRole?: string
   limit: number
   json?: boolean
 }

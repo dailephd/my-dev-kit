@@ -49,12 +49,12 @@ afterEach(() => {
 })
 
 describe('classification artifact', () => {
-  it('TST-001/AC-001: writes classification.json with schemaVersion 1.0.0 and >=1 entry', () => {
+  it('TST-001/AC-001: writes classification.json with schemaVersion 1.1.0 and >=1 entry', () => {
     const root = createFixture()
     const indexDir = indexFixture(root)
     const classification = readJson<ClassificationArtifact>(join(indexDir, 'classification.json'))
 
-    expect(classification.schemaVersion).toBe('1.0.0')
+    expect(classification.schemaVersion).toBe('1.1.0')
     expect(classification.entries.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -76,7 +76,7 @@ describe('classification artifact', () => {
     const secondIndexDir = indexFixture(root)
     const classification = readJson<ClassificationArtifact>(join(secondIndexDir, 'classification.json'))
 
-    expect(classification.schemaVersion).toBe('1.0.0')
+    expect(classification.schemaVersion).toBe('1.1.0')
     expect(classification.entries.length).toBeGreaterThanOrEqual(1)
   })
 

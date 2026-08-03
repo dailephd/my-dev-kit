@@ -1,5 +1,10 @@
 import type { SemanticArtifactRef } from '../semantics/index.js'
-import { CLASSIFICATION_ARTIFACT_KIND, type ClassificationEntry, type ClassificationRoleRef } from './classificationTypes.js'
+import {
+  CLASSIFICATION_ARTIFACT_KIND,
+  type ClassificationEntry,
+  type ClassificationRoleRef,
+  type ClassificationTargetKind,
+} from './classificationTypes.js'
 
 export interface CompactClassificationMetadata {
   classificationRoles: ClassificationRoleRef[]
@@ -7,21 +12,25 @@ export interface CompactClassificationMetadata {
 }
 
 /**
- * Builds a map-by-id of compact classification metadata for 'symbol'-kind
- * classification entries only, mirroring buildSemanticRolesFromDataModel's
- * map-by-symbolId shape. Entries with zero classifications (unresolved, e.g.
- * uncertainty='unknown') are intentionally excluded so the compact fields
- * stay absent rather than populated with an empty array - matching how
- * semanticRoles/artifactRefs absence is already handled (INV-004).
+ * Builds a map-by-id of compact classification metadata for classification
+ * entries of a single `targetKind` (default 'symbol', mirroring
+ * buildSemanticRolesFromDataModel's map-by-symbolId shape). v1.12.0 Batch 1
+ * reuses this for `targetKind: 'graph-node'` entries (Android project/module
+ * nodes) by passing that targetKind explicitly. Entries with zero
+ * classifications (unresolved, e.g. uncertainty='unknown') are intentionally
+ * excluded so the compact fields stay absent rather than populated with an
+ * empty array - matching how semanticRoles/artifactRefs absence is already
+ * handled (INV-004).
  */
 export function buildClassificationRefsBySymbolId(
   entries: readonly ClassificationEntry[],
-  classificationArtifactPath: string
+  classificationArtifactPath: string,
+  targetKind: ClassificationTargetKind = 'symbol'
 ): ReadonlyMap<string, CompactClassificationMetadata> {
   const bySymbolId = new Map<string, CompactClassificationMetadata>()
 
   for (const entry of entries) {
-    if (entry.targetKind !== 'symbol') continue
+    if (entry.targetKind !== targetKind) continue
     if (entry.classifications.length === 0) continue
 
     const classificationRoles: ClassificationRoleRef[] = entry.classifications.map((role) => ({

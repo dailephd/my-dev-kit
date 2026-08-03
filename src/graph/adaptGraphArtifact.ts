@@ -213,6 +213,11 @@ const COMPOSE_UI_EDGE_KINDS = new Set([
   'composable-has-fact',
   'composable-references-viewmodel',
   'compose-string-references-resource',
+  // v1.12.0 Batch 4: exact ViewModel state-ownership and exact Activity
+  // hosting bridges - direct evidence only, never a repository/data-layer
+  // expansion (that remains Batch 5's `--include-data-flow`).
+  'compose-state-reads-viewmodel',
+  'activity-hosts-composable',
 ])
 
 /** `view --graph compose-ui` (v1.11.0 Batch 6): every `android-composable`/`android-compose-fact` node (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, and UI-region facts alike - distinguished by node label/`androidMetadata.factKind`, not by a dedicated node kind per fact), plus the defining Kotlin file/symbol, exact ViewModel symbol, and exact resource-definition nodes an existing edge already connects to them. Never the whole `code-graph.json`, never Android test evidence, never an invented relationship. */

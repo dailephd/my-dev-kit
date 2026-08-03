@@ -9,6 +9,8 @@ import { buildAndroidManifestProject } from '../../src/android/buildAndroidManif
 import { buildAndroidResourceProject } from '../../src/android/buildAndroidResourceProject.js'
 import { buildAndroidNavigationProject } from '../../src/android/buildAndroidNavigationProject.js'
 import { buildAndroidArtifactRelationships } from '../../src/android/buildAndroidArtifactRelationships.js'
+import { detectAndroidComponents } from '../../src/android/detectAndroidComponents.js'
+import { buildAndroidComposeSemanticProject } from '../../src/android/buildAndroidComposeSemanticProject.js'
 import type { CodeGraphEdge, CodeGraphEdgeKind } from '../../src/graph/codeGraphTypes.js'
 
 const tempDirs: string[] = []
@@ -439,6 +441,149 @@ describe('buildAndroidArtifactRelationships — determinism and compactness', ()
     // Compact metadata only — no full attribute dump (theme/label full values aren't copied in).
     expect(Object.keys(componentNode.androidMetadata ?? {}).sort()).toEqual(
       ['componentKind', 'exported', 'exportedExplicit', 'rawName', 'resolvedName'].sort()
+    )
+  })
+})
+
+describe('buildAndroidArtifactRelationships — v1.12.0 Batch 3 component-dependency edges', () => {
+  it('TST-327/TST-336: projects exactly one edge per resolved dependency fact onto existing symbol nodes, deterministically', () => {
+    const root = createTempRoot()
+    scaffold(root)
+    write(root, 'app/src/main/AndroidManifest.xml', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>\n')
+    write(
+      root,
+      'app/src/main/kotlin/com/example/UserRepository.kt',
+      'package com.example\n\nclass UserRepository\n'
+    )
+    write(
+      root,
+      'app/src/main/kotlin/com/example/UserViewModel.kt',
+      'package com.example\n\nimport androidx.lifecycle.ViewModel\n\nclass UserViewModel(\n    private val repository: UserRepository\n) : ViewModel()\n'
+    )
+
+    const { artifact: androidProject } = detectAndroidProject({ projectRoot: root })
+    const { artifact: androidComponents } = detectAndroidComponents({
+      symbolIndex: buildIndex({ repoRoot: root, sourceRoots: ['app/src/main/kotlin'], buildCallGraph: false }).index,
+      androidProject,
+      projectRoot: root,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    })
+    expect(androidComponents.dependencyFacts).toHaveLength(1)
+
+    const result = buildRelationships(root)
+    const withComponents = buildAndroidArtifactRelationshipsWithComponents(root, androidComponents)
+    const edges = edgesOfKind(withComponents.edges, 'viewmodel-uses-repository')
+    expect(edges).toHaveLength(1)
+    expect(edges[0]!.source).toBe('symbol:app/src/main/kotlin/com/example/UserViewModel.kt#UserViewModel')
+    expect(edges[0]!.target).toBe('symbol:app/src/main/kotlin/com/example/UserRepository.kt#UserRepository')
+    // No new component node is created - only existing symbol nodes are referenced.
+    expect(result.nodes.some((n) => n.kind.toString().includes('view-model'))).toBe(false)
+  })
+
+  function buildAndroidArtifactRelationshipsWithComponents(root: string, androidComponents: ReturnType<typeof detectAndroidComponents>['artifact']) {
+    const { artifact: androidProject } = detectAndroidProject({ projectRoot: root })
+    const { artifact: androidGradle } = buildAndroidGradleProject({ projectRoot: root, androidProject })
+    const { artifact: androidManifest } = buildAndroidManifestProject({ projectRoot: root, androidProject, androidGradle })
+    const { artifact: androidResources } = buildAndroidResourceProject({ projectRoot: root, androidProject, androidGradle })
+    const buildResult = buildIndex({ repoRoot: root, sourceRoots: ['app/src/main/kotlin'], buildCallGraph: false })
+    const { artifact: androidNavigation } = buildAndroidNavigationProject({
+      projectRoot: root,
+      androidProject,
+      androidGradle,
+      androidResources,
+      symbolIndex: buildResult.index,
+    })
+    return buildAndroidArtifactRelationships({
+      projectRoot: root,
+      androidProject,
+      androidGradle,
+      androidManifest,
+      androidResources,
+      androidNavigation,
+      androidComponents,
+      symbolIndex: buildResult.index,
+    })
+  }
+})
+
+describe('buildAndroidArtifactRelationships — v1.12.0 Batch 4 Compose state ownership and Activity hosting edges', () => {
+  it('projects one compose-state-reads-viewmodel edge for an exact-one owner and one activity-hosts-composable edge for a resolved setContent', () => {
+    const root = createTempRoot()
+    scaffold(root)
+    write(root, 'app/src/main/AndroidManifest.xml', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>\n')
+    write(root, 'app/src/main/kotlin/com/example/UserViewModel.kt', 'package com.example\n\nimport androidx.lifecycle.ViewModel\n\nclass UserViewModel : ViewModel()\n')
+    write(
+      root,
+      'app/src/main/kotlin/com/example/HomeScreen.kt',
+      '@Composable\nfun HomeScreen() {\n    val viewModel: UserViewModel = viewModel()\n    val a = viewModel.uiState.collectAsState()\n}\n'
+    )
+    write(
+      root,
+      'app/src/main/kotlin/com/example/MainActivity.kt',
+      'class MainActivity {\n    fun onCreate() {\n        setContent {\n            HomeScreen()\n        }\n    }\n}\n'
+    )
+
+    const { artifact: androidProject } = detectAndroidProject({ projectRoot: root })
+    const { artifact: androidGradle } = buildAndroidGradleProject({ projectRoot: root, androidProject })
+    const { artifact: androidManifest } = buildAndroidManifestProject({ projectRoot: root, androidProject, androidGradle })
+    const { artifact: androidResources } = buildAndroidResourceProject({ projectRoot: root, androidProject, androidGradle })
+    const buildResult = buildIndex({ repoRoot: root, sourceRoots: ['app/src/main/kotlin'], buildCallGraph: false })
+    const { artifact: androidNavigation } = buildAndroidNavigationProject({
+      projectRoot: root,
+      androidProject,
+      androidGradle,
+      androidResources,
+      symbolIndex: buildResult.index,
+    })
+    const { artifact: androidComponents } = detectAndroidComponents({
+      symbolIndex: buildResult.index,
+      androidProject,
+      projectRoot: root,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    })
+    const { artifact: androidComposeSemantic } = buildAndroidComposeSemanticProject({
+      projectRoot: root,
+      symbolIndex: buildResult.index,
+      androidProject,
+      androidNavigation,
+      androidComponents,
+    })
+
+    const result = buildAndroidArtifactRelationships({
+      projectRoot: root,
+      androidProject,
+      androidGradle,
+      androidManifest,
+      androidResources,
+      androidNavigation,
+      androidComponents,
+      androidComposeSemantic,
+      symbolIndex: buildResult.index,
+    })
+
+    const stateEdges = edgesOfKind(result.edges, 'compose-state-reads-viewmodel')
+    expect(stateEdges).toHaveLength(1)
+    expect(stateEdges[0]!.target).toBe('symbol:app/src/main/kotlin/com/example/UserViewModel.kt#UserViewModel')
+
+    const hostEdges = edgesOfKind(result.edges, 'activity-hosts-composable')
+    expect(hostEdges).toHaveLength(1)
+    expect(hostEdges[0]!.source).toBe('symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity')
+    expect(hostEdges[0]!.target).toBe('android-compose-declaration:app/src/main/kotlin/com/example/HomeScreen.kt#HomeScreen')
+
+    // Determinism: identical IDs/ordering on a repeated run.
+    const second = buildAndroidArtifactRelationships({
+      projectRoot: root,
+      androidProject,
+      androidGradle,
+      androidManifest,
+      androidResources,
+      androidNavigation,
+      androidComponents,
+      androidComposeSemantic,
+      symbolIndex: buildResult.index,
+    })
+    expect(second.edges.filter((e) => e.kind === 'compose-state-reads-viewmodel').map((e) => e.id)).toEqual(
+      stateEdges.map((e) => e.id)
     )
   })
 })

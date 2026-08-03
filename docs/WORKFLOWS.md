@@ -440,6 +440,44 @@ All three support the existing `--format dot|svg|png`, `--out`, `--edge-style se
 
 This remains static analysis: no view claims a composable renders, a click occurs, navigation succeeds, a destination is reachable, a test executed or passed, or a test's referenced production node is fully covered.
 
+## Workflow 15: Android-role search and data-flow slicing (v1.12.0 Batch 5)
+
+Find every node of an exact Android classification role, then follow the full static ownership/data-flow chain from an Activity down to its Room/Retrofit dependencies, then pull in the tests that reference what was reached:
+
+```sh
+node dist/cli.js search --index .my-dev-kit --android-role activity --json
+node dist/cli.js search --index .my-dev-kit --android-role view-model --limit 5 --json
+
+node dist/cli.js slice --index .my-dev-kit --node "symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity" \
+  --depth 3 --include-data-flow --json
+
+node dist/cli.js slice --index .my-dev-kit --node "symbol:app/src/main/kotlin/com/example/LoginViewModel.kt#LoginViewModel" \
+  --depth 1 --include-data-flow --include-tests --json
+```
+
+`--android-role` is exact and mutually exclusive with `--query` and every other search selector; a role with zero matches still returns `status: ok` with an empty `results` array. `--include-data-flow` (valid with `--node`/`--composable`/`--android-route`/`--android-component`, rejected with `--route`/`--storage-key`/`--ui`) expands bidirectionally along the fixed Activity→Compose→ViewModel→Repository→DAO/Entity/Retrofit/Room-database/route-to-screen edge allowlist, bounded by `--depth`, reported in the additive `androidDataFlow` summary object. Adding `--include-tests` to the same slice pulls in the bounded test file/class/method/fact hierarchy for any reached composable/route/ViewModel node, reported in the additive `androidTests` summary object — both are additive-only, so omitting either flag leaves prior slice output unchanged.
+
+This remains static analysis: `--android-role` never claims a component is active at runtime; `--include-data-flow` never claims a dependency is actually injected or a query/network call executes — only that the static edge already exists in `code-graph.json`; the Android-aware `--include-tests` extension never claims a test ran or passed.
+
+## Workflow 16: Android-aware context ownership (v1.12.0 Batch 6)
+
+`context` needs no new flag to prefer the correct Android owning layer. The existing role-aware pipeline detects the task intent from the query and applies it on top of existing ranking, structural-owner, and adequacy rules:
+
+```sh
+node dist/cli.js context --index .my-dev-kit --role architecture \
+  --query "Locate the owner for changing the Home screen UI." --out capsule.json --json
+
+node dist/cli.js context --index .my-dev-kit --role implementation \
+  --query "Change the loading state behavior shown by HomeScreen." --out capsule.json --json
+
+node dist/cli.js context --index .my-dev-kit --role implementation \
+  --query "Change how Home data is loaded from the repository." --out capsule.json --json
+```
+
+The first request's `selectedOwners`/ranked `candidateNodes` prefer the Compose screen/component over a projected UI fact; the second prefers the linked ViewModel over its own collected-state fact; the third prefers the repository over the ViewModel that merely consumes it. Focusing a generated file or a test-only node for production work surfaces `android-generated-primary-target`/`android-test-primary-target` in `conflicts`, rather than silently selecting it as an owner; an ambiguous or unresolved layer is reported (`android-ambiguous-owner`/`android-unresolved-owner`), never guessed. `--role test-implementation` still requires changed production evidence and selects Android unit/instrumented/Compose-UI tests as test locations, never as production owners.
+
+This remains static analysis: no owner selection is edit authorization, no dependency-injection or runtime behavior is proven, and no test-execution/coverage claim is made.
+
 ---
 
 ## Bundled examples

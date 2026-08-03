@@ -13,6 +13,14 @@ import { DEFAULT_TEST_INFRA_LIMITS, discoverTestInfrastructure, type BoundedList
 import { CONSTANT_PATTERN, ERROR_PATTERN, SCHEMA_PATTERN, SIDE_EFFECT_PATTERN, VALIDATOR_PATTERN } from './evidencePatterns.js'
 import { isFixtureLike, isGeneratedLike, isMockLike, isTestScoped } from './evidenceClassification.js'
 import { classifyRoleConditionOmissions, evaluateRoleConditionCoverage } from './roleConditionCoverage.js'
+import type { AndroidIntent } from './androidContextIntent.js'
+import {
+  androidOwnerEligible,
+  candidateFileToPolicyInput,
+  candidateNodeToPolicyInput,
+  findAndroidUsageNodeIdsWithStrongerOwner,
+  hasAndroidProvenance,
+} from './androidContextOwnerPolicy.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -266,7 +274,10 @@ function isForbiddenOwnerPath(filePath: string | undefined): boolean {
  * one-hop graph-adjacent to a focus/changed-surface seed, is itself
  * changed-surface evidence, or is an exact query-name match. */
 function hasRequestRelevance(candidate: { reasons: string[] }): boolean {
-  return hasReasonMatching(candidate.reasons, /explicit focus (file|symbol)|direct graph neighbor|exact query-name match|changed-surface/)
+  return hasReasonMatching(
+    candidate.reasons,
+    /explicit focus (file|symbol)|direct graph neighbor|exact query-name match|changed-surface|android-intent-category-match/
+  )
 }
 
 function hasNonOwnerClassification(roles: ClassificationRoleRef[] | undefined): boolean {
@@ -321,9 +332,35 @@ function computeCallerOnlyFilePaths(codeGraph: CodeGraph, seedNodeIds: Set<strin
   return callerOnlyFilePaths
 }
 
-function isStructuralOwnerNode(node: CandidateNode, ctx: { exportedNodeIds: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> }): boolean {
+/** v1.12.0 Batch 6: Android owner-eligibility context, threaded from
+ * `BuildEvidenceGroupsOptions` down to `isStructuralOwnerNode`/`File` so an
+ * Android candidate (e.g. a Kotlin ViewModel classified `view-model`, which
+ * `NON_OWNER_CLASSIFICATION_ROLES` below excludes for the *generic* frontend
+ * meaning of that category) can be evaluated by the dedicated Android policy
+ * instead. Never widens eligibility for a non-Android candidate. */
+interface AndroidOwnerContext {
+  androidIntents: ReadonlySet<AndroidIntent>
+  isTestImplementationRole: boolean
+  /** v1.12.0 Batch 6 correction: node IDs that are the "usage" side of a fixed
+   * usage -> owner relationship (section 18/26) whose exact stronger owner is
+   * also present among the candidate pool - these are suppressed from owner
+   * eligibility (section 16/31.5) even though their own classification role
+   * would otherwise pass `androidOwnerEligible` (e.g. a ViewModel-owned
+   * `ui-only-state` fact once its linked ViewModel is also a candidate). */
+  usageNodeIdsWithStrongerOwner: ReadonlySet<string>
+}
+
+function isStructuralOwnerNode(
+  node: CandidateNode,
+  ctx: { exportedNodeIds: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> },
+  android: AndroidOwnerContext
+): boolean {
   if (!hasRequestRelevance(node)) return false
   if (isForbiddenOwnerPath(node.filePath)) return false
+  if (hasAndroidProvenance(candidateNodeToPolicyInput(node))) {
+    if (android.usageNodeIdsWithStrongerOwner.has(node.nodeId)) return false
+    return androidOwnerEligible(candidateNodeToPolicyInput(node), android.androidIntents, android.isTestImplementationRole)
+  }
   if (hasNonOwnerClassification(node.classificationRoles)) return false
   if (isContractLike(node)) return true
   if (hasOwnerQualifyingClassification(node.classificationRoles)) return true
@@ -332,9 +369,16 @@ function isStructuralOwnerNode(node: CandidateNode, ctx: { exportedNodeIds: Set<
   return false
 }
 
-function isStructuralOwnerFile(file: CandidateFile, ctx: { exportedFilePaths: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> }): boolean {
+function isStructuralOwnerFile(
+  file: CandidateFile,
+  ctx: { exportedFilePaths: Set<string>; producerIds: Set<string>; callerOnlyFilePaths: Set<string> },
+  android: AndroidOwnerContext
+): boolean {
   if (!hasRequestRelevance(file)) return false
   if (isForbiddenOwnerPath(file.path)) return false
+  if (hasAndroidProvenance(candidateFileToPolicyInput(file))) {
+    return androidOwnerEligible(candidateFileToPolicyInput(file), android.androidIntents, android.isTestImplementationRole)
+  }
   if (hasNonOwnerClassification(file.classificationRoles)) return false
   if (isContractLike({ filePath: file.path, label: file.path })) return true
   if (hasOwnerQualifyingClassification(file.classificationRoles)) return true
@@ -437,6 +481,9 @@ export interface BuildEvidenceGroupsOptions {
   symbolIndex: SymbolIndex
   selectedGraph: SelectedGraph
   repoRoot: string
+  /** v1.12.0 Batch 6: detected Android task intents for this request. Empty
+   * set for a non-Android or intent-free query. */
+  androidIntents?: ReadonlySet<AndroidIntent>
 }
 
 export interface BuildEvidenceGroupsResult {
@@ -456,6 +503,12 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const retainedFiles = options.candidateFiles.filter((f) => f.retained)
   const retainedNodes = options.candidateNodes.filter((n) => n.retained)
   const requestedSet = new Set(requestedEvidenceKinds)
+  const retainedCandidateIds = new Set([...retainedNodes.map((n) => n.nodeId)])
+  const androidOwnerContext: AndroidOwnerContext = {
+    androidIntents: options.androidIntents ?? new Set<AndroidIntent>(),
+    isTestImplementationRole: role === 'test-implementation',
+    usageNodeIdsWithStrongerOwner: findAndroidUsageNodeIdsWithStrongerOwner(codeGraph, retainedCandidateIds),
+  }
   const warnings: string[] = []
   let roleConditionCoverage: RoleConditionCoverage[] = []
 
@@ -509,8 +562,8 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const exportedFilePaths = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true && n.path).map((n) => n.path as string))
   const producerIds = computeStructuralProducerIds(codeGraph)
 
-  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds, callerOnlyFilePaths })))
-  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds, callerOnlyFilePaths })))
+  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds, callerOnlyFilePaths }, androidOwnerContext)))
+  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds, callerOnlyFilePaths }, androidOwnerContext)))
   const ownerItems = [
     ...ownerNodes.map((n) =>
       nodeToItem(n, 'structural owner candidate', isOwnerLike(n) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence')

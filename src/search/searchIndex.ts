@@ -204,7 +204,9 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
   }
 }
 
-/** Compact candidate for a Batch 5 `android-*` code-graph node: label + androidMetadata values only, never a full artifact record (v1.10.0 Batch 6). */
+/** Compact candidate for a Batch 5 `android-*` code-graph node: label + androidMetadata values only, never a full artifact record (v1.10.0 Batch 6).
+ * v1.12.0 Batch 6 correction: also projects `classificationRoles`/`classificationRefs` when the code-graph node carries them (e.g. `android-test-class`/`android-generated-build-path` nodes classified `test-only`/`generated-file`) -
+ * without this, a compact `android-*` node's classification was silently invisible to generic `search --query`/`context` candidate ranking even though it is present on the underlying graph node and already exposed by `search --android-role`. */
 function androidNodeCandidate(node: CodeGraphNode): SearchCandidate {
   const fields: SearchCandidateField[] = [
     field('nodeId', node.id, WEIGHTS.nodeId),
@@ -214,6 +216,7 @@ function androidNodeCandidate(node: CodeGraphNode): SearchCandidate {
   for (const value of Object.values(node.androidMetadata ?? {})) {
     if (typeof value === 'string' && value.length > 0) fields.push(field('androidMetadata', value, WEIGHTS.androidMetadata))
   }
+  fields.push(...classificationFields(node.classificationRoles))
 
   return {
     item: {
@@ -224,6 +227,8 @@ function androidNodeCandidate(node: CodeGraphNode): SearchCandidate {
       nodeId: node.id,
       androidArtifactId: node.androidArtifactId,
       androidMetadata: node.androidMetadata,
+      classificationRoles: node.classificationRoles,
+      classificationRefs: node.classificationRefs,
     },
     fields,
   }

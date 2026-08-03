@@ -1,6 +1,6 @@
 # Commands
 
-`@dailephd/my-dev-kit@1.11.0` is the latest published release and includes the v1.11.0 command contracts documented here.
+`@dailephd/my-dev-kit@1.12.0` is the latest published release and includes the v1.12.0 command contracts documented here.
 
 my-dev-kit provides nine public CLI commands:
 
@@ -640,6 +640,21 @@ No new selector flags. `android-test-semantic.json`'s compact `android-test-file
 
 Static-analysis limitation: indexing never executes a test. No fact or edge claims a test ran, a Compose rule initialized, an Activity launched, an assertion passed, or a mock/fake was actually injected at runtime.
 
+### Android classification-role selector (v1.12.0 Batch 5)
+
+`--android-role <role>` is one exact (non-fuzzy) selector, joining the same mutual-exclusivity group as `--query` and every other search selector above. It reuses the existing `SearchIndexResult` artifact (not the separate `my-dev-kit-v1-android-search-result` artifact `--android-route`/`--permission`/etc. use) — `androidRole` and `summary.totalMatchCount` are added additively.
+
+The allowlist is fixed at 31 values: `android-project`, `gradle-module`, `android-app-module`, `android-library-module`, `android-manifest`, `manifest-component`, `navigation-route`, `resource-file`, `xml-layout`, `activity`, `fragment`, `compose-screen`, `compose-ui-component`, `view-model`, `ui-only-state`, `ui-event`, `repository`, `use-case`, `room-entity`, `room-dao`, `room-database`, `retrofit-service`, `hilt-module`, `worker`, `broadcast-receiver`, `service`, `content-provider`, `android-unit-test`, `instrumented-test`, `compose-ui-test`, `generated-file`. An unlisted value is rejected with exit code 2 and the full allowlist in the error message.
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role "activity" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role "repository" --limit 10 --json
+```
+
+Android-provenance filtered: an `android-*`-kind graph node always qualifies; a `symbol`-kind node qualifies only when it carries real `androidComponentRefs` from the Android component-role detector — a plain TypeScript/JS symbol whose generic classification role happens to overlap an Android role name (e.g. a non-Android `repository`) is never included, regardless of path or filename. Results are ordered deterministically by node ID ascending. Zero matches is a valid, non-error outcome (`results: []`, `summary.resultCount: 0`). `--limit` truncates the returned `results`, while `summary.resultCount` (returned) and `summary.totalMatchCount` (all exact matches before truncation) are reported separately.
+
+Static-analysis limitation: this is a compact-field lookup against already-computed `classificationRoles` — no re-classification, no runtime, dependency-injection, or lifecycle proof.
+
 ### Examples
 
 ```sh
@@ -1139,8 +1154,34 @@ npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --i
 
 Two optional modifiers, both requiring `--composable` (an error otherwise) and combinable together, extend traversal exactly the way `--include-prop-flow`/`--include-event-handlers` already extend a React slice: `sliceGraph`'s existing `includeEdgeKinds` mechanism runs a second, deeper additive pass restricted to a specific edge-kind allowlist, on top of (never instead of) the normal depth-bounded slice.
 
-- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` edges only — Batch 4's own directly-resolved ViewModel candidates (one edge per exact class-name match; every candidate preserved when ambiguous, none when unresolved). No repository/DAO/data-flow expansion.
+- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` and `compose-state-reads-viewmodel` (v1.12.0 Batch 4) edges only — directly-resolved ViewModel candidates (one edge per exact class/state-owner match; every candidate preserved when ambiguous, none when unresolved). Still direct-only: no repository/DAO/service/entity/database expansion (that is `--include-data-flow`, below).
 - `--include-navigation`: extends reachability along `click-handler-contains-navigation-call` and `compose-navigation-targets-route` edges — the lexical click-to-navigation-call link, then the navigation call's own exact route candidate(s) from `android-navigation.json`. No runtime navigation-reachability claim.
+
+### Android ownership/data-flow expansion (v1.12.0 Batch 5)
+
+`slice --include-data-flow` is an opt-in secondary bounded traversal over a **fixed** Android ownership/data-flow edge allowlist, valid only with `--node`, `--composable`, `--android-route`, or `--android-component` (rejected in combination with `--route`/`--storage-key`/`--ui`):
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "symbol:app/.../MainActivity.kt#MainActivity" --depth 3 --include-data-flow --json
+```
+
+The allowlist is exactly: `activity-hosts-composable`, `composable-references-viewmodel`, `compose-state-reads-viewmodel`, `viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`, `compose-route-resolves-to-screen`, `navigation-destination-resolves-to-screen` — covering Activity -> Compose -> ViewModel -> Repository -> DAO/Entity/Retrofit, Room database -> DAO, and route -> screen resolution. Unlike `--include-viewmodel`/`--include-navigation`, this pass always traverses **both directions regardless of `--direction`**, bounded by the resolved `--depth` (reusing `sliceGraph`'s existing node/edge dedup, never a second BFS engine), and is capped at 200 added nodes — beyond the cap, expansion stops, `androidDataFlow.truncated` is `true`, and an `android-data-flow-truncated` warning is added.
+
+JSON output gains an additive `androidDataFlow` object: `{ requested, seedNodeCount, maxDepth, allowedEdgeKinds, addedNodeCount, addedEdgeCount, truncated }`. Depth `0` yields a valid, empty expansion (`addedNodeCount: 0`). Combining with `--include-viewmodel`/`--include-navigation` dedupes automatically (a node/edge reached by either pass appears once). Omitting the flag leaves slice output byte-for-byte identical to prior behavior.
+
+Static-analysis limitation: this is exact structural graph traversal over already-resolved static dependency/ownership edges — no dependency-injection resolution, no runtime call-graph, no proof any edge executes.
+
+### Android-aware `--include-tests` (v1.12.0 Batch 5)
+
+The existing `--include-tests` modifier (previously reachability-slice-only) now also applies to `--node`/`--composable`/`--android-route`/`--android-component` slices, pulling bounded, exact Android test evidence for any reached production composable/route-destination/ViewModel node in the slice:
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "symbol:.../LoginViewModel.kt#LoginViewModel" --depth 1 --include-tests --json
+```
+
+It walks backward across the existing `android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` edges to find referencing test facts, then up the existing test file -> class -> method -> fact hierarchy edges (`defines-test-class`, `test-class-defines-method`, `test-method-has-fact`) — never a full test-class/file/artifact dump, and every ambiguous reference is preserved (no selected winner). Capped at 200 added nodes with an `android-related-tests-truncated` warning when exceeded. Degrades gracefully to an all-zero `androidTests` summary (never an error) when the slice has no production seed nodes or `android-test-semantic.json` evidence is absent.
+
+JSON output gains an additive `androidTests` object: `{ requested, productionSeedCount, relatedTestMethodCount, addedNodeCount, addedEdgeCount, truncated }`. The pre-existing `slice --route/--storage-key/--ui --include-tests` (frontend-reachability) behavior is unchanged.
 
 ## view
 
@@ -1179,7 +1220,7 @@ Supported `--graph` values:
 - `android-module` (v1.10.0 Batch 6): renders the manifest-referenced `code-graph.json`, filtered to `android-module`/`android-source-set` nodes plus every node with a matching `androidModuleId`, expanded one hop across actual edges to pull in connected exact Kotlin/Java classes. Same artifact as `code`, different node/edge filter — not a new artifact.
 - `android-manifest` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-manifest-file`/`android-manifest-component`/`android-intent-filter`/`android-permission` nodes, expanded across actual `manifest-declares-component`/`manifest-component-resolves-to-source`/`component-has-intent-filter`/`component-uses-permission`/`manifest-uses-permission`/`manifest-deep-link-matches-navigation-deep-link` edges only. Every manifest XML attribute is not rendered as a node; candidate deep-link matches remain labeled as candidates, never a confirmed runtime link.
 - `android-navigation` (v1.10.0 Batch 6): renders `code-graph.json` filtered to `android-navigation-graph`/`android-navigation-destination`/`android-navigation-action`/`android-navigation-deep-link`/`android-compose-route` nodes, expanded across actual `navigation-*`/`compose-route-resolves-to-screen`/`manifest-deep-link-matches-navigation-deep-link` edges only. Never simulates a runtime navigation-graph merge and never selects one action target — every static candidate stays a separate edge.
-- `compose-ui` (v1.11.0 Batch 6): renders `code-graph.json` filtered to every `android-composable`/`android-compose-fact` node (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, and UI-region facts alike — distinguished by node label/shape and `androidMetadata.factKind`, not by a separate node kind per fact), expanded across `defines-composable`/`composable-calls-composable`/`composable-has-fact`/`composable-references-viewmodel`/`compose-string-references-resource` edges only, pulling in the composable's defining file/symbol and any exact ViewModel-symbol/resource-definition target an existing edge already connects. Excludes all Android test evidence and unrelated navigation/resource nodes by construction.
+- `compose-ui` (v1.11.0 Batch 6, extended v1.12.0 Batch 4): renders `code-graph.json` filtered to every `android-composable`/`android-compose-fact` node (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, and UI-region facts alike — distinguished by node label/shape and `androidMetadata.factKind`, not by a separate node kind per fact), expanded across `defines-composable`/`composable-calls-composable`/`composable-has-fact`/`composable-references-viewmodel`/`compose-string-references-resource`/`compose-state-reads-viewmodel`/`activity-hosts-composable` edges only, pulling in the composable's defining file/symbol, any exact ViewModel-symbol/resource-definition target, and any exact hosting Activity symbol an existing edge already connects. Excludes all Android test evidence, unrelated navigation/resource nodes, and the entire repository/DAO/service/entity/database data layer by construction.
 - `compose-navigation` (v1.11.0 Batch 6): renders the static chain `composable -> click-handler fact -> navigation-call fact -> route/destination candidate -> screen candidate`. Seeded from `android-composable` nodes plus only the click-handler/navigation-call `android-compose-fact` nodes (never the unrelated state/effect/test-tag/visible-text/string-resource facts on the same composable) and existing `android-compose-route`/`android-navigation-destination`/`android-navigation-graph` nodes, expanded across `defines-composable`/`composable-has-fact`/`click-handler-contains-navigation-call`/`compose-navigation-targets-route`/`navigation-graph-contains-destination`/`navigation-destination-resolves-to-screen`/`compose-route-resolves-to-screen` edges. Every ambiguous route/screen candidate is preserved as a separate node/edge — never a picked winner; an unresolved navigation call is still rendered with no outgoing target edge, never a fabricated one.
 - `android-test` (v1.11.0 Batch 6): renders `code-graph.json` filtered to the full `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` hierarchy (unit vs. instrumented, and every fact family — JUnit annotation, Compose rule, visible-text/test-tag assertion, route reference, fake/mock/stub/spy — distinguishable through node label/shape and `androidMetadata.factKind`/`category`), expanded across `defines-test-class`/`test-class-defines-method`/`test-class-uses-rule`/`test-method-has-fact`/`android-test-uses-double`/`android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` edges only, pulling in exact production composable/route/ViewModel-symbol nodes an existing edge already connects. Never includes every production Compose/navigation node, and never claims a test executed, passed, or covers a referenced node's behavior.
 
@@ -1596,6 +1637,20 @@ The command has no new flag. Version 1.10.4 output adds deterministic condition 
 - Current implementation-role generation supplies nonempty coverage. Missing or empty current coverage fails closed. Legacy callers and schema-major-1 artifact pairs without both additive fields remain conservatively compatible; one-sided absence or disagreement fails raw-evidence parity.
 
 Consumers should inspect `roleAdequacy`, `truncation.requiredEvidenceLost`, and the condition-specific diagnostics. General `truncation.truncated` alone does not establish inadequacy. Version 1.10.4 reports the corrected behavior while preserving the existing command contract.
+
+### v1.12.0 Batch 6: Android-aware ownership integration
+
+No new flag, request field, context role, or artifact. The existing `architecture`/`implementation`/`test-implementation` roles now recognize Android evidence and prefer the correct owning layer instead of a generated file, a test-only node, or a usage/projection site.
+
+- **Internal Android task-intent detection**: the normalized query is matched against a fixed term/phrase allowlist for ten internal intents (`ui`, `state`, `data`, `persistence-schema`, `persistence-access`, `network-contract`, `navigation`, `manifest-platform`, `resource`, `test`) — exact whole-term or fixed-phrase matching only, never fuzzy/embeddings/LLM. A query may match more than one intent; there is no forced single winner. The generic word `service` alone never forces `network-contract` intent (an Android platform service and a Retrofit service are distinct).
+- **Intent-to-owner-category preference**: each intent has a fixed primary/supporting Android classification-category list (e.g. `state` prefers `view-model` primary, `ui-only-state`/`compose-screen` supporting). A matching candidate receives a large, deterministic ranking boost on top of (never replacing) the existing role-aware ranking, request-relevance, and structural-owner rules.
+- **Production-owner eligibility**: an Android node classified `generated-file`/`generated-do-not-edit` can never satisfy `architecture`/`implementation` owner selection, and a `test-only` node never can either — even under an explicit `test`-intent query or the `test-implementation` role, which instead make it eligible as a distinct *test edit location*, never a production owner. The existing empty-`selectedOwners` role-adequacy failure (v1.10.3/v1.10.4) applies unchanged, so this is enforced by the existing pipeline, not a new one.
+- **Usage-versus-owner**: a projected usage/fact node (a ViewModel-owned collected-state fact, a resource usage site, a navigation-call fact) is excluded from owner eligibility whenever its exact stronger owner (the ViewModel, the resource definition, the route) is also present among the candidates, connected through an existing graph edge — the two are never both offered as owners at once.
+- **Bounded Android data-flow owner support**: reuses the v1.12.0 Batch 5 fixed data-flow edge allowlist directly for one internal owner-support traversal, seeded from already-retained Android candidates, capped at a fixed 4-hop path length and the existing context graph node cap — never a second BFS engine, never a fabricated reverse edge, never a new public limit. Reachable nodes are injected into the actual candidate pool, so an owner connected only through graph relationships (e.g. a ViewModel reachable from an anchored Compose screen) can be found and ranked even when the query text never names it.
+- **Six wrong-layer conflict kinds**, added to the existing `ContextConflict` record via an additive/optional `kind` field (pre-existing conflicts report `"edit-guidance-near-tie"`): `android-generated-primary-target`, `android-test-primary-target`, `android-usage-selected-over-owner`, `android-ambiguous-owner` (every materially plausible owner preserved, never a guessed winner), `android-unresolved-owner` (reuses the existing classification `wrong-layer-risk` signal — never emitted merely because a component legitimately lacks a given dependency), and `android-classification-graph-disagreement`. Each is evaluated against the resolved focus and any other retained Android candidate within the near-tie ranking margin of the top-scored Android candidate, not only the literal single-seed focus. Conflicts are deterministically ordered by kind, then primary/related candidate ID, then evidence ID.
+- Related-test discovery, evidence-group shapes, role adequacy statuses, freshness, budget, truncation, and provenance categories are all unchanged — Android evidence flows through the existing structures additively. `context-capsule.json`/`retrieval-audit-record.json` remain schema `"1.0.0"`.
+
+Static-analysis limitation: no owner selection is edit authorization; ownership evidence reflects only static classification and graph relationships already produced by prior Android batches — no dependency-injection resolution, no runtime proof, and no test-execution/coverage claim.
 
 ## graph-diff
 

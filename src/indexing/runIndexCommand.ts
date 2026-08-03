@@ -45,8 +45,10 @@ import {
 import {
   applyClassificationToCodeGraph,
   applyClassificationToSymbolIndex,
+  buildAndroidGraphNodeClassifications,
   buildClassificationArtifact,
   buildClassificationRefsBySymbolId,
+  mergeAndroidComponentRoleClassifications,
   CLASSIFICATION_SCHEMA_VERSION,
   type ClassificationArtifact,
   type CompactClassificationMetadata,
@@ -909,6 +911,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     symbolIndex: roledSymbolIndex,
     androidProject: androidResult.artifact,
     androidNavigation: androidNavigationResult.artifact,
+    androidComponents: androidComponents ?? undefined,
     createdAt,
   })
 
@@ -950,10 +953,109 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidNavigation: androidNavigationResult.artifact,
     androidComposeSemantic: androidComposeSemantic ?? undefined,
     androidTestSemantic: androidTestSemantic ?? undefined,
+    androidComponents: androidComponents ?? undefined,
     symbolIndex: roledSymbolIndex,
   })
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
   const androidRelationshipsAnalyzerStatus = buildAndroidRelationshipsAnalyzerStatus(androidResult, androidRelationships)
+
+  // v1.12.0 Batch 2: merges existing android-components.json role facts
+  // (Activity, Fragment, ViewModel, Repository, ...) into the matching
+  // already-built `symbol`-kind classification entry - never a second
+  // component-role detector, never a second entry for the same target.
+  const androidComponentRoleMerge =
+    classification && androidComponents
+      ? mergeAndroidComponentRoleClassifications(
+          classification.entries,
+          androidComponents.components,
+          androidComponents.dependencyFacts,
+          androidComposeSemantic?.activityHostFacts ?? []
+        )
+      : null
+  const baseClassificationEntries = androidComponentRoleMerge ? androidComponentRoleMerge.entries : (classification?.entries ?? [])
+
+  // v1.12.0 Batch 1: extends the same in-memory classification project with
+  // Android project/module graph-target entries, now that
+  // `relationshipCodeGraph` (which carries `android-project:root` and every
+  // `android-module` node) exists. Only classifies nodes that actually made
+  // it into the graph - never invents a target. Still one combined
+  // classification.json/analyzer and one final code-graph.json (PSE-001 of
+  // the Batch 1 architecture doc). v1.12.0 Batch 2 extends the same
+  // extension point to also classify manifest, navigation, resource,
+  // Compose, Android-test, and generated-build-path graph nodes.
+  const androidGraphNodeClassifications = classification
+    ? buildAndroidGraphNodeClassifications({ graphNodes: androidRelationships.nodes, edges: androidRelationships.edges })
+    : { entries: [], warningCount: 0 }
+  // v1.12.0 Batch 7: final deterministic ordering by stable entry `id`. Without
+  // this, `baseClassificationEntries`'s own order (inherited from whichever
+  // upstream classifier/merge path produced it) could legitimately differ
+  // between a full rebuild and an incremental partial rebuild - same entries,
+  // same content, different array order - which the artifact's own
+  // determinism contract does not allow.
+  const finalClassificationEntries = [...baseClassificationEntries, ...androidGraphNodeClassifications.entries].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  )
+  const finalClassification: ClassificationArtifact | null = classification
+    ? {
+        ...classification,
+        entries: finalClassificationEntries,
+        summary: {
+          ...classification.summary,
+          entryCount: finalClassificationEntries.length,
+          graphNodeEntryCount: androidGraphNodeClassifications.entries.length,
+          warningCount: finalClassificationEntries.reduce((sum, entry) => sum + entry.warnings.length, 0),
+        },
+      }
+    : null
+  const finalClassificationAnalyzerStatus: IndexAnalyzerStatus = finalClassification
+    ? {
+        ...classificationAnalyzerStatus,
+        status: finalClassification.summary.warningCount > 0 ? 'partial' : 'complete',
+        warningCount: finalClassification.summary.warningCount,
+        summary: {
+          entryCount: finalClassification.summary.entryCount,
+          fileEntryCount: finalClassification.summary.fileEntryCount,
+          symbolEntryCount: finalClassification.summary.symbolEntryCount,
+          graphNodeEntryCount: finalClassification.summary.graphNodeEntryCount ?? 0,
+        },
+      }
+    : classificationAnalyzerStatus
+  // v1.12.0 Batch 2: re-projects compact classificationRoles/classificationRefs
+  // for every symbol whose detailed entry the component-role merge changed,
+  // since the original projection (built before android-components.json
+  // existed) is now stale for those symbols.
+  const mergedSymbolClassificationRefsBySymbolId = androidComponentRoleMerge
+    ? buildClassificationRefsBySymbolId(androidComponentRoleMerge.entries, CLASSIFICATION_FILENAME)
+    : new Map<string, CompactClassificationMetadata>()
+  const symbolIndexWithMergedRoles = androidComponentRoleMerge
+    ? applyClassificationToSymbolIndex(roledSymbolIndex, mergedSymbolClassificationRefsBySymbolId)
+    : roledSymbolIndex
+  const codeGraphWithMergedSymbolRoles = androidComponentRoleMerge
+    ? applyClassificationToCodeGraph(relationshipCodeGraph, mergedSymbolClassificationRefsBySymbolId)
+    : relationshipCodeGraph
+
+  const androidGraphNodeClassificationRefsByNodeId = finalClassification
+    ? buildClassificationRefsBySymbolId(androidGraphNodeClassifications.entries, CLASSIFICATION_FILENAME, 'graph-node')
+    : new Map<string, CompactClassificationMetadata>()
+  const finalCodeGraph = applyClassificationToCodeGraph(codeGraphWithMergedSymbolRoles, androidGraphNodeClassificationRefsByNodeId, [
+    'android-project',
+    'android-module',
+    'android-manifest-file',
+    'android-manifest-component',
+    'android-navigation-graph',
+    'android-navigation-destination',
+    'android-navigation-deep-link',
+    'android-compose-route',
+    'android-resource-file',
+    'android-resource-definition',
+    'android-composable',
+    'android-compose-fact',
+    'android-test-file',
+    'android-test-class',
+    'android-test-method',
+    'android-generated-build-path',
+  ])
+  const finalSymbolIndex = symbolIndexWithMergedRoles
 
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
@@ -961,8 +1063,8 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     languages,
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: callGraph !== null,
-    symbolIndex: roledSymbolIndex,
-    codeGraph: relationshipCodeGraph,
+    symbolIndex: finalSymbolIndex,
+    codeGraph: finalCodeGraph,
     warnings,
     errors,
     createdAt,
@@ -970,7 +1072,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     analyzers: replaceAnalyzerStatuses(
       [
         ...(baseManifest.analyzers ?? []),
-        classificationAnalyzerStatus,
+        finalClassificationAnalyzerStatus,
         androidAnalyzerStatus,
         androidComponentsAnalyzerStatus,
         androidGradleAnalyzerStatus,
@@ -999,10 +1101,10 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   writeIndexArtifacts({
     outputDir,
     manifest,
-    symbolIndex: roledSymbolIndex,
-    codeGraph: relationshipCodeGraph,
+    symbolIndex: finalSymbolIndex,
+    codeGraph: finalCodeGraph,
     callGraph,
-    classification,
+    classification: finalClassification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
     frontendSemantic: semanticResult.frontendResult.artifact,
@@ -1364,6 +1466,7 @@ interface RunAndroidComposeSemanticAnalyzerOptions {
   symbolIndex: SymbolIndex
   androidProject: DetectAndroidProjectResult['artifact']
   androidNavigation: BuildAndroidNavigationProjectResult['artifact']
+  androidComponents?: AndroidComponentsArtifact
   createdAt: string
 }
 
@@ -1404,6 +1507,10 @@ function runAndroidComposeSemanticAnalyzer(options: RunAndroidComposeSemanticAna
           functionLocalCount: artifact.summary.functionLocalCount,
           childCallCount: artifact.summary.childCallCount,
           structuralRegionCallCount: artifact.summary.structuralRegionCallCount,
+          activityHostFactCount: artifact.summary.activityHostFactCount ?? 0,
+          viewModelOwnedStateFactCount: artifact.summary.viewModelOwnedStateFactCount ?? 0,
+          ambiguousStateOwnerFactCount: artifact.summary.ambiguousStateOwnerFactCount ?? 0,
+          unresolvedStateOwnerFactCount: artifact.summary.unresolvedStateOwnerFactCount ?? 0,
         },
       },
     }
@@ -1577,6 +1684,15 @@ function runAndroidComponentsAnalyzer(options: RunAndroidComponentsAnalyzerOptio
           highConfidenceCount: artifact.summary.highConfidenceCount,
           mediumConfidenceCount: artifact.summary.mediumConfidenceCount,
           lowConfidenceCount: artifact.summary.lowConfidenceCount,
+          dependencyFactCount: artifact.summary.dependencyFactCount ?? 0,
+          resolvedDependencyFactCount: artifact.summary.resolvedDependencyFactCount ?? 0,
+          ambiguousDependencyFactCount: artifact.summary.ambiguousDependencyFactCount ?? 0,
+          unresolvedDependencyFactCount: artifact.summary.unresolvedDependencyFactCount ?? 0,
+          viewmodelUsesRepositoryCount: artifact.summary.dependencyFactCountByKind?.['viewmodel-uses-repository'] ?? 0,
+          repositoryUsesDaoCount: artifact.summary.dependencyFactCountByKind?.['repository-uses-dao'] ?? 0,
+          repositoryUsesServiceCount: artifact.summary.dependencyFactCountByKind?.['repository-uses-service'] ?? 0,
+          daoUsesEntityCount: artifact.summary.dependencyFactCountByKind?.['dao-uses-entity'] ?? 0,
+          roomDatabaseExposesDaoCount: artifact.summary.dependencyFactCountByKind?.['room-database-exposes-dao'] ?? 0,
         },
       },
     }

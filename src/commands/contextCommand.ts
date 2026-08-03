@@ -27,6 +27,7 @@ import { resolveFocusIntake } from '../context/focusResolution.js'
 import { buildChangedSurface } from '../context/changedSurface.js'
 import { applyRoleAwareCandidates } from '../context/roleCandidates.js'
 import { buildEvidenceGroups } from '../context/evidenceGroups.js'
+import { detectAndroidIntents } from '../context/androidContextIntent.js'
 import { normalizeResponsibilityRefs, buildResponsibilityMappings } from '../context/responsibilityMapping.js'
 import { classifyFreshness } from '../context/contextFreshness.js'
 import { buildBudget, buildTruncation } from '../context/contextBudget.js'
@@ -169,6 +170,10 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
+      // v1.12.0 Batch 6: bounded, deterministic internal Android task-intent
+      // detection - never a new CLI option or ContextRequest field (section 40).
+      const androidIntents = detectAndroidIntents(queryPlan.normalizedQuery, queryPlan.terms.raw)
+
       const rankingInput = runSearch({ resolved, symbolIndex, codeGraph, normalizedQuery: queryPlan.normalizedQuery, hasTerms: queryPlan.terms.raw.length > 0 })
       steps.push({
         id: 'step-run-search',
@@ -273,6 +278,7 @@ export function registerContextCommand(program: Command): void {
         requestedEvidenceKinds: normalized.requestedEvidenceKinds,
         codeGraph,
         maxCandidateFiles: limits.maxCandidateFiles,
+        androidIntents,
       })
       candidateFiles = roleRanked.candidateFiles
       candidateNodes = roleRanked.candidateNodes
@@ -400,6 +406,7 @@ export function registerContextCommand(program: Command): void {
         symbolIndex,
         selectedGraph,
         repoRoot,
+        androidIntents,
       })
       steps.push({
         id: 'step-build-evidence-groups',
@@ -591,7 +598,14 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
-      const conflicts = detectContextConflicts({ focus, candidateNodes })
+      const conflicts = detectContextConflicts({
+        focus,
+        candidateNodes,
+        codeGraph,
+        androidIntents,
+        role: normalized.role,
+        classificationSummary,
+      })
       steps.push({
         id: 'step-detect-context-conflicts',
         kind: 'detect-context-conflicts',

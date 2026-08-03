@@ -1,12 +1,17 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from './codeGraphTypes.js'
 import type { GraphSliceCore, GraphSliceDirection } from './graphSliceTypes.js'
 
+/** v1.12.0 Batch 5: cap on nodes added by the `dataFlowEdgeKinds` secondary pass, independent of any other slice cap. */
+export const MAX_DATA_FLOW_ADDED_NODES = 200
+
 export function sliceGraph(options: {
   graph: CodeGraph
   focusNodeId: string
   depth: number
   direction: GraphSliceDirection
   includeEdgeKinds?: Set<string>
+  /** v1.12.0 Batch 5 (`slice --include-data-flow`): additive secondary BFS pass that always traverses `both` directions, regardless of `options.direction`, bounded by `options.depth`. */
+  dataFlowEdgeKinds?: Set<string>
 }): GraphSliceCore {
   validateSliceInputs(options.depth, options.direction)
   const nodeMap = new Map(options.graph.nodes.map((node) => [node.id, node]))
@@ -49,6 +54,34 @@ export function sliceGraph(options: {
     }
   }
 
+  let dataFlowExpansion: GraphSliceCore['dataFlowExpansion']
+  if (options.dataFlowEdgeKinds && options.dataFlowEdgeKinds.size > 0) {
+    const addedNodeIds: string[] = []
+    let truncated = false
+    let dataFlowFrontier = new Set(includedNodeIds)
+    for (let level = 0; level < options.depth; level++) {
+      const next = new Set<string>()
+      for (const current of dataFlowFrontier) {
+        for (const edge of options.graph.edges) {
+          if (!options.dataFlowEdgeKinds.has(edge.kind)) continue
+          for (const adjacent of adjacentNodes(edge, current, 'both')) {
+            if (includedNodeIds.has(adjacent)) continue
+            if (addedNodeIds.length >= MAX_DATA_FLOW_ADDED_NODES) {
+              truncated = true
+              continue
+            }
+            includedNodeIds.add(adjacent)
+            addedNodeIds.push(adjacent)
+            next.add(adjacent)
+          }
+        }
+      }
+      dataFlowFrontier = next
+      if (dataFlowFrontier.size === 0 && !truncated) break
+    }
+    dataFlowExpansion = { addedNodeIds, truncated }
+  }
+
   const nodes = [...includedNodeIds]
     .map((id) => nodeMap.get(id))
     .filter((node): node is CodeGraphNode => node !== undefined)
@@ -58,7 +91,7 @@ export function sliceGraph(options: {
     .filter((edge) => edgeAllowedForDirection(edge, includedNodeIds, options.focusNodeId, options.direction))
     .sort(compareById)
 
-  return { nodes, edges, warnings: [] }
+  return { nodes, edges, warnings: [], ...(dataFlowExpansion ? { dataFlowExpansion } : {}) }
 }
 
 export function validateSliceInputs(depth: number, direction: GraphSliceDirection): void {

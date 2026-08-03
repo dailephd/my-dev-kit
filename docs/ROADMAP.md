@@ -1179,6 +1179,8 @@ Candidate graph views:
 
 ## Version 1.12.0
 
+**Status: published.**
+
 Version 1.12.0 adds Android architecture classification and Android data-flow retrieval.
 
 The goal is to help coding agents avoid wrong-layer edits in Android apps by identifying screens, state owners, data owners, persistence layers, network layers, resources, and tests.
