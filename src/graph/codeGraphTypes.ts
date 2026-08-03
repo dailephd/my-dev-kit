@@ -86,6 +86,12 @@ export type CodeGraphEdgeKind =
   | 'android-test-references-route'
   | 'android-test-references-viewmodel'
   | 'android-test-uses-double'
+  /** v1.12.0 Batch 3: the five fixed static component-dependency relationships. Never a synonym. */
+  | 'viewmodel-uses-repository'
+  | 'repository-uses-dao'
+  | 'repository-uses-service'
+  | 'dao-uses-entity'
+  | 'room-database-exposes-dao'
 
 export interface CodeGraphNode {
   id: string

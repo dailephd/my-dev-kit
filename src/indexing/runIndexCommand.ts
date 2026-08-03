@@ -952,6 +952,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     androidNavigation: androidNavigationResult.artifact,
     androidComposeSemantic: androidComposeSemantic ?? undefined,
     androidTestSemantic: androidTestSemantic ?? undefined,
+    androidComponents: androidComponents ?? undefined,
     symbolIndex: roledSymbolIndex,
   })
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
@@ -963,7 +964,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   // component-role detector, never a second entry for the same target.
   const androidComponentRoleMerge =
     classification && androidComponents
-      ? mergeAndroidComponentRoleClassifications(classification.entries, androidComponents.components)
+      ? mergeAndroidComponentRoleClassifications(classification.entries, androidComponents.components, androidComponents.dependencyFacts)
       : null
   const baseClassificationEntries = androidComponentRoleMerge ? androidComponentRoleMerge.entries : (classification?.entries ?? [])
 
@@ -1664,6 +1665,15 @@ function runAndroidComponentsAnalyzer(options: RunAndroidComponentsAnalyzerOptio
           highConfidenceCount: artifact.summary.highConfidenceCount,
           mediumConfidenceCount: artifact.summary.mediumConfidenceCount,
           lowConfidenceCount: artifact.summary.lowConfidenceCount,
+          dependencyFactCount: artifact.summary.dependencyFactCount ?? 0,
+          resolvedDependencyFactCount: artifact.summary.resolvedDependencyFactCount ?? 0,
+          ambiguousDependencyFactCount: artifact.summary.ambiguousDependencyFactCount ?? 0,
+          unresolvedDependencyFactCount: artifact.summary.unresolvedDependencyFactCount ?? 0,
+          viewmodelUsesRepositoryCount: artifact.summary.dependencyFactCountByKind?.['viewmodel-uses-repository'] ?? 0,
+          repositoryUsesDaoCount: artifact.summary.dependencyFactCountByKind?.['repository-uses-dao'] ?? 0,
+          repositoryUsesServiceCount: artifact.summary.dependencyFactCountByKind?.['repository-uses-service'] ?? 0,
+          daoUsesEntityCount: artifact.summary.dependencyFactCountByKind?.['dao-uses-entity'] ?? 0,
+          roomDatabaseExposesDaoCount: artifact.summary.dependencyFactCountByKind?.['room-database-exposes-dao'] ?? 0,
         },
       },
     }

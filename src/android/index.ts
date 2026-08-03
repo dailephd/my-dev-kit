@@ -164,6 +164,12 @@ export {
   type DetectAndroidProjectResult,
 } from './androidProjectTypes.js'
 export { detectAndroidComponents, type DetectAndroidComponentsOptions } from './detectAndroidComponents.js'
+export {
+  detectAndroidComponentDependencies,
+  type DetectAndroidComponentDependenciesOptions,
+  type DetectAndroidComponentDependenciesResult,
+} from './detectAndroidComponentDependencies.js'
+export { readBoundedSourceBody, MAX_BODY_SCAN_LINES } from './boundedSourceBodyScan.js'
 export { buildAndroidComponentRefsBySymbolId } from './buildAndroidComponentRefsBySymbolId.js'
 export { applyAndroidComponentsToSymbolIndex } from './applyAndroidComponentsToSymbolIndex.js'
 export { applyAndroidComponentsToCodeGraph } from './applyAndroidComponentsToCodeGraph.js'
@@ -180,6 +186,11 @@ export {
   type AndroidComponentsArtifact,
   type AndroidComponentRoleRef,
   type CompactAndroidComponentMetadata,
+  type AndroidComponentDependencyRelationshipKind,
+  type AndroidComponentDependencyMatchStatus,
+  type AndroidComponentDependencyEvidenceKind,
+  type AndroidComponentDependencySourceRef,
+  type AndroidComponentDependencyFact,
 } from './androidComponentTypes.js'
 export {
   buildAndroidComposeSemanticProject,

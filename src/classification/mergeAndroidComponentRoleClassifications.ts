@@ -1,4 +1,4 @@
-import type { AndroidComponentEntry, AndroidComponentConfidence } from '../android/androidComponentTypes.js'
+import type { AndroidComponentDependencyFact, AndroidComponentEntry, AndroidComponentConfidence } from '../android/androidComponentTypes.js'
 import { buildWarning, dedupeRisks, validateEntry } from './classificationHelpers.js'
 import type { ClassificationEntry, ClassificationRole, EditGuidance, UncertaintyTier } from './classificationTypes.js'
 
@@ -24,17 +24,58 @@ const TIER_RANK: Record<UncertaintyTier, number> = { certain: 3, likely: 2, poss
  */
 export function mergeAndroidComponentRoleClassifications(
   entries: readonly ClassificationEntry[],
-  components: readonly AndroidComponentEntry[]
+  components: readonly AndroidComponentEntry[],
+  dependencyFacts: readonly AndroidComponentDependencyFact[] = []
 ): MergeAndroidComponentRoleClassificationsResult {
   const componentBySymbolId = new Map(components.map((c) => [c.symbolId, c]))
-  const merged = entries.map((entry) => {
+  let merged = entries.map((entry) => {
     if (entry.targetKind !== 'symbol') return entry
     const component = componentBySymbolId.get(entry.targetId)
     if (!component) return entry
     return mergeComponentIntoEntry(entry, component)
   })
+
+  // v1.12.0 Batch 3: advisory wrong-layer-risk only - never changes edit
+  // guidance, readiness, or uncertainty - for a source component whose
+  // statically visible supported dependency is ambiguous, unresolved, or
+  // whose resolved source/target role confidence is low. A ViewModel/
+  // Repository/DAO/Database legitimately not using a given layer never
+  // triggers this; it only fires when a supported declaration exists.
+  if (dependencyFacts.length > 0) {
+    const componentById = new Map(components.map((c) => [c.id, c]))
+    const riskySymbolIds = computeWrongLayerRiskSymbolIds(dependencyFacts, componentById)
+    merged = merged.map((entry) => {
+      if (!riskySymbolIds.has(entry.targetId) || entry.risks.includes('wrong-layer-risk')) return entry
+      const updated = { ...entry, risks: dedupeRisks([...entry.risks, 'wrong-layer-risk' as const]) }
+      validateEntry(updated)
+      return updated
+    })
+  }
+
   const warningCount = merged.reduce((sum, entry) => sum + entry.warnings.length, 0)
   return { entries: merged, warningCount }
+}
+
+function computeWrongLayerRiskSymbolIds(
+  facts: readonly AndroidComponentDependencyFact[],
+  componentById: Map<string, AndroidComponentEntry>
+): Set<string> {
+  const result = new Set<string>()
+  for (const fact of facts) {
+    if (fact.matchStatus !== 'resolved') {
+      result.add(fact.sourceSymbolId)
+      continue
+    }
+    const sourceComponent = componentById.get(fact.sourceComponentId)
+    if (sourceComponent?.confidence === 'low') {
+      result.add(fact.sourceSymbolId)
+      continue
+    }
+    if (fact.candidateComponentIds.some((id) => componentById.get(id)?.confidence === 'low')) {
+      result.add(fact.sourceSymbolId)
+    }
+  }
+  return result
 }
 
 function mergeComponentIntoEntry(entry: ClassificationEntry, component: AndroidComponentEntry): ClassificationEntry {

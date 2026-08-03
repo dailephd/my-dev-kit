@@ -25,6 +25,7 @@ import type { AndroidResourcesArtifact } from './androidResourceTypes.js'
 import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
 import type { AndroidComposeSemanticArtifact } from './androidComposeTypes.js'
 import type { AndroidTestSemanticArtifact } from './androidTestTypes.js'
+import type { AndroidComponentsArtifact } from './androidComponentTypes.js'
 
 export interface BuildAndroidArtifactRelationshipsOptions {
   projectRoot: string
@@ -37,6 +38,8 @@ export interface BuildAndroidArtifactRelationshipsOptions {
   androidComposeSemantic?: AndroidComposeSemanticArtifact
   /** `android-test-semantic.json`'s already-built artifact (v1.11.0 Batch 5), used only to project compact test file/class/method/fact nodes and edges. Optional so pre-Batch-5 direct callers keep working unchanged. */
   androidTestSemantic?: AndroidTestSemanticArtifact
+  /** `android-components.json`'s already-built artifact (v1.9.0 Batch 4, dependency facts added v1.12.0 Batch 3), used only to project the five fixed component-dependency edges onto existing symbol nodes. Optional so pre-existing direct callers keep working unchanged. */
+  androidComponents?: AndroidComponentsArtifact
   symbolIndex: SymbolIndex
 }
 
@@ -50,7 +53,7 @@ export interface BuildAndroidArtifactRelationshipsResult {
 export const ANDROID_PROJECT_ROOT_NODE_ID = 'android-project:root'
 
 export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactRelationshipsOptions): BuildAndroidArtifactRelationshipsResult {
-  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, androidTestSemantic, symbolIndex } = options
+  const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, androidTestSemantic, androidComponents, symbolIndex } = options
   const nodes: CodeGraphNode[] = []
   const edges: CodeGraphEdge[] = []
   const warnings: string[] = []
@@ -1009,6 +1012,34 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
           metadata: {
             evidenceArtifact: 'android-test-semantic',
             matchBasis: 'exact-simple-class-name',
+            candidate: fact.candidateSymbolIds.length > 1,
+          },
+        })
+      }
+    }
+  }
+
+  // -- 12. Component dependency facts (v1.12.0 Batch 3) -----------------------
+  //
+  // Projects the five fixed static component-dependency relationships onto
+  // the existing symbol nodes already produced by structural indexing - never
+  // a new component node. A resolved fact becomes one edge; an ambiguous fact
+  // becomes one edge per candidate (every candidate preserved, no winner
+  // selected); an unresolved fact never becomes an edge.
+  if (androidComponents?.dependencyFacts) {
+    for (const fact of androidComponents.dependencyFacts) {
+      if (fact.matchStatus === 'unresolved') continue
+      for (const candidateSymbolId of fact.candidateSymbolIds) {
+        addEdge({
+          id: edgeId(fact.sourceSymbolId, fact.relationshipKind, candidateSymbolId),
+          source: fact.sourceSymbolId,
+          target: candidateSymbolId,
+          kind: fact.relationshipKind,
+          metadata: {
+            evidenceArtifact: 'android-components',
+            evidenceEntityId: fact.id,
+            evidenceKind: fact.evidenceKind,
+            declaredTypeName: fact.declaredTypeName,
             candidate: fact.candidateSymbolIds.length > 1,
           },
         })

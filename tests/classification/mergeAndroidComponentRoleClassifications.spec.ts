@@ -130,3 +130,77 @@ describe('mergeAndroidComponentRoleClassifications', () => {
     expect(warningCount).toBe(entries.reduce((sum, e) => sum + e.warnings.length, 0))
   })
 })
+
+describe('mergeAndroidComponentRoleClassifications — v1.12.0 Batch 3 dependency-fact risk integration', () => {
+  function dependencyFact(overrides: Partial<import('../../src/android/androidComponentTypes.js').AndroidComponentDependencyFact> = {}) {
+    return {
+      id: 'android-component-dependency:1',
+      relationshipKind: 'viewmodel-uses-repository' as const,
+      sourceComponentId: 'android-component:1',
+      sourceSymbolId: 'symbol:src/MainActivity.kt#MainActivity',
+      sourceRole: 'view-model' as const,
+      targetRole: 'repository' as const,
+      declaredTypeName: 'UserRepository',
+      evidenceKind: 'primary-constructor-parameter' as const,
+      sourceRef: { file: 'src/MainActivity.kt', line: 5 },
+      matchStatus: 'resolved' as const,
+      candidateComponentIds: ['android-component:2'],
+      candidateSymbolIds: ['symbol:src/UserRepository.kt#UserRepository'],
+      warnings: [],
+      ...overrides,
+    }
+  }
+
+  it('TST-330: adds wrong-layer-risk (only) when a dependency is ambiguous, without changing guidance/readiness/uncertainty', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const entry = resolvedEntry(targetId)
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [entry],
+      [component({ symbolId: targetId, confidence: 'high' })],
+      [dependencyFact({ matchStatus: 'ambiguous', sourceSymbolId: targetId })]
+    )
+    const merged = entries[0]!
+    expect(merged.risks).toContain('wrong-layer-risk')
+    expect(merged.editGuidance).toBe(entry.editGuidance === 'uncertain' ? merged.editGuidance : 'inspect-before-edit')
+    expect(merged.readiness).toBe('ready')
+    expect(merged.uncertainty).toBe('certain')
+  })
+
+  it('TST-330: adds wrong-layer-risk when a dependency is unresolved', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [resolvedEntry(targetId)],
+      [component({ symbolId: targetId, confidence: 'high' })],
+      [dependencyFact({ matchStatus: 'unresolved', sourceSymbolId: targetId, candidateComponentIds: [], candidateSymbolIds: [] })]
+    )
+    expect(entries[0]!.risks).toContain('wrong-layer-risk')
+  })
+
+  it('TST-330: adds wrong-layer-risk when the resolved target role confidence is low, even though the fact itself resolved', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [resolvedEntry(targetId)],
+      [component({ symbolId: targetId, confidence: 'high' }), component({ id: 'android-component:2', symbolId: 'symbol:src/UserRepository.kt#UserRepository', confidence: 'low' })],
+      [dependencyFact({ matchStatus: 'resolved', sourceSymbolId: targetId })]
+    )
+    expect(entries[0]!.risks).toContain('wrong-layer-risk')
+  })
+
+  it('TST-330: does not add wrong-layer-risk merely because a component has no supported dependency declaration at all', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const { entries } = mergeAndroidComponentRoleClassifications([resolvedEntry(targetId)], [component({ symbolId: targetId, confidence: 'high' })], [])
+    expect(entries[0]!.risks).not.toContain('wrong-layer-risk')
+  })
+
+  it('does not add wrong-layer-risk to an unrelated component not named as the fact source', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const otherId = 'symbol:src/Other.kt#Other'
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [resolvedEntry(targetId), resolvedEntry(otherId)],
+      [component({ symbolId: targetId, confidence: 'high' })],
+      [dependencyFact({ matchStatus: 'ambiguous', sourceSymbolId: targetId })]
+    )
+    const other = entries.find((e) => e.targetId === otherId)!
+    expect(other.risks).not.toContain('wrong-layer-risk')
+  })
+})
