@@ -132,13 +132,31 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.11.0
+## Latest release: v1.12.0
 
-`@dailephd/my-dev-kit@1.11.0` is the latest published release. It adds Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views. The command syntax and artifact schema major remain unchanged.
+`@dailephd/my-dev-kit@1.12.0` is the latest published release. It adds Android architecture classification, Android component-dependency facts, Compose state-ownership and Activity-hosting evidence, `search --android-role`, `slice --include-data-flow`, Android-aware `slice --include-tests`, and Android-aware `context` owner selection. The command syntax and artifact schema major remain unchanged.
+
+## v1.12.0 Android architecture and data-flow retrieval
+
+v1.12.0 is the current published release. Package metadata and the CLI report `1.12.0`.
+
+The release adds a complete Android classification vocabulary (`classification.json` schema `1.1.0`) covering Android project/module structure, manifest components, navigation routes, resources, Compose screens/UI components, ViewModels, and UI-only state/events, each with edit guidance, readiness, uncertainty, and up to seven advisory risk labels. `android-components.json` (schema `1.1.0`) adds `dependencyFacts[]` — exact static component-dependency relationships (ViewModel→Repository, Repository→DAO/Service, DAO→Entity, Room Database→DAO) projected into `code-graph.json` as new edges. `android-compose-semantic.json` (schema `1.3.0`) adds Compose collected-state ownership and Activity-to-Compose hosting evidence, projected as `compose-state-reads-viewmodel` and `activity-hosts-composable` graph edges.
+
+The command surface adds:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role view-model --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --include-data-flow --json
+npx @dailephd/my-dev-kit context --index .my-dev-kit --role implementation --query "Change the loading state behavior shown by HomeScreen." --json
+```
+
+`search --android-role` accepts any of 31 Android classification roles and is mutually exclusive with other search selectors. `slice --include-data-flow` performs a bounded, bidirectional traversal over a fixed Android ownership/data-flow edge allowlist (Activity → Compose → ViewModel → Repository → DAO/Entity/Retrofit, plus Room database → DAO and route → screen). The existing `slice --include-tests` modifier gains Android-aware related-test expansion. The existing role-aware `context` command becomes Android-aware: it prefers the correct owning layer for a request (for example, a state request prefers the ViewModel over its own collected-state fact) and reports six new wrong-layer conflict kinds when ownership is ambiguous or a generated/test-only node would otherwise be selected.
+
+This release remains static evidence only: no Gradle/Kotlin/Compose/test execution, no dependency-injection resolution, no database or network inspection, no emulator, and no runtime UI/navigation/reachability proof. Android classification is advisory evidence, not an automatic edit decision. See [docs/COMMANDS.md](docs/COMMANDS.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the complete release contract.
 
 ## v1.11.0 Compose and Android-test retrieval
 
-v1.11.0 is the current published release. Package metadata and the CLI report `1.11.0`.
+v1.11.0 shipped Compose semantic indexing and retrieval, Android unit/instrumented test semantic indexing, and bounded Compose/Android-test graph views.
 
 The implementation adds two conditional Android artifacts:
 
@@ -159,7 +177,7 @@ node dist/cli.js view --index .my-dev-kit --graph compose-navigation --format do
 node dist/cli.js view --index .my-dev-kit --graph android-test --format dot
 ```
 
-Matching is exact and ambiguity is preserved. All evidence is local, deterministic, read-only static analysis: it does not execute Gradle, Compose, tests, applications, or emulators; prove runtime UI visibility, click behavior, navigation, test success, or coverage; resolve rendered resource values; or provide the v1.12 Android architecture/data-flow capability. See [docs/COMMANDS.md](docs/COMMANDS.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the complete release contract.
+Matching is exact and ambiguity is preserved. All evidence is local, deterministic, read-only static analysis: it does not execute Gradle, Compose, tests, applications, or emulators; prove runtime UI visibility, click behavior, navigation, test success, or coverage; or resolve rendered resource values. See [docs/COMMANDS.md](docs/COMMANDS.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md), and [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the complete release contract.
 
 ### Android capability introduced in v1.10.0
 
@@ -183,7 +201,7 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.exam
 npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --format dot
 ```
 
-The shipped Android capability is static evidence, not runtime proof. It does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run tests or emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; or prove runtime UI, route, intent, or deep-link behavior. Android architecture classification and data-flow retrieval remain v1.12.0 scope.
+The shipped Android capability is static evidence, not runtime proof. It does not execute Gradle or start a Gradle daemon; resolve or download dependencies; build Android projects; run tests or emulators/devices; inspect APK/AAB files; perform signing, Play Store, App Links, or Android security validation; produce a final merged runtime manifest; select runtime resource overlays; or prove runtime UI, route, intent, or deep-link behavior.
 
 ## Stage-specific bounded context retrieval
 
@@ -568,7 +586,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.11.0 is the latest published release. Later versions retain their separate planned scopes: v1.12.0 Android architecture/data-flow evidence, v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.0 is the latest published release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

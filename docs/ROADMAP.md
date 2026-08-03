@@ -1179,7 +1179,7 @@ Candidate graph views:
 
 ## Version 1.12.0
 
-**Status: implemented on the `feature/v1.12.0-android-architecture-data-flow` branch; not yet published.** Package metadata and the CLI still report `1.11.0` until release workflow updates that fact.
+**Status: published.**
 
 Version 1.12.0 adds Android architecture classification and Android data-flow retrieval.
 

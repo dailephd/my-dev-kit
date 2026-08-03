@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.11.0 is the latest published release. It retains the stage-specific bounded context work through v1.10.4 and adds Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views.
+Version 1.12.0 is the latest published release. It retains the stage-specific bounded context work through v1.10.4, the Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views shipped in v1.11.0, and adds Android architecture classification, static Android ownership/data-flow relationships, exact Android-role retrieval, bounded data-flow/related-test slicing, and Android-aware context owner selection.
 
 The current repository and package metadata contain these shipped implementation capabilities:
 
@@ -78,22 +78,15 @@ The current repository and package metadata contain these shipped implementation
 - `android-test-semantic.json` schema `1.0.0`, covering Android unit/instrumented test structure plus supported JUnit, Compose UI, Espresso, Robolectric, assertion, route, and test-double facts
 - compact Compose and Android-test nodes and exact/ambiguity-preserving relationships projected into the existing `code-graph.json`, available through generic retrieval, context, and graph-diff
 - bounded `compose-ui`, `compose-navigation`, and `android-test` code-graph views
+- a complete Android classification vocabulary in `classification.json` (schema `1.1.0`): Android project/module, manifest/manifest-component, navigation-route, resource-file/xml-layout, Compose screen/UI-component, ViewModel, UI-only-state/UI-event, the reused Android component-role vocabulary (repository, use-case, Room entity/DAO/database, Retrofit service, Hilt module, Worker, broadcast-receiver, service, content-provider, Activity, Fragment), Android unit/instrumented/Compose-UI test categories, and a generated-build-path category — each with edit guidance, readiness, uncertainty, and up to seven advisory risk labels (`wrong-layer-risk`, `manifest-security-risk`, `generated-build-file-risk`, `resource-contract-risk`, `navigation-contract-risk`, `emulator-validation-required`, `instrumented-test-required`) (v1.12.0)
+- `android-components.json` (schema `1.1.0`) additive `dependencyFacts[]`: five exact static component-dependency relationships (`viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`), projected into `code-graph.json` as new edges connecting existing symbol nodes, with resolved/ambiguous/unresolved candidate matching and no fabricated winner (v1.12.0)
+- `android-compose-semantic.json` (schema `1.3.0`) additive Compose state-ownership fields and `activityHostFacts[]`, projected as `compose-state-reads-viewmodel` and `activity-hosts-composable` edges, with classification refinement for ViewModel-owned collected state (v1.12.0)
+- `search --android-role <role>` — an exact 31-value Android classification-role selector reusing the existing `SearchIndexResult` artifact, Android-provenance filtered, mutually exclusive with every other search selector (v1.12.0)
+- `slice --include-data-flow` — a bounded bidirectional secondary traversal over a fixed Android ownership/data-flow edge allowlist (Activity/Compose/ViewModel/Repository/DAO/Entity/Retrofit/Room/route-to-screen), and an Android-aware extension of the existing `slice --include-tests` modifier pulling bounded related Android test evidence — both additive summary objects (`androidDataFlow`, `androidTests`), no new option (v1.12.0)
+- Android-aware `context` (`architecture`/`implementation`/`test-implementation`): an internal deterministic ten-intent Android task classifier, a fixed intent-to-owner-category preference matrix, generated/test-only production-owner exclusion, usage-versus-owner suppression (a projected usage node never outranks its exact stronger owner once both are candidates), a bounded Android ownership/data-flow owner-support traversal reusing the `slice --include-data-flow` allowlist, and six wrong-layer conflict kinds (`android-generated-primary-target`, `android-test-primary-target`, `android-usage-selected-over-owner`, `android-ambiguous-owner`, `android-unresolved-owner`, `android-classification-graph-disagreement`) added to the existing conflict record via an additive `kind` field — `context-capsule.json`/`retrieval-audit-record.json` remain schema `"1.0.0"`, with no new role, request field, or public flag (v1.12.0)
+- full-versus-incremental artifact equivalence and deterministic ordering across the complete classification/component/Compose artifact family, including stale-evidence removal and generic `graph-diff` coverage (v1.12.0)
 
-## Current implementation-branch scope (v1.12.0, unreleased)
-
-Version 1.12.0 is implemented on the `feature/v1.12.0-android-architecture-data-flow` branch. It is not yet published: package metadata (`package.json`, `package-lock.json`) and the CLI's own `--version` output still report `1.11.0`, and there is no npm release, GitHub Release, or Git tag for `1.12.0`. The capabilities below describe what the current repository implementation contains, not what `npx @dailephd/my-dev-kit` installs today.
-
-The v1.12.0 implementation adds Android architecture classification, static Android ownership/data-flow relationships, exact Android-role retrieval, bounded data-flow/related-test slicing, and Android-aware context owner selection, all layered onto the existing artifact model with no new command, artifact family, graph, or context role:
-
-- a complete Android classification vocabulary in `classification.json` (schema `1.1.0`): Android project/module, manifest/manifest-component, navigation-route, resource-file/xml-layout, Compose screen/UI-component, ViewModel, UI-only-state/UI-event, the reused Android component-role vocabulary (repository, use-case, Room entity/DAO/database, Retrofit service, Hilt module, Worker, broadcast-receiver, service, content-provider, Activity, Fragment), Android unit/instrumented/Compose-UI test categories, and a generated-build-path category — each with edit guidance, readiness, uncertainty, and up to seven advisory risk labels (`wrong-layer-risk`, `manifest-security-risk`, `generated-build-file-risk`, `resource-contract-risk`, `navigation-contract-risk`, `emulator-validation-required`, `instrumented-test-required`)
-- `android-components.json` (schema `1.1.0`) additive `dependencyFacts[]`: five exact static component-dependency relationships (`viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`), projected into `code-graph.json` as new edges connecting existing symbol nodes, with resolved/ambiguous/unresolved candidate matching and no fabricated winner
-- `android-compose-semantic.json` (schema `1.3.0`) additive Compose state-ownership fields and `activityHostFacts[]`, projected as `compose-state-reads-viewmodel` and `activity-hosts-composable` edges, with classification refinement for ViewModel-owned collected state
-- `search --android-role <role>` — an exact 31-value Android classification-role selector reusing the existing `SearchIndexResult` artifact, Android-provenance filtered, mutually exclusive with every other search selector
-- `slice --include-data-flow` — a bounded bidirectional secondary traversal over a fixed Android ownership/data-flow edge allowlist (Activity/Compose/ViewModel/Repository/DAO/Entity/Retrofit/Room/route-to-screen), and an Android-aware extension of the existing `slice --include-tests` modifier pulling bounded related Android test evidence — both additive summary objects (`androidDataFlow`, `androidTests`), no new option
-- Android-aware `context` (`architecture`/`implementation`/`test-implementation`): an internal deterministic ten-intent Android task classifier, a fixed intent-to-owner-category preference matrix, generated/test-only production-owner exclusion, usage-versus-owner suppression (a projected usage node never outranks its exact stronger owner once both are candidates), a bounded Android ownership/data-flow owner-support traversal reusing the `slice --include-data-flow` allowlist, and six wrong-layer conflict kinds (`android-generated-primary-target`, `android-test-primary-target`, `android-usage-selected-over-owner`, `android-ambiguous-owner`, `android-unresolved-owner`, `android-classification-graph-disagreement`) added to the existing conflict record via an additive `kind` field — `context-capsule.json`/`retrieval-audit-record.json` remain schema `"1.0.0"`, with no new role, request field, or public flag
-- full-versus-incremental artifact equivalence and deterministic ordering across the complete classification/component/Compose artifact family, including stale-evidence removal and generic `graph-diff` coverage
-
-Static-analysis boundaries remain identical to every earlier Android batch: no Gradle/Kotlin/Compose/test execution, no dependency-injection resolution, no database or network inspection, no emulator, and no runtime UI/navigation/reachability proof. Android architecture classification is advisory evidence, not an automatic edit decision. See [ROADMAP.md](ROADMAP.md) for the full v1.12.0 plan, [COMMANDS.md](COMMANDS.md) for the exact command/flag contracts, [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for artifact schemas, and [ARCHITECTURE.md](ARCHITECTURE.md) for subsystem ownership.
+Static-analysis boundaries remain identical to every earlier Android batch: no Gradle/Kotlin/Compose/test execution, no dependency-injection resolution, no database or network inspection, no emulator, and no runtime UI/navigation/reachability proof. Android architecture classification is advisory evidence, not an automatic edit decision. See [ROADMAP.md](ROADMAP.md) for the full v1.13.0 plan, [COMMANDS.md](COMMANDS.md) for the exact command/flag contracts, [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for artifact schemas, and [ARCHITECTURE.md](ARCHITECTURE.md) for subsystem ownership.
 
 ## Public commands
 
@@ -212,7 +205,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current repository scope (published through v1.11.0):
+Current repository scope (published through v1.12.0):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`
@@ -238,11 +231,12 @@ Current repository scope (published through v1.11.0):
 - static Android Gradle/manifest/resource/navigation artifacts, unified Android graph relationships, exact Android retrieval selectors, Android-aware context, and Android graph views (v1.10.0 Batches 1-7)
 - conservative Compose semantic artifact production, code-graph projection, exact selectors/source bundles/slices, generic retrieval/context/graph-diff participation, and three bounded graph views (v1.11.0)
 - conservative Android unit/instrumented test semantic artifact production and generic graph/retrieval participation without inserting test files into the core symbol index (v1.11.0)
+- Android architecture classification, static Android ownership/data-flow relationships, exact Android-role retrieval, bounded data-flow/related-test slicing, and Android-aware context owner selection (v1.12.0)
 - warnings for unsupported, ambiguous, or low-confidence patterns
 
 Current scope does not claim:
 
-- Android build/test/application/emulator execution, dependency resolution, manifest merging, runtime resource selection, runtime intent/deep-link/route/UI proof, Android architecture classification, Android data-flow retrieval, runtime coverage proof, or Android security validation
+- Android build/test/application/emulator execution, dependency resolution, manifest merging, runtime resource selection, runtime intent/deep-link/route/UI proof, runtime coverage proof, or Android security validation
 - full ORM or schema coverage
 - runtime database behavior
 - runtime React rendering behavior
@@ -287,7 +281,7 @@ my-dev-kit does not own workflow-stage progression, prompt assembly, judge inter
 
 ## Current limitations
 
-The v1.11.0 evidence is conservative static analysis. Dynamic or unsupported Compose/test expressions remain unresolved or omitted with warnings; exact-match ambiguity is preserved; resource values and runtime UI visibility are not inferred. ViewModel-to-repository, repository-to-DAO/Retrofit, Room/network flow, and Compose-specific edit guidance remain v1.12.0 responsibilities. Android benchmark expansion and public example coverage remain v1.13.0 responsibilities.
+The v1.12.0 evidence is conservative static analysis. Dynamic or unsupported Compose/test expressions remain unresolved or omitted with warnings; exact-match ambiguity is preserved; resource values and runtime UI visibility are not inferred. Android benchmark expansion and public example coverage remain v1.13.0 responsibilities.
 
 - Symbol records include start lines but not complete end-line bounds.
 - Symbol-mode source retrieval returns a bounded preview from the symbol start line and may include a capped-preview warning.

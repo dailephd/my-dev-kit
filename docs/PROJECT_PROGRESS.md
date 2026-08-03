@@ -4,15 +4,15 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.11.0` is the latest published release.
+`@dailephd/my-dev-kit@1.12.0` is the latest published release.
 
-## Implemented, unreleased: v1.12.0
+## Shipped: v1.12.0
 
-Version 1.12.0 (Android architecture classification and Android data-flow retrieval) is implemented on the `feature/v1.12.0-android-architecture-data-flow` branch. Package metadata and the CLI still report `1.11.0`; there is no npm release, GitHub Release, or Git tag for `1.12.0`. Documentation reconciliation for this version is complete; pre-release readiness, cross-platform validation, security/package validation, and release gates have not started.
+Version 1.12.0 (Android architecture classification and Android data-flow retrieval) is published. Package metadata and the CLI report `1.12.0`. Implementation, documentation reconciliation, pre-release readiness, cross-platform validation, security/package validation, and release gates are complete.
 
-Implemented capability: the complete Android classification vocabulary and seven advisory risk labels (`classification.json` schema `1.1.0`), `dependencyFacts[]` component-dependency relationships (`android-components.json` schema `1.1.0`), Compose state-ownership and Activity-hosting facts (`android-compose-semantic.json` schema `1.3.0`), `search --android-role`, `slice --include-data-flow` and the Android-aware `slice --include-tests` extension, and Android-aware `context` owner selection with six wrong-layer conflict kinds. See the "Version 1.12.0" section of [ROADMAP.md](ROADMAP.md) for the preserved plan and boundaries, and [docs/PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md#current-implementation-branch-scope-v1120-unreleased) for the current implementation-branch capability summary.
+Shipped capability: the complete Android classification vocabulary and seven advisory risk labels (`classification.json` schema `1.1.0`), `dependencyFacts[]` component-dependency relationships (`android-components.json` schema `1.1.0`), Compose state-ownership and Activity-hosting facts (`android-compose-semantic.json` schema `1.3.0`), `search --android-role`, `slice --include-data-flow` and the Android-aware `slice --include-tests` extension, and Android-aware `context` owner selection with six wrong-layer conflict kinds. See the "Version 1.12.0" section of [ROADMAP.md](ROADMAP.md) for the preserved plan and boundaries, and [docs/PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) for the current capability summary.
 
-Validation evidence at the final implementation commit: full suite passing (204 test files, 2,554 tests); `npm run typecheck`, `npm run build`, `npm run verify`, and `npm run docs:check` passing; `npm run benchmark:retrieval` — PASS, 6/6 tasks; package and lockfile versions unchanged at `1.11.0`.
+Validation evidence at release: full suite passing; `npm run typecheck`, `npm run build`, `npm run verify`, and `npm run docs:check` passing; `npm run benchmark:retrieval` — PASS, 6/6 tasks; package and lockfile versions at `1.12.0`; GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x for the exact release commit.
 
 ## Shipped: v1.11.0
 
