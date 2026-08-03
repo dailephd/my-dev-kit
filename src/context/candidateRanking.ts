@@ -182,6 +182,7 @@ function toCandidateNode(entry: PenalizedResult): CandidateNode {
     ...(result.classificationRefs ? { classificationRefs: result.classificationRefs } : {}),
     ...(result.androidArtifactId ? { androidArtifactId: result.androidArtifactId } : {}),
     ...(result.androidMetadata ? { androidMetadata: result.androidMetadata } : {}),
+    ...(result.androidComponentRefs ? { androidComponentRefs: result.androidComponentRefs } : {}),
     retained: true,
   }
 }

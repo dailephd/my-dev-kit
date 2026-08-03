@@ -428,6 +428,11 @@ export interface CandidateNode {
   /** Compact Batch 5 evidence for `android-*` candidates only - never a full artifact record. */
   androidArtifactId?: string
   androidMetadata?: Record<string, string | number | boolean | null>
+  /** v1.12.0 Batch 6: grounded Android component-role provenance for a `symbol`-kind
+   * candidate (e.g. a Kotlin ViewModel/Repository/DAO class) - the same signal
+   * `search --android-role` (v1.12.0 Batch 5) uses to exclude a non-Android symbol
+   * whose classification role name happens to overlap an Android category. */
+  androidComponentRefs?: SemanticArtifactRef[]
   retained: boolean
   droppedReason?: string
   /** v1.10.1 Batch 2: role-aware ranking adjustment applied on top of `modeAdjustment`, or 0/absent when no role was supplied. */
@@ -691,6 +696,9 @@ export interface ContextConflictCandidate {
 
 export interface ContextConflict {
   id: string
+  /** v1.12.0 Batch 6 (additive/optional): stable conflict-kind discriminator.
+   * Absent on capsules produced before this batch. */
+  kind?: string
   status: 'conflict'
   reason: string
   evidenceRefs: string[]

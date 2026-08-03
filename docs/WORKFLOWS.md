@@ -459,6 +459,25 @@ node dist/cli.js slice --index .my-dev-kit --node "symbol:app/src/main/kotlin/co
 
 This remains static analysis: `--android-role` never claims a component is active at runtime; `--include-data-flow` never claims a dependency is actually injected or a query/network call executes — only that the static edge already exists in `code-graph.json`; the Android-aware `--include-tests` extension never claims a test ran or passed.
 
+## Workflow 16: Android-aware context ownership (v1.12.0 Batch 6)
+
+`context` needs no new flag to prefer the correct Android owning layer. The existing role-aware pipeline detects the task intent from the query and applies it on top of existing ranking, structural-owner, and adequacy rules:
+
+```sh
+node dist/cli.js context --index .my-dev-kit --role architecture \
+  --query "Locate the owner for changing the Home screen UI." --out capsule.json --json
+
+node dist/cli.js context --index .my-dev-kit --role implementation \
+  --query "Change the loading state behavior shown by HomeScreen." --out capsule.json --json
+
+node dist/cli.js context --index .my-dev-kit --role implementation \
+  --query "Change how Home data is loaded from the repository." --out capsule.json --json
+```
+
+The first request's `selectedOwners`/ranked `candidateNodes` prefer the Compose screen/component over a projected UI fact; the second prefers the linked ViewModel over its own collected-state fact; the third prefers the repository over the ViewModel that merely consumes it. Focusing a generated file or a test-only node for production work surfaces `android-generated-primary-target`/`android-test-primary-target` in `conflicts`, rather than silently selecting it as an owner; an ambiguous or unresolved layer is reported (`android-ambiguous-owner`/`android-unresolved-owner`), never guessed. `--role test-implementation` still requires changed production evidence and selects Android unit/instrumented/Compose-UI tests as test locations, never as production owners.
+
+This remains static analysis: no owner selection is edit authorization, no dependency-injection or runtime behavior is proven, and no test-execution/coverage claim is made.
+
 ---
 
 ## Bundled examples

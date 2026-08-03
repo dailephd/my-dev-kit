@@ -1,5 +1,7 @@
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import { getRoleDefinition } from './contextRoles.js'
+import type { AndroidIntent } from './androidContextIntent.js'
+import { androidIntentRankingBoost, candidateFileToPolicyInput, candidateNodeToPolicyInput } from './androidContextOwnerPolicy.js'
 import type {
   CandidateFile,
   CandidateNode,
@@ -51,6 +53,10 @@ export interface ApplyRoleAwareCandidatesOptions {
   requestedEvidenceKinds: RequestedEvidenceKind[]
   codeGraph: CodeGraph
   maxCandidateFiles: number | null
+  /** v1.12.0 Batch 6: detected Android task intents for this request's normalized
+   * query. Empty set for a non-Android or intent-free query - the Android
+   * ranking boost is then always 0, so non-Android/legacy ranking is unchanged. */
+  androidIntents?: ReadonlySet<AndroidIntent>
 }
 
 export interface ApplyRoleAwareCandidatesResult {
@@ -121,6 +127,7 @@ export function applyRoleAwareCandidates(options: ApplyRoleAwareCandidatesOption
   })
   const allNodes = [...options.candidateNodes, ...injectedNodes]
 
+  const androidIntents = options.androidIntents ?? new Set<AndroidIntent>()
   const rankedNodes = allNodes.map((node) => {
     const result = scoreNodeAdjustment({
       node,
@@ -132,6 +139,7 @@ export function applyRoleAwareCandidates(options: ApplyRoleAwareCandidatesOption
       changedSymbolStatus,
       adjacentNodeIds,
       requestedSet,
+      androidIntents,
     })
     return applyNodeAdjustment(node, result, role)
   })
@@ -149,7 +157,7 @@ export function applyRoleAwareCandidates(options: ApplyRoleAwareCandidatesOption
   })
 
   const rankedRetainedCandidates = [...retained, ...injectedFiles].map((file) => {
-    const result = scoreFileAdjustment({ file, definition, focusFilePaths, changedFileStatus, adjacentFilePaths, requestedSet })
+    const result = scoreFileAdjustment({ file, definition, focusFilePaths, changedFileStatus, adjacentFilePaths, requestedSet, androidIntents })
     return applyFileAdjustment(file, result, role)
   })
   rankedRetainedCandidates.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
@@ -220,8 +228,9 @@ function scoreNodeAdjustment(input: {
   changedSymbolStatus: Map<string, ChangedSurfaceStatus>
   adjacentNodeIds: Set<string>
   requestedSet: Set<RequestedEvidenceKind>
+  androidIntents: ReadonlySet<AndroidIntent>
 }): AdjustmentResult {
-  const { node, definition, focusFilePaths, focusContainedSymbolIds, focusSymbolNodeIds, changedFileStatus, changedSymbolStatus, adjacentNodeIds, requestedSet } = input
+  const { node, definition, focusFilePaths, focusContainedSymbolIds, focusSymbolNodeIds, changedFileStatus, changedSymbolStatus, adjacentNodeIds, requestedSet, androidIntents } = input
   let adjustment = 0
   const reasons: string[] = []
   let focusMatch = false
@@ -299,6 +308,12 @@ function scoreNodeAdjustment(input: {
     }
   }
 
+  const androidBoost = androidIntentRankingBoost(candidateNodeToPolicyInput(node), androidIntents)
+  if (androidBoost.boost > 0 && androidBoost.reason) {
+    adjustment += androidBoost.boost
+    reasons.push(`${androidBoost.reason} (+${androidBoost.boost})`)
+  }
+
   return { adjustment, reasons, focusMatch, changedSurfaceMatch, changedStatus }
 }
 
@@ -309,8 +324,9 @@ function scoreFileAdjustment(input: {
   changedFileStatus: Map<string, ChangedSurfaceStatus>
   adjacentFilePaths: Set<string>
   requestedSet: Set<RequestedEvidenceKind>
+  androidIntents: ReadonlySet<AndroidIntent>
 }): AdjustmentResult {
-  const { file, definition, focusFilePaths, changedFileStatus, adjacentFilePaths, requestedSet } = input
+  const { file, definition, focusFilePaths, changedFileStatus, adjacentFilePaths, requestedSet, androidIntents } = input
   let adjustment = 0
   const reasons: string[] = []
   let focusMatch = false
@@ -365,6 +381,12 @@ function scoreFileAdjustment(input: {
       adjustment += REQUESTED_KIND_BOOST
       reasons.push(`role adjustment: requested evidence kind "closest-tests" matched (+${REQUESTED_KIND_BOOST})`)
     }
+  }
+
+  const androidBoost = androidIntentRankingBoost(candidateFileToPolicyInput(file), androidIntents)
+  if (androidBoost.boost > 0 && androidBoost.reason) {
+    adjustment += androidBoost.boost
+    reasons.push(`${androidBoost.reason} (+${androidBoost.boost})`)
   }
 
   return { adjustment, reasons, focusMatch, changedSurfaceMatch, changedStatus }

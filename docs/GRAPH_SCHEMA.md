@@ -903,6 +903,15 @@ For current condition-aware output, `groupTruncation[].requiredOmittedCount` is 
 
 Legacy schema-major-1 capsule/audit pairs may omit both `roleConditionCoverage` and `TruncationSummary.requiredEvidenceLost`. Both-absent pairs remain readable and use conservative legacy evaluation. One-sided absence or any value/order/witness disagreement is a raw-evidence parity error; absence is never normalized to an empty current result. Current implementation-role generation supplies nonempty owner/contract coverage, and a missing or empty current coverage array fails closed.
 
+### Additive Android context ownership fields (v1.12.0 Batch 6)
+
+The context capsule and retrieval audit remain schema version `"1.0.0"`. Batch 6 adds no new top-level capsule/audit field — only additive optional fields on two existing shapes:
+
+- **`CandidateNode.androidComponentRefs`** (optional, `SemanticArtifactRef[]`): the same grounded Android component-role provenance signal `search --android-role` (Batch 5) already reads from the code graph, now also carried on a ranked `symbol`-kind candidate (e.g. a Kotlin ViewModel/Repository/DAO/Entity class). Absent for a non-Android candidate. This is what lets Android owner-eligibility/ranking distinguish a real Android component from a plain TypeScript/JS symbol whose classification role name happens to be the same string (e.g. `repository`).
+- **`ContextConflict.kind`** (optional, `string`): a stable conflict-kind discriminator. A pre-Batch-6 (or non-Android) conflict record uses `"edit-guidance-near-tie"`. Six additional stable values are used for Android wrong-layer conflicts: `android-generated-primary-target`, `android-test-primary-target`, `android-usage-selected-over-owner`, `android-ambiguous-owner`, `android-unresolved-owner`, `android-classification-graph-disagreement`. Conflicts are deterministically ordered by `kind`, then the primary affected node ID, then the related node ID, then the conflict's own stable ID.
+
+No other capsule/audit field changes shape. `evidenceGroups`, `selectedOwners`, `selectedContracts`, `selectedTests`, `roleAdequacy`, `roleConditionCoverage`, `freshness`, `budget`, `truncation`, and `provenance` all reuse their existing v1.10.1-v1.10.4 shapes unchanged — Android evidence is classified into them by the existing allocation/adequacy logic, not by a parallel Android-specific evaluator. A capsule/audit pair produced for a non-Android project, or for an Android project with no Android-matching query, is byte-shape-identical to pre-Batch-6 output (the two new fields are simply absent/undefined).
+
 ## Stable node IDs and compatibility
 
 Node IDs are deterministic and stable across index runs for the same source root configuration. File node IDs use the `file:<relative-path>` form. Symbol node IDs use the `symbol:<relative-path>#<symbol-name>` form.
