@@ -92,6 +92,9 @@ export type CodeGraphEdgeKind =
   | 'repository-uses-service'
   | 'dao-uses-entity'
   | 'room-database-exposes-dao'
+  /** v1.12.0 Batch 4: Compose state ownership and Activity-to-Compose hosting. Never a synonym. */
+  | 'compose-state-reads-viewmodel'
+  | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
   id: string

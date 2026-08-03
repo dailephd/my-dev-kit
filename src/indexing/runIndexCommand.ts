@@ -911,6 +911,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     symbolIndex: roledSymbolIndex,
     androidProject: androidResult.artifact,
     androidNavigation: androidNavigationResult.artifact,
+    androidComponents: androidComponents ?? undefined,
     createdAt,
   })
 
@@ -964,7 +965,12 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   // component-role detector, never a second entry for the same target.
   const androidComponentRoleMerge =
     classification && androidComponents
-      ? mergeAndroidComponentRoleClassifications(classification.entries, androidComponents.components, androidComponents.dependencyFacts)
+      ? mergeAndroidComponentRoleClassifications(
+          classification.entries,
+          androidComponents.components,
+          androidComponents.dependencyFacts,
+          androidComposeSemantic?.activityHostFacts ?? []
+        )
       : null
   const baseClassificationEntries = androidComponentRoleMerge ? androidComponentRoleMerge.entries : (classification?.entries ?? [])
 
@@ -1452,6 +1458,7 @@ interface RunAndroidComposeSemanticAnalyzerOptions {
   symbolIndex: SymbolIndex
   androidProject: DetectAndroidProjectResult['artifact']
   androidNavigation: BuildAndroidNavigationProjectResult['artifact']
+  androidComponents?: AndroidComponentsArtifact
   createdAt: string
 }
 
@@ -1492,6 +1499,10 @@ function runAndroidComposeSemanticAnalyzer(options: RunAndroidComposeSemanticAna
           functionLocalCount: artifact.summary.functionLocalCount,
           childCallCount: artifact.summary.childCallCount,
           structuralRegionCallCount: artifact.summary.structuralRegionCallCount,
+          activityHostFactCount: artifact.summary.activityHostFactCount ?? 0,
+          viewModelOwnedStateFactCount: artifact.summary.viewModelOwnedStateFactCount ?? 0,
+          ambiguousStateOwnerFactCount: artifact.summary.ambiguousStateOwnerFactCount ?? 0,
+          unresolvedStateOwnerFactCount: artifact.summary.unresolvedStateOwnerFactCount ?? 0,
         },
       },
     }

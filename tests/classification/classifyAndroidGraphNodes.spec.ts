@@ -320,6 +320,53 @@ describe('buildAndroidGraphNodeClassifications — v1.12.0 Batch 2 Compose', () 
     expect(entry.classifications.some((c) => c.role === 'view-model')).toBe(false)
   })
 
+  it('TST-419: an exact-one ViewModel-owned collectAsState fact is ui-only-state / avoid-primary-edit-target / ready / certain / wrong-layer-risk', () => {
+    const fact: CodeGraphNode = {
+      id: 'fact:state2',
+      kind: 'android-compose-fact',
+      label: 'collectAsState',
+      androidMetadata: { factKind: 'state', callName: 'collectAsState', candidateMatchStatus: 'exact-one' },
+    }
+    const { entries } = buildAndroidGraphNodeClassifications({ graphNodes: [fact], edges: [] })
+    const entry = entryFor(entries, fact.id)
+    expect(entry.classifications.map((c) => c.role)).toEqual(['ui-only-state'])
+    expect(entry.editGuidance).toBe('avoid-primary-edit-target')
+    expect(entry.readiness).toBe('ready')
+    expect(entry.uncertainty).toBe('certain')
+    expect(entry.risks).toContain('wrong-layer-risk')
+  })
+
+  it('TST-420: ambiguous collectAsState ownership receives inspect-before-edit / needs-more-context / possible / wrong-layer-risk', () => {
+    const fact: CodeGraphNode = {
+      id: 'fact:state3',
+      kind: 'android-compose-fact',
+      label: 'collectAsState',
+      androidMetadata: { factKind: 'state', callName: 'collectAsStateWithLifecycle', candidateMatchStatus: 'ambiguous' },
+    }
+    const { entries } = buildAndroidGraphNodeClassifications({ graphNodes: [fact], edges: [] })
+    const entry = entryFor(entries, fact.id)
+    expect(entry.editGuidance).toBe('inspect-before-edit')
+    expect(entry.readiness).toBe('needs-more-context')
+    expect(entry.uncertainty).toBe('possible')
+    expect(entry.risks).toContain('wrong-layer-risk')
+  })
+
+  it('TST-421: unresolved (no-match/not-attempted) collectAsState ownership stays conservative without guessing', () => {
+    for (const status of ['no-match', 'not-attempted']) {
+      const fact: CodeGraphNode = {
+        id: `fact:state-${status}`,
+        kind: 'android-compose-fact',
+        label: 'collectAsState',
+        androidMetadata: { factKind: 'state', callName: 'collectAsState', candidateMatchStatus: status },
+      }
+      const { entries } = buildAndroidGraphNodeClassifications({ graphNodes: [fact], edges: [] })
+      const entry = entryFor(entries, fact.id)
+      expect(entry.editGuidance).toBe('inspect-before-edit')
+      expect(entry.readiness).toBe('needs-more-context')
+      expect(entry.risks).toContain('wrong-layer-risk')
+    }
+  })
+
   it('TST-213: a resolved click-handler fact is ui-event / inspect-before-edit / ready / certain, with wrong-layer-risk as a usage site', () => {
     const fact: CodeGraphNode = { id: 'fact:click1', kind: 'android-compose-fact', label: 'onClick', androidMetadata: { factKind: 'click-handler', status: 'resolved' } }
     const { entries } = buildAndroidGraphNodeClassifications({ graphNodes: [fact], edges: [] })

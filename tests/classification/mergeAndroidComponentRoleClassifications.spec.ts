@@ -204,3 +204,59 @@ describe('mergeAndroidComponentRoleClassifications — v1.12.0 Batch 3 dependenc
     expect(other.risks).not.toContain('wrong-layer-risk')
   })
 })
+
+describe('mergeAndroidComponentRoleClassifications — v1.12.0 Batch 4 Activity host risk integration', () => {
+  function activityHostFact(overrides: Partial<import('../../src/android/androidComposeTypes.js').ComposeActivityHostFactEntry> = {}) {
+    return {
+      id: 'symbol:src/MainActivity.kt#MainActivity::activity-host@L5',
+      activityComponentId: 'android-component:1',
+      activitySymbolId: 'symbol:src/MainActivity.kt#MainActivity',
+      sourceRange: { file: 'src/MainActivity.kt', startLine: 5, endLine: 7 },
+      apiForm: 'setContent-trailing-lambda' as const,
+      rawContentSummary: 'HomeScreen()',
+      hostedCallName: 'HomeScreen',
+      status: 'resolved' as const,
+      candidateComposableIds: [],
+      candidateMatchStatus: 'no-match' as const,
+      warnings: [],
+      ...overrides,
+    }
+  }
+
+  it('TST-441: adds wrong-layer-risk for ambiguous or no-match supported host evidence, without changing unrelated guidance', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const entry = resolvedEntry(targetId)
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [entry],
+      [component({ symbolId: targetId, confidence: 'high', role: 'activity' })],
+      [],
+      [activityHostFact({ candidateMatchStatus: 'no-match' })]
+    )
+    const merged = entries[0]!
+    expect(merged.risks).toContain('wrong-layer-risk')
+    expect(merged.readiness).toBe(entry.readiness)
+    expect(merged.uncertainty).toBe(entry.uncertainty)
+  })
+
+  it('does not add wrong-layer-risk merely because an Activity has no setContent call', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [resolvedEntry(targetId)],
+      [component({ symbolId: targetId, confidence: 'high', role: 'activity' })],
+      [],
+      []
+    )
+    expect(entries[0]!.risks).not.toContain('wrong-layer-risk')
+  })
+
+  it('does not add wrong-layer-risk for a resolved, exact-one host fact', () => {
+    const targetId = 'symbol:src/MainActivity.kt#MainActivity'
+    const { entries } = mergeAndroidComponentRoleClassifications(
+      [resolvedEntry(targetId)],
+      [component({ symbolId: targetId, confidence: 'high', role: 'activity' })],
+      [],
+      [activityHostFact({ candidateMatchStatus: 'exact-one', candidateComposableIds: ['android-compose-declaration:x'] })]
+    )
+    expect(entries[0]!.risks).not.toContain('wrong-layer-risk')
+  })
+})

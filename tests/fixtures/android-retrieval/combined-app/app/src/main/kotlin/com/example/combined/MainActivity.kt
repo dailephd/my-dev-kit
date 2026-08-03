@@ -9,6 +9,12 @@ class MainActivity {
         // R.string.commented_out_reference should never match anything
         val fake = "R.string.string_literal_reference"
     }
+
+    fun onCreate() {
+        setContent {
+            UserHomeScreen()
+        }
+    }
 }
 
 class SyncService

@@ -1,5 +1,5 @@
 export const ANDROID_COMPOSE_SEMANTIC_ARTIFACT_KIND = 'my-dev-kit-v1-android-compose-semantic'
-export const ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION = '1.2.0'
+export const ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION = '1.3.0'
 export const ANDROID_COMPOSE_SEMANTIC_FILENAME = 'android-compose-semantic.json'
 
 export type ComposeDeclarationScope = 'top-level' | 'function-local'
@@ -59,6 +59,9 @@ export type ComposeFactResolutionStatus = 'resolved' | 'unresolved'
 export type ComposeStateCallKind = 'remember' | 'rememberSaveable' | 'collectAsState' | 'collectAsStateWithLifecycle'
 export type ComposeStateBindingForm = 'assignment' | 'delegated' | null
 
+/** v1.12.0 Batch 4: reuses the exact same match-status vocabulary `android-navigation.json`'s navigation-call candidate matching already established. */
+export type ComposeStateOwnerCandidateMatchStatus = 'exact-one' | 'ambiguous' | 'no-match' | 'not-attempted'
+
 export interface ComposeStateFactEntry {
   id: string
   composableId: string
@@ -71,6 +74,16 @@ export interface ComposeStateFactEntry {
   rawArgumentsSummary: string | null
   status: ComposeFactResolutionStatus
   warnings: string[]
+  /** v1.12.0 Batch 4: the bounded exact direct member-access chain immediately before `.collectAsState(...)`/`.collectAsStateWithLifecycle(...)` (e.g. `"viewModel.uiState"`). Always `null` for `remember`/`rememberSaveable` (no ownership is ever attempted), and `null` for an unsupported receiver shape (function call, indexed access, safe-call, cast, etc.). */
+  receiverText: string | null
+  /** v1.12.0 Batch 4: the first exact identifier in `receiverText` (e.g. `"viewModel"`). `null` whenever `receiverText` is `null`. */
+  receiverRootName: string | null
+  /** v1.12.0 Batch 4: every exact same-composable `viewModelReferences[]` entry ID whose `variableOrParameterName` equals `receiverRootName`, deterministically sorted. */
+  matchedViewModelReferenceIds: string[]
+  /** v1.12.0 Batch 4: exact indexed class-symbol candidates resolved from the matched ViewModel reference(s), using the same resolver `composable-references-viewmodel` already uses. */
+  candidateViewModelSymbolIds: string[]
+  /** v1.12.0 Batch 4: `"not-attempted"` for `remember`/`rememberSaveable` and unsupported receivers; `"no-match"` when a same-composable ViewModel reference matched but resolved to zero symbol candidates; `"exact-one"`/`"ambiguous"` otherwise. */
+  candidateMatchStatus: ComposeStateOwnerCandidateMatchStatus
 }
 
 export type ComposeEffectKind = 'LaunchedEffect' | 'DisposableEffect'
@@ -197,6 +210,32 @@ export interface ComposeSemanticSummary {
   clickHandlerFactCount: number
   navigationCallFactCount: number
   warningCount: number
+  /** v1.12.0 Batch 4: additive. Number of emitted `activityHostFacts`. */
+  activityHostFactCount?: number
+  /** v1.12.0 Batch 4: additive. `stateFacts` with `candidateMatchStatus === 'exact-one'`. */
+  viewModelOwnedStateFactCount?: number
+  /** v1.12.0 Batch 4: additive. `stateFacts` with `candidateMatchStatus === 'ambiguous'`. */
+  ambiguousStateOwnerFactCount?: number
+  /** v1.12.0 Batch 4: additive. `collectAsState`/`collectAsStateWithLifecycle` facts with `candidateMatchStatus` of `'no-match'` or `'not-attempted'`. */
+  unresolvedStateOwnerFactCount?: number
+}
+
+/** v1.12.0 Batch 4: direct Activity `setContent(...)` hosting evidence. */
+export type ComposeActivityHostApiForm = 'setContent-trailing-lambda' | 'setContent-content-argument'
+export type ComposeActivityHostStatus = 'resolved' | 'unresolved'
+
+export interface ComposeActivityHostFactEntry {
+  id: string
+  activityComponentId: string
+  activitySymbolId: string
+  sourceRange: ComposeSourceRange
+  apiForm: ComposeActivityHostApiForm
+  rawContentSummary: string | null
+  hostedCallName: string | null
+  status: ComposeActivityHostStatus
+  candidateComposableIds: string[]
+  candidateMatchStatus: ComposeStateOwnerCandidateMatchStatus
+  warnings: string[]
 }
 
 export interface AndroidComposeSemanticArtifact {
@@ -215,6 +254,8 @@ export interface AndroidComposeSemanticArtifact {
   stringResourceFacts: ComposeStringResourceFactEntry[]
   clickHandlerFacts: ComposeClickHandlerFactEntry[]
   navigationCallFacts: ComposeNavigationCallFactEntry[]
+  /** v1.12.0 Batch 4: additive. Empty when no supported Activity `setContent` evidence is found. */
+  activityHostFacts: ComposeActivityHostFactEntry[]
   warnings: string[]
   summary: ComposeSemanticSummary
 }

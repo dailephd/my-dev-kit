@@ -24,6 +24,7 @@ import type { AndroidManifestArtifact, AndroidManifestComponentEvidence } from '
 import type { AndroidResourcesArtifact } from './androidResourceTypes.js'
 import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
 import type { AndroidComposeSemanticArtifact } from './androidComposeTypes.js'
+import { resolveViewModelClassCandidates } from './resolveViewModelClassCandidates.js'
 import type { AndroidTestSemanticArtifact } from './androidTestTypes.js'
 import type { AndroidComponentsArtifact } from './androidComponentTypes.js'
 
@@ -697,7 +698,27 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
         variableName: fact.variableName,
         bindingForm: fact.bindingForm,
         status: fact.status,
+        receiverRootName: fact.receiverRootName,
+        candidateMatchStatus: fact.candidateMatchStatus,
       })
+      // v1.12.0 Batch 4: projects state ownership onto the existing
+      // `android-compose-fact` node - one edge per exact same-composable
+      // ViewModel candidate (resolved: one; ambiguous: every candidate, no
+      // winner; no-match/not-attempted: no edge).
+      for (const candidateId of fact.candidateViewModelSymbolIds) {
+        addEdge({
+          id: edgeId(fact.id, 'compose-state-reads-viewmodel', candidateId),
+          source: fact.id,
+          target: candidateId,
+          kind: 'compose-state-reads-viewmodel',
+          metadata: {
+            evidenceArtifact: 'android-compose-semantic',
+            evidenceEntityId: fact.id,
+            matchBasis: 'exact-same-composable-receiver-root',
+            candidate: fact.candidateViewModelSymbolIds.length > 1,
+          },
+        })
+      }
     }
     for (const fact of androidComposeSemantic.effectFacts) {
       addComposeFact(fact.id, fact.composableId, fact.kind, fact.sourceRange, 'effect', {
@@ -800,6 +821,45 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
           target: candidateId,
           kind: 'compose-navigation-targets-route',
           metadata: { evidenceArtifact: 'android-compose-semantic', candidate: fact.candidateIds.length > 1 },
+        })
+      }
+    }
+  }
+
+  // -- 11a. Activity-to-Compose direct hosting (v1.12.0 Batch 4) -------------------
+  //
+  // Connects an existing Activity `symbol` node (from `android-components.json`,
+  // never re-derived here) to an existing `android-composable` node (added
+  // above, when Compose evidence exists) - never a new node for either side.
+  // A resolved host fact with no candidates would be a contradiction (never
+  // happens by construction); only `resolved` facts ever carry candidates.
+  if (androidComposeSemantic?.activityHostFacts) {
+    const validSymbolIds = new Set<string>()
+    for (const file of symbolIndex.files) {
+      for (const symbol of file.symbols) validSymbolIds.add(`symbol:${file.path}#${symbol.name}`)
+    }
+    for (const fact of androidComposeSemantic.activityHostFacts) {
+      if (fact.status !== 'resolved') continue
+      if (!validSymbolIds.has(fact.activitySymbolId)) {
+        warnings.push(`Activity host fact '${fact.id}' references symbol '${fact.activitySymbolId}', which is not a known indexed symbol; skipped.`)
+        continue
+      }
+      for (const candidateId of fact.candidateComposableIds) {
+        if (!nodeIds.has(candidateId)) {
+          warnings.push(`Activity host fact '${fact.id}' references composable '${candidateId}', which is not a known graph node; skipped.`)
+          continue
+        }
+        addEdge({
+          id: edgeId(fact.activitySymbolId, 'activity-hosts-composable', candidateId),
+          source: fact.activitySymbolId,
+          target: candidateId,
+          kind: 'activity-hosts-composable',
+          metadata: {
+            evidenceArtifact: 'android-compose-semantic',
+            evidenceEntityId: fact.id,
+            apiForm: fact.apiForm,
+            candidate: fact.candidateComposableIds.length > 1,
+          },
         })
       }
     }
@@ -1121,23 +1181,6 @@ function resolveComposableDefiningNodeId(
     }
   }
   return { nodeId: `file:${decl.sourceRange.file}`, matchBasis: 'file' }
-}
-
-/** `composable-references-viewmodel` target resolution (v1.11.0 Batch 4): exact simple-class-name match against indexed Kotlin/Java `class` symbols project-wide (mirrors `resolveScreenSymbolCandidates`'s existing precedent) — a Compose parameter/local `typeText` is ordinarily an unqualified name resolved through an import, so a fully-qualified match (`resolveExactClassCandidates`) isn't applicable here. Never fuzzy, never a suffix-only ("...ViewModel") match. */
-function resolveViewModelClassCandidates(typeText: string, symbolIndex: SymbolIndex): string[] {
-  const bare = typeText.trim().replace(/[?]$/, '')
-  const simpleName = bare.includes('.') ? bare.slice(bare.lastIndexOf('.') + 1) : bare
-  if (!/^[A-Za-z_]\w*$/.test(simpleName)) return []
-  const results: string[] = []
-  for (const file of symbolIndex.files) {
-    if (file.language !== 'kotlin' && file.language !== 'java') continue
-    for (const symbol of file.symbols) {
-      if (symbol.name === simpleName && symbol.kind === 'class') {
-        results.push(`symbol:${file.path}#${symbol.name}`)
-      }
-    }
-  }
-  return [...new Set(results)].sort()
 }
 
 function derivePackageFromFilePath(filePath: string): string | null {

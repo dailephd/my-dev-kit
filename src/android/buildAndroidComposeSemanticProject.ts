@@ -25,12 +25,17 @@ import { toForwardSlash } from '../io/pathUtils.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { AndroidProjectArtifact } from './androidProjectTypes.js'
 import type { AndroidNavigationArtifact } from './androidNavigationTypes.js'
+import type { AndroidComponentsArtifact } from './androidComponentTypes.js'
+import { readBoundedSourceBody } from './boundedSourceBodyScan.js'
+import { resolveViewModelClassCandidates } from './resolveViewModelClassCandidates.js'
 import { extractRouteArgument, parseStringLiteral, collectStringConstants } from './buildComposeNavigationRoutes.js'
 import {
   ANDROID_COMPOSE_SEMANTIC_ARTIFACT_KIND,
   ANDROID_COMPOSE_SEMANTIC_SCHEMA_VERSION,
   type AndroidComposeSemanticArtifact,
   type BuildAndroidComposeSemanticProjectResult,
+  type ComposeActivityHostApiForm,
+  type ComposeActivityHostFactEntry,
   type ComposeAnnotationEvidence,
   type ComposeChildCallEvidence,
   type ComposeClickApiForm,
@@ -48,6 +53,7 @@ import {
   type ComposeNavigationRouteClassification,
   type ComposeParameterSummary,
   type ComposeSemanticSummary,
+  type ComposeStateOwnerCandidateMatchStatus,
   type ComposeStateBindingForm,
   type ComposeStateCallKind,
   type ComposeStateFactEntry,
@@ -65,6 +71,8 @@ export interface BuildAndroidComposeSemanticProjectOptions {
   androidProject: AndroidProjectArtifact
   /** `android-navigation.json`'s already-built artifact (v1.11.0 Batch 3), used only to exact-match `navigate(...)` call-site routes against its existing `composeRoutes[]`/`destinations[]` IDs. Optional so pre-Batch-3 direct callers (and existing tests) keep working unchanged; when omitted, navigation-call facts are still emitted but never resolve a candidate. */
   androidNavigation?: AndroidNavigationArtifact
+  /** `android-components.json`'s already-built artifact (v1.12.0 Batch 4), used only to identify already-detected `activity`-role components whose Kotlin source is scanned for direct `setContent(...)` hosting evidence. Optional so pre-Batch-4 direct callers keep working unchanged; when omitted, `activityHostFacts` stays empty. */
+  androidComponents?: AndroidComponentsArtifact
   createdAt?: string
 }
 
@@ -115,7 +123,7 @@ const RAW_SUMMARY_MAX_LENGTH = 160
 export function buildAndroidComposeSemanticProject(
   options: BuildAndroidComposeSemanticProjectOptions
 ): BuildAndroidComposeSemanticProjectResult {
-  const { projectRoot, symbolIndex, androidProject, androidNavigation, createdAt = new Date().toISOString() } = options
+  const { projectRoot, symbolIndex, androidProject, androidNavigation, androidComponents, createdAt = new Date().toISOString() } = options
 
   if (!androidProject.detected) {
     return { artifact: emptyArtifact(projectRoot, createdAt) }
@@ -167,14 +175,17 @@ export function buildAndroidComposeSemanticProject(
   const publicDeclarations = allDeclarations.map(toPublicEntry).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   const detected = publicDeclarations.length > 0
 
-  const stateFacts = detected ? sortById(allStateFacts) : []
-  const effectFacts = detected ? sortById(allEffectFacts) : []
   const viewModelReferences = detected ? sortById(allViewModelReferences) : []
+  const stateFacts = detected ? resolveStateOwnership(sortById(allStateFacts), viewModelReferences, symbolIndex) : []
+  const effectFacts = detected ? sortById(allEffectFacts) : []
   const testTagFacts = detected ? sortById(allTestTagFacts) : []
   const visibleTextFacts = detected ? sortById(allVisibleTextFacts) : []
   const stringResourceFacts = detected ? sortById(allStringResourceFacts) : []
   const clickHandlerFacts = detected ? sortById(allClickHandlerFacts) : []
   const navigationCallFacts = detected ? sortById(allNavigationCallFacts) : []
+  const activityHostFacts = detected
+    ? sortById(resolveActivityHostFacts({ projectRoot, symbolIndex, androidComponents, declarations: publicDeclarations }))
+    : []
 
   const factWarnings = detected
     ? [
@@ -186,6 +197,7 @@ export function buildAndroidComposeSemanticProject(
         ...stringResourceFacts.flatMap((f) => f.warnings),
         ...clickHandlerFacts.flatMap((f) => f.warnings),
         ...navigationCallFacts.flatMap((f) => f.warnings),
+        ...activityHostFacts.flatMap((f) => f.warnings),
       ]
     : []
   const combinedWarnings = dedupeSort([...fileWarnings, ...declWarnings, ...factWarnings])
@@ -206,6 +218,7 @@ export function buildAndroidComposeSemanticProject(
     stringResourceFacts,
     clickHandlerFacts,
     navigationCallFacts,
+    activityHostFacts,
     warnings: combinedWarnings,
     summary: computeSummary(
       publicDeclarations,
@@ -217,7 +230,8 @@ export function buildAndroidComposeSemanticProject(
       visibleTextFacts,
       stringResourceFacts,
       clickHandlerFacts,
-      navigationCallFacts
+      navigationCallFacts,
+      activityHostFacts
     ),
   }
 
@@ -865,6 +879,23 @@ function extractStateFacts(
     const line = lineNumberInBody(bodyText, d.bodyStartLine, nameStart)
     const endLine = lineNumberInBody(bodyText, d.bodyStartLine, spanEnd)
 
+    // v1.12.0 Batch 4: ownership matching is only ever attempted for
+    // collected state (`collectAsState`/`collectAsStateWithLifecycle`) - a
+    // `remember`/`rememberSaveable` fact never gets a receiver or owner.
+    let receiverText: string | null = null
+    let receiverRootName: string | null = null
+    const ownershipWarnings: string[] = []
+    if (callName === 'collectAsState' || callName === 'collectAsStateWithLifecycle') {
+      const receiver = extractDirectReceiverChain(bodyText, nameStart)
+      receiverText = receiver
+      receiverRootName = receiver ? receiver.split('.')[0]! : null
+      if (!receiver) {
+        ownershipWarnings.push(
+          `${d.file}:${line}: "${callName}" has no statically supported direct member-access receiver; state ownership was not attempted.`
+        )
+      }
+    }
+
     results.push({
       id: factId(d.id, 'state', counters, line),
       composableId: d.id,
@@ -876,10 +907,39 @@ function extractStateFacts(
       staticArguments,
       rawArgumentsSummary: argTokens.length > 0 ? boundText(argsText) : null,
       status,
-      warnings,
+      warnings: [...warnings, ...ownershipWarnings],
+      receiverText,
+      receiverRootName,
+      matchedViewModelReferenceIds: [],
+      candidateViewModelSymbolIds: [],
+      candidateMatchStatus: 'not-attempted',
     })
   }
   return results
+}
+
+const DIRECT_RECEIVER_LOOKBEHIND_WINDOW = 300
+/** Rejects a chain immediately preceded by an identifier/`)`/`]`/`.`/`?` char - a function-call, indexed, safe-call, or otherwise computed receiver, none of which are statically supported. */
+const RECEIVER_CHAIN_PATTERN = /([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)\.\s*$/
+const RECEIVER_BOUNDARY_REJECT_PATTERN = /[\w)\]"'`?]/
+
+/**
+ * v1.12.0 Batch 4: extracts the bounded exact direct member-access chain
+ * immediately preceding a `.collectAsState(...)`/`.collectAsStateWithLifecycle(...)`
+ * call site (e.g. `"viewModel.uiState"` from `viewModel.uiState.collectAsState()`).
+ * Returns `null` for any computed receiver (function call, indexed access,
+ * safe-call, cast, parenthesized expression) - the character immediately
+ * before the matched chain is checked so a suffix of a larger unsupported
+ * expression (e.g. the `state` in `models[key].state.collectAsState()`) is
+ * never mistaken for a clean receiver.
+ */
+function extractDirectReceiverChain(bodyText: string, nameStart: number): string | null {
+  const windowStart = Math.max(0, nameStart - DIRECT_RECEIVER_LOOKBEHIND_WINDOW)
+  const window = bodyText.slice(windowStart, nameStart)
+  const m = RECEIVER_CHAIN_PATTERN.exec(window)
+  if (!m || m.index === undefined) return null
+  if (m.index > 0 && RECEIVER_BOUNDARY_REJECT_PATTERN.test(window[m.index - 1]!)) return null
+  return m[1]!.replace(/\s+/g, '')
 }
 
 function extractEffectFacts(
@@ -997,6 +1057,269 @@ function extractViewModelReferences(
   }
 
   return results
+}
+
+/**
+ * v1.12.0 Batch 4: matches each collected-state fact's `receiverRootName` to
+ * `viewModelReferences[]` entries in the *same* composable only (exact,
+ * case-sensitive `variableOrParameterName` equality - never cross-composable,
+ * never suffix/fuzzy), then resolves every matched reference's `typeText`
+ * to indexed class symbols using the exact same resolver
+ * `composable-references-viewmodel` graph edges already use.
+ */
+function resolveStateOwnership(
+  stateFacts: readonly ComposeStateFactEntry[],
+  viewModelReferences: readonly ComposeViewModelReferenceEntry[],
+  symbolIndex: SymbolIndex
+): ComposeStateFactEntry[] {
+  const referencesByComposable = new Map<string, ComposeViewModelReferenceEntry[]>()
+  for (const ref of viewModelReferences) {
+    const list = referencesByComposable.get(ref.composableId) ?? []
+    list.push(ref)
+    referencesByComposable.set(ref.composableId, list)
+  }
+
+  return stateFacts.map((fact) => {
+    if (fact.kind !== 'collectAsState' && fact.kind !== 'collectAsStateWithLifecycle') return fact
+    if (!fact.receiverRootName) return fact // unsupported receiver - already 'not-attempted'
+
+    const sameComposableRefs = referencesByComposable.get(fact.composableId) ?? []
+    const matched = sameComposableRefs.filter((ref) => ref.variableOrParameterName === fact.receiverRootName)
+    if (matched.length === 0) {
+      return {
+        ...fact,
+        candidateMatchStatus: 'not-attempted' as ComposeStateOwnerCandidateMatchStatus,
+        warnings: [
+          ...fact.warnings,
+          `${fact.sourceRange.file}:${fact.sourceRange.startLine}: no ViewModel reference named '${fact.receiverRootName}' was found in the same composable; state ownership was not attempted.`,
+        ],
+      }
+    }
+
+    const matchedViewModelReferenceIds = [...new Set(matched.map((ref) => ref.id))].sort()
+    const candidateSet = new Set<string>()
+    for (const ref of matched) {
+      if (!ref.typeText) continue
+      for (const candidate of resolveViewModelClassCandidates(ref.typeText, symbolIndex)) candidateSet.add(candidate)
+    }
+    const candidateViewModelSymbolIds = [...candidateSet].sort()
+    const candidateMatchStatus: ComposeStateOwnerCandidateMatchStatus =
+      candidateViewModelSymbolIds.length === 0 ? 'no-match' : candidateViewModelSymbolIds.length === 1 ? 'exact-one' : 'ambiguous'
+
+    return {
+      ...fact,
+      matchedViewModelReferenceIds,
+      candidateViewModelSymbolIds,
+      candidateMatchStatus,
+      warnings:
+        candidateMatchStatus === 'no-match'
+          ? [
+              ...fact.warnings,
+              `${fact.sourceRange.file}:${fact.sourceRange.startLine}: ViewModel reference '${fact.receiverRootName}' matched but resolved to no indexed class symbol.`,
+            ]
+          : fact.warnings,
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// v1.12.0 Batch 4 -- Activity `setContent(...)` direct hosting evidence.
+// Consumes existing `android-components.json` `activity`-role records only
+// (never re-derives Activity detection) and reuses the shared bounded,
+// brace-depth-scanned source re-read Batch 3 already established for
+// Retrofit-service/component-dependency scanning - never a second unbounded
+// scanner, never a member-symbol model.
+// ---------------------------------------------------------------------------
+
+interface ResolveActivityHostFactsOptions {
+  projectRoot: string
+  symbolIndex: SymbolIndex
+  androidComponents?: AndroidComponentsArtifact
+  declarations: readonly ComposeDeclarationEntry[]
+}
+
+const SET_CONTENT_CALL_PATTERN = /\bsetContent\s*([({])/g
+const HOST_CONTROL_FLOW_PATTERN = /\b(if|when|for|while|try)\b/
+
+function resolveActivityHostFacts(options: ResolveActivityHostFactsOptions): ComposeActivityHostFactEntry[] {
+  const { projectRoot, symbolIndex, androidComponents, declarations } = options
+  if (!androidComponents) return []
+
+  const filesByPath = new Map(symbolIndex.files.map((f) => [f.path, f]))
+  const counters = new Map<string, number>()
+  const results: ComposeActivityHostFactEntry[] = []
+
+  const activityComponents = androidComponents.components.filter((c) => c.role === 'activity' && c.sourceLanguage === 'kotlin')
+
+  for (const component of activityComponents) {
+    const file = filesByPath.get(component.filePath)
+    if (!file) continue
+    const symbol = file.symbols.find((s) => s.name === component.symbolName)
+    if (!symbol || typeof symbol.location?.line !== 'number') continue
+
+    const body = readBoundedSourceBody(projectRoot, file.path, symbol.location.line)
+    if (body === null) continue
+
+    for (const m of body.matchAll(SET_CONTENT_CALL_PATTERN)) {
+      if (m.index === undefined) continue
+      const openChar = m[1]!
+      const openIdx = m.index + m[0].length - 1
+      const line = lineNumberInBody(body, symbol.location.line, m.index)
+
+      let apiForm: ComposeActivityHostApiForm
+      let lambdaOpenIdx: number
+      let spanEnd: number
+
+      if (openChar === '{') {
+        apiForm = 'setContent-trailing-lambda'
+        lambdaOpenIdx = openIdx
+        const close = findMatchingBraceRaw(body, lambdaOpenIdx)
+        if (close === -1) continue
+        spanEnd = close
+      } else {
+        const parenClose = findMatchingParenRaw(body, openIdx)
+        if (parenClose === -1) continue
+        const argsText = body.slice(openIdx + 1, parenClose)
+        const contentMatch = /\bcontent\s*=\s*\{/.exec(argsText)
+        if (!contentMatch) continue // not one of the two supported forms - not a hosting attempt at all
+        apiForm = 'setContent-content-argument'
+        lambdaOpenIdx = openIdx + 1 + contentMatch.index + contentMatch[0].length - 1
+        const close = findMatchingBraceRaw(body, lambdaOpenIdx)
+        if (close === -1) continue
+        spanEnd = close
+      }
+
+      const lambdaBody = body.slice(lambdaOpenIdx + 1, spanEnd)
+      const endLine = lineNumberInBody(body, symbol.location.line, spanEnd)
+      const hostedCallName = detectDirectHostedCallName(lambdaBody)
+      const rawContentSummary = lambdaBody.trim() === '' ? null : boundText(lambdaBody)
+
+      if (!hostedCallName) {
+        results.push({
+          id: activityFactId(component.symbolId, counters, line),
+          activityComponentId: component.id,
+          activitySymbolId: component.symbolId,
+          sourceRange: { file: component.filePath, startLine: line, endLine },
+          apiForm,
+          rawContentSummary,
+          hostedCallName: null,
+          status: 'unresolved',
+          candidateComposableIds: [],
+          candidateMatchStatus: 'not-attempted',
+          warnings: [`${component.filePath}:${line}: "setContent" does not contain exactly one statically supported direct top-level composable call; recorded as unresolved.`],
+        })
+        continue
+      }
+
+      const candidates = resolveHostedComposableCandidates(hostedCallName, component, file.imports, declarations)
+      const candidateMatchStatus: ComposeStateOwnerCandidateMatchStatus =
+        candidates.length === 0 ? 'no-match' : candidates.length === 1 ? 'exact-one' : 'ambiguous'
+      const warnings =
+        candidateMatchStatus === 'no-match'
+          ? [`${component.filePath}:${line}: "setContent" hosts "${hostedCallName}()", but no matching composable declaration was found.`]
+          : []
+
+      results.push({
+        id: activityFactId(component.symbolId, counters, line),
+        activityComponentId: component.id,
+        activitySymbolId: component.symbolId,
+        sourceRange: { file: component.filePath, startLine: line, endLine },
+        apiForm,
+        rawContentSummary,
+        hostedCallName,
+        status: 'resolved',
+        candidateComposableIds: candidates,
+        candidateMatchStatus,
+        warnings,
+      })
+    }
+  }
+
+  return results
+}
+
+function activityFactId(activitySymbolId: string, counters: Map<string, number>, line: number): string {
+  const key = `${activitySymbolId}#activity-host@L${line}`
+  const n = (counters.get(key) ?? 0) + 1
+  counters.set(key, n)
+  return n === 1 ? `${activitySymbolId}::activity-host@L${line}` : `${activitySymbolId}::activity-host@L${line}#${n}`
+}
+
+/** Mirrors `buildComposeNavigationRoutes.ts`'s existing `detectDirectScreenCandidate` precedent: the lambda body must be exactly one top-level call expression (plus an optional trailing lambda), with no `if`/`when`/`for`/`while`/`try` anywhere - otherwise no candidate is guessed. */
+function detectDirectHostedCallName(lambdaBody: string): string | null {
+  const trimmed = lambdaBody.trim()
+  if (trimmed === '') return null
+  if (HOST_CONTROL_FLOW_PATTERN.test(trimmed)) return null
+
+  const callMatch = /^([A-Za-z_][\w.]*)\s*\(/.exec(trimmed)
+  if (!callMatch) return null
+  const parenOpenIndex = callMatch[0].length - 1
+  const callEnd = findMatchingParenRaw(trimmed, parenOpenIndex)
+  if (callEnd === -1) return null
+
+  let rest = trimmed.slice(callEnd + 1).trim()
+  if (rest.startsWith('{')) {
+    const braceClose = findMatchingBraceRaw(rest, 0)
+    if (braceClose === -1) return null
+    rest = rest.slice(braceClose + 1).trim()
+  }
+  if (rest !== '') return null
+
+  return callMatch[1]!
+}
+
+/**
+ * v1.12.0 Batch 4: resolves `hostedCallName` to existing
+ * `android-compose-semantic.json` declarations using the fixed tier order -
+ * fully-qualified (not statically visible from a bare call name here, so
+ * this tier never applies), explicit import, same-package, then exact simple
+ * name - stopping at the first tier with any match.
+ */
+function resolveHostedComposableCandidates(
+  hostedCallName: string,
+  activityComponent: { filePath: string; packageName: string | null },
+  activityFileImports: readonly string[],
+  declarations: readonly ComposeDeclarationEntry[]
+): string[] {
+  const simpleName = hostedCallName.includes('.') ? hostedCallName.slice(hostedCallName.lastIndexOf('.') + 1) : hostedCallName
+  const byName = declarations.filter((d) => d.name === simpleName)
+  if (byName.length === 0) return []
+
+  // Tier 1: exact fully qualified call (`com.example.HomeScreen()`).
+  if (hostedCallName.includes('.')) {
+    const pkg = hostedCallName.slice(0, hostedCallName.lastIndexOf('.'))
+    const fq = byName.filter((d) => derivePackageFromComposePath(d.sourceRange.file) === pkg)
+    return sortIds(fq.map((d) => d.id)) // a fully qualified call never falls through to lower tiers
+  }
+
+  // Tier 2: exact explicit import (`import com.example.HomeScreen` -> candidate must live in package `com.example`).
+  const importMatch = activityFileImports.find((imp) => imp.endsWith(`.${simpleName}`))
+  if (importMatch) {
+    const importPkg = importMatch.slice(0, importMatch.lastIndexOf('.'))
+    const viaImport = byName.filter((d) => derivePackageFromComposePath(d.sourceRange.file) === importPkg)
+    if (viaImport.length > 0) return sortIds(viaImport.map((d) => d.id))
+  }
+
+  // Tier 3: exact same-package declaration.
+  if (activityComponent.packageName !== null) {
+    const samePackage = byName.filter((d) => derivePackageFromComposePath(d.sourceRange.file) === activityComponent.packageName)
+    if (samePackage.length > 0) return sortIds(samePackage.map((d) => d.id))
+  }
+
+  // Tier 4: exact simple declaration name (already filtered by `byName`).
+  return sortIds(byName.map((d) => d.id))
+}
+
+function derivePackageFromComposePath(filePath: string): string | null {
+  const match = /\/(?:kotlin|java)\/(.+)$/.exec(filePath)
+  if (!match) return null
+  const rel = match[1]!
+  const lastSlash = rel.lastIndexOf('/')
+  return lastSlash === -1 ? '' : rel.slice(0, lastSlash).replace(/\//g, '.')
+}
+
+function sortIds(ids: string[]): string[] {
+  return [...new Set(ids)].sort()
 }
 
 function extractTestTagFacts(
@@ -1778,8 +2101,10 @@ function computeSummary(
   visibleTextFacts: ComposeVisibleTextFactEntry[] = [],
   stringResourceFacts: ComposeStringResourceFactEntry[] = [],
   clickHandlerFacts: ComposeClickHandlerFactEntry[] = [],
-  navigationCallFacts: ComposeNavigationCallFactEntry[] = []
+  navigationCallFacts: ComposeNavigationCallFactEntry[] = [],
+  activityHostFacts: ComposeActivityHostFactEntry[] = []
 ): ComposeSemanticSummary {
+  const isCollectedStateFact = (f: ComposeStateFactEntry) => f.kind === 'collectAsState' || f.kind === 'collectAsStateWithLifecycle'
   return {
     declarationCount: declarations.length,
     previewCount: declarations.filter((d) => d.isPreview).length,
@@ -1797,6 +2122,12 @@ function computeSummary(
     clickHandlerFactCount: clickHandlerFacts.length,
     navigationCallFactCount: navigationCallFacts.length,
     warningCount: warnings.length,
+    activityHostFactCount: activityHostFacts.length,
+    viewModelOwnedStateFactCount: stateFacts.filter((f) => f.candidateMatchStatus === 'exact-one').length,
+    ambiguousStateOwnerFactCount: stateFacts.filter((f) => f.candidateMatchStatus === 'ambiguous').length,
+    unresolvedStateOwnerFactCount: stateFacts.filter(
+      (f) => isCollectedStateFact(f) && (f.candidateMatchStatus === 'no-match' || f.candidateMatchStatus === 'not-attempted')
+    ).length,
   }
 }
 
@@ -1817,6 +2148,7 @@ function emptyArtifact(projectRoot: string, createdAt: string): AndroidComposeSe
     stringResourceFacts: [],
     clickHandlerFacts: [],
     navigationCallFacts: [],
+    activityHostFacts: [],
     warnings: [],
     summary: computeSummary([], []),
   }

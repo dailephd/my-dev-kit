@@ -553,9 +553,93 @@ function buildComposeFactEntry(node: CodeGraphNode, ctx: GraphContext): Classifi
   return null
 }
 
+/**
+ * v1.12.0 Batch 4: `remember`/`rememberSaveable` keep the original Batch 2
+ * default (no ownership is ever attempted for local state). `collectAsState`/
+ * `collectAsStateWithLifecycle` are refined by `candidateMatchStatus`
+ * (computed by `android-compose-semantic.json`'s state-ownership matching):
+ * an `exact-one` ViewModel owner marks the fact as a UI-side projection
+ * (`avoid-primary-edit-target`) of that ViewModel's state, never the
+ * composable's own locally-owned state; ambiguous/unresolved ownership stays
+ * conservative with `wrong-layer-risk`. The linked ViewModel's own
+ * classification is never touched here.
+ */
 function buildComposeStateFactEntry(node: CodeGraphNode): ClassificationEntry {
   const targetId = node.id
   const ref = artifactRef('android-compose-semantic.json', 'my-dev-kit-v1-android-compose-semantic', targetId)
+  const meta = node.androidMetadata ?? {}
+  const isCollectedState = meta.callName === 'collectAsState' || meta.callName === 'collectAsStateWithLifecycle'
+  const matchStatus = meta.candidateMatchStatus as string | undefined
+
+  if (isCollectedState && matchStatus === 'exact-one') {
+    return makeEntry({
+      targetId,
+      filePath: node.path ?? null,
+      roles: [{ role: 'ui-only-state', subtype: null, confidence: 'certain' }],
+      editGuidance: 'avoid-primary-edit-target',
+      readiness: 'ready',
+      uncertainty: 'certain',
+      risks: ['wrong-layer-risk'],
+      reason:
+        'This is a UI-side collected-state usage/projection; its statically supported owner is the linked ViewModel - editing here does not relocate or own that state.',
+      evidence: [
+        {
+          kind: 'artifact-cross-reference',
+          source: 'android-compose-semantic.json',
+          artifactSource: ref,
+          reason: `Compose collected-state fact with an exact same-composable ViewModel owner, backed by android-compose-semantic.json, projected onto graph node '${targetId}'`,
+        },
+      ],
+      artifactRefs: [ref],
+    })
+  }
+
+  if (isCollectedState && matchStatus === 'ambiguous') {
+    return makeEntry({
+      targetId,
+      filePath: node.path ?? null,
+      roles: [{ role: 'ui-only-state', subtype: null, confidence: 'possible' }],
+      editGuidance: 'inspect-before-edit',
+      readiness: 'needs-more-context',
+      uncertainty: 'possible',
+      risks: ['wrong-layer-risk'],
+      reason: 'Compose collected-state fact has more than one statically possible ViewModel owner; ownership is ambiguous.',
+      evidence: [
+        {
+          kind: 'artifact-cross-reference',
+          source: 'android-compose-semantic.json',
+          artifactSource: ref,
+          reason: `ambiguous ViewModel ownership, backed by android-compose-semantic.json, projected onto graph node '${targetId}'`,
+        },
+      ],
+      artifactRefs: [ref],
+      warnings: [buildWarning('ambiguous-evidence', 'more than one statically possible ViewModel owner for this collected-state fact')],
+    })
+  }
+
+  if (isCollectedState && (matchStatus === 'no-match' || matchStatus === 'not-attempted')) {
+    return makeEntry({
+      targetId,
+      filePath: node.path ?? null,
+      roles: [{ role: 'ui-only-state', subtype: null, confidence: 'possible' }],
+      editGuidance: 'inspect-before-edit',
+      readiness: 'needs-more-context',
+      uncertainty: 'possible',
+      risks: ['wrong-layer-risk'],
+      reason: 'Compose collected-state fact has no statically resolved ViewModel owner; ownership was not guessed.',
+      evidence: [
+        {
+          kind: 'artifact-cross-reference',
+          source: 'android-compose-semantic.json',
+          artifactSource: ref,
+          reason: `unresolved ViewModel ownership, backed by android-compose-semantic.json, projected onto graph node '${targetId}'`,
+        },
+      ],
+      artifactRefs: [ref],
+      warnings: [buildWarning('no-static-evidence', 'no statically resolved ViewModel owner for this collected-state fact')],
+    })
+  }
+
   return makeEntry({
     targetId,
     filePath: node.path ?? null,

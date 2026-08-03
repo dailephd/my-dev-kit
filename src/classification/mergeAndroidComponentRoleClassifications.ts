@@ -1,4 +1,5 @@
 import type { AndroidComponentDependencyFact, AndroidComponentEntry, AndroidComponentConfidence } from '../android/androidComponentTypes.js'
+import type { ComposeActivityHostFactEntry } from '../android/androidComposeTypes.js'
 import { buildWarning, dedupeRisks, validateEntry } from './classificationHelpers.js'
 import type { ClassificationEntry, ClassificationRole, EditGuidance, UncertaintyTier } from './classificationTypes.js'
 
@@ -25,7 +26,8 @@ const TIER_RANK: Record<UncertaintyTier, number> = { certain: 3, likely: 2, poss
 export function mergeAndroidComponentRoleClassifications(
   entries: readonly ClassificationEntry[],
   components: readonly AndroidComponentEntry[],
-  dependencyFacts: readonly AndroidComponentDependencyFact[] = []
+  dependencyFacts: readonly AndroidComponentDependencyFact[] = [],
+  activityHostFacts: readonly ComposeActivityHostFactEntry[] = []
 ): MergeAndroidComponentRoleClassificationsResult {
   const componentBySymbolId = new Map(components.map((c) => [c.symbolId, c]))
   let merged = entries.map((entry) => {
@@ -44,16 +46,33 @@ export function mergeAndroidComponentRoleClassifications(
   if (dependencyFacts.length > 0) {
     const componentById = new Map(components.map((c) => [c.id, c]))
     const riskySymbolIds = computeWrongLayerRiskSymbolIds(dependencyFacts, componentById)
-    merged = merged.map((entry) => {
-      if (!riskySymbolIds.has(entry.targetId) || entry.risks.includes('wrong-layer-risk')) return entry
-      const updated = { ...entry, risks: dedupeRisks([...entry.risks, 'wrong-layer-risk' as const]) }
-      validateEntry(updated)
-      return updated
-    })
+    merged = applyWrongLayerRisk(merged, riskySymbolIds)
+  }
+
+  // v1.12.0 Batch 4: same advisory-only mechanism for an Activity whose
+  // supported `setContent` hosting evidence is ambiguous or resolves to no
+  // matching composable. An Activity with no `setContent` call at all never
+  // triggers this.
+  if (activityHostFacts.length > 0) {
+    const riskyActivitySymbolIds = new Set(
+      activityHostFacts
+        .filter((f) => f.status === 'resolved' && (f.candidateMatchStatus === 'ambiguous' || f.candidateMatchStatus === 'no-match'))
+        .map((f) => f.activitySymbolId)
+    )
+    merged = applyWrongLayerRisk(merged, riskyActivitySymbolIds)
   }
 
   const warningCount = merged.reduce((sum, entry) => sum + entry.warnings.length, 0)
   return { entries: merged, warningCount }
+}
+
+function applyWrongLayerRisk(entries: readonly ClassificationEntry[], riskySymbolIds: ReadonlySet<string>): ClassificationEntry[] {
+  return entries.map((entry) => {
+    if (!riskySymbolIds.has(entry.targetId) || entry.risks.includes('wrong-layer-risk')) return entry
+    const updated = { ...entry, risks: dedupeRisks([...entry.risks, 'wrong-layer-risk' as const]) }
+    validateEntry(updated)
+    return updated
+  })
 }
 
 function computeWrongLayerRiskSymbolIds(

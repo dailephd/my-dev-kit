@@ -213,7 +213,13 @@ function printReachabilitySliceResult(result: ReachabilitySliceResult): void {
 function selectedComposeEdgeKinds(options: SliceCommandOptions): Set<string> | undefined {
   if (!options.includeViewmodel && !options.includeNavigation) return undefined
   const kinds = new Set<string>()
-  if (options.includeViewmodel) kinds.add('composable-references-viewmodel')
+  if (options.includeViewmodel) {
+    kinds.add('composable-references-viewmodel')
+    // v1.12.0 Batch 4: direct state-ownership evidence only - never expands
+    // into repository/DAO/service/entity/database (that is Batch 5's
+    // `--include-data-flow`).
+    kinds.add('compose-state-reads-viewmodel')
+  }
   if (options.includeNavigation) {
     kinds.add('compose-navigation-targets-route')
     kinds.add('click-handler-contains-navigation-call')
