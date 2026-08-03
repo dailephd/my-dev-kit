@@ -46,6 +46,9 @@ export interface BuildAndroidArtifactRelationshipsResult {
   warnings: string[]
 }
 
+/** v1.12.0 Batch 1: stable ID of the single bounded Android project root node. */
+export const ANDROID_PROJECT_ROOT_NODE_ID = 'android-project:root'
+
 export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactRelationshipsOptions): BuildAndroidArtifactRelationshipsResult {
   const { projectRoot, androidProject, androidManifest, androidResources, androidNavigation, androidComposeSemantic, androidTestSemantic, symbolIndex } = options
   const nodes: CodeGraphNode[] = []
@@ -84,8 +87,18 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
     return { nodes: [], edges: [], warnings: [] }
   }
 
-  // -- 1. Modules and source sets --------------------------------------------
+  // -- 1. Project root, modules, and source sets -------------------------------
   const sourceSetNodeId = (moduleId: string, sourceSet: string): string => `android-source-set:${moduleId}#${sourceSet}`
+
+  // v1.12.0 Batch 1: exactly one bounded project root, backed by
+  // android-project.json, deterministic and free of any absolute path.
+  addNode({
+    id: ANDROID_PROJECT_ROOT_NODE_ID,
+    kind: 'android-project',
+    label: 'Android project',
+    androidArtifactId: 'android-project',
+    androidEntityId: ANDROID_PROJECT_ROOT_NODE_ID,
+  })
 
   for (const module of androidProject.modules) {
     addNode({
@@ -97,6 +110,13 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
       androidEntityId: module.id,
       androidModuleId: module.id,
       androidMetadata: { moduleType: module.type },
+    })
+    addEdge({
+      id: edgeId(ANDROID_PROJECT_ROOT_NODE_ID, 'android-project-contains-module', module.id),
+      source: ANDROID_PROJECT_ROOT_NODE_ID,
+      target: module.id,
+      kind: 'android-project-contains-module',
+      metadata: { evidenceArtifact: 'android-project', moduleId: module.id },
     })
 
     const sourceSetNames = new Set<string>(module.sourceSets.map((s) => s.name))

@@ -81,6 +81,7 @@ export {
 export { buildAndroidNavigationXmlModel } from './buildAndroidNavigationXmlModel.js'
 export {
   buildAndroidArtifactRelationships,
+  ANDROID_PROJECT_ROOT_NODE_ID,
   type BuildAndroidArtifactRelationshipsOptions,
   type BuildAndroidArtifactRelationshipsResult,
 } from './buildAndroidArtifactRelationships.js'

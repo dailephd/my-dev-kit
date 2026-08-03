@@ -45,6 +45,7 @@ import {
 import {
   applyClassificationToCodeGraph,
   applyClassificationToSymbolIndex,
+  buildAndroidGraphNodeClassifications,
   buildClassificationArtifact,
   buildClassificationRefsBySymbolId,
   CLASSIFICATION_SCHEMA_VERSION,
@@ -955,6 +956,49 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
   const androidRelationshipsAnalyzerStatus = buildAndroidRelationshipsAnalyzerStatus(androidResult, androidRelationships)
 
+  // v1.12.0 Batch 1: extends the same in-memory classification project with
+  // Android project/module graph-target entries, now that
+  // `relationshipCodeGraph` (which carries `android-project:root` and every
+  // `android-module` node) exists. Only classifies nodes that actually made
+  // it into the graph - never invents a target. Still one combined
+  // classification.json/analyzer and one final code-graph.json (PSE-001 of
+  // the Batch 1 architecture doc).
+  const androidGraphNodeClassifications = classification
+    ? buildAndroidGraphNodeClassifications({ graphNodes: androidRelationships.nodes })
+    : { entries: [], warningCount: 0 }
+  const finalClassification: ClassificationArtifact | null = classification
+    ? {
+        ...classification,
+        entries: [...classification.entries, ...androidGraphNodeClassifications.entries],
+        summary: {
+          ...classification.summary,
+          entryCount: classification.summary.entryCount + androidGraphNodeClassifications.entries.length,
+          graphNodeEntryCount: androidGraphNodeClassifications.entries.length,
+          warningCount: classification.summary.warningCount + androidGraphNodeClassifications.warningCount,
+        },
+      }
+    : null
+  const finalClassificationAnalyzerStatus: IndexAnalyzerStatus = finalClassification
+    ? {
+        ...classificationAnalyzerStatus,
+        status: finalClassification.summary.warningCount > 0 ? 'partial' : 'complete',
+        warningCount: finalClassification.summary.warningCount,
+        summary: {
+          entryCount: finalClassification.summary.entryCount,
+          fileEntryCount: finalClassification.summary.fileEntryCount,
+          symbolEntryCount: finalClassification.summary.symbolEntryCount,
+          graphNodeEntryCount: finalClassification.summary.graphNodeEntryCount ?? 0,
+        },
+      }
+    : classificationAnalyzerStatus
+  const androidGraphNodeClassificationRefsByNodeId = finalClassification
+    ? buildClassificationRefsBySymbolId(androidGraphNodeClassifications.entries, CLASSIFICATION_FILENAME, 'graph-node')
+    : new Map<string, CompactClassificationMetadata>()
+  const finalCodeGraph = applyClassificationToCodeGraph(relationshipCodeGraph, androidGraphNodeClassificationRefsByNodeId, [
+    'android-project',
+    'android-module',
+  ])
+
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -962,7 +1006,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: callGraph !== null,
     symbolIndex: roledSymbolIndex,
-    codeGraph: relationshipCodeGraph,
+    codeGraph: finalCodeGraph,
     warnings,
     errors,
     createdAt,
@@ -970,7 +1014,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     analyzers: replaceAnalyzerStatuses(
       [
         ...(baseManifest.analyzers ?? []),
-        classificationAnalyzerStatus,
+        finalClassificationAnalyzerStatus,
         androidAnalyzerStatus,
         androidComponentsAnalyzerStatus,
         androidGradleAnalyzerStatus,
@@ -1000,9 +1044,9 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     outputDir,
     manifest,
     symbolIndex: roledSymbolIndex,
-    codeGraph: relationshipCodeGraph,
+    codeGraph: finalCodeGraph,
     callGraph,
-    classification,
+    classification: finalClassification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,
     frontendSemantic: semanticResult.frontendResult.artifact,

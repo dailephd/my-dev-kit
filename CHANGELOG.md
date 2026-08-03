@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extended `classification.json` (schema `1.0.0` -> `1.1.0`, additive) with a `targetKind: 'graph-node'` classification target so entries can classify an existing artifact-backed code-graph node in addition to the existing `file`/`symbol` targets; every pre-1.1.0 entry remains readable unchanged, and this remains one combined `classification.json` and one `'classification'` analyzer entry.
+- Added exactly one `android-project:root` node (`kind: 'android-project'`) to `code-graph.json` when Android project evidence is detected, plus one `android-project-contains-module` edge per current module connecting it to the existing `android-module:<path>` node — reusing that node's identity, never inventing a second module type.
+- Classified the Android project root and every module node using four new categories: `android-project` (project root), `gradle-module` (every module), and `android-app-module`/`android-library-module` (app/library modules only — an unknown-type module receives only `gradle-module` at `needs-more-context`/`possible`, never a guessed app/library subtype). The same compact `classificationRoles`/`classificationRefs` projection symbol nodes already use is projected onto these nodes, so `lookup --resolve-classification` and `slice` work unchanged.
+- This is static structural evidence only: no Gradle execution, no runtime-variant claim, and no dependency-injection analysis. Does not yet implement the complete Android classification vocabulary (Activity/Fragment/Compose/ViewModel/Room/Retrofit/Hilt/etc.) or any Android data-flow relationships — those remain later v1.12.0 scope.
+
 ## 1.11.0 - 2026-08-02
 
 - Corrected Graphviz PNG subprocess handling for Node 24 by preserving binary stdout, kept DOT/SVG/fallback behavior unchanged, and made `npm pack --dry-run --json` directly parseable while retaining the required prepack build.

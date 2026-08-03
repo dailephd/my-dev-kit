@@ -103,15 +103,30 @@ describe('graph-diff Android compatibility', () => {
     // no node is added or removed, since the module itself still exists.
     // (Before Batch 5, android-project.json contributed nothing to
     // code-graph.json at all, so this same edit produced zero node changes.)
+    // As of v1.12.0 Batch 1, the module's compact classificationRoles also
+    // change alongside androidMetadata, since app/library module type now
+    // drives its `android-app-module`/`android-library-module` classification.
     expect(parsed.summary.nodesAdded).toBe(0)
     expect(parsed.summary.nodesChanged).toBe(1)
     expect(parsed.nodes.changed).toEqual([
       {
         id: 'android-module:app',
         kind: 'android-module',
-        changedFields: ['androidMetadata'],
-        before: { androidMetadata: { moduleType: 'app' } },
-        after: { androidMetadata: { moduleType: 'library' } },
+        changedFields: ['androidMetadata', 'classificationRoles'],
+        before: {
+          androidMetadata: { moduleType: 'app' },
+          classificationRoles: [
+            { role: 'gradle-module', editGuidance: 'inspect-before-edit', readiness: 'ready', uncertainty: 'certain' },
+            { role: 'android-app-module', editGuidance: 'inspect-before-edit', readiness: 'ready', uncertainty: 'certain' },
+          ],
+        },
+        after: {
+          androidMetadata: { moduleType: 'library' },
+          classificationRoles: [
+            { role: 'gradle-module', editGuidance: 'inspect-before-edit', readiness: 'ready', uncertainty: 'certain' },
+            { role: 'android-library-module', editGuidance: 'inspect-before-edit', readiness: 'ready', uncertainty: 'certain' },
+          ],
+        },
       },
     ])
   })

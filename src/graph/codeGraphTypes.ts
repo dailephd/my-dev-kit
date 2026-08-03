@@ -9,6 +9,8 @@ export type CodeGraphNodeKind =
   | 'file'
   | 'symbol'
   | 'frontend-fact'
+  /** v1.12.0 Batch 1: single bounded Android project root, `android-project:root` (BEH-15.1). */
+  | 'android-project'
   | 'android-module'
   | 'android-source-set'
   | 'android-manifest-file'
@@ -48,6 +50,8 @@ export type CodeGraphEdgeKind =
   | 'calls'
   | 'related-to'
   | ReactFlowRelationshipKind
+  /** v1.12.0 Batch 1: `android-project:root` -> an existing `android-module` node, one per current module (BEH-15.1). */
+  | 'android-project-contains-module'
   | 'module-contains-source-set'
   | 'manifest-declares-component'
   | 'manifest-component-resolves-to-source'

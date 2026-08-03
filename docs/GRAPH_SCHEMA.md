@@ -44,7 +44,7 @@ Context artifacts (written by the `context` command, v1.6.0):
 - `context-capsule.json`
 - `retrieval-audit-record.json` (optional, written when `--audit-out` is requested)
 
-Classification artifact (written by `index` whenever the classification analyzer runs, v1.5.0):
+Classification artifact (written by `index` whenever the classification analyzer runs, v1.5.0; schema `1.1.0` as of v1.12.0 Batch 1, which additively extends `targetKind` with `'graph-node'` so entries can target an existing artifact-backed code-graph node — e.g. `android-project`/`android-module` nodes — alongside the existing `file`/`symbol` targets. All pre-1.1.0 file/symbol entries remain readable unchanged):
 
 - `classification.json`
 
@@ -287,6 +287,8 @@ This is a compact projection only — it does not include evidence, risk labels,
 
 A symbol with no classification entry, or an index without a classification analyzer, simply omits both fields — this never changes existing `semanticRoles`/`artifactRefs` behavior.
 
+**v1.12.0 Batch 1** projects the same `classificationRoles`/`classificationRefs` shape onto the `android-project:root` node and every `android-module` node, using four additive categories: `android-project` (project root, `read-only-reference`/`ready`/`certain`), `gradle-module` (every module), plus `android-app-module` or `android-library-module` (app/library modules, `inspect-before-edit`/`ready`/`certain`) — an unknown-type module receives only `gradle-module` at `needs-more-context`/`possible`, never a guessed app/library subtype. These are static structural facts only: they carry no build, runtime-variant, or DI-graph claim.
+
 ### Current limitation
 
 Symbol start lines are recorded. Complete symbol end-line bounds are not recorded.
@@ -384,9 +386,15 @@ Defined edge kinds:
 
 When a project has Android evidence, `index` additively enriches `code-graph.json` with compact nodes/edges connecting the six Android artifacts (`android-project.json`, `android-components.json`, `android-gradle.json`, `android-manifest.json`, `android-resources.json`, `android-navigation.json`) to each other and to existing Kotlin/Java `symbol`/`file` nodes. See [android-project.json](#android-projectjson-v190-batch-1) below and the dedicated section [Android artifact relationships in code-graph.json (v1.10.0 Batch 5)](#android-artifact-relationships-in-code-graphjson-v1100-batch-5) for full behavior, candidate-enumeration, and matching rules.
 
-Additional node kinds: `android-module`, `android-source-set`, `android-manifest-file`, `android-manifest-component`, `android-intent-filter`, `android-permission`, `android-resource-file`, `android-resource-definition`, `android-navigation-graph`, `android-navigation-destination`, `android-navigation-action`, `android-navigation-deep-link`, `android-compose-route`.
+Additional node kinds: `android-module`, `android-source-set`, `android-manifest-file`, `android-manifest-component`, `android-intent-filter`, `android-permission`, `android-resource-file`, `android-resource-definition`, `android-navigation-graph`, `android-navigation-destination`, `android-navigation-action`, `android-navigation-deep-link`, `android-compose-route`, `android-project` (v1.12.0 Batch 1, the single `android-project:root` node — see below).
 
-Additional edge kinds: `module-contains-source-set`, `manifest-declares-component`, `manifest-component-resolves-to-source`, `component-has-intent-filter`, `component-uses-permission`, `manifest-uses-permission`, `resource-defined-in-file`, `source-references-resource`, `navigation-graph-contains-destination`, `navigation-destination-has-action`, `navigation-action-targets-destination`, `navigation-action-pop-up-to-destination`, `navigation-graph-includes-graph`, `navigation-destination-has-deep-link`, `manifest-deep-link-matches-navigation-deep-link`, `navigation-destination-resolves-to-screen`, `compose-route-resolves-to-screen`.
+Additional edge kinds: `module-contains-source-set`, `manifest-declares-component`, `manifest-component-resolves-to-source`, `component-has-intent-filter`, `component-uses-permission`, `manifest-uses-permission`, `resource-defined-in-file`, `source-references-resource`, `navigation-graph-contains-destination`, `navigation-destination-has-action`, `navigation-action-targets-destination`, `navigation-action-pop-up-to-destination`, `navigation-graph-includes-graph`, `navigation-destination-has-deep-link`, `manifest-deep-link-matches-navigation-deep-link`, `navigation-destination-resolves-to-screen`, `compose-route-resolves-to-screen`, `android-project-contains-module` (v1.12.0 Batch 1).
+
+### Android project root (v1.12.0 Batch 1)
+
+When Android project evidence is detected, `buildAndroidArtifactRelationships` additively projects exactly one bounded project-root node: `id: 'android-project:root'`, `kind: 'android-project'`, `label: 'Android project'` — backed by `android-project.json`, deterministic, and free of any machine-specific absolute path. One `android-project-contains-module` edge (`android-project:root` → the existing `android-module:<path>` node) is added per current module, reusing the module's existing node identity — never a second module-node type. Absent entirely for a non-Android project.
+
+The classification analyzer (below) additively classifies this root node and every `android-module` node it connects to, projecting the same compact `classificationRoles`/`classificationRefs` shape symbol nodes already use.
 
 ## call-graph.json
 

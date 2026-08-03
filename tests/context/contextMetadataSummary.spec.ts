@@ -71,7 +71,7 @@ describe('buildClassificationSummary', () => {
     }
     const artifact: ClassificationArtifact = {
       artifactKind: 'my-dev-kit-v1-classification',
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
       createdAt: new Date().toISOString(),
       entries: [entry],
       summary: { entryCount: 1, fileEntryCount: 0, symbolEntryCount: 1, warningCount: 0 },
