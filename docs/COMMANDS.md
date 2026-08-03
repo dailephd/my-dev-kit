@@ -640,6 +640,21 @@ No new selector flags. `android-test-semantic.json`'s compact `android-test-file
 
 Static-analysis limitation: indexing never executes a test. No fact or edge claims a test ran, a Compose rule initialized, an Activity launched, an assertion passed, or a mock/fake was actually injected at runtime.
 
+### Android classification-role selector (v1.12.0 Batch 5)
+
+`--android-role <role>` is one exact (non-fuzzy) selector, joining the same mutual-exclusivity group as `--query` and every other search selector above. It reuses the existing `SearchIndexResult` artifact (not the separate `my-dev-kit-v1-android-search-result` artifact `--android-route`/`--permission`/etc. use) — `androidRole` and `summary.totalMatchCount` are added additively.
+
+The allowlist is fixed at 31 values: `android-project`, `gradle-module`, `android-app-module`, `android-library-module`, `android-manifest`, `manifest-component`, `navigation-route`, `resource-file`, `xml-layout`, `activity`, `fragment`, `compose-screen`, `compose-ui-component`, `view-model`, `ui-only-state`, `ui-event`, `repository`, `use-case`, `room-entity`, `room-dao`, `room-database`, `retrofit-service`, `hilt-module`, `worker`, `broadcast-receiver`, `service`, `content-provider`, `android-unit-test`, `instrumented-test`, `compose-ui-test`, `generated-file`. An unlisted value is rejected with exit code 2 and the full allowlist in the error message.
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role "activity" --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role "repository" --limit 10 --json
+```
+
+Android-provenance filtered: an `android-*`-kind graph node always qualifies; a `symbol`-kind node qualifies only when it carries real `androidComponentRefs` from the Android component-role detector — a plain TypeScript/JS symbol whose generic classification role happens to overlap an Android role name (e.g. a non-Android `repository`) is never included, regardless of path or filename. Results are ordered deterministically by node ID ascending. Zero matches is a valid, non-error outcome (`results: []`, `summary.resultCount: 0`). `--limit` truncates the returned `results`, while `summary.resultCount` (returned) and `summary.totalMatchCount` (all exact matches before truncation) are reported separately.
+
+Static-analysis limitation: this is a compact-field lookup against already-computed `classificationRoles` — no re-classification, no runtime, dependency-injection, or lifecycle proof.
+
 ### Examples
 
 ```sh
@@ -1139,8 +1154,34 @@ npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable "HomeScreen" --i
 
 Two optional modifiers, both requiring `--composable` (an error otherwise) and combinable together, extend traversal exactly the way `--include-prop-flow`/`--include-event-handlers` already extend a React slice: `sliceGraph`'s existing `includeEdgeKinds` mechanism runs a second, deeper additive pass restricted to a specific edge-kind allowlist, on top of (never instead of) the normal depth-bounded slice.
 
-- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` and `compose-state-reads-viewmodel` (v1.12.0 Batch 4) edges only — directly-resolved ViewModel candidates (one edge per exact class/state-owner match; every candidate preserved when ambiguous, none when unresolved). Still direct-only: no repository/DAO/service/entity/database expansion (reserved for a later `--include-data-flow` flag).
+- `--include-viewmodel`: extends reachability along `composable-references-viewmodel` and `compose-state-reads-viewmodel` (v1.12.0 Batch 4) edges only — directly-resolved ViewModel candidates (one edge per exact class/state-owner match; every candidate preserved when ambiguous, none when unresolved). Still direct-only: no repository/DAO/service/entity/database expansion (that is `--include-data-flow`, below).
 - `--include-navigation`: extends reachability along `click-handler-contains-navigation-call` and `compose-navigation-targets-route` edges — the lexical click-to-navigation-call link, then the navigation call's own exact route candidate(s) from `android-navigation.json`. No runtime navigation-reachability claim.
+
+### Android ownership/data-flow expansion (v1.12.0 Batch 5)
+
+`slice --include-data-flow` is an opt-in secondary bounded traversal over a **fixed** Android ownership/data-flow edge allowlist, valid only with `--node`, `--composable`, `--android-route`, or `--android-component` (rejected in combination with `--route`/`--storage-key`/`--ui`):
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "symbol:app/.../MainActivity.kt#MainActivity" --depth 3 --include-data-flow --json
+```
+
+The allowlist is exactly: `activity-hosts-composable`, `composable-references-viewmodel`, `compose-state-reads-viewmodel`, `viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`, `compose-route-resolves-to-screen`, `navigation-destination-resolves-to-screen` — covering Activity -> Compose -> ViewModel -> Repository -> DAO/Entity/Retrofit, Room database -> DAO, and route -> screen resolution. Unlike `--include-viewmodel`/`--include-navigation`, this pass always traverses **both directions regardless of `--direction`**, bounded by the resolved `--depth` (reusing `sliceGraph`'s existing node/edge dedup, never a second BFS engine), and is capped at 200 added nodes — beyond the cap, expansion stops, `androidDataFlow.truncated` is `true`, and an `android-data-flow-truncated` warning is added.
+
+JSON output gains an additive `androidDataFlow` object: `{ requested, seedNodeCount, maxDepth, allowedEdgeKinds, addedNodeCount, addedEdgeCount, truncated }`. Depth `0` yields a valid, empty expansion (`addedNodeCount: 0`). Combining with `--include-viewmodel`/`--include-navigation` dedupes automatically (a node/edge reached by either pass appears once). Omitting the flag leaves slice output byte-for-byte identical to prior behavior.
+
+Static-analysis limitation: this is exact structural graph traversal over already-resolved static dependency/ownership edges — no dependency-injection resolution, no runtime call-graph, no proof any edge executes.
+
+### Android-aware `--include-tests` (v1.12.0 Batch 5)
+
+The existing `--include-tests` modifier (previously reachability-slice-only) now also applies to `--node`/`--composable`/`--android-route`/`--android-component` slices, pulling bounded, exact Android test evidence for any reached production composable/route-destination/ViewModel node in the slice:
+
+```sh
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "symbol:.../LoginViewModel.kt#LoginViewModel" --depth 1 --include-tests --json
+```
+
+It walks backward across the existing `android-test-references-composable`/`android-test-references-route`/`android-test-references-viewmodel` edges to find referencing test facts, then up the existing test file -> class -> method -> fact hierarchy edges (`defines-test-class`, `test-class-defines-method`, `test-method-has-fact`) — never a full test-class/file/artifact dump, and every ambiguous reference is preserved (no selected winner). Capped at 200 added nodes with an `android-related-tests-truncated` warning when exceeded. Degrades gracefully to an all-zero `androidTests` summary (never an error) when the slice has no production seed nodes or `android-test-semantic.json` evidence is absent.
+
+JSON output gains an additive `androidTests` object: `{ requested, productionSeedCount, relatedTestMethodCount, addedNodeCount, addedEdgeCount, truncated }`. The pre-existing `slice --route/--storage-key/--ui --include-tests` (frontend-reachability) behavior is unchanged.
 
 ## view
 

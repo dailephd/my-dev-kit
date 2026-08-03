@@ -16,6 +16,9 @@ import {
   loadAndroidGraphData,
   resolveAndroidSelectorMode,
   resolveAndroidCandidates,
+  ANDROID_DATA_FLOW_EDGE_KINDS,
+  ANDROID_DATA_FLOW_EDGE_KIND_SET,
+  expandAndroidRelatedTests,
   type AndroidCandidateBase,
   type AndroidSelectorMode,
 } from '../android/index.js'
@@ -34,9 +37,13 @@ export function registerSliceCommand(program: Command): void {
     .option('--composable <name>', 'slice around a uniquely-resolved Compose composable (exact name match)')
     .option('--include-viewmodel', 'extend a --composable slice to directly resolved ViewModel candidates')
     .option('--include-navigation', 'extend a --composable slice through navigation-call facts to exact route candidates')
-    .option('--include-tests', 'include test evidence refs (reachability slice only)')
+    .option('--include-tests', 'include test evidence refs (reachability slice), or bounded Android test evidence (node/composable/Android-selector slice)')
     .option('--include-storage', 'include storage key facts in route/UI reachability slice')
     .option('--include-ui', 'include UI marker facts in route reachability slice')
+    .option(
+      '--include-data-flow',
+      'extend a --node/--composable/--android-route/--android-component slice through the fixed Android ownership/data-flow edge allowlist (Activity/Compose/ViewModel/Repository/DAO/Entity/Retrofit/Room/route-to-screen)'
+    )
     .option('--depth <n>', 'slice depth', parseInteger, 1)
     .option('--direction <both|incoming|outgoing>', 'traversal direction', 'both')
     .option('--include-prop-flow', 'include local React prop-flow relationship edges')
@@ -44,6 +51,15 @@ export function registerSliceCommand(program: Command): void {
     .option('--out <path>', 'output path')
     .option('--json', 'print JSON output')
     .action((options: SliceCommandOptions) => {
+      if (
+        options.includeDataFlow &&
+        (options.route !== undefined || options.storageKey !== undefined || options.ui !== undefined)
+      ) {
+        throw new Error(
+          '--include-data-flow is only valid with --node, --composable, --android-route, or --android-component.'
+        )
+      }
+
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
         if (options.node !== undefined) {
@@ -65,9 +81,9 @@ export function registerSliceCommand(program: Command): void {
         return
       }
 
-      if (options.includeTests || options.includeStorage || options.includeUi) {
+      if (options.includeStorage || options.includeUi) {
         throw new Error(
-          'The --include-tests, --include-storage, and --include-ui flags are only valid with --route, --storage-key, or --ui.'
+          'The --include-storage and --include-ui flags are only valid with --route, --storage-key, or --ui.'
         )
       }
 
@@ -138,13 +154,64 @@ export function registerSliceCommand(program: Command): void {
 
       const artifacts = loadLookupArtifacts(options.index)
       const includeEdgeKinds = mergeEdgeKindSets(selectedReactFlowKinds(options), selectedComposeEdgeKinds(options))
+      const dataFlowEdgeKinds = options.includeDataFlow ? new Set(ANDROID_DATA_FLOW_EDGE_KIND_SET) : undefined
       const core = sliceGraph({
         graph: artifacts.codeGraph,
         focusNodeId,
         depth: options.depth,
         direction: options.direction,
         includeEdgeKinds,
+        dataFlowEdgeKinds,
       })
+
+      let nodes = core.nodes
+      let edges = core.edges
+      const warnings = [...core.warnings]
+
+      let androidDataFlow: AndroidDataFlowSummary | undefined
+      if (options.includeDataFlow) {
+        const addedNodeCount = core.dataFlowExpansion?.addedNodeIds.length ?? 0
+        const truncated = core.dataFlowExpansion?.truncated ?? false
+        androidDataFlow = {
+          requested: true,
+          seedNodeCount: nodes.length - addedNodeCount,
+          maxDepth: options.depth,
+          allowedEdgeKinds: ANDROID_DATA_FLOW_EDGE_KINDS,
+          addedNodeCount,
+          addedEdgeCount: edges.filter((edge) => ANDROID_DATA_FLOW_EDGE_KIND_SET.has(edge.kind)).length,
+          truncated,
+        }
+        if (truncated) warnings.push('android-data-flow-truncated')
+      }
+
+      let androidTests: AndroidTestsSummary | undefined
+      if (options.includeTests) {
+        const expansion = expandAndroidRelatedTests(artifacts.codeGraph, new Set(nodes.map((node) => node.id)))
+        const nodeById = new Map(artifacts.codeGraph.nodes.map((node) => [node.id, node]))
+        const edgeById = new Map(artifacts.codeGraph.edges.map((edge) => [edge.id, edge]))
+        const mergedNodes = new Map(nodes.map((node) => [node.id, node]))
+        for (const id of expansion.addedNodeIds) {
+          const node = nodeById.get(id)
+          if (node) mergedNodes.set(id, node)
+        }
+        const mergedEdges = new Map(edges.map((edge) => [edge.id, edge]))
+        for (const id of expansion.addedEdgeIds) {
+          const edge = edgeById.get(id)
+          if (edge) mergedEdges.set(id, edge)
+        }
+        nodes = [...mergedNodes.values()].sort((a, b) => a.id.localeCompare(b.id))
+        edges = [...mergedEdges.values()].sort((a, b) => a.id.localeCompare(b.id))
+        androidTests = {
+          requested: true,
+          productionSeedCount: expansion.productionSeedCount,
+          relatedTestMethodCount: expansion.relatedTestMethodCount,
+          addedNodeCount: expansion.addedNodeIds.length,
+          addedEdgeCount: expansion.addedEdgeIds.length,
+          truncated: expansion.truncated,
+        }
+        if (expansion.truncated) warnings.push('android-related-tests-truncated')
+      }
+
       const slice: GraphSlice = {
         artifactKind: 'my-dev-kit-v1-graph-slice',
         version: '1.0.0',
@@ -153,24 +220,59 @@ export function registerSliceCommand(program: Command): void {
         focusNodeId,
         depth: options.depth,
         direction: options.direction,
-        nodes: core.nodes,
-        edges: core.edges,
-        summary: summarizeSlice(core.nodes, core.edges),
+        nodes,
+        edges,
+        summary: summarizeSlice(nodes, edges),
         artifactPaths: {
           manifest: toForwardSlash(artifacts.resolved.manifestPath),
           codeGraph: toForwardSlash(artifacts.resolved.artifactPaths.codeGraph),
         },
-        warnings: core.warnings,
+        warnings,
       }
       const writtenPath = options.out ? writeGraphSlice(options.out, slice) : null
-      const result = { ...slice, ...(androidSelector ? { androidSelector } : {}), outputPath: writtenPath }
+      const result = {
+        ...slice,
+        ...(androidSelector ? { androidSelector } : {}),
+        ...(androidDataFlow ? { androidDataFlow } : {}),
+        ...(androidTests ? { androidTests } : {}),
+        outputPath: writtenPath,
+      }
       if (options.json) {
         console.log(JSON.stringify(result, null, 2))
         return
       }
       console.log(`Graph slice: ${slice.summary.nodeCount} node(s), ${slice.summary.edgeCount} edge(s).`)
+      if (androidDataFlow) {
+        console.log(
+          `Android data-flow: +${androidDataFlow.addedNodeCount} node(s), +${androidDataFlow.addedEdgeCount} edge(s)${androidDataFlow.truncated ? ' (truncated)' : ''}.`
+        )
+      }
+      if (androidTests) {
+        console.log(
+          `Android tests: ${androidTests.relatedTestMethodCount} method(s), +${androidTests.addedNodeCount} node(s)${androidTests.truncated ? ' (truncated)' : ''}.`
+        )
+      }
       if (writtenPath) console.log(`Wrote: ${writtenPath}`)
     })
+}
+
+interface AndroidDataFlowSummary {
+  requested: true
+  seedNodeCount: number
+  maxDepth: number
+  allowedEdgeKinds: readonly string[]
+  addedNodeCount: number
+  addedEdgeCount: number
+  truncated: boolean
+}
+
+interface AndroidTestsSummary {
+  requested: true
+  productionSeedCount: number
+  relatedTestMethodCount: number
+  addedNodeCount: number
+  addedEdgeCount: number
+  truncated: boolean
 }
 
 interface SliceCommandOptions {
@@ -187,6 +289,7 @@ interface SliceCommandOptions {
   includeTests?: boolean
   includeStorage?: boolean
   includeUi?: boolean
+  includeDataFlow?: boolean
   depth: number
   direction: GraphSliceDirection
   includePropFlow?: boolean

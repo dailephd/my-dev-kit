@@ -125,6 +125,23 @@ export {
   type AndroidComponentLookupDetail,
   type AndroidComponentLookupResult,
 } from './androidRetrieval.js'
+export {
+  ANDROID_ROLE_SEARCH_VALUES,
+  isAndroidRoleSearchValue,
+  buildAndroidRoleSearchResult,
+  type AndroidRoleSearchValue,
+  type BuildAndroidRoleSearchResultOptions,
+} from './androidRoleSearch.js'
+export {
+  ANDROID_DATA_FLOW_EDGE_KINDS,
+  ANDROID_DATA_FLOW_EDGE_KIND_SET,
+  type AndroidDataFlowEdgeKind,
+} from './androidDataFlowEdges.js'
+export {
+  expandAndroidRelatedTests,
+  MAX_ANDROID_RELATED_TEST_NODES,
+  type AndroidRelatedTestsExpansion,
+} from './androidRelatedTestsExpansion.js'
 export { buildComposeNavigationRoutes } from './buildComposeNavigationRoutes.js'
 export {
   buildAndroidNavigationProject,
