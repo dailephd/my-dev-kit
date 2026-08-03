@@ -986,7 +986,15 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const androidGraphNodeClassifications = classification
     ? buildAndroidGraphNodeClassifications({ graphNodes: androidRelationships.nodes, edges: androidRelationships.edges })
     : { entries: [], warningCount: 0 }
-  const finalClassificationEntries = [...baseClassificationEntries, ...androidGraphNodeClassifications.entries]
+  // v1.12.0 Batch 7: final deterministic ordering by stable entry `id`. Without
+  // this, `baseClassificationEntries`'s own order (inherited from whichever
+  // upstream classifier/merge path produced it) could legitimately differ
+  // between a full rebuild and an incremental partial rebuild - same entries,
+  // same content, different array order - which the artifact's own
+  // determinism contract does not allow.
+  const finalClassificationEntries = [...baseClassificationEntries, ...androidGraphNodeClassifications.entries].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  )
   const finalClassification: ClassificationArtifact | null = classification
     ? {
         ...classification,
