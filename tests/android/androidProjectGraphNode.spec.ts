@@ -142,3 +142,35 @@ describe('buildAndroidArtifactRelationships — android-project:root (v1.12.0 Ba
     expect(first.nodes.map((n) => n.id)).toEqual(second.nodes.map((n) => n.id))
   })
 })
+
+describe('buildAndroidArtifactRelationships — android-generated-build-path (v1.12.0 Batch 2)', () => {
+  const GENERATED_BUILD_OUTPUT_FIXTURE_ROOT = join(process.cwd(), 'tests', 'fixtures', 'android', 'generated-build-output')
+
+  it('TST-217: adds a bounded android-generated-build-path node for the existing app/build directory, no file enumeration', () => {
+    const result = buildRelationships(GENERATED_BUILD_OUTPUT_FIXTURE_ROOT, ['app/src/main/kotlin'])
+    const generatedNodes = result.nodes.filter((n) => n.kind === 'android-generated-build-path')
+    expect(generatedNodes.length).toBeGreaterThan(0)
+    expect(generatedNodes.some((n) => n.id === 'android-generated-build-path:app/build')).toBe(true)
+    // Bounded: only the directory itself is a node, never its contents (Generated.java, intermediates/fake/*).
+    expect(generatedNodes.every((n) => !n.id.includes('Generated.java') && !n.id.includes('intermediates'))).toBe(true)
+    for (const node of generatedNodes) {
+      expect(node.path).not.toMatch(/^[A-Za-z]:/)
+    }
+  })
+
+  it('TST-223: the generated-build-path node disappears when the directory disappears (stale-evidence removal)', () => {
+    const root = createTempRoot()
+    write(root, 'settings.gradle.kts', 'rootProject.name = "t"\ninclude(":app")\n')
+    write(root, 'app/build.gradle.kts', 'plugins {\n    id("com.android.application")\n}\n\nandroid {\n    namespace = "com.example"\n    compileSdk = 34\n}\n')
+    write(root, 'app/src/main/AndroidManifest.xml', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>\n')
+    write(root, 'app/src/main/kotlin/com/example/X.kt', 'package com.example\nclass X\n')
+    write(root, 'app/build/.keep', '')
+
+    const before = buildRelationships(root, ['app/src/main/kotlin'])
+    expect(before.nodes.some((n) => n.id === 'android-generated-build-path:app/build')).toBe(true)
+
+    rmSync(join(root, 'app', 'build'), { recursive: true, force: true })
+    const after = buildRelationships(root, ['app/src/main/kotlin'])
+    expect(after.nodes.some((n) => n.id === 'android-generated-build-path:app/build')).toBe(false)
+  })
+})

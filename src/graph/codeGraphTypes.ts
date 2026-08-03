@@ -30,6 +30,8 @@ export type CodeGraphNodeKind =
   | 'android-test-class'
   | 'android-test-method'
   | 'android-test-fact'
+  /** v1.12.0 Batch 2: bounded generated/build directory evidence, backed by `android-project.json`'s existing `ignoredGeneratedDirectories` - never a repository-wide scan. */
+  | 'android-generated-build-path'
 
 /** Which Batch 1-5 Android artifact (or v1.9.0 android-project/android-components) a compact `android-*` node/edge is backed by (v1.10.0 Batch 5). */
 export type AndroidArtifactId =

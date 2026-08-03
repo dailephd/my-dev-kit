@@ -289,6 +289,21 @@ A symbol with no classification entry, or an index without a classification anal
 
 **v1.12.0 Batch 1** projects the same `classificationRoles`/`classificationRefs` shape onto the `android-project:root` node and every `android-module` node, using four additive categories: `android-project` (project root, `read-only-reference`/`ready`/`certain`), `gradle-module` (every module), plus `android-app-module` or `android-library-module` (app/library modules, `inspect-before-edit`/`ready`/`certain`) — an unknown-type module receives only `gradle-module` at `needs-more-context`/`possible`, never a guessed app/library subtype. These are static structural facts only: they carry no build, runtime-variant, or DI-graph claim.
 
+**v1.12.0 Batch 2** completes the Android classification vocabulary, projected the same way onto the remaining artifact-backed Android graph-node kinds:
+
+- `android-manifest-file` → `android-manifest` + `configuration-file`, `inspect-before-edit`.
+- `android-manifest-component` → `manifest-component`, `inspect-before-edit`, always carrying the advisory `emulator-validation-required`/`instrumented-test-required` risk labels (a manifest component always crosses an Android platform boundary).
+- `android-navigation-graph`/`android-navigation-destination`/`android-navigation-deep-link`/`android-compose-route` → `navigation-route`, `inspect-before-edit` (navigation *actions* are never classified as routes — they are transitions, not route definitions).
+- `android-resource-file` → `resource-file`, `safe-primary-edit-target` unless it is a platform-sensitive `xml`-baseType file (`inspect-before-edit` + `resource-contract-risk`); `android-resource-definition` → `resource-file` (+ `xml-layout` for layouts), always `safe-primary-edit-target`.
+- `android-composable` → `compose-screen` (exact route/destination target evidence) or `compose-ui-component` (everything else); `@Preview` composables stay `compose-ui-component` but get `read-only-reference`, never a production-screen claim.
+- `android-compose-fact` → `ui-only-state` (state facts only) or `ui-event` (click-handler facts only) — no other fact kind is classified in this batch, and no ViewModel-ownership is inferred for state facts.
+- `android-test-file`/`android-test-class`/`android-test-method` → `android-unit-test` or `instrumented-test` (by source-set category) plus generic `test-block`/`test-fixture`, plus `compose-ui-test` when Compose-test framework evidence is present. Always `test-only`.
+- `android-generated-build-path` → `generated-file`, `generated-do-not-edit` (see above).
+
+Existing Android component-role facts (`android-components.json`) are reused verbatim as classification categories (`activity`, `fragment`, `view-model`, `repository`, `use-case`, `room-entity`, `room-dao`, `room-database`, `retrofit-service`, `hilt-module`, `worker`, `broadcast-receiver`, `service`, `content-provider`) by merging them into the matching already-built `symbol`-kind classification entry (`src/classification/mergeAndroidComponentRoleClassifications.ts`) — never a second detector, never a duplicate entry. Confidence maps to guidance/readiness/uncertainty: high → `ready`/`certain`; medium → `ready`/`likely`; low (naming-only) → `uncertain` guidance, `risky-assumption` readiness, `possible` uncertainty, and `wrong-layer-risk` — never upgraded merely because it is the only candidate.
+
+Seven risk labels are advisory only, never a security verdict or runtime/build/test proof: `manifest-security-risk`, `generated-build-file-risk`, `resource-contract-risk`, `navigation-contract-risk`, `emulator-validation-required`, `instrumented-test-required`, and the existing `wrong-layer-risk` (assigned to usage/reference sites, test-only production-task focus, generated targets, and low-confidence naming-only evidence).
+
 ### Current limitation
 
 Symbol start lines are recorded. Complete symbol end-line bounds are not recorded.
@@ -386,7 +401,7 @@ Defined edge kinds:
 
 When a project has Android evidence, `index` additively enriches `code-graph.json` with compact nodes/edges connecting the six Android artifacts (`android-project.json`, `android-components.json`, `android-gradle.json`, `android-manifest.json`, `android-resources.json`, `android-navigation.json`) to each other and to existing Kotlin/Java `symbol`/`file` nodes. See [android-project.json](#android-projectjson-v190-batch-1) below and the dedicated section [Android artifact relationships in code-graph.json (v1.10.0 Batch 5)](#android-artifact-relationships-in-code-graphjson-v1100-batch-5) for full behavior, candidate-enumeration, and matching rules.
 
-Additional node kinds: `android-module`, `android-source-set`, `android-manifest-file`, `android-manifest-component`, `android-intent-filter`, `android-permission`, `android-resource-file`, `android-resource-definition`, `android-navigation-graph`, `android-navigation-destination`, `android-navigation-action`, `android-navigation-deep-link`, `android-compose-route`, `android-project` (v1.12.0 Batch 1, the single `android-project:root` node — see below).
+Additional node kinds: `android-module`, `android-source-set`, `android-manifest-file`, `android-manifest-component`, `android-intent-filter`, `android-permission`, `android-resource-file`, `android-resource-definition`, `android-navigation-graph`, `android-navigation-destination`, `android-navigation-action`, `android-navigation-deep-link`, `android-compose-route`, `android-project` (v1.12.0 Batch 1, the single `android-project:root` node — see below), `android-generated-build-path` (v1.12.0 Batch 2, see below).
 
 Additional edge kinds: `module-contains-source-set`, `manifest-declares-component`, `manifest-component-resolves-to-source`, `component-has-intent-filter`, `component-uses-permission`, `manifest-uses-permission`, `resource-defined-in-file`, `source-references-resource`, `navigation-graph-contains-destination`, `navigation-destination-has-action`, `navigation-action-targets-destination`, `navigation-action-pop-up-to-destination`, `navigation-graph-includes-graph`, `navigation-destination-has-deep-link`, `manifest-deep-link-matches-navigation-deep-link`, `navigation-destination-resolves-to-screen`, `compose-route-resolves-to-screen`, `android-project-contains-module` (v1.12.0 Batch 1).
 
@@ -395,6 +410,10 @@ Additional edge kinds: `module-contains-source-set`, `manifest-declares-componen
 When Android project evidence is detected, `buildAndroidArtifactRelationships` additively projects exactly one bounded project-root node: `id: 'android-project:root'`, `kind: 'android-project'`, `label: 'Android project'` — backed by `android-project.json`, deterministic, and free of any machine-specific absolute path. One `android-project-contains-module` edge (`android-project:root` → the existing `android-module:<path>` node) is added per current module, reusing the module's existing node identity — never a second module-node type. Absent entirely for a non-Android project.
 
 The classification analyzer (below) additively classifies this root node and every `android-module` node it connects to, projecting the same compact `classificationRoles`/`classificationRefs` shape symbol nodes already use.
+
+### Android generated build paths (v1.12.0 Batch 2)
+
+`buildAndroidArtifactRelationships` also projects one `android-generated-build-path` node per repository-relative path already present in `android-project.json`'s existing `ignoredGeneratedDirectories[]` (a fixed `build`/`.gradle` existence check under the project root and each declared module — never a repository-wide scan). Node ID: `android-generated-build-path:<normalized-relative-path>`; `path` is the same repository-relative string, never an absolute path. No file beneath the directory is enumerated, read, or turned into a node. The node disappears on the next full/incremental rebuild if the directory (and therefore the `ignoredGeneratedDirectories` entry) disappears. Classified `generated-file` / `generated-do-not-edit` / `ready` / `certain` / `generated-build-file-risk`.
 
 ## call-graph.json
 

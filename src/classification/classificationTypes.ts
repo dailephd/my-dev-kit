@@ -34,6 +34,39 @@ export type ClassificationRoleName =
   | 'gradle-module'
   | 'android-app-module'
   | 'android-library-module'
+  /**
+   * v1.12.0 Batch 2: Android source/UI/data/platform/resource/test categories,
+   * plus reused Android component-role names (`activity`..`content-provider`
+   * match `AndroidComponentRole` in `src/android/androidComponentTypes.ts`
+   * exactly - never a synonym) and reused generic categories
+   * (`test-fixture`, `configuration-file`, `generated-file`, `view-model`,
+   * `ui-only-state` already existed above and are not redeclared).
+   */
+  | 'android-manifest'
+  | 'manifest-component'
+  | 'navigation-route'
+  | 'resource-file'
+  | 'xml-layout'
+  | 'compose-screen'
+  | 'compose-ui-component'
+  | 'ui-event'
+  | 'android-unit-test'
+  | 'instrumented-test'
+  | 'compose-ui-test'
+  | 'test-block'
+  | 'activity'
+  | 'fragment'
+  | 'repository'
+  | 'use-case'
+  | 'room-entity'
+  | 'room-dao'
+  | 'room-database'
+  | 'retrofit-service'
+  | 'hilt-module'
+  | 'worker'
+  | 'broadcast-receiver'
+  | 'service'
+  | 'content-provider'
   | (string & {})
 
 export type ClassificationTargetKind =
@@ -69,6 +102,13 @@ export type RiskLabel =
   | 'generated-file-risk'
   | 'public-contract-risk'
   | 'migration-risk'
+  /** v1.12.0 Batch 2: advisory Android risk labels - never a security verdict or runtime proof. */
+  | 'manifest-security-risk'
+  | 'generated-build-file-risk'
+  | 'resource-contract-risk'
+  | 'navigation-contract-risk'
+  | 'emulator-validation-required'
+  | 'instrumented-test-required'
 
 /**
  * Measures confidence IN the classification's correctness, distinct from

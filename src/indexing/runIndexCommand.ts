@@ -48,6 +48,7 @@ import {
   buildAndroidGraphNodeClassifications,
   buildClassificationArtifact,
   buildClassificationRefsBySymbolId,
+  mergeAndroidComponentRoleClassifications,
   CLASSIFICATION_SCHEMA_VERSION,
   type ClassificationArtifact,
   type CompactClassificationMetadata,
@@ -956,25 +957,38 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   const relationshipCodeGraph = addAndroidRelationshipsToCodeGraph(roledCodeGraph, androidRelationships)
   const androidRelationshipsAnalyzerStatus = buildAndroidRelationshipsAnalyzerStatus(androidResult, androidRelationships)
 
+  // v1.12.0 Batch 2: merges existing android-components.json role facts
+  // (Activity, Fragment, ViewModel, Repository, ...) into the matching
+  // already-built `symbol`-kind classification entry - never a second
+  // component-role detector, never a second entry for the same target.
+  const androidComponentRoleMerge =
+    classification && androidComponents
+      ? mergeAndroidComponentRoleClassifications(classification.entries, androidComponents.components)
+      : null
+  const baseClassificationEntries = androidComponentRoleMerge ? androidComponentRoleMerge.entries : (classification?.entries ?? [])
+
   // v1.12.0 Batch 1: extends the same in-memory classification project with
   // Android project/module graph-target entries, now that
   // `relationshipCodeGraph` (which carries `android-project:root` and every
   // `android-module` node) exists. Only classifies nodes that actually made
   // it into the graph - never invents a target. Still one combined
   // classification.json/analyzer and one final code-graph.json (PSE-001 of
-  // the Batch 1 architecture doc).
+  // the Batch 1 architecture doc). v1.12.0 Batch 2 extends the same
+  // extension point to also classify manifest, navigation, resource,
+  // Compose, Android-test, and generated-build-path graph nodes.
   const androidGraphNodeClassifications = classification
-    ? buildAndroidGraphNodeClassifications({ graphNodes: androidRelationships.nodes })
+    ? buildAndroidGraphNodeClassifications({ graphNodes: androidRelationships.nodes, edges: androidRelationships.edges })
     : { entries: [], warningCount: 0 }
+  const finalClassificationEntries = [...baseClassificationEntries, ...androidGraphNodeClassifications.entries]
   const finalClassification: ClassificationArtifact | null = classification
     ? {
         ...classification,
-        entries: [...classification.entries, ...androidGraphNodeClassifications.entries],
+        entries: finalClassificationEntries,
         summary: {
           ...classification.summary,
-          entryCount: classification.summary.entryCount + androidGraphNodeClassifications.entries.length,
+          entryCount: finalClassificationEntries.length,
           graphNodeEntryCount: androidGraphNodeClassifications.entries.length,
-          warningCount: classification.summary.warningCount + androidGraphNodeClassifications.warningCount,
+          warningCount: finalClassificationEntries.reduce((sum, entry) => sum + entry.warnings.length, 0),
         },
       }
     : null
@@ -991,13 +1005,42 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
         },
       }
     : classificationAnalyzerStatus
+  // v1.12.0 Batch 2: re-projects compact classificationRoles/classificationRefs
+  // for every symbol whose detailed entry the component-role merge changed,
+  // since the original projection (built before android-components.json
+  // existed) is now stale for those symbols.
+  const mergedSymbolClassificationRefsBySymbolId = androidComponentRoleMerge
+    ? buildClassificationRefsBySymbolId(androidComponentRoleMerge.entries, CLASSIFICATION_FILENAME)
+    : new Map<string, CompactClassificationMetadata>()
+  const symbolIndexWithMergedRoles = androidComponentRoleMerge
+    ? applyClassificationToSymbolIndex(roledSymbolIndex, mergedSymbolClassificationRefsBySymbolId)
+    : roledSymbolIndex
+  const codeGraphWithMergedSymbolRoles = androidComponentRoleMerge
+    ? applyClassificationToCodeGraph(relationshipCodeGraph, mergedSymbolClassificationRefsBySymbolId)
+    : relationshipCodeGraph
+
   const androidGraphNodeClassificationRefsByNodeId = finalClassification
     ? buildClassificationRefsBySymbolId(androidGraphNodeClassifications.entries, CLASSIFICATION_FILENAME, 'graph-node')
     : new Map<string, CompactClassificationMetadata>()
-  const finalCodeGraph = applyClassificationToCodeGraph(relationshipCodeGraph, androidGraphNodeClassificationRefsByNodeId, [
+  const finalCodeGraph = applyClassificationToCodeGraph(codeGraphWithMergedSymbolRoles, androidGraphNodeClassificationRefsByNodeId, [
     'android-project',
     'android-module',
+    'android-manifest-file',
+    'android-manifest-component',
+    'android-navigation-graph',
+    'android-navigation-destination',
+    'android-navigation-deep-link',
+    'android-compose-route',
+    'android-resource-file',
+    'android-resource-definition',
+    'android-composable',
+    'android-compose-fact',
+    'android-test-file',
+    'android-test-class',
+    'android-test-method',
+    'android-generated-build-path',
   ])
+  const finalSymbolIndex = symbolIndexWithMergedRoles
 
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
@@ -1005,7 +1048,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     languages,
     callGraphEnabled: options.callGraph === true,
     callGraphProduced: callGraph !== null,
-    symbolIndex: roledSymbolIndex,
+    symbolIndex: finalSymbolIndex,
     codeGraph: finalCodeGraph,
     warnings,
     errors,
@@ -1043,7 +1086,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
   writeIndexArtifacts({
     outputDir,
     manifest,
-    symbolIndex: roledSymbolIndex,
+    symbolIndex: finalSymbolIndex,
     codeGraph: finalCodeGraph,
     callGraph,
     classification: finalClassification,

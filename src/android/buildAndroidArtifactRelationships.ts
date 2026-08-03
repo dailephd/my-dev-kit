@@ -145,6 +145,23 @@ export function buildAndroidArtifactRelationships(options: BuildAndroidArtifactR
     }
   }
 
+  // v1.12.0 Batch 2: bounded generated/build path evidence, reusing
+  // `android-project.json`'s already-detected `ignoredGeneratedDirectories`
+  // (a fixed, small `build`/`.gradle` existence check under the project root
+  // and each declared module - never a repository-wide scan). One node per
+  // detected path; no file enumeration beneath it, no content read.
+  for (const generatedPath of androidProject.ignoredGeneratedDirectories) {
+    const generatedNodeId = `android-generated-build-path:${generatedPath}`
+    addNode({
+      id: generatedNodeId,
+      kind: 'android-generated-build-path',
+      label: generatedPath,
+      path: generatedPath,
+      androidArtifactId: 'android-project',
+      androidEntityId: generatedNodeId,
+    })
+  }
+
   // -- 2. Manifest files and components ---------------------------------------
   const manifestFilePathById = new Map(androidManifest.manifests.map((m) => [m.id, m.path]))
   for (const manifestFile of androidManifest.manifests) {
