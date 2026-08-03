@@ -18,6 +18,7 @@ import {
   androidOwnerEligible,
   candidateFileToPolicyInput,
   candidateNodeToPolicyInput,
+  findAndroidUsageNodeIdsWithStrongerOwner,
   hasAndroidProvenance,
 } from './androidContextOwnerPolicy.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
@@ -340,6 +341,13 @@ function computeCallerOnlyFilePaths(codeGraph: CodeGraph, seedNodeIds: Set<strin
 interface AndroidOwnerContext {
   androidIntents: ReadonlySet<AndroidIntent>
   isTestImplementationRole: boolean
+  /** v1.12.0 Batch 6 correction: node IDs that are the "usage" side of a fixed
+   * usage -> owner relationship (section 18/26) whose exact stronger owner is
+   * also present among the candidate pool - these are suppressed from owner
+   * eligibility (section 16/31.5) even though their own classification role
+   * would otherwise pass `androidOwnerEligible` (e.g. a ViewModel-owned
+   * `ui-only-state` fact once its linked ViewModel is also a candidate). */
+  usageNodeIdsWithStrongerOwner: ReadonlySet<string>
 }
 
 function isStructuralOwnerNode(
@@ -350,6 +358,7 @@ function isStructuralOwnerNode(
   if (!hasRequestRelevance(node)) return false
   if (isForbiddenOwnerPath(node.filePath)) return false
   if (hasAndroidProvenance(candidateNodeToPolicyInput(node))) {
+    if (android.usageNodeIdsWithStrongerOwner.has(node.nodeId)) return false
     return androidOwnerEligible(candidateNodeToPolicyInput(node), android.androidIntents, android.isTestImplementationRole)
   }
   if (hasNonOwnerClassification(node.classificationRoles)) return false
@@ -494,9 +503,11 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const retainedFiles = options.candidateFiles.filter((f) => f.retained)
   const retainedNodes = options.candidateNodes.filter((n) => n.retained)
   const requestedSet = new Set(requestedEvidenceKinds)
+  const retainedCandidateIds = new Set([...retainedNodes.map((n) => n.nodeId)])
   const androidOwnerContext: AndroidOwnerContext = {
     androidIntents: options.androidIntents ?? new Set<AndroidIntent>(),
     isTestImplementationRole: role === 'test-implementation',
+    usageNodeIdsWithStrongerOwner: findAndroidUsageNodeIdsWithStrongerOwner(codeGraph, retainedCandidateIds),
   }
   const warnings: string[] = []
   let roleConditionCoverage: RoleConditionCoverage[] = []

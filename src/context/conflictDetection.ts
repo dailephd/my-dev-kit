@@ -8,7 +8,14 @@ import type {
 } from './types.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { AndroidIntent } from './androidContextIntent.js'
-import { androidOwnerEligible, candidateNodeToPolicyInput, hasAndroidProvenance, isAndroidGeneratedCandidate, isAndroidTestOnlyCandidate } from './androidContextOwnerPolicy.js'
+import {
+  androidOwnerEligible,
+  candidateNodeToPolicyInput,
+  findUsageOwnerPairs,
+  hasAndroidProvenance,
+  isAndroidGeneratedCandidate,
+  isAndroidTestOnlyCandidate,
+} from './androidContextOwnerPolicy.js'
 import type { EditGuidance } from '../classification/classificationTypes.js'
 
 const NEAR_TIE_SCORE_MARGIN = 8
@@ -47,32 +54,6 @@ function toConflictCandidate(candidate: CandidateNode) {
     score: candidate.score,
     editGuidance: guidance(candidate),
   }
-}
-
-/** Fixed usage -> owner edge kinds recognized for `android-usage-selected-over-owner`
- * (section 18/26). `reverse: true` means the owner is the edge source and the
- * usage/projection is the edge target (e.g. a composable "has" a fact). */
-const USAGE_TO_OWNER_EDGE_KINDS: ReadonlyArray<{ kind: string; reverse: boolean }> = [
-  { kind: 'compose-state-reads-viewmodel', reverse: false },
-  { kind: 'source-references-resource', reverse: false },
-  { kind: 'compose-navigation-targets-route', reverse: false },
-  { kind: 'composable-has-fact', reverse: true },
-]
-
-interface UsageOwnerPair {
-  usageId: string
-  ownerId: string
-}
-
-function findUsageOwnerPairs(codeGraph: CodeGraph, candidateIds: ReadonlySet<string>): UsageOwnerPair[] {
-  const pairs: UsageOwnerPair[] = []
-  for (const edge of codeGraph.edges) {
-    const rule = USAGE_TO_OWNER_EDGE_KINDS.find((r) => r.kind === edge.kind)
-    if (!rule) continue
-    if (!candidateIds.has(edge.source) || !candidateIds.has(edge.target)) continue
-    pairs.push(rule.reverse ? { usageId: edge.target, ownerId: edge.source } : { usageId: edge.source, ownerId: edge.target })
-  }
-  return pairs
 }
 
 export function detectContextConflicts(options: {
@@ -152,42 +133,55 @@ function detectAndroidWrongLayerConflicts(
   let sequence = 0
   const nextId = (kind: string) => `conflict-${kind}-${++sequence}`
 
+  // "Focused or otherwise likely to be selected" (sections 24-26): the literal
+  // resolved focus, plus every retained Android candidate within the near-tie
+  // margin of the top-scored Android candidate - so a node that outranks the
+  // literal focus (but was not itself chosen as the single-seed focus) still
+  // counts as "likely to be selected" for these production-ownership checks.
+  const byId = new Map(candidateNodes.map((n) => [n.nodeId, n]))
+  const likelySelectedIds = new Set<string>([...(focusCandidate ? [focusCandidate.nodeId] : []), ...topScoredAndroidCandidateIds(candidateNodes)])
+  const likelySelectedCandidates = [...likelySelectedIds].map((id) => byId.get(id)).filter((c): c is CandidateNode => c !== undefined)
+
   // --- android-generated-primary-target (section 24) ---
-  if (focusCandidate && requiresProductionOwner && isAndroidGeneratedCandidate(candidateNodeToPolicyInput(focusCandidate))) {
-    conflicts.push({
-      id: nextId('android-generated-primary-target'),
-      kind: 'android-generated-primary-target',
-      status: 'conflict',
-      reason: 'The focused candidate is a generated Android artifact and cannot be a production edit owner.',
-      evidenceRefs: [...new Set(focusCandidate.classificationRefs?.map((ref) => ref.id) ?? [])].sort(),
-      affectedFiles: focusCandidate.filePath ? [focusCandidate.filePath] : [],
-      affectedNodes: [focusCandidate.nodeId],
-      candidates: [toConflictCandidate(focusCandidate)],
-      recommendedNextAction: 'Locate the non-generated production owner responsible for this generated output instead of editing it directly.',
-    })
+  if (requiresProductionOwner) {
+    for (const candidate of likelySelectedCandidates) {
+      if (!isAndroidGeneratedCandidate(candidateNodeToPolicyInput(candidate))) continue
+      conflicts.push({
+        id: nextId('android-generated-primary-target'),
+        kind: 'android-generated-primary-target',
+        status: 'conflict',
+        reason: 'A focused or likely-to-be-selected candidate is a generated Android artifact and cannot be a production edit owner.',
+        evidenceRefs: [...new Set(candidate.classificationRefs?.map((ref) => ref.id) ?? [])].sort(),
+        affectedFiles: candidate.filePath ? [candidate.filePath] : [],
+        affectedNodes: [candidate.nodeId],
+        candidates: [toConflictCandidate(candidate)],
+        recommendedNextAction: 'Locate the non-generated production owner responsible for this generated output instead of editing it directly.',
+      })
+    }
   }
 
   // --- android-test-primary-target (section 25) ---
-  if (focusCandidate && requiresProductionOwner && !explicitTestIntent && isAndroidTestOnlyCandidate(candidateNodeToPolicyInput(focusCandidate))) {
-    conflicts.push({
-      id: nextId('android-test-primary-target'),
-      kind: 'android-test-primary-target',
-      status: 'conflict',
-      reason: 'The focused candidate is a test-only Android node and cannot satisfy production ownership for this request.',
-      evidenceRefs: [...new Set(focusCandidate.classificationRefs?.map((ref) => ref.id) ?? [])].sort(),
-      affectedFiles: focusCandidate.filePath ? [focusCandidate.filePath] : [],
-      affectedNodes: [focusCandidate.nodeId],
-      candidates: [toConflictCandidate(focusCandidate)],
-      recommendedNextAction: 'Use this test as supporting/test-location evidence and locate the related production owner separately.',
-    })
+  if (requiresProductionOwner && !explicitTestIntent) {
+    for (const candidate of likelySelectedCandidates) {
+      if (!isAndroidTestOnlyCandidate(candidateNodeToPolicyInput(candidate))) continue
+      conflicts.push({
+        id: nextId('android-test-primary-target'),
+        kind: 'android-test-primary-target',
+        status: 'conflict',
+        reason: 'A focused or likely-to-be-selected candidate is a test-only Android node and cannot satisfy production ownership for this request.',
+        evidenceRefs: [...new Set(candidate.classificationRefs?.map((ref) => ref.id) ?? [])].sort(),
+        affectedFiles: candidate.filePath ? [candidate.filePath] : [],
+        affectedNodes: [candidate.nodeId],
+        candidates: [toConflictCandidate(candidate)],
+        recommendedNextAction: 'Use this test as supporting/test-location evidence and locate the related production owner separately.',
+      })
+    }
   }
 
   // --- android-usage-selected-over-owner and android-classification-graph-disagreement (sections 26, 29) ---
   if (codeGraph) {
     const retainedIds = new Set(candidateNodes.filter((n) => n.retained).map((n) => n.nodeId))
     const pairs = findUsageOwnerPairs(codeGraph, retainedIds)
-    const byId = new Map(candidateNodes.map((n) => [n.nodeId, n]))
-    const likelySelectedIds = new Set<string>([...(focusCandidate ? [focusCandidate.nodeId] : []), ...topScoredAndroidCandidateIds(candidateNodes)])
 
     for (const pair of pairs) {
       if (!likelySelectedIds.has(pair.usageId)) continue

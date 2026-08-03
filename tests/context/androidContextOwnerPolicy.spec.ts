@@ -11,6 +11,7 @@ import {
   hasAndroidProvenance,
   isAndroidGeneratedCandidate,
   isAndroidTestOnlyCandidate,
+  isAndroidValidTestLocation,
   MAX_ANDROID_OWNER_SUPPORT_PATH_LENGTH,
 } from '../../src/context/androidContextOwnerPolicy.js'
 import type { AndroidIntent } from '../../src/context/androidContextIntent.js'
@@ -44,10 +45,18 @@ describe('androidOwnerEligible', () => {
     expect(androidOwnerEligible(testOnly, new Set<AndroidIntent>(['data']), false)).toBe(false)
   })
 
-  it('TST-617: a test-only candidate becomes eligible as a test edit location under explicit test intent', () => {
+  it('TST-617 (corrected): a test-only candidate is NEVER production-owner eligible, even under explicit test intent or the test-implementation role - it becomes a valid test EDIT LOCATION instead, a distinct concept', () => {
     const testOnly = { kind: 'android-test-method', classificationRoles: [role('android-unit-test', 'test-only')] }
-    expect(androidOwnerEligible(testOnly, new Set<AndroidIntent>(['test']), false)).toBe(true)
-    expect(androidOwnerEligible(testOnly, new Set<AndroidIntent>(), true)).toBe(true)
+    expect(androidOwnerEligible(testOnly, new Set<AndroidIntent>(['test']), false)).toBe(false)
+    expect(androidOwnerEligible(testOnly, new Set<AndroidIntent>(), true)).toBe(false)
+    expect(isAndroidValidTestLocation(testOnly, new Set<AndroidIntent>(['test']), false)).toBe(true)
+    expect(isAndroidValidTestLocation(testOnly, new Set<AndroidIntent>(), true)).toBe(true)
+    expect(isAndroidValidTestLocation(testOnly, new Set<AndroidIntent>(), false)).toBe(false)
+  })
+
+  it('a non-test-only Android node is never blanket-approved merely because test intent/role is present', () => {
+    const sourceSet = { kind: 'android-source-set', classificationRoles: [role('gradle-module', 'safe-primary-edit-target')] }
+    expect(androidOwnerEligible(sourceSet, new Set<AndroidIntent>(['test']), false)).toBe(false)
   })
 
   it('excludes docs-only and read-only-reference guidance from ownership', () => {

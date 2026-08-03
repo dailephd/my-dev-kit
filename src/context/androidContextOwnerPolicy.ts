@@ -131,6 +131,16 @@ export interface AndroidCandidateLike {
  * eligibility for a candidate this module itself excludes (generated, docs,
  * read-only, or test-only without explicit test intent/role).
  */
+/**
+ * Production-owner eligibility only (section 13/31.4). A `test-only` node is
+ * NEVER eligible here, under any intent or role - "no test-only production
+ * owner" is an unconditional invariant, not one that explicit test intent can
+ * waive. Explicit test work makes a test-only node a valid *test edit
+ * location* instead (section 15.2), which is a distinct concept evaluated by
+ * `isAndroidValidTestLocation` below, never by this function - conflating the
+ * two previously let a test-only node leak into the production "owners"
+ * evidence group under any query merely containing the word "test".
+ */
 export function androidOwnerEligible(
   candidate: AndroidCandidateLike,
   intents: ReadonlySet<AndroidIntent>,
@@ -141,15 +151,24 @@ export function androidOwnerEligible(
   if (roles.includes('generated-file')) return false
   const guidances = classificationGuidances(candidate)
   if (guidances.some((g) => HARD_EXCLUDED_GUIDANCE.has(g))) return false
-  const explicitTestIntent = intents.has('test') || isTestImplementationRole
-  if (!explicitTestIntent && guidances.includes(TEST_ONLY_GUIDANCE)) return false
-  if (explicitTestIntent) {
-    // Explicit test work: test-location categories are eligible as test edit
-    // locations, but never as the production owner (section 15.2/31.4) - the
-    // caller is responsible for keeping this distinct from "selected owner".
-    return true
-  }
-  return matchedTier(roles, intents) !== 'none'
+  if (guidances.includes(TEST_ONLY_GUIDANCE)) return false
+  const effectiveIntents = isTestImplementationRole && !intents.has('test') ? new Set([...intents, 'test' as const]) : intents
+  return matchedTier(roles, effectiveIntents) !== 'none'
+}
+
+/** True only when a test-only candidate is a valid test EDIT LOCATION (section
+ * 15.2/31.4) - explicit test intent or the `test-implementation` role, and
+ * the candidate itself actually carries `test-only` guidance. Never implies
+ * production-owner eligibility (see `androidOwnerEligible` above); callers
+ * building test-location/related-test evidence (never the "owners" group)
+ * may use this to admit a test-only node deliberately. */
+export function isAndroidValidTestLocation(
+  candidate: AndroidCandidateLike,
+  intents: ReadonlySet<AndroidIntent>,
+  isTestImplementationRole: boolean
+): boolean {
+  if (!isAndroidTestOnlyCandidate(candidate)) return false
+  return intents.has('test') || isTestImplementationRole
 }
 
 /** True only for a candidate whose sole plausible role is a test-location
@@ -224,6 +243,52 @@ export function findAndroidOwnerSupportNodeIds(options: {
     if (frontier.size === 0) break
   }
   return included
+}
+
+/** Fixed usage -> owner edge kinds (section 18/26). `reverse: true` means the
+ * owner is the edge source and the usage/projection is the edge target (e.g.
+ * a composable "has" a fact). Single canonical owner for both
+ * `conflictDetection.ts` (android-usage-selected-over-owner) and
+ * `evidenceGroups.ts` (suppressing a usage node's owner eligibility when its
+ * exact stronger owner is also present - section 16/31.5) - never a second
+ * copy of this edge-kind list. */
+export const USAGE_TO_OWNER_EDGE_KINDS: ReadonlyArray<{ kind: string; reverse: boolean }> = [
+  { kind: 'compose-state-reads-viewmodel', reverse: false },
+  { kind: 'source-references-resource', reverse: false },
+  { kind: 'compose-navigation-targets-route', reverse: false },
+  { kind: 'composable-has-fact', reverse: true },
+]
+
+export interface UsageOwnerPair {
+  usageId: string
+  ownerId: string
+}
+
+export function findUsageOwnerPairs(codeGraph: CodeGraph, candidateIds: ReadonlySet<string>): UsageOwnerPair[] {
+  const pairs: UsageOwnerPair[] = []
+  for (const edge of codeGraph.edges) {
+    const rule = USAGE_TO_OWNER_EDGE_KINDS.find((r) => r.kind === edge.kind)
+    if (!rule) continue
+    if (!candidateIds.has(edge.source) || !candidateIds.has(edge.target)) continue
+    pairs.push(rule.reverse ? { usageId: edge.target, ownerId: edge.source } : { usageId: edge.source, ownerId: edge.target })
+  }
+  return pairs
+}
+
+/**
+ * Node IDs that are the "usage" side of a fixed usage -> owner relationship
+ * (section 18/26) whose paired owner is also present among `candidateIds`
+ * (section 16: "a usage/projection node never outranks its exact stronger
+ * owner when one is connected through an existing graph edge" - section
+ * 31.5). Used to suppress a usage node's production-owner eligibility, never
+ * to remove it from ranking, dependency evidence, or conflict reporting.
+ */
+export function findAndroidUsageNodeIdsWithStrongerOwner(codeGraph: CodeGraph, candidateIds: ReadonlySet<string>): ReadonlySet<string> {
+  const suppressed = new Set<string>()
+  for (const pair of findUsageOwnerPairs(codeGraph, candidateIds)) {
+    suppressed.add(pair.usageId)
+  }
+  return suppressed
 }
 
 export function candidateNodeToPolicyInput(node: CandidateNode): AndroidCandidateLike {
