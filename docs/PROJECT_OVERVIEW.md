@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.12.0 is the latest published release. It retains the stage-specific bounded context work through v1.10.4, the Compose semantic retrieval, Android test semantic indexing, and bounded Compose/Android-test graph views shipped in v1.11.0, and adds Android architecture classification, static Android ownership/data-flow relationships, exact Android-role retrieval, bounded data-flow/related-test slicing, and Android-aware context owner selection.
+Version 1.12.1 is the latest published release. It retains the complete v1.12.0 Android architecture and data-flow surface and corrects architecture evidence allocation and required-witness adequacy: a positive explicit `limits.evidenceGroupEntries` value is enforced per applicable bounded group, optional or redundant truncation can remain adequate when every required architecture condition retains a witness, missing-before-allocation evidence is distinguished from allocation-caused final-witness loss, and capsule/audit requested-limit, applied-limit, condition, truncation, provenance, and adequacy evidence remain in parity under schema major `1`.
 
 The current repository and package metadata contain these shipped implementation capabilities:
 
@@ -205,7 +205,7 @@ my-dev-kit data-model --index .my-dev-kit --field User.email --trace-view --json
 
 The semantic and data-model layers build on the existing artifact model and remain deliberately narrow.
 
-Current repository scope (published through v1.12.0):
+Current repository scope (published through v1.12.1):
 
 - conservative TypeScript model extraction producing `data-entity` and `data-field` semantic roles
 - compact semantic metadata embedded in structural artifacts, linked to detailed artifacts via `artifactRefs`

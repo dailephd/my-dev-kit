@@ -865,7 +865,7 @@ The retrieval audit carries the same computed role, responsibility, adequacy, fr
 
 Current generation also writes the same canonical active-index identity to both artifacts: `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`. The source is the already validated index manifest, not process working-directory inference. Before/after identities remain in the shared `freshness.comparedIdentities` array. Before writing a requested pair, the producer validates these identities and every other duplicated readiness summary in deterministic order.
 
-Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner and relevant contract or extension-point evidence. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
+Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner, an extension point or grounded no-extension-point conclusion, a relevant contract, and test evidence or a grounded test gap. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
 
 Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
 
@@ -874,7 +874,7 @@ Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reas
 The current repository keeps context capsule and retrieval-audit schema version `"1.0.0"` while correcting implementation-role readiness:
 
 - Implementation-role `groupTruncation[]` entries may include optional allocation fields: `required`, `reservation`, `initiallySelectedCount`, `unusedReservationContributed`, `borrowedCapacity`, `requiredOmittedCount`, `optionalOmittedCount`, `adequacyAffected`, `governingHardBound`, `aggregateCapacityUsed`, and `aggregateCapacityRemaining`.
-- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other groups. In the published v1.10.3 contract, `requiredOmittedCount` conservatively counts qualified evidence still omitted after spillover. `governingHardBound` is the finite sum of participating reservations, not the request's reporting-only `limits.evidenceGroupEntries` value.
+- `reservation` is the group's initial share; `borrowedCapacity` is unused reservation reassigned from other groups under default behavior. A positive explicit `limits.evidenceGroupEntries` replaces each applicable reservation and is the hard maximum for that group. The shared `budget.limits[]` evidence-group entry adds `requestedValue` and sorted `appliedLimits[]` so capsule and audit expose the same requested/effective limits.
 - `responsibilityMappings.duplicateResponsibilityIds` remains the public duplicate diagnostic. Normalization preserves duplicate references until mapping, actual mappings stay unique in first-occurrence order, and duplicate and `unknownResponsibilityIds` diagnostics can both describe the same input.
 - `EvidenceItemRef.id` remains the public evidence identity. For directed file-edge classification, a plain file item is matched to the code graph through canonical `file:<path>` node identity; symbol items use their existing symbol node ID. No new public ID format is introduced.
 - Retrieval-audit `index.manifestSchemaVersion` and `index.projectRoot` are additive optional fields for schema-major-1 compatibility. Current generation always populates them; old supported-major audits can omit them and remain parseable, with identity unavailable rather than inferred.
@@ -885,7 +885,7 @@ These additions are optional for schema-major-1 consumers. Existing fields retai
 
 The context capsule and retrieval audit remain schema version `"1.0.0"`. Current producer output adds the same ordered `roleConditionCoverage` array to both artifacts. The serialized `RoleConditionCoverage` shape is:
 
-- `conditionId`: stable `RoleConditionId`; currently `implementation.selected-owner` or `implementation.required-contract`.
+- `conditionId`: stable `RoleConditionId`; current values are `architecture-owner`, `architecture-extension-point`, `architecture-contract`, `architecture-test-or-explicit-gap`, `implementation.selected-owner`, and `implementation.required-contract`.
 - `role`, `required`, and `evidenceGroupIds`: the role, requiredness, and associated group identity from the canonical internal `RoleConditionDefinition`.
 - `witnessPolicy`: `RoleConditionWitnessPolicy`, currently only `at-least-one`.
 - `requiredWitnessCount`, `availableWitnessCount`, and `retainedWitnessCount`: the required minimum and adequate witness counts before and after allocation.
@@ -901,7 +901,7 @@ For current condition-aware output, `groupTruncation[].requiredOmittedCount` is 
 
 `TruncationSummary.requiredEvidenceLost` is an additive rollup emitted by current output. It equals whether any `truncation.records[]` entry reports `requiredEvidenceLost: true`; `TruncationSummary.truncated` remains independently true for general bounded overflow.
 
-Legacy schema-major-1 capsule/audit pairs may omit both `roleConditionCoverage` and `TruncationSummary.requiredEvidenceLost`. Both-absent pairs remain readable and use conservative legacy evaluation. One-sided absence or any value/order/witness disagreement is a raw-evidence parity error; absence is never normalized to an empty current result. Current implementation-role generation supplies nonempty owner/contract coverage, and a missing or empty current coverage array fails closed.
+Legacy schema-major-1 capsule/audit pairs may omit both `roleConditionCoverage` and `TruncationSummary.requiredEvidenceLost`. Both-absent pairs remain readable and use conservative legacy evaluation. One-sided absence or any value/order/witness disagreement is a raw-evidence parity error. Current implementation and architecture generation supplies condition coverage; architecture conditions use IDs `architecture-owner`, `architecture-extension-point`, `architecture-contract`, and `architecture-test-or-explicit-gap`. Owner/contract absence is distinct from allocation loss, while grounded empty extension/test discovery satisfies the corresponding explicit-gap policy.
 
 ### Additive Android context ownership fields (v1.12.0 Batch 6)
 

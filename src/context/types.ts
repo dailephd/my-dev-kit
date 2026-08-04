@@ -63,10 +63,8 @@ export const REQUESTED_EVIDENCE_KINDS: readonly RequestedEvidenceKind[] = [
   'responsibility-mappings',
 ]
 
-/** Structured limits for later-batch role-aware retrieval. Distinct from the
- * existing operational `ContextCapsuleLimits` (--max-candidate-files etc.):
- * these fields are validated and preserved in Batch 1 but are not yet
- * consulted by retrieval. */
+/** Structured limits for role-aware retrieval. Distinct from the existing
+ * operational `ContextCapsuleLimits` (--max-candidate-files etc.). */
 export interface ContextRequestLimits {
   candidates?: number
   graphDepth?: number
@@ -932,6 +930,10 @@ export interface EvidenceGroup {
  * New conditions must be added through the canonical definition owner rather than
  * re-declared by allocation, adequacy, or serialization modules. */
 export type RoleConditionId =
+  | 'architecture-owner'
+  | 'architecture-extension-point'
+  | 'architecture-contract'
+  | 'architecture-test-or-explicit-gap'
   | 'implementation.selected-owner'
   | 'implementation.required-contract'
 
@@ -950,6 +952,9 @@ export interface RoleConditionDefinition {
   conditionLabel: string
   description: string
   evaluationOrder: number
+  /** Some architecture conditions explicitly accept a grounded empty discovery
+   * result (for example, no extension point or no closest test). */
+  emptyEvidenceSatisfies?: boolean
 }
 
 export type RoleConditionCoverageLossReason = 'bounded-allocation-omitted-required-witnesses'
@@ -1191,6 +1196,10 @@ export interface BudgetLimitUsage {
   truncated: boolean
   requiredEvidenceAffected: boolean
   adequacyImpact: string | null
+  /** Additive schema-major-1 limit diagnostics. Present for the
+   * evidenceGroupEntries entry in current output. */
+  requestedValue?: number | null
+  appliedLimits?: Array<{ groupId: string; limit: number | null }>
 }
 
 export interface BudgetCharacterUsage {

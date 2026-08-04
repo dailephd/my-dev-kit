@@ -382,7 +382,7 @@ describe('required-first evidence allocation (Batch 2)', () => {
     expect(secondCapsule.roleAdequacy).toEqual(firstCapsule.roleAdequacy)
   })
 
-  it('TST-B1202-009: architecture and legacy roles are unaffected by the required-first allocator', () => {
+  it('TST-B1202-009: architecture preserves default caps and legacy roles remain unaffected', () => {
     const root = createTempRoot('my-dev-kit-v1-alloc-role-compat-')
     const src = join(root, 'src')
     mkdirSync(src, { recursive: true })
@@ -401,11 +401,14 @@ describe('required-first evidence allocation (Batch 2)', () => {
     const archOut = join(root, 'arch-capsule.json')
     expect(runContext(indexOut, archRequestPath, archOut).status).toBe(0)
     const archCapsule = JSON.parse(readFileSync(archOut, 'utf8'))
-    // Architecture-role groups were never routed through the Batch 2 allocator: no
-    // allocation-diagnostic fields are present on its groupTruncation entries.
+    // Architecture keeps its historical default caps while exposing additive
+    // diagnostics from the shared allocator.
     for (const g of archCapsule.groupTruncation as GroupTruncationLike[]) {
-      expect(g.reservation).toBeUndefined()
-      expect(g.borrowedCapacity).toBeUndefined()
+      if (g.groupId === 'architecture-owners') expect(g.reservation).toBe(5)
+      if (g.groupId === 'architecture-extension-points') expect(g.reservation).toBe(8)
+      if (g.groupId === 'architecture-contracts') expect(g.reservation).toBe(10)
+      if (g.groupId === 'architecture-architecture-tests') expect(g.reservation).toBe(8)
+      if (g.groupId !== 'architecture-graph-neighborhood') expect(g.borrowedCapacity).toBe(0)
       expect(g.governingHardBound).toBeUndefined()
     }
 

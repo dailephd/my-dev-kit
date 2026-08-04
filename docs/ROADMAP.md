@@ -993,7 +993,7 @@ Test files receive general test/fixture classification; fixtures, factories, moc
 
 - candidate limits, graph depth/node/edge limits, file/symbol limits, source-range and source-line limits, character limits, evidence-group-entry limits, full-file-fallback limits, and responsibility-mapping limits are all declared and reported alongside their used/available/dropped counts
 - `limits.responsibilityMappings` is an enforcing limit: it actually caps how many responsibility mappings are produced, truncating deterministically critical-first (a critical responsibility can only be dropped once every critical one already exceeds the limit)
-- `limits.evidenceGroupEntries` is a reporting-only budget: it is recorded as a declared value alongside the real usage/availability/drop counts, but the actual per-group caps that shape evidence-group truncation are the fixed internal limits each group defines (for example 3 or 5 for owners, 10 for contracts); the declared field does not override those internal caps. This is a deliberate reporting boundary, not an unresolved implementation gap.
+- `limits.evidenceGroupEntries` is an enforcing positive per-group limit. When absent, historical group defaults apply; when present, its normalized value replaces every applicable bounded group's default and is reported with the applied group limits.
 - truncation is always reported with dropped counts, whether required evidence was lost, and the resulting adequacy impact
 - full-file fallback remains exceptional: it is attempted only for contract/validator/error evidence a responsibility mapping needed but no selected source slice covered, it records line/character counts rather than the file content itself, a fallback limit of zero disables it entirely while still reporting the disallowed need honestly, and a positive limit deterministically caps the fallback count
 
@@ -1073,7 +1073,7 @@ Correct implementation-role context readiness so structurally credible owners ar
 
 - `ContextRequest`, context capsules, and retrieval-audit records remain schema major `1`; the current artifact schema version remains `"1.0.0"`.
 - Existing `context` syntax, modes, roles, requested-evidence kinds, and legacy no-role behavior remain unchanged.
-- `limits.evidenceGroupEntries` remains diagnostic/reporting-only. The finite implementation required-evidence bound is the sum of the participating groups' internal reservations.
+- `limits.evidenceGroupEntries` is enforced per applicable group; the historical implementation required-evidence bound remains the default only when the field is absent.
 - Responsibility criticality remains outside the string-only `testResponsibilityRefs` request field; this patch does not add a new criticality contract.
 - my-dev-kit remains a local, read-only, deterministic static-evidence producer. The current orchestrator does not automatically invoke it.
 
@@ -1270,6 +1270,14 @@ Candidate command shapes:
 - no network inspection
 - no emulator execution
 - no guarantee that navigation or UI is reachable at runtime
+
+## Version 1.12.1
+
+**Status: published.**
+
+Version 1.12.1 is a bounded corrective patch for architecture evidence allocation and required-witness adequacy. It makes a positive explicit `limits.evidenceGroupEntries` value enforce the maximum retained entries per applicable bounded evidence group while preserving historical defaults when absent, distinguishes optional or redundant omission from allocation-caused loss of the final required witness, and keeps capsule/audit limit and condition evidence in schema-major-1 parity.
+
+The patch adds no command, flag, role, artifact family, runtime analysis, freshness behavior, closest-test behavior, or v1.13.0 benchmark scope. Genuine missing evidence, final-witness loss, unpreserved material ambiguity, missing provenance, unresolved material conflict, and capsule/audit disagreement remain fail-closed.
 
 ## Version 1.13.0
 

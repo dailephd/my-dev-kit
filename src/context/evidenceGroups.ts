@@ -105,14 +105,15 @@ function dedupeById(items: EvidenceItemRef[]): EvidenceItemRef[] {
  * before this batch. Nothing is invented: reassignment only ever moves capacity
  * that another required group in this pass left unused, so total selected
  * evidence across the pass can never exceed that pre-existing sum. This is
- * deliberately independent of `requestLimits.evidenceGroupEntries`, which remains
- * a diagnostic/reporting-only value (contextBudget.ts) and is never treated as an
- * enforced allocation bound.
+ * An explicit `requestLimits.evidenceGroupEntries` replaces each participating
+ * group's reservation and is also its hard per-group limit. Without an explicit
+ * value, the historical reservations and spillover behavior remain unchanged.
  */
 export interface RequiredGroupAllocationInput {
   kind: EvidenceGroupKind
   items: EvidenceItemRef[]
   reservation: number
+  hardLimit?: number
 }
 
 export interface RequiredGroupAllocationResult {
@@ -130,10 +131,11 @@ export interface RequiredGroupAllocationResult {
 function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): RequiredGroupAllocationResult[] {
   const prepared = inputs.map((input) => {
     const dedupedItems = dedupeById(input.items)
-    const initiallySelected = dedupedItems.slice(0, input.reservation)
-    const remaining = dedupedItems.slice(input.reservation)
+    const initialLimit = Math.min(input.reservation, input.hardLimit ?? input.reservation)
+    const initiallySelected = dedupedItems.slice(0, initialLimit)
+    const remaining = dedupedItems.slice(initialLimit)
     const unusedReservationContributed = Math.max(0, input.reservation - dedupedItems.length)
-    return { kind: input.kind, reservation: input.reservation, dedupedItems, initiallySelected, remaining, unusedReservationContributed }
+    return { kind: input.kind, reservation: input.reservation, hardLimit: input.hardLimit, dedupedItems, initiallySelected, remaining, unusedReservationContributed }
   })
 
   let pool = prepared.reduce((sum, g) => sum + g.unusedReservationContributed, 0)
@@ -142,7 +144,10 @@ function allocateRequiredGroups(inputs: RequiredGroupAllocationInput[]): Require
     let borrowedCapacity = 0
     let selectedItems = g.initiallySelected
     if (pool > 0 && g.remaining.length > 0) {
-      const take = Math.min(pool, g.remaining.length)
+      const remainingHardCapacity = g.hardLimit === undefined
+        ? g.remaining.length
+        : Math.max(0, g.hardLimit - g.initiallySelected.length)
+      const take = Math.min(pool, g.remaining.length, remainingHardCapacity)
       selectedItems = [...g.initiallySelected, ...g.remaining.slice(0, take)]
       borrowedCapacity = take
       pool -= take
@@ -484,6 +489,8 @@ export interface BuildEvidenceGroupsOptions {
   /** v1.12.0 Batch 6: detected Android task intents for this request. Empty
    * set for a non-Android or intent-free query. */
   androidIntents?: ReadonlySet<AndroidIntent>
+  /** Explicit per-group evidence limit from the normalized ContextRequest. */
+  evidenceGroupEntries?: number
 }
 
 export interface BuildEvidenceGroupsResult {
@@ -594,10 +601,42 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   let selectedTests: EvidenceItemRef[] = []
 
   if (role === 'architecture') {
-    const ownersGroup = pushGroup('owners', ownerItems, { limit: 5, required: true, provenance: 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates' })
     const extensionPoints = ownerItems.filter((item) => adjacentItems.some((a) => a.id === item.id))
-    pushGroup('extension-points', extensionPoints, { limit: 8, required: true, provenance: 'structural owners that are also graph-adjacent to the focus/seed' })
-    const contractsGroup = pushGroup('contracts', contractItems, { limit: 10, required: true, provenance: 'contract-like classification over role-ranked candidates' })
+    const architectureInputs: RequiredGroupAllocationInput[] = [
+      { kind: 'owners', items: ownerItems, reservation: options.evidenceGroupEntries ?? 5, hardLimit: options.evidenceGroupEntries ?? 5 },
+      { kind: 'extension-points', items: extensionPoints, reservation: options.evidenceGroupEntries ?? 8, hardLimit: options.evidenceGroupEntries ?? 8 },
+      { kind: 'contracts', items: contractItems, reservation: options.evidenceGroupEntries ?? 10, hardLimit: options.evidenceGroupEntries ?? 10 },
+      { kind: 'architecture-tests', items: closestTestItems, reservation: options.evidenceGroupEntries ?? 8, hardLimit: options.evidenceGroupEntries ?? 8 },
+    ]
+    const allocations = allocateRequiredGroups(architectureInputs)
+    roleConditionCoverage = evaluateRoleConditionCoverage({
+      role,
+      evidenceGroups: allocations.map((allocation) => ({
+        groupId: `${role}-${allocation.kind}`,
+        availableItems: allocation.dedupedItems,
+        retainedItems: allocation.selectedItems,
+      })),
+    })
+    const allocationByKind = new Map(allocations.map((allocation) => [allocation.kind, allocation]))
+    function pushArchitectureGroup(kind: EvidenceGroupKind, provenance: string): EvidenceGroup {
+      const allocation = allocationByKind.get(kind)
+      if (!allocation) throw new Error(`Missing architecture allocation for evidence group "${kind}"`)
+      return pushGroup(kind, allocation.selectedItems, {
+        limit: allocation.effectiveLimit,
+        required: true,
+        provenance,
+        availableCountOverride: allocation.dedupedItems.length,
+      }, {
+        required: true,
+        reservation: allocation.reservation,
+        initiallySelectedCount: allocation.initiallySelectedCount,
+        unusedReservationContributed: allocation.unusedReservationContributed,
+        borrowedCapacity: allocation.borrowedCapacity,
+      })
+    }
+    const ownersGroup = pushArchitectureGroup('owners', 'structural ownership evidence (exported symbol, contract/canonical-type naming, classification, or graph producer relationship) over role-ranked candidates')
+    pushArchitectureGroup('extension-points', 'structural owners that are also graph-adjacent to the focus/seed')
+    const contractsGroup = pushArchitectureGroup('contracts', 'contract-like classification over role-ranked candidates')
     const graphNeighborhoodItems: EvidenceItemRef[] = selectedGraph.nodes.map((n) => ({
       id: n.nodeId,
       itemKind: n.kind === 'symbol' ? 'symbol' : 'file',
@@ -613,7 +652,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       provenance: 'reused selectGraphNeighborhood output (Batch 2/3 selected graph)',
       availableCountOverride: graphNeighborhoodItems.length,
     })
-    pushGroup('architecture-tests', closestTestItems, { limit: 8, required: true, provenance: 'test-file naming convention over role-ranked candidates' })
+    pushArchitectureGroup('architecture-tests', 'test-file naming convention over role-ranked candidates')
     selectedOwners = ownersGroup.items
     selectedContracts = contractsGroup.items
   } else if (role === 'implementation') {
@@ -631,16 +670,23 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     // same fixed priority order, rather than as isolated final caps (see
     // allocateRequiredGroups above). Group identities, candidate content, and
     // candidate rank/order are unchanged from Batch 1/pre-Batch-2.
+    const explicitLimit = options.evidenceGroupEntries
+    const allocationInput = (kind: EvidenceGroupKind, items: EvidenceItemRef[], defaultReservation: number): RequiredGroupAllocationInput => ({
+      kind,
+      items,
+      reservation: explicitLimit ?? defaultReservation,
+      ...(explicitLimit === undefined ? {} : { hardLimit: explicitLimit }),
+    })
     const allocations = allocateRequiredGroups([
-      { kind: 'owners', items: ownerItems, reservation: 3 },
-      { kind: 'dependencies', items: dependencyGroupItems, reservation: 10 },
-      { kind: 'callers-and-callees', items: callersGroupItems, reservation: 15 },
-      { kind: 'contracts', items: contractItems, reservation: 10 },
-      { kind: 'validators-and-constants', items: validators, reservation: 10 },
-      { kind: 'errors', items: errors, reservation: 10 },
-      { kind: 'schemas-and-serializers', items: schemas, reservation: 10 },
-      { kind: 'compatibility-surfaces', items: exportedSymbolItems, reservation: 8 },
-      { kind: 'closest-tests', items: closestTestItems, reservation: 8 },
+      allocationInput('owners', ownerItems, 3),
+      allocationInput('dependencies', dependencyGroupItems, 10),
+      allocationInput('callers-and-callees', callersGroupItems, 15),
+      allocationInput('contracts', contractItems, 10),
+      allocationInput('validators-and-constants', validators, 10),
+      allocationInput('errors', errors, 10),
+      allocationInput('schemas-and-serializers', schemas, 10),
+      allocationInput('compatibility-surfaces', exportedSymbolItems, 8),
+      allocationInput('closest-tests', closestTestItems, 8),
     ])
     roleConditionCoverage = evaluateRoleConditionCoverage({
       role,
@@ -788,11 +834,13 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       ['setup-and-configuration', setupAndConfigItems],
       ['test-commands', testCommandItems],
     ])
+    const explicitLimit = options.evidenceGroupEntries
     const allocations = allocateRequiredGroups(
       TEST_IMPLEMENTATION_REQUIRED_RESERVATIONS.map(({ kind, reservation }) => ({
         kind,
         items: candidatesByKind.get(kind) ?? [],
-        reservation,
+        reservation: explicitLimit ?? reservation,
+        ...(explicitLimit === undefined ? {} : { hardLimit: explicitLimit }),
       }))
     )
     const allocationByKind = new Map(allocations.map((allocation) => [allocation.kind, allocation]))

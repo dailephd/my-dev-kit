@@ -343,8 +343,10 @@ npx @dailephd/my-dev-kit context --request context-request.json --json
 
 1. Index or refresh the repository using the existing `index` command.
 2. Retrieve architecture-role context for the request.
-3. Inspect ownership ambiguity, structural evidence, adequacy, truncation, and provenance.
-4. Use the evidence to identify the extension point and avoid parallel architecture.
+3. Inspect requested/applied evidence-group limits and the four architecture conditions: owner, extension point or grounded no-extension conclusion, contract, and test evidence or grounded test gap.
+4. Confirm required provenance and capsule/audit parity. Omitted surplus may remain visible as optional truncation when all applicable witnesses remain covered.
+5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition/provenance is missing, or material ambiguity/conflict cannot be preserved. Do not stop solely because optional truncation is present.
+6. Use the evidence to identify the extension point and avoid parallel architecture.
 
 The primary question is: "Where should the behavior live?"
 
@@ -353,8 +355,8 @@ The primary question is: "Where should the behavior live?"
 1. Refresh the index immediately before production editing.
 2. Retrieve implementation-role context rather than relying only on the earlier architecture capsule.
 3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests. A structurally grounded owner needs request relevance plus independent structural support; a focused or owner-named file is not enough by itself.
-4. Inspect allocation and role-condition diagnostics. Unused reservation can be borrowed by another group; after the finite aggregate bound is exhausted, omitted surplus candidates remain visible as optional truncation when the required owner and contract witnesses are still covered.
-5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition is missing, context is stale, or freshness is unknown where the workflow requires proof. Do not stop solely because optional truncation is present.
+4. Inspect requested/applied evidence-group limits and the implementation owner/contract conditions. Omitted surplus remains visible as optional truncation when both required witnesses remain covered.
+5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition/provenance is missing, material ambiguity/conflict cannot be preserved, capsule/audit parity fails, context is stale, or freshness is unknown where the workflow requires proof. Do not stop solely because optional truncation is present.
 6. Implement production code outside my-dev-kit context generation.
 
 The primary question is: "What exact current code must be changed or preserved?"
