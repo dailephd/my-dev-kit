@@ -78,7 +78,7 @@ Distinguish published-baseline examples from local release-candidate examples. E
 
 ## Final document state gate
 
-The release pull request intentionally contains final post-publication wording because the exact commit merged into `main` will be tagged, used for the GitHub Release, packed, and published to npm. Do not merge transitional release-state wording and plan to correct it after publication.
+The release pull request intentionally contains final release-state wording even though the target has not yet been published when the pull request is created. The exact commit merged into `main` is then tagged, used for the GitHub Release, packed, and published to npm. Do not merge transitional release-state wording and plan to correct it after publication.
 
 Before creating the release pull request, verify all of these conditions on the release branch:
 

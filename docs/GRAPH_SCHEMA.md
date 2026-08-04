@@ -865,7 +865,7 @@ The retrieval audit carries the same computed role, responsibility, adequacy, fr
 
 Current generation also writes the same canonical active-index identity to both artifacts: `indexPath`, `manifestPath`, `manifestSchemaVersion`, and `projectRoot`. The source is the already validated index manifest, not process working-directory inference. Before/after identities remain in the shared `freshness.comparedIdentities` array. Before writing a requested pair, the producer validates these identities and every other duplicated readiness summary in deterministic order.
 
-Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner and relevant contract or extension-point evidence. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
+Role adequacy distinguishes nonempty output from sufficient evidence. Architecture requires a plausible owner, an extension point or grounded no-extension-point conclusion, a relevant contract, and test evidence or a grounded test gap. Implementation additionally requires relevant source and contract evidence. Test implementation requires changed production evidence, related test infrastructure or an explicit missing-test state, and all critical responsibilities mapped.
 
 Freshness is `fresh`, `stale`, or `unknown` and always includes inspectable reasons. Index existence alone never establishes freshness. Serialization preserves stable paths and ordering, reports truncation and bounded full-file fallback, and measures deterministic characters rather than claiming exact model-token counts.
 
@@ -885,7 +885,7 @@ These additions are optional for schema-major-1 consumers. Existing fields retai
 
 The context capsule and retrieval audit remain schema version `"1.0.0"`. Current producer output adds the same ordered `roleConditionCoverage` array to both artifacts. The serialized `RoleConditionCoverage` shape is:
 
-- `conditionId`: stable `RoleConditionId`; currently `implementation.selected-owner` or `implementation.required-contract`.
+- `conditionId`: stable `RoleConditionId`; current values are `architecture-owner`, `architecture-extension-point`, `architecture-contract`, `architecture-test-or-explicit-gap`, `implementation.selected-owner`, and `implementation.required-contract`.
 - `role`, `required`, and `evidenceGroupIds`: the role, requiredness, and associated group identity from the canonical internal `RoleConditionDefinition`.
 - `witnessPolicy`: `RoleConditionWitnessPolicy`, currently only `at-least-one`.
 - `requiredWitnessCount`, `availableWitnessCount`, and `retainedWitnessCount`: the required minimum and adequate witness counts before and after allocation.

@@ -1271,6 +1271,14 @@ Candidate command shapes:
 - no emulator execution
 - no guarantee that navigation or UI is reachable at runtime
 
+## Version 1.12.1
+
+**Status: implemented, unreleased.**
+
+Version 1.12.1 is a bounded corrective patch for architecture evidence allocation and required-witness adequacy. It makes a positive explicit `limits.evidenceGroupEntries` value enforce the maximum retained entries per applicable bounded evidence group while preserving historical defaults when absent, distinguishes optional or redundant omission from allocation-caused loss of the final required witness, and keeps capsule/audit limit and condition evidence in schema-major-1 parity.
+
+The patch adds no command, flag, role, artifact family, runtime analysis, freshness behavior, closest-test behavior, or v1.13.0 benchmark scope. Genuine missing evidence, final-witness loss, unpreserved material ambiguity, missing provenance, unresolved material conflict, and capsule/audit disagreement remain fail-closed.
+
 ## Version 1.13.0
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.

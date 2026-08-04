@@ -6,6 +6,12 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.0` is the latest published release.
 
+## Implemented, unreleased: v1.12.1
+
+Version 1.12.1 is the current implemented patch target and is not yet published. It corrects architecture evidence allocation and required-witness adequacy so a positive explicit `limits.evidenceGroupEntries` value applies per applicable bounded evidence group, historical defaults remain when the field is absent, and requested/applied limits are visible in matching capsule/audit budget evidence.
+
+Architecture adequacy now evaluates owner, extension-point-or-grounded-gap, contract, and test-or-grounded-gap witnesses. Optional or redundant omission remains visible as truncation without fabricating required evidence loss when every condition stays covered. Missing-before-allocation evidence can still make context insufficient without being mislabeled as lost; allocation that removes the final available required witness remains fail-closed. Schema-major-1 compatibility and implementation-role, test-implementation, Android, and non-Android regression protections remain intact.
+
 ## Shipped: v1.12.0
 
 Version 1.12.0 (Android architecture classification and Android data-flow retrieval) is published. Package metadata and the CLI report `1.12.0`. Implementation, documentation reconciliation, pre-release readiness, cross-platform validation, security/package validation, and release gates are complete.
