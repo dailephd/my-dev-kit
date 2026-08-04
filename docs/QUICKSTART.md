@@ -182,7 +182,7 @@ Source retrieval never modifies source files. The `--max-lines` limit is enforce
 
 ### v1.11.0 Compose retrieval
 
-This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the latest published release, `@dailephd/my-dev-kit@1.12.0`. The examples below may also be run from a source checkout built with `npm run build`.
+This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the latest published release, `@dailephd/my-dev-kit@1.12.1`. The examples below may also be run from a source checkout built with `npm run build`.
 
 ```sh
 node dist/cli.js source --index .my-dev-kit --composable HomeScreen --include-compose-tree --format numbered

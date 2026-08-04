@@ -1273,7 +1273,7 @@ Candidate command shapes:
 
 ## Version 1.12.1
 
-**Status: implemented, unreleased.**
+**Status: published.**
 
 Version 1.12.1 is a bounded corrective patch for architecture evidence allocation and required-witness adequacy. It makes a positive explicit `limits.evidenceGroupEntries` value enforce the maximum retained entries per applicable bounded evidence group while preserving historical defaults when absent, distinguishes optional or redundant omission from allocation-caused loss of the final required witness, and keeps capsule/audit limit and condition evidence in schema-major-1 parity.
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.12.1 - 2026-08-04
+
 - Corrected architecture evidence allocation and required-witness adequacy semantics. `limits.evidenceGroupEntries` now applies as the positive per-group limit for bounded evidence groups, architecture owner/extension-point/contract/test conditions reserve and evaluate witnesses explicitly, optional or redundant truncation no longer reports required evidence loss, and capsule/audit output records matching requested and applied limits without changing schema major `1`.
 
 ## 1.12.0 - 2026-08-03

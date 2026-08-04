@@ -1,6 +1,6 @@
 # Commands
 
-`@dailephd/my-dev-kit@1.12.0` is the latest published release and includes the v1.12.0 command contracts documented here.
+`@dailephd/my-dev-kit@1.12.1` is the latest published release and includes the v1.12.0 command surface plus the corrected architecture evidence-limit and required-witness semantics documented here.
 
 my-dev-kit provides nine public CLI commands:
 
