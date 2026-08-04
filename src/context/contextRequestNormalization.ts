@@ -193,9 +193,10 @@ function validateLimits(value: unknown, displayPath: string): ContextRequestLimi
   for (const key of allowedKeys) {
     const fieldValue = obj[key]
     if (fieldValue === undefined) continue
-    if (typeof fieldValue !== 'number' || !Number.isInteger(fieldValue) || fieldValue < 0) {
+    const minimum = key === 'evidenceGroupEntries' ? 1 : 0
+    if (typeof fieldValue !== 'number' || !Number.isInteger(fieldValue) || fieldValue < minimum) {
       throw new Error(
-        `Invalid limits.${key} in context request file ${displayPath}: expected a non-negative integer, got ${JSON.stringify(fieldValue)}.`
+        `Invalid limits.${key} in context request file ${displayPath}: expected a ${minimum === 1 ? 'positive' : 'non-negative'} integer, got ${JSON.stringify(fieldValue)}.`
       )
     }
     result[key] = fieldValue

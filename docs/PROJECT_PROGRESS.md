@@ -79,9 +79,9 @@ Version 1.10.1 shipped as a bounded patch on the v1.10.0 baseline that extends t
 ### Known implementation facts worth tracking precisely
 
 - `limits.responsibilityMappings` is an **enforcing** limit — it actually truncates the number of responsibility mappings produced (`src/context/contextBudget.ts`, `src/context/responsibilityMapping.ts`).
-- `limits.evidenceGroupEntries` is **reporting-only** — the field is validated, normalized, and reported alongside real usage/availability/drop counts in `budget.limits[]`, but the actual per-group truncation caps come from fixed internal values in `src/context/evidenceGroups.ts` (for example owners = 3 or 5 depending on role, contracts = 10). The declared request-level value does not override those internal caps. This is documented in `docs/ROADMAP.md` as an intentional reporting boundary, not a gap.
+- `limits.evidenceGroupEntries` is an **enforcing positive per-group limit** in the Unreleased v1.12.1 correction. Historical defaults remain when absent; requested and applied limits are recorded in matching capsule/audit budget diagnostics.
 - Files that merely match a naming convention (for example a file named similarly to "builder" or "factory") are intentionally excluded from evidence groups and test-infrastructure discovery unless backed by graph, import, or classification evidence. This is a deliberate conservative boundary.
-- For the implementation role, internal group caps are initial reservations in a shared finite allocation pass. This does not make `limits.evidenceGroupEntries` an enforcing selector. In v1.10.4, overflow remaining after the aggregate bound is classified against explicit role-condition witness coverage rather than treating every omitted candidate from a required group as required loss.
+- For the implementation role, internal group caps remain initial reservations only when no explicit evidence-group limit is supplied. Overflow is classified against explicit role-condition witness coverage rather than treating every omitted candidate from a required group as required loss.
 
 ### Documentation correction
 

@@ -98,7 +98,7 @@ export function buildBudget(options: BuildBudgetOptions): BudgetSummary {
   const evidenceGroupUsed = evidenceGroups.reduce((sum, g) => sum + g.usedCount, 0)
   const evidenceGroupAvailable = evidenceGroups.reduce((sum, g) => sum + g.availableCount, 0)
   const evidenceGroupDropped = evidenceGroups.reduce((sum, g) => sum + g.droppedCount, 0)
-  const requiredEvidenceGroupsTruncated = groupTruncation.some((g) => g.truncated && evidenceGroups.find((eg) => eg.id === g.groupId)?.required)
+  const requiredEvidenceGroupsTruncated = groupTruncation.some((g) => g.adequacyAffected === true)
   limits.push({
     name: 'evidenceGroupEntries',
     declaredValue: evidenceGroupEntriesDeclared,
@@ -108,6 +108,11 @@ export function buildBudget(options: BuildBudgetOptions): BudgetSummary {
     truncated: evidenceGroupDropped > 0,
     requiredEvidenceAffected: requiredEvidenceGroupsTruncated,
     adequacyImpact: requiredEvidenceGroupsTruncated ? 'Required evidence-group truncation may reduce role adequacy.' : null,
+    requestedValue: evidenceGroupEntriesDeclared,
+    appliedLimits: evidenceGroups
+      .filter((group) => group.limit !== null)
+      .map((group) => ({ groupId: group.id, limit: group.limit }))
+      .sort((left, right) => left.groupId.localeCompare(right.groupId)),
   })
 
   limits.push({
@@ -171,7 +176,7 @@ export function buildTruncation(options: BuildTruncationOptions): TruncationSumm
     if (
       !sharedClassificationAvailable &&
       roleConditionCoverage !== undefined &&
-      group?.role === 'implementation'
+      group?.role !== null
     ) {
       warnings.push(
         `Condition coverage was available but omission classification was absent for group "${entry.groupId}"; conservative required-group fallback was used.`

@@ -407,6 +407,7 @@ export function registerContextCommand(program: Command): void {
         selectedGraph,
         repoRoot,
         androidIntents,
+        evidenceGroupEntries: normalized.requestLimits?.evidenceGroupEntries,
       })
       steps.push({
         id: 'step-build-evidence-groups',

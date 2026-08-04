@@ -14,6 +14,52 @@ import type {
  */
 export const ROLE_CONDITION_DEFINITIONS: readonly RoleConditionDefinition[] = [
   {
+    conditionId: 'architecture-owner',
+    role: 'architecture',
+    required: true,
+    witnessPolicy: 'at-least-one',
+    requiredWitnessCount: 1,
+    evidenceGroupIds: ['architecture-owners'],
+    conditionLabel: 'at least one plausible owner is present',
+    description: 'At least one adequate architecture owner remains selected.',
+    evaluationOrder: 10,
+  },
+  {
+    conditionId: 'architecture-extension-point',
+    role: 'architecture',
+    required: true,
+    witnessPolicy: 'at-least-one',
+    requiredWitnessCount: 1,
+    evidenceGroupIds: ['architecture-extension-points'],
+    conditionLabel: 'an extension point or grounded no-extension-point conclusion is present',
+    description: 'An architecture extension point remains selected, or bounded discovery grounds that none exists.',
+    evaluationOrder: 20,
+    emptyEvidenceSatisfies: true,
+  },
+  {
+    conditionId: 'architecture-contract',
+    role: 'architecture',
+    required: true,
+    witnessPolicy: 'at-least-one',
+    requiredWitnessCount: 1,
+    evidenceGroupIds: ['architecture-contracts'],
+    conditionLabel: 'at least one relevant contract is present',
+    description: 'At least one adequate architecture contract remains selected.',
+    evaluationOrder: 30,
+  },
+  {
+    conditionId: 'architecture-test-or-explicit-gap',
+    role: 'architecture',
+    required: true,
+    witnessPolicy: 'at-least-one',
+    requiredWitnessCount: 1,
+    evidenceGroupIds: ['architecture-architecture-tests'],
+    conditionLabel: 'architecture test evidence or a grounded test gap is present',
+    description: 'Architecture test evidence remains selected, or bounded discovery grounds an explicit test gap.',
+    evaluationOrder: 40,
+    emptyEvidenceSatisfies: true,
+  },
+  {
     conditionId: 'implementation.selected-owner',
     role: 'implementation',
     required: true,
@@ -91,7 +137,9 @@ export function evaluateRoleConditionCoverage(options: EvaluateRoleConditionCove
         .flatMap((groupId) => groupById.get(groupId)?.retainedItems ?? [])
         .filter((item) => availableWitnessIdSet.has(item.id))
     )
-    const conditionSatisfied = retainedWitnessIds.length >= definition.requiredWitnessCount
+    const conditionSatisfied =
+      retainedWitnessIds.length >= definition.requiredWitnessCount ||
+      (definition.emptyEvidenceSatisfies === true && availableWitnessIds.length === 0)
     const lostRequiredCondition =
       definition.required &&
       availableWitnessIds.length >= definition.requiredWitnessCount &&

@@ -30,16 +30,16 @@ import type {
   RoleConditionCoverage,
 } from './types.js'
 
-function implementationConditionLabel(conditionId: RoleConditionId): string {
-  const definition = getRoleConditionDefinitions('implementation').find(
+function roleConditionLabel(role: ContextRole, conditionId: RoleConditionId): string {
+  const definition = getRoleConditionDefinitions(role).find(
     (candidate) => candidate.conditionId === conditionId
   )
-  if (!definition) throw new Error(`Missing canonical implementation role condition "${conditionId}"`)
+  if (!definition) throw new Error(`Missing canonical ${role} role condition "${conditionId}"`)
   return definition.conditionLabel
 }
 
-const IMPLEMENTATION_OWNER_CONDITION = implementationConditionLabel('implementation.selected-owner')
-const IMPLEMENTATION_CONTRACT_CONDITION = implementationConditionLabel('implementation.required-contract')
+const IMPLEMENTATION_OWNER_CONDITION = roleConditionLabel('implementation', 'implementation.selected-owner')
+const IMPLEMENTATION_CONTRACT_CONDITION = roleConditionLabel('implementation', 'implementation.required-contract')
 
 export interface EvaluateRoleAdequacyOptions {
   role: ContextRole | null
@@ -125,19 +125,39 @@ export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): Role
   const affectedResponsibilityIds = [...new Set([...criticalUnmapped, ...criticalPartial, ...noncriticalIssues])].sort()
 
   if (role === 'architecture') {
-    requiredConditions.push('at least one plausible owner is present', 'at least one relevant contract/extension-point category is present')
-    if (selectedOwners.length > 0) {
-      satisfiedConditions.push('at least one plausible owner is present')
-      supportingEvidence.push(...selectedOwners.slice(0, 3).map((o) => o.id))
-    } else {
-      missingConditions.push('no plausible owner exists')
-      blockingConditions.push('no plausible owner exists')
+    const definitions = getRoleConditionDefinitions(role)
+    requiredConditions.push(...definitions.filter((definition) => definition.required).map((definition) => definition.conditionLabel))
+    const architectureCoverage = roleConditionCoverage?.filter((condition) => condition.role === role) ?? []
+    if (architectureCoverage.length !== definitions.length) {
+      missingConditions.push('role condition coverage unavailable')
+      blockingConditions.push('role condition coverage unavailable')
       status = downgrade(status, 'context insufficient and more retrieval required')
-    }
-    if (selectedContracts.length > 0) {
-      satisfiedConditions.push('at least one relevant contract/extension-point category is present')
     } else {
-      missingConditions.push('no relevant contract/extension-point evidence')
+      const groupItems = new Map(evidenceGroups.map((group) => [group.id, group.items]))
+      for (const condition of architectureCoverage) {
+        const definition = definitions.find((candidate) => candidate.conditionId === condition.conditionId)
+        if (!definition) continue
+        if (condition.conditionSatisfied) {
+          satisfiedConditions.push(definition.conditionLabel)
+          supportingEvidence.push(...condition.retainedWitnessIds.slice(0, 3))
+        } else {
+          const diagnostic = condition.conditionId === 'architecture-owner'
+            ? 'no plausible owner exists'
+            : condition.conditionId === 'architecture-contract'
+              ? 'no relevant contract evidence'
+              : `required architecture condition unsatisfied: ${condition.conditionId}`
+          missingConditions.push(diagnostic)
+          if (condition.conditionId === 'architecture-owner') blockingConditions.push(diagnostic)
+          status = downgrade(status, 'context insufficient and more retrieval required')
+        }
+        const retainedItems = condition.evidenceGroupIds.flatMap((groupId) => groupItems.get(groupId) ?? [])
+        const retainedById = new Map(retainedItems.map((item) => [item.id, item]))
+        if (condition.retainedWitnessIds.some((id) => !retainedById.get(id)?.provenance)) {
+          missingConditions.push(`required provenance missing: ${condition.conditionId}`)
+          blockingConditions.push(`required provenance missing: ${condition.conditionId}`)
+          status = downgrade(status, 'context insufficient and more retrieval required')
+        }
+      }
     }
   } else if (role === 'implementation') {
     requiredConditions.push(IMPLEMENTATION_OWNER_CONDITION, IMPLEMENTATION_CONTRACT_CONDITION, 'no critical unresolved implementation requirement remains', 'context is not stale')
