@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRelativeSpecifier } from '../../src/context/testInfrastructureDiscovery'
+import { resolveRelativeSpecifier } from '../../src/context/testInfrastructureDiscovery.js'
 
 describe('resolveRelativeSpecifier (NodeNext regression)', () => {
   it('maps a NodeNext .js specifier to .ts source when only .ts exists', () => {
