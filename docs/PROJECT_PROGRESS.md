@@ -4,7 +4,11 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.1` is the latest published release.
+`@dailephd/my-dev-kit@1.12.2` is the latest published release.
+
+## Shipped: v1.12.2
+
+Version 1.12.2 is published. Package metadata and the CLI report `1.12.2`. It is a bounded corrective patch for NodeNext/Node16-style related-test resolution: literal relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production sources (`.jsx` → `.tsx`); real `.js`/`.jsx` files retain precedence; unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare/scoped package import behavior is unchanged. This is a backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability. See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap.
 
 ## Shipped: v1.12.1
 

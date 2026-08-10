@@ -115,4 +115,74 @@ describe('related-test discovery', () => {
     expect(paths).toContain('src/widgetRegistry.spec.ts')
     expect(paths).not.toContain('src/completelyUnrelated.spec.ts')
   })
+
+  it('a NodeNext-style .js-specifier import (no real .js file, TypeScript source only) is discovered', () => {
+    // Regression: an observer-project-shaped fixture (production .ts file, test file
+    // one directory level deeper, importing via the emitted-JS extension required by
+    // "module"/"moduleResolution": "NodeNext"). Before the fix, resolveRelativeSpecifier
+    // could never resolve `../domain/completion.js` back to `domain/completion.ts`.
+    const root = createTempRoot('my-dev-kit-v1-relatedtest-nodenext-')
+    const src = join(root, 'src')
+    const domain = join(src, 'domain')
+    const testsUnit = join(src, 'tests', 'unit')
+    mkdirSync(domain, { recursive: true })
+    mkdirSync(testsUnit, { recursive: true })
+    writeFileSync(
+      join(domain, 'completion.ts'),
+      'export function deriveCompletion(): string { return "complete" }\nexport function otherThing(): void {}\n'
+    )
+    writeFileSync(
+      join(testsUnit, 'completion.test.ts'),
+      "import { deriveCompletion } from '../../domain/completion.js'\nexport const check = deriveCompletion\n"
+    )
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'req.json', {
+      schemaVersion: '1.0.0',
+      query: 'completion',
+      role: 'test-implementation',
+      focusSymbols: ['symbol:src/domain/completion.ts#deriveCompletion'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath])
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    const match = capsule.testInfrastructure.relatedTests.find((t: { path: string }) => t.path === 'src/tests/unit/completion.test.ts')
+    expect(match).toBeDefined()
+    expect(match.relationship).toBe('references-selected-production-symbol')
+  })
+
+  it('NodeNext .js import is associated even when test is deeper in directory tree', () => {
+    const root = createTempRoot('my-dev-kit-v1-relatedtest-nodenext-deep-')
+    const src = join(root, 'src')
+    const domain = join(src, 'domain')
+    const testsDeep = join(src, 'tests', 'unit', 'deep')
+    mkdirSync(domain, { recursive: true })
+    mkdirSync(testsDeep, { recursive: true })
+    writeFileSync(join(domain, 'completion.ts'), 'export const x = 1\n')
+    writeFileSync(
+      join(testsDeep, 'completion.test.ts'),
+      "import { x } from '../../../domain/completion.js'\nexport const check = x\n"
+    )
+    const indexOut = join(root, '.my-dev-kit')
+    const indexResult = runCli(['index', '--root', root, '--src', 'src', '--out', indexOut])
+    expect(indexResult.status).toBe(0)
+
+    const requestPath = writeRequest(root, 'req.json', {
+      schemaVersion: '1.0.0',
+      query: 'completion',
+      role: 'test-implementation',
+      changedFiles: ['src/domain/completion.ts'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath])
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    const paths = capsule.testInfrastructure.relatedTests.map((t: { path: string }) => t.path)
+    expect(paths).toContain('src/tests/unit/deep/completion.test.ts')
+  })
 })
