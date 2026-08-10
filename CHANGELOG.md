@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v1.12.2 (implemented, not yet published)
+
+- NodeNext/Node16-style relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production source files for related-test discovery (`.jsx` → `.tsx`). Literal real `.js`/`.jsx` files retain precedence when present. Unsupported `.mjs`/`.cjs` families remain unmapped (no fabricated `.mts`/`.cts`). Extensionless, index, and bare/scoped package import behavior unchanged. Backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability.
+
 ## 1.12.1 - 2026-08-04
 
 - Corrected architecture evidence allocation and required-witness adequacy semantics. `limits.evidenceGroupEntries` now applies as the positive per-group limit for bounded evidence groups, architecture owner/extension-point/contract/test conditions reserve and evaluate witnesses explicitly, optional or redundant truncation no longer reports required evidence loss, and capsule/audit output records matching requested and applied limits without changing schema major `1`.

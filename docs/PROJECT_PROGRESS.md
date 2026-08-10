@@ -6,6 +6,10 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.1` is the latest published release.
 
+## Implemented (not yet published)
+
+`v1.12.2` (NodeNext related-test resolution patch) is implemented and validated on `fix/v1.12.2-nodenext-related-test-resolution` but not yet published. Package metadata and CLI report remain `1.12.1`. v1.13.0 remains separate future planned scope. See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap.
+
 ## Shipped: v1.12.1
 
 Version 1.12.1 is published. Package metadata and the CLI report `1.12.1`. It corrects architecture evidence allocation and required-witness adequacy so a positive explicit `limits.evidenceGroupEntries` value applies per applicable bounded evidence group, historical defaults remain when the field is absent, and requested/applied limits are visible in matching capsule/audit budget evidence.

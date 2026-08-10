@@ -1279,6 +1279,12 @@ Version 1.12.1 is a bounded corrective patch for architecture evidence allocatio
 
 The patch adds no command, flag, role, artifact family, runtime analysis, freshness behavior, closest-test behavior, or v1.13.0 benchmark scope. Genuine missing evidence, final-witness loss, unpreserved material ambiguity, missing provenance, unresolved material conflict, and capsule/audit disagreement remain fail-closed.
 
+## Version 1.12.2
+
+**Status: implemented, not released.**
+
+Version 1.12.2 is a bounded corrective patch enabling NodeNext/Node16-style relative `.js` test imports to resolve to corresponding `.ts` / `.tsx` production sources for related-test discovery (`.jsx` → `.tsx`). Literal real `.js`/`.jsx` files retain precedence when present. Unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare package import behavior is unchanged. This is a backward-compatible defect correction; no new public command, artifact schema major, or v1.13.0 capability. v1.13.0 remains separate planned scope.
+
 ## Version 1.13.0
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.
