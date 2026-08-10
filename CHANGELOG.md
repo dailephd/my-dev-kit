@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v1.12.2 (implemented, not yet published)
+## 1.12.2 - 2026-08-10
 
 - NodeNext/Node16-style relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production source files for related-test discovery (`.jsx` → `.tsx`). Literal real `.js`/`.jsx` files retain precedence when present. Unsupported `.mjs`/`.cjs` families remain unmapped (no fabricated `.mts`/`.cts`). Extensionless, index, and bare/scoped package import behavior unchanged. Backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability.
 

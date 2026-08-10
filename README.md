@@ -132,13 +132,13 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.12.1
+## Latest release: v1.12.2
 
-`@dailephd/my-dev-kit@1.12.1` is the latest published release. It corrects architecture evidence allocation so explicit `limits.evidenceGroupEntries` values apply per bounded evidence group and optional or redundant truncation no longer fabricates required-evidence loss. Genuine loss of the final required owner, extension-point, contract, or test/gap witness remains fail-closed; capsule and audit limit, condition, truncation, provenance, and adequacy evidence remain in schema-major-1 parity. The command syntax and artifact schema major remain unchanged.
+`@dailephd/my-dev-kit@1.12.2` is the latest published release. It is a bounded corrective patch for NodeNext/Node16-style related-test resolution: literal relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production sources (`.jsx` → `.tsx`); real `.js`/`.jsx` files retain precedence; unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare/scoped package import behavior is unchanged. This is a backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability. The command syntax and artifact schema major remain unchanged.
 
 ## v1.12.0 Android architecture and data-flow retrieval
 
-v1.12.0 shipped Android architecture and data-flow retrieval and remains fully included in v1.12.1.
+v1.12.0 shipped Android architecture and data-flow retrieval and remains fully included in v1.12.2.
 
 The release adds a complete Android classification vocabulary (`classification.json` schema `1.1.0`) covering Android project/module structure, manifest components, navigation routes, resources, Compose screens/UI components, ViewModels, and UI-only state/events, each with edit guidance, readiness, uncertainty, and up to seven advisory risk labels. `android-components.json` (schema `1.1.0`) adds `dependencyFacts[]` — exact static component-dependency relationships (ViewModel→Repository, Repository→DAO/Service, DAO→Entity, Room Database→DAO) projected into `code-graph.json` as new edges. `android-compose-semantic.json` (schema `1.3.0`) adds Compose collected-state ownership and Activity-to-Compose hosting evidence, projected as `compose-state-reads-viewmodel` and `activity-hosts-composable` graph edges.
 
@@ -586,7 +586,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.1 is the latest published release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.2 is the latest published release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

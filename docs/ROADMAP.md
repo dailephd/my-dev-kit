@@ -1281,7 +1281,7 @@ The patch adds no command, flag, role, artifact family, runtime analysis, freshn
 
 ## Version 1.12.2
 
-**Status: implemented, not released.**
+**Status: published.**
 
 Version 1.12.2 is a bounded corrective patch enabling NodeNext/Node16-style relative `.js` test imports to resolve to corresponding `.ts` / `.tsx` production sources for related-test discovery (`.jsx` → `.tsx`). Literal real `.js`/`.jsx` files retain precedence when present. Unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare package import behavior is unchanged. This is a backward-compatible defect correction; no new public command, artifact schema major, or v1.13.0 capability. v1.13.0 remains separate planned scope.
 
