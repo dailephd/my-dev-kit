@@ -402,7 +402,7 @@ function isStructuralContractNode(
 ): boolean {
   if (isContractLike(node)) return true
   if (!hasRequestRelevance(node) || isForbiddenOwnerPath(node.filePath)) return false
-  if (!node.filePath.toLowerCase().endsWith('.py')) return false
+  if (!(node.filePath ?? '').toLowerCase().endsWith('.py')) return false
   if (!structuralContractIds.has(node.nodeId)) return false
   return node.symbolKind === 'class' || node.symbolKind === 'interface' || node.symbolKind === 'type' || node.symbolKind === 'enum' || node.symbolKind === 'const' || node.symbolKind === 'variable'
 }
