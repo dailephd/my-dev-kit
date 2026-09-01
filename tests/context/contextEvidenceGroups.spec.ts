@@ -111,6 +111,37 @@ describe('evidence-group construction', () => {
     expect(dependenciesGroup.items.some((i: { path: string }) => i.path === 'src/widgetValidator.ts')).toBe(true)
   })
 
+  it('reconstructs neutral Python contract owners from structural dependencies', () => {
+    const root = createTempRoot('my-dev-kit-v1-neutral-python-contract-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'result.py'), 'class Result:\n    def __init__(self, value):\n        self.value = value\n')
+    writeFileSync(join(src, 'cases.py'), "CASES = {'ready': 'ok'}\n")
+    writeFileSync(join(src, 'helper.py'), 'def helper(value):\n    return value\n')
+    writeFileSync(join(src, 'schema.py'), 'def unrelated(value):\n    return value\n')
+    writeFileSync(join(src, 'resolver.py'), 'from .cases import CASES\nfrom .result import Result\n\ndef resolve(case_id):\n    return Result(CASES[case_id])\n')
+
+    const indexOut = join(root, '.my-dev-kit')
+    expect(runCli(['index', '--root', root, '--src', 'src', '--out', indexOut]).status).toBe(0)
+    const requestPath = writeRequest(root, 'neutral-python-contract.json', {
+      schemaVersion: '1.0.0',
+      role: 'implementation',
+      query: 'resolve result cases',
+      focusFiles: ['src/resolver.py'],
+    })
+    const outPath = join(root, 'capsule.json')
+    expect(runContext(indexOut, requestPath, outPath).status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    const contracts = capsule.evidenceGroups.find((g: { kind: string }) => g.kind === 'contracts')
+    const paths = contracts.items.map((item: { path?: string }) => item.path).filter(Boolean)
+
+    expect(paths).toContain('src/result.py')
+    expect(paths).toContain('src/cases.py')
+    expect(paths).not.toContain('src/helper.py')
+    expect(paths).not.toContain('src/schema.py')
+    expect(capsule.roleAdequacy.missingConditions).not.toContain('required contract missing')
+  })
+
   it('TST-B3-003: test-implementation role produces changed-surface, production-symbol, related-test, infrastructure, and command groups', () => {
     const root = createTempRoot('my-dev-kit-v1-evg-test-')
     const { indexOut } = writeFullFixture(root)
