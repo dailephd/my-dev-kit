@@ -118,6 +118,7 @@ function criticalMapping(status: ResponsibilityMapping['mappingStatus']): Respon
 }
 
 function evaluate(options: {
+  baseStatus?: ContextAdequacyStatement['status']
   coverage?: RoleConditionCoverage[]
   coverageProvided?: boolean
   truncation?: TruncationSummary
@@ -129,7 +130,7 @@ function evaluate(options: {
   const roleConditionCoverage = options.coverage ?? conditionCoverage()
   return evaluateRoleAdequacy({
     role: 'implementation',
-    baseAdequacy,
+    baseAdequacy: { ...baseAdequacy, status: options.baseStatus ?? baseAdequacy.status },
     evidenceGroups: [],
     selectedOwners: options.selectedOwners ?? [evidence('owner-a')],
     selectedContracts: options.selectedContracts ?? [evidence('contract-a')],
@@ -166,6 +167,16 @@ function evaluate(options: {
 }
 
 describe('condition-aware implementation role adequacy', () => {
+  it('recovers from non-material primary-source insufficiency when role witnesses are complete', () => {
+    const result = evaluate({
+      baseStatus: 'context insufficient and more retrieval required',
+    })
+
+    expect(result.status).toBe('context sufficient for implementation')
+    expect(result.missingConditions).toEqual([])
+    expect(result.blockingConditions).toEqual([])
+  })
+
   it('remains sufficient when every condition is covered and truncation is optional', () => {
     const result = evaluate({
       truncation: {
