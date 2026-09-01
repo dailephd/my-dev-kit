@@ -400,8 +400,9 @@ function isStructuralContractNode(
   node: CandidateNode,
   structuralContractIds: Set<string>
 ): boolean {
-  if (!hasRequestRelevance(node) || isForbiddenOwnerPath(node.filePath)) return false
   if (isContractLike(node)) return true
+  if (!hasRequestRelevance(node) || isForbiddenOwnerPath(node.filePath)) return false
+  if (!node.filePath.toLowerCase().endsWith('.py')) return false
   if (!structuralContractIds.has(node.nodeId)) return false
   return node.symbolKind === 'class' || node.symbolKind === 'interface' || node.symbolKind === 'type' || node.symbolKind === 'enum' || node.symbolKind === 'const' || node.symbolKind === 'variable'
 }
@@ -410,8 +411,9 @@ function isStructuralContractFile(
   file: CandidateFile,
   structuralContractFilePaths: Set<string>
 ): boolean {
+  if (isContractLike({ filePath: file.path, label: file.path })) return true
   if (!hasRequestRelevance(file) || isForbiddenOwnerPath(file.path)) return false
-  return isContractLike({ filePath: file.path, label: file.path }) || structuralContractFilePaths.has(file.path)
+  return file.path.toLowerCase().endsWith('.py') && structuralContractFilePaths.has(file.path)
 }
 
 /** Reconstructs the same focus/changed-surface seed node/file IDs Batch 2's
