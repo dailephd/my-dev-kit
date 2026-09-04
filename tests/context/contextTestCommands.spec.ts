@@ -133,3 +133,83 @@ describe('test-command derivation', () => {
     expect(capsule.testInfrastructure.testCommands.some((c: { commandText: string | null }) => c.commandText === 'vitest run')).toBe(true)
   })
 })
+
+// v1.12.3 Batch 3: bounded, static Makefile "test" target discovery — the smallest
+// confirmed grounded gap identified by the Python test-command discovery audit (a
+// repository without package.json, such as a typical Python project, previously had
+// no static source of a test command at all beyond an unsupported-framework warning
+// for pytest.ini/tox.ini). Static inspection only: the target's literal recipe line
+// is used verbatim, never executed, never fabricated from `tests/`/`test_*.py`
+// file presence alone.
+describe('Makefile "test" target discovery (Python/non-npm repositories)', () => {
+  it('positive: an explicit pytest invocation in a Makefile "test" target is discovered verbatim, with Makefile provenance, deterministically across repeated runs', () => {
+    const root = createTempRoot('my-dev-kit-v1-cmd-makefile-pytest-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'calc.py'), 'def add(a, b):\n    return a + b\n')
+    writeFileSync(join(root, 'Makefile'), ['.PHONY: test', '', 'test:', '\tpytest tests/ -v', ''].join('\n'))
+    const indexOut = join(root, '.my-dev-kit')
+    expect(runCli(['index', '--root', root, '--src', 'src', '--out', indexOut]).status).toBe(0)
+
+    const requestPath = writeRequest(root, 'req.json', {
+      schemaVersion: '1.0.0',
+      query: 'calc',
+      role: 'implementation',
+      focusSymbols: ['symbol:src/calc.py#add'],
+      requestedEvidenceKinds: ['test-infrastructure', 'test-commands'],
+    })
+    const outPath = join(root, 'capsule.json')
+
+    const first = runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath])
+    expect(first.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    const command = capsule.testInfrastructure.testCommands.find((c: { commandText: string | null }) => c.commandText === 'pytest tests/ -v')
+    expect(command).toBeDefined()
+    expect(command.framework).toBe('pytest')
+    expect(command.scope).toBe('full-project')
+    expect(command.commandSource).toContain('Makefile target "test"')
+
+    const outPath2 = join(root, 'capsule2.json')
+    const second = runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath2])
+    expect(second.status).toBe(0)
+    const capsule2 = JSON.parse(readFileSync(outPath2, 'utf8'))
+    expect(capsule2.testInfrastructure.testCommands).toEqual(capsule.testInfrastructure.testCommands)
+  })
+
+  it('negative: a Python repository with no package.json and no Makefile "test" target fabricates nothing; the gap is reported unresolved, never invented as "pytest" or "python -m pytest"', () => {
+    const root = createTempRoot('my-dev-kit-v1-cmd-makefile-absent-')
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'calc.py'), 'def add(a, b):\n    return a + b\n')
+    // Python test-shaped file present, but never fabricates a command from its mere
+    // existence (section 17: no inference from `tests/`/`test_*.py` presence).
+    writeFileSync(join(src, 'test_calc.py'), 'from calc import add\n\ndef test_add():\n    assert add(1, 2) == 3\n')
+    // A Makefile exists but has no "test" target, so it must not be mistaken for one.
+    writeFileSync(join(root, 'Makefile'), ['.PHONY: lint', '', 'lint:', '\tflake8 src/', ''].join('\n'))
+    const indexOut = join(root, '.my-dev-kit')
+    expect(runCli(['index', '--root', root, '--src', 'src', '--out', indexOut]).status).toBe(0)
+
+    const requestPath = writeRequest(root, 'req.json', {
+      schemaVersion: '1.0.0',
+      query: 'calc',
+      role: 'implementation',
+      focusSymbols: ['symbol:src/calc.py#add'],
+      requestedEvidenceKinds: ['test-infrastructure', 'test-commands'],
+    })
+    const outPath = join(root, 'capsule.json')
+    const result = runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath])
+    expect(result.status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+
+    expect(capsule.testInfrastructure.testCommands).toEqual([])
+    expect(
+      capsule.testInfrastructure.testCommands.some((c: { commandText: string | null }) => c.commandText === 'pytest' || c.commandText === 'python -m pytest')
+    ).toBe(false)
+    expect(
+      capsule.testInfrastructure.unresolved.some(
+        (u: { evidenceKind: string; reason: string }) =>
+          u.evidenceKind === 'test-commands' && u.reason.includes('Makefile')
+      )
+    ).toBe(true)
+  })
+})

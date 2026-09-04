@@ -721,6 +721,7 @@ export function registerContextCommand(program: Command): void {
         responsibilityInputs,
         hasSuppliedResponsibilities: normalized.testResponsibilityRefs.length > 0,
         requestedResponsibilityMappings,
+        requireTestCommandEvidence: normalized.requestedEvidenceKinds.includes('test-commands'),
         evidenceGroups: evidenceResult.groups,
         selectedOwners: evidenceResult.selectedOwners,
         selectedContracts: evidenceResult.selectedContracts,

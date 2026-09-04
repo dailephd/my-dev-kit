@@ -538,22 +538,68 @@ function detectFramework(command: string): string | null {
 
 const VITEST_RUN_COMMAND_PATTERN = /^(npx\s+)?vitest\s+run\b/i
 
+const MAKEFILE_NAMES = ['Makefile', 'makefile', 'GNUmakefile']
+
+/** v1.12.3 Batch 3: bounded, static discovery of an explicit `test` target's recipe
+ * command in a repository Makefile — the Makefile equivalent of a package.json
+ * "test" script, and the smallest grounded source needed to stop treating Python
+ * (and other non-npm) repositories as always command-less. The target's first
+ * non-empty tab-indented recipe line is used verbatim; nothing is inferred from
+ * `tests/`/`test_*.py` file presence, and no command is fabricated when no `test`
+ * target exists. Never executed. */
+function discoverMakefileTestCommand(repoRoot: string): { commandText: string; commandSource: string } | null {
+  for (const name of MAKEFILE_NAMES) {
+    const fullPath = path.join(repoRoot, name)
+    const text = readTextIfExists(fullPath)
+    if (text === null) continue
+    const lines = text.split(/\r?\n/)
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^test\s*:(?!=)/.test(lines[i])) continue
+      for (let j = i + 1; j < lines.length; j++) {
+        const recipeLine = lines[j]
+        if (!recipeLine || !recipeLine.startsWith('\t')) break
+        const command = recipeLine.slice(1).trim()
+        if (command.length === 0) continue
+        return {
+          commandText: command,
+          commandSource: `Makefile target "test" (${toForwardSlash(path.relative(repoRoot, fullPath) || name)})`,
+        }
+      }
+      return null
+    }
+  }
+  return null
+}
+
 function deriveTestCommands(options: {
   role: ContextRole | null
   packageScripts: PackageScriptEvidenceEntry[]
   relatedTestPaths: string[]
+  repoRoot: string
 }): { commands: TestCommandEvidenceEntry[]; unresolved: UnresolvedEvidenceItem[] } {
-  const { role, packageScripts, relatedTestPaths } = options
+  const { role, packageScripts, relatedTestPaths, repoRoot } = options
   const commands: TestCommandEvidenceEntry[] = []
   const unresolved: UnresolvedEvidenceItem[] = []
 
   const testScript = packageScripts.find((s) => s.name === 'test')
   if (!testScript) {
+    const makefileCommand = discoverMakefileTestCommand(repoRoot)
+    if (makefileCommand) {
+      commands.push({
+        commandText: makefileCommand.commandText,
+        commandSource: makefileCommand.commandSource,
+        testFiles: [],
+        framework: detectFramework(makefileCommand.commandText),
+        scope: 'full-project',
+        basis: 'Verbatim recipe command from Makefile target "test".',
+      })
+      return { commands, unresolved }
+    }
     unresolved.push({
       evidenceKind: 'test-commands',
       role,
-      basis: 'package.json scripts',
-      reason: 'No package.json "test" script was found; a targeted test command cannot be derived.',
+      basis: 'package.json scripts, Makefile',
+      reason: 'No package.json "test" script and no Makefile "test" target was found; a targeted test command cannot be derived.',
       blocking: false,
     })
     return { commands, unresolved }
@@ -782,6 +828,7 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
     role,
     packageScripts: packageScriptEntries,
     relatedTestPaths,
+    repoRoot,
   })
   unresolved.push(...commandUnresolved)
   const testCommands = bound(commands, limits.testCommands)

@@ -80,6 +80,11 @@ export interface BuildResponsibilityMappingsOptions {
   /** True only when the caller supplied at least one `testResponsibilityRefs` entry. */
   hasSuppliedResponsibilities: boolean
   requestedResponsibilityMappings: boolean
+  /** True only when the caller explicitly requested the `test-commands` evidence
+   * kind (v1.12.3 Batch 3). When false, a missing test command is supplemental
+   * (a warning, not a mapping/blocking gap); when true, command evidence becomes
+   * required core-equivalent evidence for status purposes. */
+  requireTestCommandEvidence: boolean
   evidenceGroups: EvidenceGroup[]
   selectedOwners: EvidenceItemRef[]
   selectedContracts: EvidenceItemRef[]
@@ -148,37 +153,61 @@ function buildOracleEvidence(options: {
   return oracle
 }
 
-const REQUIRED_CATEGORIES = ['productionSymbols', 'contractOrValidatorOrErrorEvidence', 'proposedOrExistingTestFiles', 'oracleEvidence', 'testCommands'] as const
+// v1.12.3 Batch 3: only these four categories are CORE responsibility evidence
+// (production evidence, contract/validator/error evidence, related test evidence,
+// oracle/assertion evidence). `testCommands` is SUPPLEMENTAL execution metadata: a
+// discovered command can never substitute for missing core evidence, and a missing
+// command can never by itself block a responsibility whose core evidence is
+// complete, unless the caller explicitly requested `test-commands` (see
+// `requireTestCommandEvidence` below), in which case command evidence becomes
+// required alongside the four core categories for that request.
+const CORE_CATEGORIES = ['productionSymbols', 'contractOrValidatorOrErrorEvidence', 'proposedOrExistingTestFiles', 'oracleEvidence'] as const
 
-function determineStatus(mapping: {
-  productionSymbols: EvidenceItemRef[]
-  contracts: EvidenceItemRef[]
-  validators: EvidenceItemRef[]
-  constants: EvidenceItemRef[]
-  errors: EvidenceItemRef[]
-  proposedOrExistingTestFiles: EvidenceItemRef[]
-  oracleEvidence: EvidenceItemRef[]
-  testCommands: EvidenceItemRef[]
-}): { status: ResponsibilityMappingStatus; unresolvedReasons: string[] } {
+function determineStatus(
+  mapping: {
+    productionSymbols: EvidenceItemRef[]
+    contracts: EvidenceItemRef[]
+    validators: EvidenceItemRef[]
+    constants: EvidenceItemRef[]
+    errors: EvidenceItemRef[]
+    proposedOrExistingTestFiles: EvidenceItemRef[]
+    oracleEvidence: EvidenceItemRef[]
+    testCommands: EvidenceItemRef[]
+  },
+  requireTestCommandEvidence: boolean
+): { status: ResponsibilityMappingStatus; unresolvedReasons: string[]; testCommandGap: boolean } {
   const contractLike = mapping.contracts.length + mapping.validators.length + mapping.constants.length + mapping.errors.length > 0
-  const satisfied = {
+  // `oracleEvidence` also carries a command-derived "exit-code" entry (see
+  // `buildOracleEvidence`) whenever a test command exists. That entry is itself
+  // supplemental execution metadata restated as an oracle, so it must not let a
+  // discovered command alone satisfy the *core* oracle category — otherwise command
+  // evidence would substitute for missing oracle/assertion evidence (Batch 3, section 13.F).
+  const coreOracleEvidence = mapping.oracleEvidence.filter((item) => item.metadata?.oracleKind !== 'exit-code')
+  const coreSatisfied = {
     productionSymbols: mapping.productionSymbols.length > 0,
     contractOrValidatorOrErrorEvidence: contractLike,
     proposedOrExistingTestFiles: mapping.proposedOrExistingTestFiles.length > 0,
-    oracleEvidence: mapping.oracleEvidence.length > 0,
-    testCommands: mapping.testCommands.length > 0,
+    oracleEvidence: coreOracleEvidence.length > 0,
   }
-  const satisfiedCount = Object.values(satisfied).filter(Boolean).length
-  const unresolvedReasons: string[] = []
-  if (!satisfied.productionSymbols) unresolvedReasons.push('no production symbol')
-  if (!satisfied.contractOrValidatorOrErrorEvidence) unresolvedReasons.push('no contract, validator, or error evidence')
-  if (!satisfied.proposedOrExistingTestFiles) unresolvedReasons.push('no related test')
-  if (!satisfied.oracleEvidence) unresolvedReasons.push('no oracle evidence')
-  if (!satisfied.testCommands) unresolvedReasons.push('no test command')
+  const testCommandSatisfied = mapping.testCommands.length > 0
+  const testCommandGap = !testCommandSatisfied
 
-  if (satisfiedCount === REQUIRED_CATEGORIES.length) return { status: 'mapped', unresolvedReasons: [] }
-  if (satisfiedCount === 0) return { status: 'unmapped', unresolvedReasons }
-  return { status: 'partially-mapped', unresolvedReasons }
+  const unresolvedReasons: string[] = []
+  if (!coreSatisfied.productionSymbols) unresolvedReasons.push('no production symbol')
+  if (!coreSatisfied.contractOrValidatorOrErrorEvidence) unresolvedReasons.push('no contract, validator, or error evidence')
+  if (!coreSatisfied.proposedOrExistingTestFiles) unresolvedReasons.push('no related test')
+  if (!coreSatisfied.oracleEvidence) unresolvedReasons.push('no oracle evidence')
+
+  // Command evidence only participates in the status calculation (and its own
+  // unresolved reason) when the caller explicitly asked for `test-commands`;
+  // otherwise it is tracked solely via `testCommandGap` for a supplemental warning.
+  const categorySatisfiedCount = Object.values(coreSatisfied).filter(Boolean).length + (requireTestCommandEvidence ? (testCommandSatisfied ? 1 : 0) : 0)
+  const totalCategories = CORE_CATEGORIES.length + (requireTestCommandEvidence ? 1 : 0)
+  if (requireTestCommandEvidence && !testCommandSatisfied) unresolvedReasons.push('no test command')
+
+  if (categorySatisfiedCount === totalCategories) return { status: 'mapped', unresolvedReasons: [], testCommandGap }
+  if (categorySatisfiedCount === 0) return { status: 'unmapped', unresolvedReasons, testCommandGap }
+  return { status: 'partially-mapped', unresolvedReasons, testCommandGap }
 }
 
 export function buildResponsibilityMappings(options: BuildResponsibilityMappingsOptions): ResponsibilityMappingSummary {
@@ -187,6 +216,7 @@ export function buildResponsibilityMappings(options: BuildResponsibilityMappings
     responsibilityInputs,
     hasSuppliedResponsibilities,
     requestedResponsibilityMappings,
+    requireTestCommandEvidence,
     evidenceGroups,
     selectedOwners,
     selectedContracts,
@@ -267,17 +297,30 @@ export function buildResponsibilityMappings(options: BuildResponsibilityMappings
       continue
     }
 
-    const { status, unresolvedReasons } = determineStatus({
-      productionSymbols,
-      contracts: contractItems,
-      validators,
-      constants,
-      errors,
-      proposedOrExistingTestFiles,
-      oracleEvidence,
-      testCommands: testCommandItems,
-    })
+    const { status, unresolvedReasons, testCommandGap } = determineStatus(
+      {
+        productionSymbols,
+        contracts: contractItems,
+        validators,
+        constants,
+        errors,
+        proposedOrExistingTestFiles,
+        oracleEvidence,
+        testCommands: testCommandItems,
+      },
+      requireTestCommandEvidence
+    )
     if (status === 'unmapped') unknownResponsibilityIds.push(input.id)
+
+    // Supplemental gap visibility (v1.12.3 Batch 3, section 14): when core
+    // evidence is complete and `test-commands` was not explicitly requested, a
+    // missing command must remain visible without becoming a mapping/blocking
+    // gap. Uses the existing per-mapping `warnings` field rather than a new
+    // schema field.
+    const mappingWarnings: string[] =
+      status === 'mapped' && testCommandGap && !requireTestCommandEvidence
+        ? ['A test execution command was not discovered for this responsibility; this is supplemental evidence and does not affect mapping status unless "test-commands" is explicitly requested.']
+        : []
 
     const provenance: ProvenanceRecord[] = buildProvenanceRecords([
       { items: productionSymbols, role, requestField: 'testResponsibilityRefs', derivedByModule: 'responsibilityMapping.ts' },
@@ -305,7 +348,7 @@ export function buildResponsibilityMappings(options: BuildResponsibilityMappings
       mappingStatus: status,
       unresolvedReasons,
       provenance,
-      warnings: [],
+      warnings: mappingWarnings,
     })
   }
 
