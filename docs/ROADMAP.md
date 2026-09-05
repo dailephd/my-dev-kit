@@ -1285,6 +1285,100 @@ The patch adds no command, flag, role, artifact family, runtime analysis, freshn
 
 Version 1.12.2 is a bounded corrective patch enabling NodeNext/Node16-style relative `.js` test imports to resolve to corresponding `.ts` / `.tsx` production sources for related-test discovery (`.jsx` → `.tsx`). Literal real `.js`/`.jsx` files retain precedence when present. Unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare package import behavior is unchanged. This is a backward-compatible defect correction; no new public command, artifact schema major, or v1.13.0 capability. v1.13.0 remains separate planned scope.
 
+## Version 1.12.3
+
+**Status: implementation complete; pre-release validation pending.**
+
+Version 1.12.3 is a bounded corrective patch for false context-readiness blockers in the existing role-specific `context` workflow. It addresses cases where a low-level retrieval or classification limitation is treated as proof that the repository lacks required context even after stronger, grounded role evidence has satisfied the actual requirements for the current stage.
+
+The goal is to make final role readiness depend on the evidence genuinely required for that role while preserving conservative failure when required evidence is actually missing. The patch must not weaken real blockers or pull v1.13.0 Android benchmark, example, or workflow-documentation scope forward.
+
+### Planned corrections
+
+#### Recoverable role adequacy
+
+- preserve base context-adequacy diagnostics, including failed source selection, without making every base failure an irreversible floor for role-specific readiness
+- derive the final role status from the role's required conditions and critical unresolved evidence rather than from downgrade-only inheritance
+- allow an implementation role to become sufficient when the retained evidence independently satisfies the required owner, contract, source/evidence, freshness, and unresolved-requirement conditions even if the initially selected primary focus produced no source slice
+- keep genuinely required missing source evidence, required-evidence truncation, unresolved material conflict, and other real role-condition failures blocking
+- preserve supported `--no-source` behavior and do not treat zero source slices as inherently incompatible with sufficient role context
+- when source evidence is required, evaluate primary-focus selection together with source retrievability so an unsuitable top-ranked focus can be reported, skipped for source purposes, or followed by another suitable retained candidate rather than converted automatically into a global readiness failure
+
+#### Structure-aware contract evidence
+
+- correct implementation-contract discovery so grounded contract, validator, result-shape, case-definition, error, schema, or equivalent evidence is not rejected solely because the owning filename lacks words such as `type`, `schema`, `valid`, `constant`, or `error`
+- use indexed symbols, graph relationships, classification/evidence-group information, source evidence, and other existing grounded signals before filename hints
+- retain conservative behavior: neutral filenames alone do not prove contract ownership, fuzzy filename similarity does not become evidence, and ambiguity remains explicit
+- add Python regression coverage with legitimate neutral owners such as `result.py` and `cases.py` so fake compatibility files or artificial witness files are never required to make real contracts selectable
+
+#### Test-responsibility mapping semantics
+
+- distinguish core evidence needed to understand and implement a test responsibility from supplemental execution metadata
+- for the existing `test-implementation` role, treat grounded production-symbol evidence, contract/validator/error evidence, related or proposed test evidence, and oracle/assertion evidence as the core mapping requirements
+- do not make `testCommands` universally mandatory when the core responsibility evidence is already present and the request does not specifically require test-command evidence
+- when core evidence is complete but no test command is discovered, keep the responsibility sufficiently mapped and report an explicit warning that the execution command was not discovered
+- when core production, contract, test, or oracle evidence is genuinely absent, keep the responsibility partially mapped or unmapped and preserve the existing fail-closed behavior for critical responsibilities
+- preserve test-command evidence as useful supporting execution evidence and as required evidence when the request explicitly asks for the `test-commands` evidence kind
+
+#### Python test-command discovery audit
+
+- audit the existing `testInfrastructure.testCommands` discovery path for Python repositories instead of assuming that pytest support is absent
+- evaluate grounded command evidence from supported repository metadata and execution surfaces such as `pyproject.toml`, `pytest.ini`, `tox.ini`, `noxfile.py`, `Makefile`, CI configuration, verifier/task scripts, Docker or shell entry points, and documented runner scripts where the existing architecture can consume them safely
+- implement only confirmed discovery gaps needed to support real repositories and the new regression fixtures
+- preserve provenance for every discovered command and never fabricate a command merely to satisfy readiness
+- do not add a caller-injected command escape hatch in this patch unless it can be represented through the existing schema without weakening provenance or trust boundaries
+
+#### Readiness consistency
+
+- prevent contradictory output where role adequacy is sufficient with no missing or blocking conditions while every critical responsibility remains incomplete solely because optional metadata is absent
+- keep `roleAdequacy.status`, `missingConditions`, `blockingConditions`, responsibility mappings, truncation impact, capsule output, retrieval-audit output, and downstream-consumer readiness evidence mutually consistent
+- distinguish "my-dev-kit failed to classify or discover one evidence form" from "the repository lacks evidence required to perform the current task safely"
+- surface classifier or discovery limitations as warnings or targeted evidence gaps unless the missing evidence is actually required for the current role
+
+### Implementation sequence
+
+1. freeze direct regressions for the zero-source primary-focus failure, neutral-filename contract false negative, and four-of-five responsibility-mapping failure
+2. correct final role-adequacy evaluation so later grounded role evidence can recover from non-material base-layer failures
+3. correct contract evidence selection so structural evidence can establish legitimate neutral-named owners without broad fuzzy matching
+4. separate core responsibility evidence from supplemental test-command metadata and make requested evidence requirements explicit
+5. audit Python test-command discovery and add only confirmed, provenance-preserving coverage gaps
+6. enforce consistency across role adequacy, responsibility mappings, capsule/audit output, and downstream readiness inputs
+7. extend focused context tests and `benchmark:retrieval` coverage, then reconcile documentation before release work
+
+### Required regression coverage
+
+- primary ranked focus cannot produce a source slice, another retained owner/source satisfies the role, all required implementation conditions are satisfied, freshness is fresh: role readiness is sufficient
+- genuinely required source evidence is missing: readiness remains insufficient
+- `--no-source` remains supported
+- real required-evidence truncation still blocks when the final required witness is lost
+- legitimate Python contract owners use neutral filenames such as `result.py` and `cases.py`: contract evidence is still found through grounded structure
+- critical test responsibility has production, contract/validator, related-test, and oracle evidence but no discovered test command: mapping is sufficient with an explicit warning when test-command evidence was not requested
+- a real pytest command is discoverable: command evidence is populated with provenance and the responsibility remains mapped
+- production, test, contract, or oracle evidence is genuinely missing: critical responsibility remains incomplete and readiness blocks
+- role adequacy, missing/blocking conditions, responsibility status, capsule, and audit do not report mutually contradictory readiness
+- repeated runs remain deterministic and schema-major-1 compatible
+
+### Compatibility boundaries
+
+- no new public command, flag, role, artifact family, or artifact schema major
+- existing `ContextRequest`, context-capsule, and retrieval-audit schema-major-1 compatibility remains intact
+- no weakening of genuine missing-evidence, ambiguity, conflict, freshness, truncation, or critical-responsibility blockers
+- no automatic test execution, runtime proof, LLM reasoning, source editing, or orchestrator execution enters `my-dev-kit`
+- broad Python language/framework improvements remain assigned to v1.14.0; this patch may only improve test-command discovery where a concrete existing-workflow defect is confirmed
+- v1.13.0 remains the separate Android retrieval benchmark, examples, and workflow-documentation milestone and retains its existing scope
+
+### Acceptance criteria
+
+- the reproduced FULL_STAGE_CONTEXT false blockers no longer occur when all role-required grounded evidence is present
+- a failed helper classifier or source-selection attempt cannot by itself override stronger role evidence unless the missing evidence is required for that role
+- critical responsibility mapping no longer depends universally on a statically discovered test-command string
+- missing optional execution metadata produces a clear warning rather than a false hard blocker
+- genuinely missing critical evidence continues to fail closed
+- neutral-named Python contract owners are discoverable from grounded structural evidence without fake files, renaming, or fuzzy guessing
+- capsule and retrieval-audit readiness facts remain in parity and deterministic across repeated runs
+- focused context tests, the full test suite, typecheck, build, documentation checks, retrieval regression benchmarks, package verification, and cross-platform validation pass before release preparation
+
+
 ## Version 1.13.0
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.

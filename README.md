@@ -586,7 +586,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.2 is the latest published release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.2 is the latest published release. Version 1.12.3 is a bounded context-readiness corrective patch that is implemented and locally validated on the source repository but not yet published; packages installed from npm still receive v1.12.2 behavior until it ships. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 
