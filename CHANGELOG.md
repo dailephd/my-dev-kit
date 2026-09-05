@@ -2,13 +2,13 @@
 
 ## Unreleased
 
-Version 1.12.3 (implementation complete on the source repository; not yet published):
+## 1.12.3 - 2026-09-05
 
 - Final role adequacy for `architecture`/`implementation`/`test-implementation` now derives from the role's actual required conditions instead of an unconditional downgrade from an early, non-material base-retrieval or helper-classification failure. Genuinely missing required evidence, unresolved material conflict, and final-required-witness truncation remain blocking; `--no-source` and legacy no-role behavior remain compatible.
 - Implementation-contract discovery uses grounded structural evidence (indexed symbols, graph relationships, classification/evidence-group information) rather than filename hints alone, so legitimate neutral-named Python contract owners (e.g. `result.py`, `cases.py`) are selectable without literal filename special cases. Unrelated neutral files and misleading filename-only candidates remain excluded.
 - Test-responsibility mapping distinguishes core evidence (production, contract/validator/error, related-test, and oracle/assertion) from supplemental `testCommands` evidence: a core-complete responsibility with no discovered command remains sufficiently mapped with an explicit warning unless `test-commands` evidence is explicitly requested, in which case grounded command evidence becomes required. Added bounded, static `Makefile` `test` target discovery alongside existing `package.json` script discovery.
 - Added an integrated regression suite protecting role adequacy, responsibility mappings, missing/blocking conditions, truncation, and capsule/audit parity from contradicting each other across the above corrections.
-- No new public command, flag, role, or artifact schema major. Known, intentionally unfixed limitation: the shared related-test classifier does not generally recognize Python `test_*.py` / `*_test.py` naming; broader Python language/framework classifier support remains v1.14.0 scope.
+- No new public command, flag, role, or artifact schema major. Known limitation: the shared related-test classifier does not generally recognize Python `test_*.py` / `*_test.py` naming; broader Python language/framework classifier support remains v1.14.0 scope.
 
 ## 1.12.2 - 2026-08-10
 

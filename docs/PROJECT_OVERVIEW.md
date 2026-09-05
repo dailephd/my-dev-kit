@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.12.2 is the latest published release. It retains the complete v1.12.0 Android architecture and data-flow surface and the v1.12.1 architecture evidence-allocation and required-witness adequacy corrections, plus a bounded NodeNext/Node16-style related-test import-resolution correction. Version 1.12.3 (recoverable role adequacy, structure-aware Python contract evidence, and core-vs-supplemental test-responsibility mapping — see [ROADMAP.md](ROADMAP.md)) is implemented and locally validated on the source repository but not yet published.
+Version 1.12.3 is the latest published release. It retains the complete v1.12.0 Android architecture and data-flow surface, the v1.12.1 architecture evidence-allocation and required-witness adequacy corrections, and a bounded NodeNext/Node16-style related-test import-resolution correction (v1.12.2), plus recoverable role adequacy, structure-aware Python contract evidence, and core-vs-supplemental test-responsibility mapping (see [ROADMAP.md](ROADMAP.md)).
 
 The current repository and package metadata contain these shipped implementation capabilities:
 

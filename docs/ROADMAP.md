@@ -1287,7 +1287,7 @@ Version 1.12.2 is a bounded corrective patch enabling NodeNext/Node16-style rela
 
 ## Version 1.12.3
 
-**Status: implementation complete; pre-release validation pending.**
+**Status: published.**
 
 Version 1.12.3 is a bounded corrective patch for false context-readiness blockers in the existing role-specific `context` workflow. It addresses cases where a low-level retrieval or classification limitation is treated as proof that the repository lacks required context even after stronger, grounded role evidence has satisfied the actual requirements for the current stage.
 

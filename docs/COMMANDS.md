@@ -1,6 +1,6 @@
 # Commands
 
-`@dailephd/my-dev-kit@1.12.2` is the latest published release and includes the v1.12.0 command surface plus the v1.12.1 architecture evidence-limit and required-witness corrections documented here. Version 1.12.3 (role-adequacy, structure-aware Python contract evidence, and test-responsibility mapping corrections — see "v1.12.3" below) is implemented and locally validated on the source repository but not yet published; the installed package still behaves as documented for v1.12.2 until it ships.
+`@dailephd/my-dev-kit@1.12.3` is the latest published release and includes the v1.12.0 command surface, the v1.12.1 architecture evidence-limit and required-witness corrections, and the v1.12.3 role-adequacy, structure-aware Python contract evidence, and test-responsibility mapping corrections documented here (see "v1.12.3" below).
 
 my-dev-kit provides nine public CLI commands:
 
@@ -1656,7 +1656,7 @@ Static-analysis limitation: no owner selection is edit authorization; ownership 
 
 ### v1.12.3: recoverable role adequacy, structure-aware Python contract evidence, and core-vs-supplemental test-responsibility mapping
 
-**Implemented and locally validated on the source repository; not yet published.** No new flag, request field, context role, or artifact. `requestedEvidenceKinds` values, including `test-commands`, are unchanged from Batch 3/4.
+**Shipped in v1.12.3.** No new flag, request field, context role, or artifact. `requestedEvidenceKinds` values, including `test-commands`, are unchanged from prior versions.
 
 - **Recoverable role adequacy.** `roleAdequacy.status` for `architecture`/`implementation`/`test-implementation` is now derived from the role's actual required conditions rather than from an unconditional downgrade triggered by an early, non-material base-retrieval or helper-classification failure (for example, an unsuitable top-ranked focus producing no source slice). When independently retained evidence still satisfies the role's required owner, contract, source/evidence, and freshness conditions, the role can be reported sufficient. Genuinely missing required evidence, unresolved material conflict, and loss of the final required witness through truncation remain blocking, `--no-source` remains supported, and legacy no-role behavior is unchanged.
 - **Structure-aware Python contract evidence.** Implementation-contract candidate discovery (`contracts`/`validators`/`schemas` evidence) no longer treats a filename hint (`type`, `schema`, `valid`, `constant`, `error`) as the sole eligibility gate for a Python owner. Grounded structural evidence — indexed symbols, graph relationships, and classification/evidence-group information — can establish a legitimate neutral-named contract owner (for example `result.py`, `cases.py`) without a literal filename special case. A neutral filename with no supporting structural evidence still does not qualify, and unrelated neutral files and misleading filename-only candidates remain excluded.
