@@ -1,6 +1,6 @@
 # Commands
 
-`@dailephd/my-dev-kit@1.12.1` is the latest published release and includes the v1.12.0 command surface plus the corrected architecture evidence-limit and required-witness semantics documented here.
+`@dailephd/my-dev-kit@1.12.3` is the latest published release and includes the v1.12.0 command surface, the v1.12.1 architecture evidence-limit and required-witness corrections, and the v1.12.3 role-adequacy, structure-aware Python contract evidence, and test-responsibility mapping corrections documented here (see "v1.12.3" below).
 
 my-dev-kit provides nine public CLI commands:
 
@@ -1653,6 +1653,17 @@ No new flag, request field, context role, or artifact. The existing `architectur
 - Related-test discovery, evidence-group shapes, role adequacy statuses, freshness, budget, truncation, and provenance categories are all unchanged — Android evidence flows through the existing structures additively. `context-capsule.json`/`retrieval-audit-record.json` remain schema `"1.0.0"`.
 
 Static-analysis limitation: no owner selection is edit authorization; ownership evidence reflects only static classification and graph relationships already produced by prior Android batches — no dependency-injection resolution, no runtime proof, and no test-execution/coverage claim.
+
+### v1.12.3: recoverable role adequacy, structure-aware Python contract evidence, and core-vs-supplemental test-responsibility mapping
+
+**Shipped in v1.12.3.** No new flag, request field, context role, or artifact. `requestedEvidenceKinds` values, including `test-commands`, are unchanged from prior versions.
+
+- **Recoverable role adequacy.** `roleAdequacy.status` for `architecture`/`implementation`/`test-implementation` is now derived from the role's actual required conditions rather than from an unconditional downgrade triggered by an early, non-material base-retrieval or helper-classification failure (for example, an unsuitable top-ranked focus producing no source slice). When independently retained evidence still satisfies the role's required owner, contract, source/evidence, and freshness conditions, the role can be reported sufficient. Genuinely missing required evidence, unresolved material conflict, and loss of the final required witness through truncation remain blocking, `--no-source` remains supported, and legacy no-role behavior is unchanged.
+- **Structure-aware Python contract evidence.** Implementation-contract candidate discovery (`contracts`/`validators`/`schemas` evidence) no longer treats a filename hint (`type`, `schema`, `valid`, `constant`, `error`) as the sole eligibility gate for a Python owner. Grounded structural evidence — indexed symbols, graph relationships, and classification/evidence-group information — can establish a legitimate neutral-named contract owner (for example `result.py`, `cases.py`) without a literal filename special case. A neutral filename with no supporting structural evidence still does not qualify, and unrelated neutral files and misleading filename-only candidates remain excluded.
+- **Core-vs-supplemental test-responsibility evidence.** `responsibilityMappings.mappings[].mappingStatus` now requires four core evidence categories — grounded production-symbol evidence, contract/validator/error evidence, related-or-proposed test evidence, and oracle/assertion evidence — regardless of request content. The discovered test-execution command (`testInfrastructure.testCommands`) is supplemental: a core-complete responsibility with no discovered command is still reported `mapped`/sufficiently mapped, with an explicit per-mapping warning that no test command was discovered, unless the request's `requestedEvidenceKinds` includes `test-commands` — in that case grounded command evidence becomes required for that mapping. A discovered command's exit-code outcome cannot substitute for missing core oracle/assertion evidence.
+- **Bounded Makefile test-command discovery.** `testCommands[]` discovery now also checks a repository `Makefile`/`makefile`/`GNUmakefile` for a `test:` target and, when found, reports the verbatim recipe command with `commandSource` naming the Makefile path — additive to the existing `package.json` `test` script discovery. No command is executed; a repository with neither a `package.json` test script nor a Makefile `test` target still produces an `unresolved` entry, never a fabricated command.
+- **Cross-output readiness consistency.** An integrated regression suite (`tests/context/contextV1123ReadinessConsistency.spec.ts`) protects `contextAdequacy`, `roleAdequacy`, `responsibilityMappings`, `missingConditions`/`blockingConditions`, truncation, and the `ContextCapsule`/`RetrievalAuditRecord` pair from reporting mutually contradictory readiness across the corrections above.
+- **Known, intentionally unfixed limitation.** The shared related-test classifier does not generally recognize Python `test_*.py` / `*_test.py` naming; this is not implemented as of v1.12.3. Broader Python language/framework classifier support remains v1.14.0 scope.
 
 ## graph-diff
 

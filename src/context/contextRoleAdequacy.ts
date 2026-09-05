@@ -117,7 +117,17 @@ export function evaluateRoleAdequacy(options: EvaluateRoleAdequacyOptions): Role
   const warnings: string[] = []
   const supportingEvidence: string[] = []
 
+  // A non-material base retrieval gap (for example, an empty primary source
+  // slice) is diagnostic evidence, not an irreversible role-status floor. The
+  // role-specific conditions below are the authority for role adequacy. A
+  // material base conflict remains blocking and is intentionally preserved.
   let status = baseAdequacy.status
+  if (
+    role === 'implementation' &&
+    baseAdequacy.status === 'context insufficient and more retrieval required'
+  ) {
+    status = 'context sufficient for implementation'
+  }
 
   const criticalUnmapped = criticalUnmappedResponsibilityIds(responsibilityMappings)
   const criticalPartial = criticalPartiallyMappedResponsibilityIds(responsibilityMappings)

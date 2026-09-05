@@ -103,7 +103,7 @@ describe('responsibility mapping', () => {
     expect(['mapped', 'partially-mapped']).toContain(mapping.mappingStatus)
   })
 
-  it('TST-B4-002/019: a partial fixture (no derivable oracle/test-command evidence) reports partially-mapped with clear unresolved reasons', () => {
+  it('TST-B4-002/019: a partial fixture (no derivable oracle evidence, test-commands not requested) reports partially-mapped with clear unresolved reasons, and a missing command is supplemental, not an unresolved core reason', () => {
     const root = createTempRoot('my-dev-kit-v1-resp-partial-')
     const src = join(root, 'src')
     mkdirSync(src, { recursive: true })
@@ -127,7 +127,9 @@ describe('responsibility mapping', () => {
     const mapping = capsule.responsibilityMappings.mappings.find((m: { responsibilityId: string }) => m.responsibilityId === 'resp-lonely')
     expect(mapping.mappingStatus).toBe('partially-mapped')
     expect(mapping.unresolvedReasons).toContain('no oracle evidence')
-    expect(mapping.unresolvedReasons).toContain('no test command')
+    // v1.12.3 Batch 3: test-commands was not explicitly requested, so a missing
+    // command is supplemental and must not appear as a core unresolved reason.
+    expect(mapping.unresolvedReasons).not.toContain('no test command')
   })
 
   it('TST-B4-003/024: no grounded evidence at all (no responsibilities supplied) never produces a false mapping success', () => {
@@ -186,6 +188,7 @@ describe('responsibility mapping: unit-level contract (structured Responsibility
     role: 'implementation' as const,
     hasSuppliedResponsibilities: true,
     requestedResponsibilityMappings: true,
+    requireTestCommandEvidence: false,
     evidenceGroups: [],
     selectedOwners: [],
     selectedContracts: [],

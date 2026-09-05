@@ -392,6 +392,29 @@ function isStructuralOwnerFile(
   return false
 }
 
+/** Contract evidence may be neutral-named when the graph shows that the
+ * implementation seed directly depends on it. Declaration kinds that can
+ * describe a contract surface are intentionally narrower than "exported":
+ * exported helper functions alone are not contract evidence. */
+function isStructuralContractNode(
+  node: CandidateNode,
+  structuralContractIds: Set<string>
+): boolean {
+  if (isContractLike(node)) return true
+  if (!hasRequestRelevance(node) || isForbiddenOwnerPath(node.filePath)) return false
+  if (!(node.filePath ?? '').toLowerCase().endsWith('.py')) return false
+  return structuralContractIds.has(node.nodeId)
+}
+
+function isStructuralContractFile(
+  file: CandidateFile,
+  structuralContractFilePaths: Set<string>
+): boolean {
+  if (isContractLike({ filePath: file.path, label: file.path })) return true
+  if (!hasRequestRelevance(file) || isForbiddenOwnerPath(file.path)) return false
+  return file.path.toLowerCase().endsWith('.py') && structuralContractFilePaths.has(file.path)
+}
+
 /** Reconstructs the same focus/changed-surface seed node/file IDs Batch 2's
  * `roleCandidates.ts` used for adjacency, so direction can be derived here without
  * a second graph traversal (only the existing edges are inspected). */
@@ -521,11 +544,33 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
 
-  const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isContractLike(n)))
-  const contractFiles = sortByScoreThenPath(retainedFiles.filter((f) => isContractLike({ filePath: f.path, label: f.path })))
+  const seedNodeIds = computeSeedNodeIds({ codeGraph, focusIntake, changedSurface })
+  const structuralContractIds = new Set<string>()
+  const structuralContractFilePaths = new Set<string>()
+  const contractDeclarationKinds = new Set(['class', 'interface', 'type', 'enum', 'const', 'variable'])
+  const pathByNodeId = new Map(codeGraph.nodes.map((n) => [n.id, n.path]))
+  for (const edge of codeGraph.edges) {
+    if (!seedNodeIds.has(edge.source) || (edge.kind !== 'imports' && edge.kind !== 'depends-on' && edge.kind !== 'calls')) continue
+    const target = nodeGraphById.get(edge.target)
+    const targetPath = target?.path ?? pathByNodeId.get(edge.target) ?? (edge.target.startsWith('file:') ? edge.target.slice('file:'.length) : undefined)
+    if (!targetPath || isForbiddenOwnerPath(targetPath)) continue
+    if (target && target.kind === 'symbol' && target.symbolKind && contractDeclarationKinds.has(target.symbolKind)) {
+      structuralContractIds.add(target.id)
+      structuralContractFilePaths.add(targetPath)
+    } else {
+      const targetSymbols = codeGraph.nodes.filter((n) => n.path === targetPath && n.kind === 'symbol' && n.symbolKind && contractDeclarationKinds.has(n.symbolKind))
+      if (targetSymbols.length > 0) {
+        structuralContractFilePaths.add(targetPath)
+        for (const symbol of targetSymbols) structuralContractIds.add(symbol.id)
+      }
+    }
+  }
+
+  const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralContractNode(n, structuralContractIds)))
+  const contractFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralContractFile(f, structuralContractFilePaths)))
   const contractItems = [
-    ...contractNodes.map((n) => nodeToItem(n, 'contract-like candidate', 'contract/validator/schema/error naming heuristic')),
-    ...contractFiles.map((f) => fileToItem(f, 'contract-like candidate', 'contract/validator/schema/error naming heuristic')),
+    ...contractNodes.map((n) => nodeToItem(n, 'contract-like candidate', isContractLike(n) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
+    ...contractFiles.map((f) => fileToItem(f, 'contract-like candidate', isContractLike({ filePath: f.path, label: f.path }) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
   ]
 
   const closestTestNodes = sortByScoreThenPath(retainedNodes.filter((n) => isTestLike(n.filePath)))
@@ -546,7 +591,6 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   // dependency (seed -> neighbor) vs caller (neighbor -> seed) evidence using the
   // existing code-graph edges directly, so "dependencies" and "callers-and-callees"
   // are not simply the same list twice.
-  const seedNodeIds = computeSeedNodeIds({ codeGraph, focusIntake, changedSurface })
   const { dependencyItems, callerItems } = splitDependenciesAndCallers({ codeGraph, adjacentItems, seedNodeIds })
 
   const exportedSymbolItems = sortByScoreThenPath(retainedNodes.filter((n) => n.kind === 'symbol' && nodeGraphById.get(n.nodeId)?.exported === true)).map((n) =>

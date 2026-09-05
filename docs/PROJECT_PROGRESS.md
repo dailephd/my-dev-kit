@@ -4,7 +4,21 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.2` is the latest published release.
+`@dailephd/my-dev-kit@1.12.3` is the latest published release.
+
+## Shipped: v1.12.3
+
+Version 1.12.3 is published. Package metadata and the CLI report `1.12.3`. It is a bounded corrective patch for the role-aware `context` command's readiness semantics.
+
+- Final role adequacy for `architecture`/`implementation`/`test-implementation` now derives from the role's actual required conditions rather than an unconditional downgrade from an early, non-material base-retrieval or helper-classification failure. Genuinely missing required evidence, unresolved material conflict, and final required-witness truncation remain blocking; `--no-source` and legacy no-role behavior remain compatible.
+- Implementation-contract discovery uses grounded structural evidence (indexed symbols, graph relationships, classification/evidence-group information) so legitimate neutral-named Python contract owners (for example `result.py`, `cases.py`) are selectable without literal filename special cases. Unrelated neutral files and misleading filename-only candidates remain excluded.
+- Test-responsibility mapping distinguishes core evidence (production, contract/validator/error, related-test, and oracle/assertion evidence) from supplemental test-command evidence. A core-complete responsibility with no discovered command remains sufficiently mapped with an explicit warning unless the request explicitly asks for `test-commands` evidence, in which case grounded command evidence becomes required; command evidence cannot substitute for missing core evidence.
+- Bounded, static `Makefile` `test` target discovery was added to existing package.json-script-based test-command discovery; no command execution and no fabricated command.
+- An integrated regression suite protects role adequacy, responsibility mappings, `missingConditions`/`blockingConditions`, truncation, and capsule/audit parity from contradicting each other across the above corrections together.
+
+Known limitation: the shared test-file classifier does not generally recognize Python `test_*.py` / `*_test.py` naming as related-test evidence; broader Python language/framework classifier support remains v1.14.0 scope.
+
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) is the next planned milestone.
 
 ## Shipped: v1.12.2
 

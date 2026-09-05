@@ -370,16 +370,19 @@ describe('documentation preservation checker', () => {
       expect(violations.some((v) => v.rule === 'artifact-family-present')).toBe(true)
     })
 
-    it('fails when README loses its manifest-owned v1.12.1 release-state boundary', () => {
+    it('fails when README loses its manifest-owned current release-state boundary', () => {
+      const currentVersion = loadPackageVersion()
       const releaseStateKeyword = manifest.statusBoundaries.documentKeywords[manifest.readme.path].find((keyword) =>
-        keyword.includes('1.12.1'),
+        keyword.includes(currentVersion),
       )
       expect(releaseStateKeyword).toBeDefined()
+      const mutatedReadme = realDocuments[manifest.readme.path]
+        .split(releaseStateKeyword!)
+        .join('current release status removed for test')
+      expect(mutatedReadme).not.toBe(realDocuments[manifest.readme.path])
       const mutated: DocumentContents = {
         ...realDocuments,
-        [manifest.readme.path]: realDocuments[manifest.readme.path]
-          .split(releaseStateKeyword!)
-          .join('v1.12.1 status removed for test'),
+        [manifest.readme.path]: mutatedReadme,
       }
       const violations = checkDocumentationPreservation(manifest, mutated)
       expect(violations.some((v) => v.rule === 'current-future-status-boundary')).toBe(true)
