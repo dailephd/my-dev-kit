@@ -4,6 +4,11 @@ This document maps my-dev-kit's stable cross-cutting contracts to their current
 implementation and detailed owners. It is deliberately not a second copy of
 every JSON schema or command flag.
 
+This is a repository-level maintainer and ecosystem contract document. It is
+not part of the installed-user documentation surface, and normal use of the
+published `@dailephd/my-dev-kit` CLI does not depend on this file being present
+in the npm package.
+
 ## CLI command contract
 
 The public executable exposes nine command families: `index`, `search`,
