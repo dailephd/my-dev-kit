@@ -31,7 +31,7 @@ Future releases should preserve the core model:
 index -> manifest -> artifacts -> search -> lookup -> slice -> source -> view
 ```
 
-New languages, frameworks, and platforms should be added through adapters and artifact producers rather than by replacing the retrieval model.
+New languages, frameworks, platforms, and document formats should be added through adapters and artifact producers rather than by replacing the retrieval model.
 
 ## Product principles
 
@@ -54,6 +54,7 @@ New languages, frameworks, and platforms should be added through adapters and ar
 - connect to databases
 - claim runtime behavior when it only has static evidence
 - become a second orchestrator runtime
+- become a documentation website renderer or static-site generator
 
 ## Version 1.0.0
 
@@ -1378,7 +1379,6 @@ The goal is to make final role readiness depend on the evidence genuinely requir
 - capsule and retrieval-audit readiness facts remain in parity and deterministic across repeated runs
 - focused context tests, the full test suite, typecheck, build, documentation checks, retrieval regression benchmarks, package verification, and cross-platform validation pass before release preparation
 
-
 ## Version 1.13.0
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.
@@ -1480,11 +1480,357 @@ Candidate future languages:
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
 
+## Version 1.15.0
+
+Version 1.15.0 adds the document-indexing foundation while preserving the existing code-first command behavior.
+
+The goal is to let `my-dev-kit` index and retrieve repository documentation through the same graph-guided workflow used for source code, without requiring project-specific documentation filenames, special comments, one-line prose, or a parallel documentation CLI.
+
+### Domain contract
+
+Add a shared domain selector:
+
+- `--domain code|docs|all`
+- default value: `code`
+- omitting `--domain` preserves all existing behavior
+- v1.15.0 applies the selector to `index`, `search`, `lookup`, `source`, `slice`, and `view`
+- `data-model` remains code-specific
+- `context` remains code-domain only until cross-domain evidence exists in v1.17.0
+
+Domain semantics:
+
+- `code` indexes and retrieves the current source-code/artifact surface
+- `docs` indexes and retrieves supported repository text documentation
+- `all` produces both code and document artifacts in one index, but v1.15.0 does not yet infer code-to-document relationships
+
+### Initial document formats
+
+The initial supported document formats are:
+
+- Markdown (`.md`)
+- MDX (`.mdx`)
+- plain text (`.txt`) through bounded textual fallback
+
+Markdown and MDX receive structure-aware parsing. Plain text remains searchable and retrievable through deterministic bounded chunks. PDF, DOCX, scanned images, arbitrary HTML scraping, reStructuredText, AsciiDoc, and binary documents are outside this version.
+
+### Normalized document model
+
+Document indexing operates on logical structure rather than physical lines. A section or paragraph may span many physical lines.
+
+Initial normalized concepts:
+
+- document
+- section
+- heading
+- paragraph
+- list
+- list item
+- code block
+- table
+- blockquote
+- link
+- textual/reference evidence
+
+Globally addressable graph identities are required for documents and sections. Lower-level blocks may remain structured children until real retrieval requirements justify first-class graph identities.
+
+Stable document identities are derived deterministically from normalized repository-relative paths plus heading hierarchy/occurrence information. Duplicate headings must never collapse into one node.
+
+### Artifacts
+
+Add manifest-registered artifacts:
+
+- `document-index.json`
+- `document-graph.json`
+
+`document-index.json` owns normalized document/section records, source spans, headings, searchable text fields, structured blocks, links, format metadata, and warnings.
+
+`document-graph.json` owns document/section containment and document-to-document relationships that can be proven directly from document structure and explicit links.
+
+Document sections are not inserted into `symbol-index.json`, and document nodes do not masquerade as code symbols.
+
+### Retrieval behavior
+
+Existing commands operate over document nodes when `--domain docs` or `--domain all` is selected:
+
+- `search` ranks exact heading/title matches, inline-code/reference matches, link text, body text, code blocks, path, and other deterministic fields
+- `lookup` retrieves an exact document or section node
+- `slice` traverses bounded document relationships
+- `source` returns the original multiline source text backing a document/section node
+- `view` renders a document graph through the existing renderer rather than a second visualization engine
+
+A query such as `context` must not require the relevant description to appear on one physical line. The indexer resolves the relevant logical section or bounded textual unit and preserves its original line range only as provenance/source coordinates.
+
+### Incremental-indexing compatibility
+
+Document files participate in changed-file detection and cache invalidation. A document-only change must not require unrelated code files to be reparsed when the existing incremental architecture can safely reuse them.
+
+### Generality requirements
+
+- no required `docs/` directory
+- no required `CONTRACTS.md`, `COMMANDS.md`, `ROADMAP.md`, or other project-specific filename
+- no required my-dev-kit section comments or custom prose syntax
+- normal human-written Markdown/MDX remains valid input
+- better structure improves retrieval precision but weakly structured text degrades to bounded text retrieval rather than failing
+
+### Dependencies and ordering
+
+1. domain option contract and backward-compatibility tests
+2. Markdown/MDX/plain-text discovery and normalized document model
+3. stable document/section identity and source-span handling
+4. `document-index.json` and `document-graph.json` production/manifest registration
+5. search/lookup/source/slice/view integration
+6. incremental-indexing compatibility and deterministic regression fixtures
+
+### Acceptance criteria
+
+- all existing invocations behave identically when `--domain` is omitted
+- ordinary Markdown and MDX can be indexed without rewriting documents for my-dev-kit
+- multiline sections are searchable, lookup-able, slice-able, and retrievable as bounded original source
+- weakly structured plain text remains usable through deterministic bounded chunks
+- document artifacts are deterministic, inspectable, manifest-registered, and read-only with respect to the indexed repository
+- no code/document relationship is guessed in this version
+- no second search, graph, renderer, or top-level documentation command family is introduced
+
+## Version 1.16.0
+
+Version 1.16.0 adds conservative code-to-document and document-to-code relationships on top of the v1.15.0 document identities.
+
+The goal is to restore the useful traceability concept from the earlier experimental implementation without restoring its parallel registry/retrieval architecture. The current manifest, stable IDs, graphs, and retrieval commands remain authoritative.
+
+### Cross-domain relationship artifact
+
+Add a manifest-registered `documentation-links.json` artifact containing relationships between existing document IDs and existing repository/code/test/artifact identities.
+
+Do not create a second symbol registry or duplicate code graph. Do not create a universal repository graph until evidence from real use demonstrates that materializing one is preferable to composing existing graphs plus relationship edges.
+
+### Initial relationship families
+
+Resolve only relationships backed by strong static evidence:
+
+- `references-file`
+- `references-symbol`
+- `references-command`
+- `references-flag`
+- `references-artifact`
+- `references-test`
+- `links-document`
+
+Relationship inputs may include explicit repository-relative paths, exact indexed symbol names/IDs, command/flag literals, artifact filenames, explicit test paths/identities, Markdown links, and other exact structures supported by existing artifacts.
+
+Ambiguous exact references remain ambiguous. A repeated or non-unique symbol name must not be assigned an arbitrary winner.
+
+### Relationship-strength boundary
+
+v1.16.0 does not infer strong semantic claims such as `specifies`, `implements`, or `proves` from mere co-occurrence or wording similarity.
+
+The first release records factual reference relationships. Stronger semantic edge kinds may be added only when later implementation can define deterministic evidence requirements.
+
+### Cross-domain retrieval
+
+With `--domain all`:
+
+- `search` may return code and document candidates in one deterministic result space while preserving candidate kind/domain
+- `lookup` may include related documentation references for a code node and related code references for a document node
+- `slice` may traverse bounded cross-domain links in addition to same-domain edges
+- `source` continues to retrieve the original repository content for the selected node, whether code or documentation
+- `view` may render bounded mixed-domain slices through the existing graph renderer
+
+### First-party documentation-site consumer
+
+After v1.16.0, a first-party documentation website may consume the public document/code relationship artifacts to provide related implementation, related tests, related artifacts, source previews, and cross-reference visualization.
+
+The website is a downstream consumer, not part of the core CLI contract. `my-dev-kit` does not become a Markdown-to-HTML engine, web framework, theme system, hosting platform, or static-site generator.
+
+### Dependencies and ordering
+
+1. exact document reference extraction
+2. path/document-link resolution
+3. code symbol/command/flag/artifact/test resolution
+4. ambiguity and provenance representation
+5. `documentation-links.json` production/manifest registration
+6. cross-domain search/lookup/slice/source/view integration
+7. unrelated-repository fixtures proving no project-specific filename convention is required
+
+### Acceptance criteria
+
+- exact document references resolve to existing repository identities when uniquely grounded
+- ambiguous or unresolved references remain explicit and no unsupported winner is fabricated
+- `--domain all` exposes connected code and document evidence without a second retrieval runtime
+- no semantic `specifies`/`implements` claim is inferred from weak textual similarity
+- the first-party website can consume the artifacts without becoming a dependency of `my-dev-kit`
+
+## Version 1.17.0
+
+Version 1.17.0 makes document evidence available to task-oriented context retrieval and adds conservative documentation change-impact evidence.
+
+The goal is for a coding agent or human to retrieve the code, tests, contracts, usage documentation, and potentially affected documentation for a task without broad document dumps.
+
+### Context domain integration
+
+Extend the existing domain selector to `context`:
+
+- `context --domain code`
+- `context --domain docs`
+- `context --domain all`
+- default remains `code`
+
+Existing role semantics remain unchanged unless `docs` or `all` is requested.
+
+For `--domain all`, candidate ranking and evidence grouping may include bounded document evidence such as:
+
+- contract/specification sections
+- command/usage documentation
+- architecture documentation
+- examples/tutorial sections
+- related document links
+- document sections explicitly referencing changed/focus code identities
+
+Document evidence remains provenance-bearing, bounded, and subject to the same honest omission/truncation discipline as other context evidence.
+
+### Documentation impact evidence
+
+When a changed file/symbol/command/artifact has known document references, context and diff consumers may report those document sections as `potentially affected documentation`.
+
+This is an impact relationship, not an automatic stale-document verdict. my-dev-kit must not claim a document is incorrect merely because referenced code changed.
+
+### Graph-diff document support
+
+Extend `graph-diff` using v1.15.0 stable document identities:
+
+- documents added/removed/changed
+- sections added/removed/changed
+- document links/references added/removed/changed where stable identity supports it
+- cross-domain relationship additions/removals
+- missing document artifacts degrade explicitly rather than invalidating otherwise valid code-only comparisons
+
+### Retrieval regression coverage
+
+Extend `benchmark:retrieval` with representative document/cross-domain tasks, including:
+
+- what does a documented command or concept do?
+- where is an exact code symbol documented?
+- what code/test evidence is explicitly referenced by this section?
+- what documentation is potentially affected by a changed symbol?
+- distinguish current contract/usage documentation from unrelated roadmap mentions where deterministic evidence supports the distinction
+- preserve ambiguity instead of choosing an unsupported documentation or code target
+
+### Dependencies and ordering
+
+1. document-aware candidate/ranking/evidence-group model
+2. `context --domain` compatibility and request normalization
+3. cross-domain source/graph selection
+4. documentation impact evidence
+5. document/cross-domain `graph-diff`
+6. retrieval regression fixtures, caps, provenance, and adequacy validation
+
+### Acceptance criteria
+
+- existing context invocations remain code-domain compatible by default
+- `--domain all` can retain relevant code, test, and documentation evidence in one bounded capsule
+- potential documentation impact is distinguished from proven staleness
+- document evidence cannot bypass existing caps, provenance requirements, ambiguity handling, or adequacy rules
+- regression fixtures demonstrate useful cross-domain retrieval without broad document injection
+
+## Version 1.18.0
+
+Version 1.18.0 generalizes the document domain through format adapters and hardens it against repository-layout assumptions.
+
+The goal is to prove that document indexing is a general-purpose my-dev-kit capability rather than a feature tailored to the my-dev-kit repositories themselves.
+
+### Document-format adapter architecture
+
+Introduce a normalized document-adapter contract analogous to language adapters. Adapters produce the same core document concepts while preserving format-specific warnings and source spans.
+
+Required supported formats by the end of this version:
+
+- Markdown
+- MDX
+- plain text
+- reStructuredText
+
+AsciiDoc is a candidate addition only if it fits the bounded implementation and validation budget; otherwise it remains future scope.
+
+Adapters may expose different structural fidelity. For example, Markdown/reStructuredText can expose sections and links while plain text may expose bounded chunks only. Missing structure is not fabricated.
+
+### Optional semantic metadata
+
+Support optional, format-appropriate metadata such as front matter when present, including evidence-backed hints for document role or title.
+
+Metadata is optional enrichment. A repository must remain indexable without it.
+
+### Conservative document classification
+
+Add evidence-backed document-role classification when sufficiently supported, with categories such as:
+
+- README/project overview
+- API reference
+- command reference
+- architecture
+- contract/specification
+- tutorial/guide
+- development guide
+- release guide
+- changelog/history
+- roadmap/planning
+- unknown
+
+Filename/path evidence may contribute but is never universally authoritative. Ambiguous role remains `unknown` or explicitly uncertain.
+
+### Large-document and large-documentation-tree hardening
+
+Add bounded protections consistent with existing indexing ergonomics:
+
+- document-count/size preflight diagnostics
+- deterministic maximum section/chunk behavior
+- generated documentation-site output exclusions where detectable/configured
+- vendor/build/site-output exclusions through existing ignore/exclude mechanisms
+- incremental document parsing/reuse where current cache architecture safely supports it
+
+### General-purpose validation
+
+Validation must include repositories that do not follow the my-dev-kit documentation layout:
+
+- one large README
+- nested `docs/` hierarchy
+- monorepo documentation
+- mixed Markdown/MDX
+- reStructuredText project
+- weakly structured plain text
+- explicit source-path/symbol references
+- documentation with few or no exact code references
+
+No acceptance test may require `CONTRACTS.md`, `COMMANDS.md`, `ROADMAP.md`, `CURRENT_STATE.md`, or my-dev-kit-specific comments/front matter.
+
+### Website boundary
+
+The official my-dev-kit documentation website may use these artifacts as its reference data model and may implement specialized interfaces such as related-code/test panels, traceability graphs, source previews, and change-impact views.
+
+The core package remains renderer-independent. Other consumers may build Docusaurus, Sphinx, MkDocs, Astro, Next.js, custom sites, coding-agent workflows, or other interfaces over the same JSON artifacts.
+
+### Dependencies and ordering
+
+1. document-adapter interface over the proven v1.15 model
+2. reStructuredText adapter and format-normalization tests
+3. optional metadata and conservative document classification
+4. large-document/tree protections and incremental compatibility
+5. unrelated-repository retrieval benchmarks
+6. cross-platform and full regression hardening
+
+### Acceptance criteria
+
+- the document domain works across multiple repository styles without my-dev-kit-specific document structure
+- missing structure degrades honestly instead of preventing indexing
+- optional metadata improves confidence without becoming mandatory
+- large documentation trees remain bounded and deterministic
+- website/framework choice remains outside the core artifact contract
+
 ## Version 2.0.0
 
 Version 2.0.0 focuses on a larger artifact and plugin model.
 
 The goal is to expand the v1 CLI into a more extensible retrieval platform while preserving the core graph-guided workflow.
+
+Document-domain concepts proven in v1.15.0-v1.18.0 should be promoted into the v2 artifact/plugin architecture rather than redesigned speculatively before those releases are exercised.
 
 ### Artifact schema v2
 
@@ -1492,6 +1838,9 @@ Candidate first-class node types:
 
 - file
 - symbol
+- document
+- document section
+- documentation reference
 - local function
 - React component
 - local React component tree
@@ -1536,6 +1885,7 @@ Candidate first-class node types:
 Candidate plugin categories:
 
 - language plugins
+- document-format plugins
 - framework plugins
 - test-framework plugins
 - ORM plugins
@@ -1581,23 +1931,28 @@ If artifact formats change, the release provides one of the following:
 
 ## Ecosystem integration notes
 
-`my-dev-kit` should provide Android artifacts and retrieval results that other tools can consume.
+`my-dev-kit` should provide Android and documentation artifacts and retrieval results that other tools can consume.
 
-`my-dev-kit-orchestrator` should remain responsible for staged workflow control. Android support in the orchestrator should be added as workflow profiles or prompt modules that consume `my-dev-kit` Android artifacts. The orchestrator should not become the Android parser.
+`my-dev-kit-orchestrator` should remain responsible for staged workflow control. Android support and document-aware context use in the orchestrator should consume `my-dev-kit` artifacts rather than duplicate parsing or indexing.
 
-`my-dev-kit-lab` should remain responsible for security validation. Android security checks should consume target project files and `my-dev-kit` Android artifacts where useful, but they belong in the lab project rather than in the core indexing CLI.
+`my-dev-kit-lab` should remain responsible for security validation. Android security checks and future documentation-evidence experiments may consume target project files and `my-dev-kit` artifacts where useful, but they belong in the lab project rather than in the core indexing CLI.
 
-Recommended ecosystem split for Android:
+A first-party documentation website may consume public my-dev-kit artifacts, but website rendering, themes, navigation UI, hosting, and deployment remain separate from the core CLI.
+
+Recommended ecosystem split:
 
 ```text
 my-dev-kit
-  Android/Kotlin/Java/Gradle/Manifest/Compose indexing and retrieval
+  code/document/Android indexing, relationships, and bounded retrieval
 
 my-dev-kit-orchestrator
-  Android-aware architecture-context, test-strategy, implementation, and verification profiles
+  staged architecture-context, implementation, test-strategy, and verification workflows consuming my-dev-kit evidence
 
 my-dev-kit-lab
-  Android security and release-risk validation profiles
+  security, controlled experiments, and release-risk validation
+
+first-party documentation website
+  human-facing rendering and interactive exploration of public my-dev-kit evidence
 ```
 
 ## Long-term direction
@@ -1611,6 +1966,9 @@ The core product direction is:
 - bounded source context instead of broad source injection
 - source continuation and source bundles instead of full-file fallback
 - classification metadata instead of wrong-layer edits
+- document-domain indexing instead of treating documentation as unstructured full-file context
+- cross-domain code-document relationships instead of manual traceability alone
+- documentation impact evidence instead of assuming every code change makes every document stale
 - model-to-view lineage instead of manual tracing from schemas to generated UI
 - literal and reference tracing instead of full-file string hunting
 - React render-flow retrieval instead of full-component reading
@@ -1618,7 +1976,7 @@ The core product direction is:
 - Android project, Gradle, manifest, resource, Compose, and ViewModel-aware retrieval for mobile app work
 - explicit fallback reporting instead of hidden assumptions
 - conservative static analysis instead of overclaimed runtime understanding
-- framework-aware retrieval where it improves real development workflows
-- clear artifacts that can be inspected, versioned, and reused by humans or coding agents
+- framework-aware and document-format-aware retrieval where it improves real development workflows
+- clear artifacts that can be inspected, versioned, and reused by humans, coding agents, and documentation interfaces
 
-The product should continue to work as a standalone CLI. Any future UI, hosted service, or agent integration should build on the same artifact model rather than replacing it.
+The product should continue to work as a standalone CLI. Any future UI, documentation site, hosted service, or agent integration should build on the same artifact model rather than replacing it.
