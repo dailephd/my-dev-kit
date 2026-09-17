@@ -24,7 +24,7 @@ The recipes in this guide are agent compositions. A successful execution must su
 - Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
 - Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).
 
-The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.6`, and Observer `0.8.0`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
+The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.6`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
 
 ## 2. Responsibility and execution boundaries
 
@@ -73,13 +73,13 @@ Use dedicated test data and a non-production database. Preserve pre-existing wor
 
 ### Installed commands versus source-checkout tooling
 
-Use the installed public binaries for normal product use. Resolve installation and browser prerequisites once. In particular, the Observer package is **`my-frontend-observer`**, not `@dailephd/my-frontend-observer`.
+Use the installed public binaries for normal product use. Resolve installation and browser prerequisites once. Observer currently uses the scoped package **`@dailephd/my-frontend-observer`**. Its executable remains `my-frontend-observer`. Earlier unscoped package examples are historical and must not select a different package silently.
 
 ```powershell
 npx @dailephd/my-dev-kit --help
 npx @dailephd/my-dev-kit-orchestrator --help
 npx @dailephd/my-dev-kit-lab --help
-npx my-frontend-observer --help
+npx @dailephd/my-frontend-observer --help
 ```
 
 Verify versions and command-specific help from the actual installation before using an example. A local dependency can determine what `npx` resolves. Record that identity rather than assuming `npx` always downloads the newest release.
@@ -245,12 +245,26 @@ Refresh test context after production changes. Complete the use-case and regress
 
 ### 8.4 Observer evaluation and correction
 
-Use the actual artifact roots returned by commands. The following is a syntax skeleton, not runnable until placeholders and contract files are resolved:
+Prefer Observer 0.8.1's project workflow for ordinary repeated coding-agent checks. Resolve configuration once, freeze its acceptance inputs, and retain the same baseline alias throughout the task:
 
 ```powershell
-npx my-frontend-observer observe --url "http://localhost:<port>/<route>" --viewport 1280x720 --targets-file "<targets.json>" --output "<evidence>/observations"
-npx my-frontend-observer compare --before "<baseline-observation-root>" --after "<candidate-observation-root>" --output "<evidence>/comparisons"
-npx my-frontend-observer evaluate-contract --before "<baseline-observation-root>" --after "<candidate-observation-root>" --comparison "<comparison-root>" --baseline "<approved-baseline-contract-root>" --change "<change-contract-root>" --output "<evidence>/evaluations" --enforce
+npx @dailephd/my-frontend-observer init --url "http://127.0.0.1:<port>/<route>" --viewport 1280x720 --targets-file "<targets.json>"
+npx @dailephd/my-frontend-observer capture baseline
+# Implement the complete slice outside Observer and run project tests.
+npx @dailephd/my-frontend-observer check baseline --json
+npx @dailephd/my-frontend-observer view --no-open
+```
+
+The schema-1.1.0 project configuration can explicitly reference `acceptance.comparisonConfigFile`, the paired `acceptance.contract.baselineArtifact` and `changeArtifact`, and `acceptance.reference.approvedArtifact` plus optional `bindingsFile`. Use the exact current project schema and safe project-relative paths. Do not invent acceptance CLI flags. Contract/reference preparation remains explicit. `capture baseline` alone does not define executable acceptance.
+
+`check` captures a new immutable current candidate, invokes the canonical comparison, and evaluates configured acceptance. Its bounded JSON results and exit codes are `PASS`/0, `FAIL`/1, `REVIEW_REQUIRED`/2, and `BLOCKED`/3. Comparison alone is `REVIEW_REQUIRED`, even when there are no differences. Do not convert it to PASS or replace the baseline alias to conceal a failure. Configure all required acceptance before relying on this gate.
+
+The advanced standalone commands remain useful for existing evidence, custom state/scroll captures, and explicit multi-state orchestration. Use the actual artifact roots they return. The following is a syntax skeleton, not runnable until placeholders and contract files are resolved:
+
+```powershell
+npx @dailephd/my-frontend-observer observe --url "http://localhost:<port>/<route>" --viewport 1280x720 --targets-file "<targets.json>" --output "<evidence>/observations"
+npx @dailephd/my-frontend-observer compare --before "<baseline-observation-root>" --after "<candidate-observation-root>" --output "<evidence>/comparisons"
+npx @dailephd/my-frontend-observer evaluate-contract --before "<baseline-observation-root>" --after "<candidate-observation-root>" --comparison "<comparison-root>" --baseline "<approved-baseline-contract-root>" --change "<change-contract-root>" --output "<evidence>/evaluations" --enforce
 ```
 
 Baseline and change contracts are prepared with `approve-baseline` and `save-change-contract` using the documented schemas. A fresh candidate uses the frozen conditions. Evaluate requested changes and active protected/preserved clauses together.
@@ -261,7 +275,7 @@ Read semantic results, not only exit codes. `observe` may persist partial eviden
 
 On failure, preserve the candidate, obtain fresh bounded runtime/static evidence, repair the smallest justified source surface, rerun affected tests, and observe again. Evaluate each attempt against the same approved baseline. Do not weaken assertions, tolerances, targets, or requirements to obtain PASS. Reproducible target-definition errors require a recorded contract correction, not a hidden rebaseline.
 
-`projectBoundedAgentContext`, runtime/static correlation, `prepareReferenceCorrection`, and `reviewReferenceCorrectionAttempt` are library APIs. Use an existing, validated adapter when present. Otherwise compose the public commands and report manual bridging. Do not invent corresponding CLI commands or a second evaluator.
+`projectBoundedAgentContext`, runtime/static correlation, `prepareReferenceCorrection`, and `reviewReferenceCorrectionAttempt` are library APIs. Use an existing, validated adapter when present. The project `check` command already composes capture, comparison, and configured acceptance. Use its result instead of inventing an adapter for that supported path. Report any additional manual bridging actually needed for static correlation or unsupported multi-state execution. Do not invent corresponding CLI commands or a second evaluator.
 
 ### 8.5 Final-state acceptance
 
@@ -327,7 +341,7 @@ Implement the connected slice, run database/API/client tests, inspect changed ev
 
 **Input:** verified scaffold and first slice. Reuse the completed run, source index, environment commands, tests, and approved behavior. Confirm architecture and project identity, then create a normal bounded feature contract and execute the vertical slice. Refresh only affected architecture domains.
 
-**Output:** continuation without respecifying the project or treating the scaffold as a finished app. This is manual coordination, not the deferred native greenfield handoff implementation.
+**Output:** continuation without respecifyinging the project or treating the scaffold as a finished app. This is manual coordination, not the deferred native greenfield handoff implementation.
 
 ### 9.10 Commit-to-commit regression localization
 
