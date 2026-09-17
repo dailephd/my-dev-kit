@@ -19,6 +19,8 @@ Use either the installed binary or `npx`, not both as different product surfaces
 
 The commands are `index`, `search`, `lookup`, `source`, `slice`, `view`, `data-model`, `context`, and `graph-diff`. Use `<command> --help` against the actual installation before composing commands from different versions.
 
+Android/Compose selectors include `--android-ui` and `--test-tag`. The `compose-ui` graph view displays supported Compose evidence. Their exact arguments and limits are documented below.
+
 ## Path conventions
 
 Run examples from the target project root unless another root is explicit. Replace placeholders before execution. One-line examples work in PowerShell and common Unix shells. Shell redirection, process management, and cleanup remain shell-specific.
