@@ -158,7 +158,8 @@
       "Android/Kotlin/Java",
       "Compose semantic retrieval",
       "Android test-evidence retrieval",
-      "Compose and Android-test graph views"
+      "Compose and Android-test graph views",
+      "ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md"
     ]
   },
   "statusBoundaries": {
@@ -169,7 +170,23 @@
         "## Version 1.12.3",
         "**Status: published.**"
       ],
-      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Shipped: v1.12.3", "Package metadata and the CLI report `1.12.3`", "## Shipped: v1.12.1", "## Shipped: v1.12.0", "## Shipped: v1.10.3", "## Shipped: v1.10.4"]
+      "docs/PROJECT_PROGRESS.md": ["latest published release", "## Shipped: v1.12.3", "Package metadata and the CLI report `1.12.3`", "## Shipped: v1.12.1", "## Shipped: v1.12.0", "## Shipped: v1.10.3", "## Shipped: v1.10.4"],
+      "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
+        "my-dev-kit-orchestrator", "my-dev-kit-lab", "my-frontend-observer",
+        "Existing-project onboarding workflow", "Architecture Assimilation Report",
+        "ARCHITECTURE_ASSIMILATION_PASS", "ARCHITECTURE_ASSIMILATION_INCOMPLETE",
+        "Existing owner:", "Existing extension point:", "Canonical contracts/state:",
+        "Architecture that must not be duplicated:",
+        "Continuous full-stack vertical slice", "Failure feedback and improvement planning",
+        "Library API", "Agent composition", "Required assurance must pass",
+        "Runtime-to-source repair", "Shared-component safe change or refactor",
+        "Visual-reference implementation", "Golden runtime extraction",
+        "API and data-contract migration", "Edge-case hardening matrix",
+        "Dependency-upgrade impact review", "Pre-pull-request evidence convergence",
+        "Greenfield-to-first-feature handoff", "Commit-to-commit regression localization",
+        "Critical-journey contract bank", "Security-sensitive user flow",
+        "Release-candidate runtime assurance", "Field failure to ecosystem improvement"
+      ]
     },
     "requiredBoundaryKeywords": [
       "local-first",

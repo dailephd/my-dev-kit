@@ -1,0 +1,536 @@
+# Ecosystem development workflows
+
+## 1. Purpose and ownership
+
+This is the single cross-repository workflow guide for **my-dev-kit**, **my-dev-kit-orchestrator**, **my-dev-kit-lab**, and **my-frontend-observer**. Its canonical location is `dailephd/my-dev-kit/docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md`. Other repositories link here rather than maintain synchronized copies.
+
+Use this guide to select and combine workflows. Use each tool's own command and contract documentation for exact syntax and artifact schemas. Documentation ownership does not change runtime ownership: my-dev-kit remains a static evidence producer, not an orchestrator, browser, test runner, or security scanner.
+
+This guide consolidates the former Orchestrator ecosystem guide, the web/full-stack vertical-slice workflow, and the cross-tool recipes below. It preserves onboarding, greenfield work, version batches, patches, coordinated changes, documentation reconciliation, security, release, recovery, and handoff responsibilities. It does not change any roadmap or publish a new product capability.
+
+### Evidence labels
+
+- **Implemented command:** a documented public command in the inspected tool.
+- **Library API:** a documented programmatic surface, not a CLI subcommand.
+- **Agent composition:** an ordered recipe executed by a person or coding agent using existing tools and project commands. It is not built-in automation or a claim that the whole recipe has passed a cross-repository trial.
+- **Planned or unsupported:** not available through the inspected public surface. Record the limitation rather than invent a command.
+
+The recipes in this guide are agent compositions. A successful execution must supply its own evidence.
+
+### Command and contract authorities
+
+- my-dev-kit: [Commands](COMMANDS.md), [tool-local workflows](WORKFLOWS.md), [contracts](CONTRACTS.md), [graph and artifact schemas](GRAPH_SCHEMA.md).
+- Orchestrator: [Commands](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/COMMANDS.md), [native workflows](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/WORKFLOWS.md), [artifacts](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/ARTIFACTS.md), [contracts](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/CONTRACTS.md).
+- Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
+- Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).
+
+The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.6`, and Observer `0.8.0`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
+
+## 2. Responsibility and execution boundaries
+
+**The planner** defines the user outcome, scope, behavior, compatibility boundaries, required layers, test responsibilities, visual intent, execution mode, and Git authority. The implementation prompt contains these requirements directly. A coding agent must not need the planner's private template library to understand its assignment.
+
+**The coding agent** obtains evidence, edits the authorized target, runs actual project commands, tests the integrated result, repairs bounded failures, and reports the outcome. Neither command generation nor a stage-completion mark proves that this work ran.
+
+**my-dev-kit** owns indexing, search, exact lookup, bounded source, slices, graph views, data-model/lineage evidence, context capsules, and graph differences. Classification and graph edges are conservative static evidence, not runtime reachability, security findings, or complete test coverage.
+
+**Orchestrator** owns staged prompts, native artifacts, readiness, lifecycle, judge/correction routing, and export. It does not run the agent, my-dev-kit, Docker, databases, project tests, Observer, Lab, or publication. Its bounded Observer consumer is a library boundary, not automatic browser integration.
+
+**Observer** owns local browser observations, comparisons, executable frontend contracts, external-reference evidence and fidelity, bounded runtime context, and explicit runtime/static correlation. It never edits target source. Runtime target identity, reference-region identity, and static source identity remain different concepts.
+
+**Lab** owns supported experiments, audits, automated security validation, and reports. It supplements rather than replaces project tests and browser evidence. It is not a mandatory per-edit step, a generic web penetration tester, or a universal consumer of arbitrary ecosystem feedback files.
+
+**Git, GitHub, and the package registry** own history, review, CI, releases, and publication. Permission to implement a feature does not authorize a release, deployment, destructive database action, or force push.
+
+## 3. Shared run contract
+
+Before execution, the planner supplies the following task-specific values. Resolve them once, not differently in every phase.
+
+```text
+TASK: <descriptive task slug and user outcome>
+TARGET: <repository or explicit source/target repository pair>
+BASE: <branch and expected commit, or a rule to resolve them safely>
+EXECUTION_MODE: DIRECT_IMPLEMENTATION | FULL_STAGE_CONTEXT
+SCOPE: <included behavior and explicit exclusions>
+REQUIRED_LAYERS: <data, backend, boundary, client state, UI as applicable>
+USER_FLOW: <entry action -> real processing -> observable result>
+PRESERVED_BEHAVIOR: <existing contracts and neighboring journeys>
+TEST_RESPONSIBILITIES: <planner-authored positive, negative and boundary cases>
+VISUAL_INTENT: NONE | PRESERVE_CURRENT | MATCH_EXISTING | REFERENCE
+VISUAL_INPUTS: <precedent, reference and selected requirements when applicable>
+RUNTIME_EVIDENCE: <routes, states, viewports, targets and required checks>
+ASSURANCE: <required Lab/project checks, optional checks, failure thresholds>
+CORRECTION_LIMIT: <default three failed-candidate correction cycles>
+AUTHORITY: <separate edit, commit, push, merge, release and deployment permissions>
+REPORT: docs/reports/<task-slug>-implementation.md
+FEEDBACK: docs/reports/<task-slug>-ecosystem-feedback.md
+EVIDENCE_ROOT: .my-dev-kit-workflows/<task-slug>/
+```
+
+An existing project report convention may replace the two report paths, but the prompt must resolve exact paths before execution. Do not scatter alternative reports across directories. Generated indexes, observations, logs, test data, and temporary configuration belong in the ignored evidence root or an established project-owned tool directory. Preserve native tool filenames and returned artifact IDs.
+
+Use dedicated test data and a non-production database. Preserve pre-existing work and untracked files. Do not reset, clean, stash, force push, rewrite a user's branch, or delete another task's evidence. Never remove the before-index or approved browser baseline while later checks still reference it. Do not commit secrets, session credentials, private browser captures, raw context dumps, package archives, or generated logs.
+
+### Installed commands versus source-checkout tooling
+
+Use the installed public binaries for normal product use. Resolve installation and browser prerequisites once. In particular, the Observer package is **`my-frontend-observer`**, not `@dailephd/my-frontend-observer`.
+
+```powershell
+npx @dailephd/my-dev-kit --help
+npx @dailephd/my-dev-kit-orchestrator --help
+npx @dailephd/my-dev-kit-lab --help
+npx my-frontend-observer --help
+```
+
+Verify versions and command-specific help from the actual installation before using an example. A local dependency can determine what `npx` resolves. Record that identity rather than assuming `npx` always downloads the newest release.
+
+Lab `security validate` and `audit` are installed CLI commands in the reviewed `0.4.6` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
+
+```powershell
+npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" audit --target "<absolute-target>" --types code-rot --format text,json --fail-on none
+npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" security validate --target "<absolute-target>" --profile npm-package --format text,json
+```
+
+Select a profile appropriate to the target. Use `--out` explicitly when separate executions need separate reports. An audit with `--fail-on none` collects findings but is not an acceptance gate by exit status. Lab's low-level `security deps`, `security package`, `security codeql`, `security semgrep`, and `security fuzz` are not installed CLI routes in this baseline. Do not invent them.
+
+## 4. Selecting direct or staged execution
+
+Choose the execution mode before writing an implementation prompt. The coding agent does not choose it.
+
+`DIRECT_IMPLEMENTATION` is the default for bounded continuation work with known architecture, established owners and extension points, explicit tests, and proportionate validation. It does not start an Orchestrator run or require its supplemental artifacts. Use current, bounded repository evidence. A safe direct-read fallback is permitted when the selected retrieval path is inadequate, but record the limitation and do not relabel the producer's readiness result.
+
+`FULL_STAGE_CONTEXT` is appropriate for unresolved ownership, competing layers, a new subsystem or cross-repository contract, a major migration/extraction, previous material context failures, integrity-sensitive changes, or an explicit request for formal staging. Select the native mode separately: `feature`, `repair`, `test`, `refactor`, `harden`, `extraction`, or `greenfield`.
+
+These two labels are planner policies, not Orchestrator CLI modes. Do not build a hybrid prompt that silently adds a complete native lifecycle to direct implementation.
+
+A single continuous coding-agent session may advance through multiple native stages, but only in the order and under the gates the tool actually provides. The feature lifecycle still has separate `implementation` and `test-implementation` stages. One session is not permission to collapse stages, pre-mark artifacts, bypass readiness, or make tests optional.
+
+If bounded inspection exposes a genuine unresolved architectural decision, preserve completed evidence and report the exact decision. Do not substitute an arbitrary owner or automatically restart an entire workflow.
+
+## 5. Static context and evidence refresh
+
+### Stable index and snapshots
+
+Determine source roots from the actual repository. Include required test roots. Use a stable working index and refresh it in place. Create separate before/after indexes only when an immutable comparison or experiment requires them. A matching directory name, package version, or timestamp does not prove freshness.
+
+```powershell
+npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --call-graph --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<owner or behavior>" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<returned-node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<returned-node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<returned-source-node-id>" --format numbered
+```
+
+Use exact source, continuation, same-file dependency expansion, and bounded ranges before broad reads. Choose commands because they answer a question, not to complete a ritual. Record whole-file fallbacks with the file, line count, prior retrieval, missing information, conclusion, and implementation impact.
+
+Use full indexing for an initial index, wrong roots, corrupted evidence, changed source-root contracts, or unproven reuse. Use `--incremental` when the current supported contract makes reuse appropriate. Inspect the manifest and reported fallback. Call-graph fallback, missing language support, and optional omissions must remain explicit.
+
+### Stage-role context refresh
+
+```powershell
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<architecture question>" --role architecture --out ".my-dev-kit-workflows/<task>/architecture.json" --audit-out ".my-dev-kit-workflows/<task>/architecture-audit.json" --json
+npx @dailephd/my-dev-kit context --request "<current-context-request.json>" --json
+```
+
+Architecture context establishes the owner, extension point or grounded no-extension conclusion, contracts, and test evidence or an explicit gap. Implementation context refreshes exact owners, dependencies, validators, constants, errors, serializers, command boundaries, and closest tests immediately before editing. Test-implementation context follows actual production changes and maps planner-authored responsibilities to changed code, test locations, expected-result evidence, infrastructure, and commands.
+
+Use the current `ContextRequest` schema. `testResponsibilityRefs` contains string IDs, not embedded criticality objects. Before/after inputs appear as a coherent pair and the active index must match the intended current state. Never invent freshness by copying an old capsule.
+
+Inspect role adequacy, context adequacy, freshness, identity, condition coverage, required-evidence loss, unresolved issues, and capsule/audit agreement. Optional bounded truncation alone is not a failure. Missing required evidence, stale identities, or contradictory outputs cannot become a PASS through prose. Regenerate both artifacts from a corrected request and index.
+
+For staged work, use the native supplemental paths and schemas returned by Orchestrator, including its implementation/test packets and retrieval reports. They are not extra native stages. Re-run `status`, `check`, and the affected `prompt` after refresh. A library consumer or manually written summary must not override either producer truth or `RunIntegrityGate`.
+
+## 6. Existing-project onboarding workflow
+
+An unfamiliar project needs Architecture Assimilation before task-level planning. One feature query does not establish project-wide understanding. An already-understood continuation does not need the same broad onboarding again.
+
+Inspect repository identity, branch and worktree, tracked documentation, source roots, packages and entry points, actual architectural layers, canonical versus derived state, extension mechanisms, important input/output flows, public contracts, test infrastructure, configuration, operational constraints, and recurring conventions. Compare current documentation with implementation in both directions. Preserve roadmap scope and release history separately from current code facts.
+
+Create an **Architecture Assimilation Report** covering:
+
+1. Repository, commit, versions, source roots, index identity, and documentation sources.
+2. Major subsystems, owners, dependencies, contracts, and analogous implementations.
+3. Canonical/persisted state versus projections, artifacts, UI state, fixtures, and generated files.
+4. Registration/wiring paths and extension points that must not be duplicated.
+5. Relevant control/data flows, static limitations, tests, commands, and operational boundaries.
+6. Safe edit guidance, unresolved questions, contradictions, and targeted retrieval/fallback evidence.
+
+The **Architecture Assimilation Gate** has two manual workflow outcomes:
+
+```text
+ARCHITECTURE_ASSIMILATION_PASS
+ARCHITECTURE_ASSIMILATION_INCOMPLETE
+```
+
+A pass requires grounded answers for the likely change area:
+
+```text
+Existing owner:
+Existing extension point:
+Existing analogous implementation:
+Canonical contracts/state:
+Important dependencies:
+Layers that must not own this behavior:
+Existing tests to extend:
+Architecture that must not be duplicated:
+Remaining uncertainty:
+```
+
+Do not guess a missing critical owner, contract, or canonical representation. A small, explicit noncritical uncertainty may remain. Resolve evidence gaps with bounded inspection. Product decisions that sources cannot answer return to the planner.
+
+After a pass, select direct or staged execution and carry only the relevant findings into the next prompt. Reuse the model for ordinary continuation. Partially repeat assimilation after a framework change, new state/persistence layer, major subsystem replacement, public-contract change, repository restructuring, or evidence that the old map is wrong.
+
+## 7. Greenfield: two planning files to first working slice
+
+Preserve `project-description.txt` and `project-milestones.txt` as planning inputs. The planner translates their goals, constraints, non-goals, ordering, dependencies, and unresolved decisions into operational artifacts. The tools do not automatically ingest these two filenames.
+
+```powershell
+npx @dailephd/my-dev-kit-orchestrator init
+npx @dailephd/my-dev-kit-orchestrator start --mode greenfield "<bounded project goal and constraints>"
+npx @dailephd/my-dev-kit-orchestrator prompt
+```
+
+Follow the generated sequence: idea brief, product boundary, stack decision, starter profile, bootstrap bundle, project documents, scaffold plan, scaffold implementation, first vertical slice, verification, initial index, judge, and final report. Use generated artifact paths, not an invented parallel catalog.
+
+The reviewed profiles are `typescript-cli`, `nextjs-app`, `android-compose`, and `python-cli`. Full-stack web support is the bounded Next.js/PostgreSQL/Prisma/Docker capability attached to `nextjs-app`, not a `nextjs-fullstack` profile. There are no `--profile`, `--project-type`, or `--framework` CLI flags for selecting it. Python CLI is not a Python web/server profile. Unsupported or ambiguous platform intent stays unresolved.
+
+The agent creates the files and runs setup and verification. The common agent instructions (`agents.txt`, `claude.txt`, `AGENTS.md`, `CLAUDE.md`) are separate from the standardized public project-document baseline. Follow the generated contract rather than copying a source project's credentials, ports, models, or domain content.
+
+For a selected full-stack environment, verify host/container addressing, secret scopes, development/test database separation, schema and committed migrations, client generation, readiness, safe non-production reset, no-seed default, and migration-before-traffic responsibility. Do not run destructive reset or deployment without separate authority.
+
+Index only after meaningful source exists. Verify the first actual user flow with project tests and Observer where applicable. Then transfer exact repository identity, environment commands, owners, contracts, tests, and runtime evidence into normal feature work. Greenfield-to-feature handoff is an agent composition here, not a claim that the deferred native handoff capability has shipped.
+
+## 8. Continuous full-stack vertical slice
+
+**Use when:** one user outcome crosses application layers. **Finish when:** all required layers, wiring, applicable cases, protected behavior, and final-state evidence pass. Backend-only or unwired frontend work is never completion.
+
+### 8.1 Map owners and test responsibilities
+
+Before editing, trace the smallest complete path:
+
+```text
+user action -> UI -> client/state -> API or server boundary
+            -> backend/service -> persistence where applicable
+            -> response/state -> rendered result
+```
+
+Identify current owners or justified new extension points for every required layer, shared types, validators, errors, and neighboring consumers. Graph evidence can be partial. Verify missing links through bounded source inspection rather than claim universal full-stack tracing or use Android-only flags on a web graph.
+
+Create a use-case matrix from the planner's tests and current contracts. Evaluate normal success, invalid input, empty/missing data, loading, failure, authorization, retry/duplicate action, limits, stale/partial data, and affected responsive/layout behavior. Each applicable case needs an expected result, responsible layer, and test level. Mark inapplicable cases with a reason. Consider meaningful combinations such as a repeated submission while a request is pending. Do not claim exhaustive coverage of every possible state.
+
+### 8.2 Freeze runtime and visual acceptance
+
+Record route, viewport, theme, authenticated state, application state, deterministic test data, target definitions, baseline identity, comparison settings, and contracts before editing behavior that could affect them. Backend changes can affect the baseline too, so capture it before such changes, not only before CSS edits.
+
+Observer's state-file records caller declarations. It does not log in, seed a database, click a form, or establish that state. The project's browser test/setup commands or an authorized human must establish it. Observer's documented action surface includes bounded scrolling, not an arbitrary multi-action user-journey runner.
+
+For a new UI element, configure its intended stable target in both observations when appearance is the contract. Protect existing surrounding regions. Do not demand that a nonexistent new element already render in the baseline.
+
+Visual modes:
+
+- `PRESERVE_CURRENT`: freeze protected/preserved properties of existing targets.
+- `MATCH_EXISTING`: identify a named component/route and its actual design-system source. Express the selected measurable relationships and token requirements explicitly.
+- `REFERENCE`: use a selected external image plus explicit regions, requirements, applicability, tolerances, and bindings. Import is not approval. Approval follows the user's or planner's actual selection, never a command-success inference.
+- `NONE`: follow existing conventions, but do not claim exact visual fidelity.
+
+Observer reference fidelity covers its supported structured geometry/relationship requirements. A passing result does not establish unmeasured font, color, asset, animation, accessibility, or aesthetic preferences. Verify those through explicit project tests or human review where required. A raw screenshot is useful design input, but not a complete executable acceptance contract.
+
+### 8.3 Implement and test without a layer handoff
+
+Implement all required layers and their wiring in one continuous agent session. Dependency order may be data -> backend -> boundary -> client state -> UI, but every item is an intermediate step. Add focused tests as behavior is implemented. Do not postpone discovering all failures until the final check.
+
+Exercise the real integration path. A frontend mock, hardcoded successful response, unused endpoint, or duplicate client-only business rule cannot satisfy required backend integration. Browser tests must perform the user action and verify the intended observable result. Where persistence is required, verify it through a project-owned database-backed test or safe read-back.
+
+Refresh test context after production changes. Complete the use-case and regression tests against that current state. Do not request another prompt merely because backend work finished.
+
+### 8.4 Observer evaluation and correction
+
+Use the actual artifact roots returned by commands. The following is a syntax skeleton, not runnable until placeholders and contract files are resolved:
+
+```powershell
+npx my-frontend-observer observe --url "http://localhost:<port>/<route>" --viewport 1280x720 --targets-file "<targets.json>" --output "<evidence>/observations"
+npx my-frontend-observer compare --before "<baseline-observation-root>" --after "<candidate-observation-root>" --output "<evidence>/comparisons"
+npx my-frontend-observer evaluate-contract --before "<baseline-observation-root>" --after "<candidate-observation-root>" --comparison "<comparison-root>" --baseline "<approved-baseline-contract-root>" --change "<change-contract-root>" --output "<evidence>/evaluations" --enforce
+```
+
+Baseline and change contracts are prepared with `approve-baseline` and `save-change-contract` using the documented schemas. A fresh candidate uses the frozen conditions. Evaluate requested changes and active protected/preserved clauses together.
+
+Reference-driven work additionally uses `import-reference`, `approve-reference`, and `evaluate-reference-fidelity --reference <root> --candidate <root> --bindings-file <file> --enforce`. Fidelity must pass **and** preservation contracts must pass. The reference is not the before-observation.
+
+Read semantic results, not only exit codes. `observe` may persist partial evidence at exit 0. `compare` may return an incomparable result at exit 0. Reference fidelity can be `not-evaluated` at exit 0 even with `--enforce`. Missing required evidence cannot pass the outer acceptance gate.
+
+On failure, preserve the candidate, obtain fresh bounded runtime/static evidence, repair the smallest justified source surface, rerun affected tests, and observe again. Evaluate each attempt against the same approved baseline. Do not weaken assertions, tolerances, targets, or requirements to obtain PASS. Reproducible target-definition errors require a recorded contract correction, not a hidden rebaseline.
+
+`projectBoundedAgentContext`, runtime/static correlation, `prepareReferenceCorrection`, and `reviewReferenceCorrectionAttempt` are library APIs. Use an existing, validated adapter when present. Otherwise compose the public commands and report manual bridging. Do not invent corresponding CLI commands or a second evaluator.
+
+### 8.5 Final-state acceptance
+
+Refresh the final index, inspect Git changes and graph differences where applicable, and run newly implicated regression tests. Run the repository's final validation once, without duplicating expensive suites hidden inside `verify`. Run required risk-based assurance separately.
+
+Any later production edit invalidates affected test, browser, and correlation evidence. Re-run the dependent gates. Required assurance must pass. An optional skip may be reported, but a required skip/block never coexists with an overall PASS.
+
+The outer workflow verdict is `PASS_FULL_STACK_VERTICAL_SLICE` only after the complete user flow and all required evidence pass. This is a workflow report value, not a new native Orchestrator judge verdict. In a staged run, native verification, accepted judge PASS, readiness, and final-report eligibility still apply.
+
+## 9. Cross-tool recipe catalog
+
+Each recipe below states its inputs, sequence, output, and limit. Reuse sections 3-5 and 16 rather than paste their entire text into every task prompt.
+
+### 9.1 Runtime-to-source repair
+
+**Input:** a reproducible visible failure, URL/state, expected behavior, and an exact source revision. Capture Observer evidence, identify the failed stable target or contract clause, retrieve candidate source through my-dev-kit search/lookup/slice/source, and check explicit runtime/static correlation when available. Use Orchestrator `repair` when formal diagnosis and correction routing help. Implement a bounded repair, add a regression test, and recapture/evaluate.
+
+**Output:** corrected behavior plus a reproducible failure-to-source explanation. Correlation may be ambiguous or unavailable and never proves causality. A fresh manual source investigation is not silently labeled an automatic bridge.
+
+### 9.2 Shared-component safe change or refactor
+
+**Input:** the shared component and preserved public behavior. Retrieve direct consumers, routes, local prop/event flows, and related tests. Supplement static discovery with route configuration and known critical journeys because the graph is not exhaustive. Capture baselines for affected existing routes and a small protected sentinel set. Use `refactor` only for behavior-preserving work, otherwise `feature` or `repair`.
+
+Change the shared owner, test each affected contract, inspect graph/Git differences, and evaluate each protected route against its own matching baseline. **Output:** intended change with no observed regression in the declared consumer set. An untested route is not protected merely because discovery omitted it.
+
+### 9.3 Visual-reference implementation
+
+**Input:** the user's selected reference or existing design precedent. Import and explicitly approve the reference, author only the design requirements that matter, bind reference regions to runtime targets, and retrieve the responsible component and style precedent. Implement, capture the candidate, evaluate fidelity and preservation, then correct from failed evidence.
+
+**Output:** evidence-backed agreement with selected measurable requirements. Use `view` for optional human inspection. The viewer is not a source editor, automatic annotation author, screenshot-cloning engine, or approval substitute. Record unsupported styling requirements rather than claim a complete visual match.
+
+### 9.4 Golden runtime extraction
+
+**Input:** read-only source repository, separate target repository, desired behavior, and a do-not-port list. Use native `extraction` for source architecture, workflow/porting maps, golden behavior, and target architecture when staged work is warranted. Keep source and target indexes separate. Capture source runtime evidence. A selected source screenshot may become an approved external reference for the target.
+
+Implement the behavior with the target's chosen architecture, run target tests, and evaluate target contracts and applicable reference requirements. **Output:** a tested port without importing unrelated source architecture. Do not use ordinary before/after comparison across incompatible application URLs. Visual similarity does not prove functional equivalence or authorize copying unrelated assets.
+
+### 9.5 API and data-contract migration
+
+**Input:** a field/API/schema change and compatibility policy. Use `data-model --entity`, `--field`, and `--trace-view` where supported, then source/graph inspection to identify storage, transformations, boundary types, client state, and UI consumers. Record dynamic or unresolved paths. Define old/new client compatibility, missing/null values, serialization, validation, and migration/read-back tests before editing.
+
+Implement the connected slice, run database/API/client tests, inspect changed evidence, and observe affected UI. **Output:** a verified contract transition through the actual consumer path. Static lineage does not validate a migration, server execution, or complete cross-service flow.
+
+### 9.6 Edge-case hardening matrix
+
+**Input:** a component and its failure assumptions. Combine Orchestrator `harden`, current validators/errors/constants from my-dev-kit, and project-owned test state setup. Turn applicable success, error, loading, authorization, retry, concurrency, limits, stale data, and layout cases into explicit expected outcomes. Run narrow tests and selected state combinations. Observe rendered states and bounded scroll scenarios where useful.
+
+**Output:** reproducible behavior and tests for the declared risk set. Do not claim exhaustive use-case coverage. Observer state declarations do not create authenticated/error/loading states, and Lab fuzz checks are not a general application-state explorer.
+
+### 9.7 Dependency-upgrade impact review
+
+**Input:** locked baseline and one bounded upgrade. Record dependency/package findings and working tests, capture critical UI baselines, upgrade in the authorized branch, and run build, type, contract, integration, and affected browser checks. Use Git/package-lock changes as well as graph differences. Re-run applicable Lab checks.
+
+**Output:** upgrade evidence, compatibility findings, and rollback information. Runtime behavior can change with no source-graph difference. A clean graph diff or `npm audit` alone is not approval.
+
+### 9.8 Pre-pull-request evidence convergence
+
+**Input:** final candidate revision, actual changed surface, and acceptance responsibilities. Match test reports, current context, Observer candidates/contracts, and selected assurance results to that same revision and state. Check required responsibilities, skipped checks, unexpected changes, and evidence invalidated by later edits. In a staged run, consult `check`, canonical readiness, judge acceptance, and final eligibility.
+
+**Output:** a review packet whose claims refer to one candidate. Do not average independent failures into a score or let one tool's PASS override another required failure.
+
+### 9.9 Greenfield-to-first-feature handoff
+
+**Input:** verified scaffold and first slice. Reuse the completed run, source index, environment commands, tests, and approved behavior. Confirm architecture and project identity, then create a normal bounded feature contract and execute the vertical slice. Refresh only affected architecture domains.
+
+**Output:** continuation without respecifying the project or treating the scaffold as a finished app. This is manual coordination, not the deferred native greenfield handoff implementation.
+
+### 9.10 Commit-to-commit regression localization
+
+**Input:** known-good and known-bad revisions, deterministic setup, and one reproducible symptom. Use separately authorized disposable worktrees or checkouts, not a destructive reset of user work. Build matching indexes, record Git changes, capture runtime states, and compare them. Ordinary Observer comparison requires compatible URLs/viewports/browser conditions, so replay revisions sequentially at the same loopback URL or report incompatibility.
+
+Intersect changed static candidates with affected runtime targets, test hypotheses, and use `repair` for the smallest established defect. **Output:** narrowed suspects and a verified repair. Neither co-change nor correlation proves causality. A rename may appear as removal/addition. Do not hide either limitation.
+
+### 9.11 Critical-journey contract bank
+
+**Input:** selected important routes/states, stable targets, approved baselines, contracts, and setup commands. Maintain these as reviewed project test assets, excluding secrets and private captures. For each risky change, select implicated journeys from static evidence **plus** an always-run critical sentinel set. Run project browser actions, capture Observer evidence, and evaluate each state against its matching baseline.
+
+**Output:** reusable regression protection for the declared journey bank. Observer does not discover all routes or execute arbitrary journeys. A loop/script selecting tests is an agent/project adapter, not a new Observer engine. Baseline promotion is explicit and never automatic after PASS.
+
+### 9.12 Security-sensitive user flow
+
+**Input:** trust boundaries and a specific security requirement. Retrieve validation, authorization, data access, secret handling, and UI exposure owners. Add real allowed/denied/error-path tests and verify the integrated flow. Observe browser-visible consequences only where useful. Run applicable Lab checks under a declared profile/threshold.
+
+**Output:** scoped source, runtime, and security evidence. Hiding a button does not prove server authorization. An authenticated-state label does not prove a login. Unsupported application-security checks remain a limitation and may require separate review.
+
+### 9.13 Release-candidate runtime assurance
+
+**Input:** exact release candidate and the critical-journey bank. Run source/package readiness and risk-based Lab assurance, then project browser tests and Observer contracts against that candidate. Preserve deterministic environment and data setup. If a fix follows, invalidate and repeat affected gates before release authorization.
+
+**Output:** browser regression evidence added to release readiness, not a replacement for CI, installed-package validation, security, or publication checks. This recipe never publishes by itself.
+
+### 9.14 Field failure to ecosystem improvement
+
+**Input:** the feedback records defined in section 16. Group reproducible observations by responsible tool, workflow, failure mechanism, version, and cost. Separate implementation defects, misuse, environment failures, documented limitations, and confirmed product defects. Select a representative sanitized case before proposing a tool change.
+
+Where the question fits Lab's existing experiment contracts, use `experiment list`, `experiment describe`, and `experiment run` or its documented library strategy inputs. Otherwise use a separately authorized project test/experiment adapter. Lab does not automatically ingest arbitrary feedback Markdown or arbitrary full-stack edit campaigns.
+
+Compare matched baselines and candidates with identical tasks, revisions, agent settings, budgets, and acceptance criteria. Keep independent sessions, frozen arm reports, and neutral adjudication. Separate cold-index setup from warm retrieval effort. **Output:** an improvement proposal supported by reproduction, regression tests, measured cost, and replay of the original failure. Report raw counts and limitations, not invented savings or a universal winner.
+
+## 10. Version, patch, extraction, and coordinated work
+
+### Feature-version workflow
+
+Preserve the roadmap's version goal, exclusions, and dependencies. Inspect current code before freezing batches. Group changes by shared owners, contracts, fixtures, and tests rather than equal-sized lists. Each prompt includes inherited state, bounded scope, exact edit areas, planner-authored tests, validation, Git authority, report paths, and stop conditions. Do not recreate earlier batches.
+
+Use one coherent version branch where appropriate. Commit/push only when authorized. Do not require a new pull request or a package version bump for each internal batch. After all batches, run implementation completeness and documentation reconciliation, then separate readiness, release preparation, and publication. Keep batch logs out of the roadmap.
+
+### Patch and hotfix workflow
+
+Reproduce the defect on the exact published artifact and record tag, peeled commit, package identity, platform, and invocation. Separate a broken promised behavior from a new enhancement. Identify the responsible tool or target application. Make the smallest repair with a failing-before/passing-after regression test, validate the packed consumer path, reconcile affected documents, and run patch readiness. Severity does not grant publication permission or authorize pulling unrelated unreleased features into the patch.
+
+### Multi-repository coordinated workflow
+
+Record every repository/commit pair, package/API/schema dependency, compatibility rule, and release order before editing. Keep separate repository histories and edit scopes. Validate each candidate locally, then test actual producer-consumer artifacts using exact packs or commits. Observer-to-Orchestrator consumption and historical Lab replay are separate evidence claims. Do not claim a fresh four-tool replay from an older fixed fixture.
+
+After explicit release authorization, publish upstream-first where dependencies require it. Reinstall and validate the exact published upstream in the consumer before releasing the consumer. No single current command coordinates all repository releases.
+
+## 11. Documentation reconciliation and preservation
+
+Inventory current implementation, scripts, commands, schemas, examples, package contents, and tracked documents. Compare both ways: unsupported documentation and implemented-but-undocumented behavior. Verify exact command names and flag combinations, installed-versus-checkout usage, output/exit semantics, links, and current-versus-planned status. Only then improve structure and language.
+
+Use Git history, tags, release evidence, and earlier comprehensive documents for forensic recovery. Recover meaning without restoring superseded facts as current. Preserve separate roadmap versions, goals, dependencies, exclusions, deferred work, product pillars, command families, schemas, and release history. Relocation requires a documented destination and navigation, not silent deletion.
+
+This guide owns cross-tool composition. Each local `WORKFLOWS.md` owns that tool's operational sequences. Each local `COMMANDS.md` owns that executable's exact interface. Do not replicate a full foreign command manual here or add a second ecosystem catalog elsewhere.
+
+Run configured documentation, link, and preservation checks. Update narrowly scoped preservation metadata when an explicitly authorized relocation changes the canonical path. Do not disable checks to hide loss. Documentation-only work does not authorize product changes, new capabilities, version bumps, or publication. A required package-file inclusion or documentation-test adjustment must be named explicitly in the task scope.
+
+## 12. Assurance and experiments
+
+### Project and package validation
+
+Read the target's actual scripts. `verify` may include build/type/docs but omit tests, or include expensive smokes. Run each required responsibility, not a mechanically duplicated command list. Separate focused checks, final project checks, installed-package checks, cross-platform CI, and security evidence.
+
+For installed/source parity, inspect the exact `npm pack` tarball, install outside the source checkout, resolve the actual binary, and exercise advertised commands with a consumer working directory. Ensure repository files and development dependencies cannot satisfy missing runtime assets. Check docs, examples, templates, schemas, and prompts as well as command registration. For this deliberate isolation test, an external disposable workspace is an explicit exception to normal project-contained generated state.
+
+### Lab security and code-rot checks
+
+Use the installed `security validate` or `audit` command for normal target inspection. Supported audit types are `code-rot`, `security`, and their combination. `quality`, `project`, and `all` are not implemented audit types in the reviewed baseline. Security profiles include `node-cli-package`, `local-tool`, `npm-package`, and `android`. Do not confuse Orchestrator's `android-compose` profile with a Lab profile.
+
+Check target identity and pre/post source state. Reports go to an explicit safe output/workspace, not the installed package. Optional missing scanners remain skipped. Required failures or an inconclusive required environment block acceptance. Code-rot findings are candidate evidence, not automatic proof of dead code or complete coverage. Static Android checks do not build or launch the app.
+
+Lab contributor self-validation remains a separate checkout workflow. `npm test` and `npm run verify` have distinct responsibilities in the inspected Lab package. Do not run the entire Lab self-suite for each target feature unless the task is validating Lab itself.
+
+### Experiments and reporting
+
+The registered experiment plugin is `context-strategy-comparison`. Inspect it before selecting cases and strategies. CLI strategies and programmatic stage-context inputs are distinct. The fixed context-integrity smoke is a historical/frozen-fixture developer workflow, not a configurable arbitrary-run replay CLI.
+
+Preserve partial agent outcomes, timeouts, usage limits, target immutability, missing metrics, and unmatched evidence. Use `report render`, `plots generate`, and `gallery build` only with the artifact families they support. Do not feed raw Observer or workflow-feedback files into a Lab renderer and assume compatibility.
+
+## 13. Readiness, release, and publication
+
+Implementation completeness, readiness, release preparation, and publication are different states. A feature or documentation task does not authorize moving between them automatically. Consult the target's [release guide](RELEASE.md) and its own CI/security rules.
+
+Readiness pins an exact candidate and runs required install/type/build/test/docs/benchmark gates, exact-tarball inspection and isolated consumer smokes, path-with-spaces and JSON/diagnostic behavior, deterministic checks, supported platform CI, applicable security/code-rot checks, and runtime assurance where relevant. Local Linux success is not Windows/macOS validation. Do not change the supported Node matrix from memory.
+
+With explicit publication authority, preserve this ordering:
+
+1. Create the release branch from the validated implementation candidate.
+2. Finalize versions and intended release-document state, preserving future roadmap scope.
+3. Validate locally, inspect the exact package and packaged docs, then push and create the release pull request.
+4. Require exact-head PR checks and review, merge through repository policy, then require exact merged-main checks.
+5. Create the annotated tag on that verified commit, check its peeled target, and require any applicable tag workflow.
+6. Create and verify the GitHub Release and release-channel parity.
+7. Finish cleanup and every other GitHub/file mutation before npm publication.
+8. Confirm target version availability and clean state, then run the separately authorized `npm publish --access public` as the final state-changing action.
+9. Perform read-only registry, release, tag, and repository verification afterward.
+
+Prepare publication-neutral or final intended release documentation in the candidate so the tagged package does not permanently contain stale preparation prose. Reports must still distinguish intended release state from actual registry verification. Do not claim publication before it succeeds.
+
+On partial publication, record exactly which external actions completed. Do not republish blindly, move tags, force history, or repair released content without new authority. Authentication is handled in the local terminal, never by requesting tokens in chat. All temporary installs and consumer smokes belong before the final publish action under this policy.
+
+## 14. Recovery and handoff
+
+Resume at the earliest invalidated evidence or lifecycle gate. Preserve the branch, exact candidate, requests, indexes, failed artifacts, diagnostics, and completed work.
+
+For stale/wrong-root indexes, rebuild only the necessary current evidence. For capsule/audit contradiction, regenerate the pair rather than hand-edit either side. For inadequate architecture or unclear contracts, resolve the precise missing decision. For a failed test/CI/package/security gate, correct the authorized cause and rerun dependent checks. Do not turn optional truncation into an entire workflow restart.
+
+In staged work, `status`, `check`, `prompt`, and correction routing remain authoritative. Artifact presence, `mark complete`, or an authored judge PASS cannot bypass canonical readiness or final-report eligibility. Do not invent a `status --json` flag. Avoid custom `start --output-dir` runs when subsequent commands cannot rediscover them.
+
+A continuation handoff records repository/branch/commit, tool versions, run ID and stage, worktree state, validated outcomes, reports and raw-evidence paths, accepted architecture, current blockers, authorization, exact next action, and remaining roadmap without reordering it. Export a native run when eligible, but retain project-level context that export does not supply. If using the existing future-heavy handoff convention, target 50% remaining plan, 30% reusable workflow, 10% completed history, and 10% current state/risks. This is a writing convention, not an artifact schema.
+
+## 15. Compact prompt assembly
+
+Do not paste this whole guide into an implementation prompt. Select one recipe and the shared requirements it actually needs. Include:
+
+```text
+1. Identity, exact scope, inherited state and separate Git authority.
+2. Required user flow/layers and current owners or evidence questions.
+3. Planner-authored behavior, boundaries, examples and test responsibilities.
+4. Runtime/visual acceptance inputs and protected behavior when applicable.
+5. Ordered continuous execution and bounded correction rules.
+6. Exact project validation commands and final-state acceptance.
+7. Report and ecosystem-feedback paths, failure record, and stop conditions.
+```
+
+Provide code-shaped examples and exact constants for design-critical planner-owned interfaces. Do not transfer unresolved product decisions to the implementer. A self-contained prompt can reference accessible current repository files, but must not assume access to private planner templates or absent local ecosystem text files.
+
+One prompt may cover one complete vertical slice. If size or context genuinely requires more than one execution, split by independently testable user outcomes, not backend versus frontend. Report the actual extra handoff and unfinished layers rather than label partial work complete.
+
+## 16. Failure feedback and improvement planning
+
+Report material failures **when they happen**, before a workaround obscures them. Keep ordinary implementation/test failures in the implementation report. Add a complete feedback record for workflow/tool/specification/environment failures, unexpected manual work, late-discovered important cases, repeated regressions, or interrupted full-stack continuation. Deduplicate retries of the same cause and retain attempt references.
+
+### Failure record
+
+```text
+ID: <task-slug>/<plain-English failure name>
+STAGE: <actual stage or operation>
+CLASS: IMPLEMENTATION_DEFECT | REPOSITORY_DEFECT | MY_DEV_KIT_GAP |
+       ORCHESTRATOR_GAP | FRONTEND_OBSERVER_GAP | LAB_GAP |
+       CROSS_TOOL_INTEGRATION_GAP | SPECIFICATION_GAP | ENVIRONMENT_GAP
+DIAGNOSIS: CONFIRMED_DEFECT | DOCUMENTED_LIMITATION | MISUSE |
+           ENVIRONMENT | UNRESOLVED
+IMPACT: BLOCKING | DEGRADED | INFORMATIONAL
+IDENTITY: <target commit/worktree identity, tool versions, index/artifact IDs>
+REPRODUCTION: <smallest safe setup and exact command/working directory>
+EXPECTED: <required behavior and its contract/source>
+ACTUAL: <observed output, exit status, semantic result and diagnostic>
+EVIDENCE: <report/artifact paths and relevant test/node/target IDs>
+FALLBACK: <bounded fallback or NONE, and acceptance preserved>
+COST: <measured extra reads/calls/retries/time or NOT_MEASURED>
+RISK: <what missing evidence could conceal>
+OWNER: <responsible tool/workflow/application or UNKNOWN>
+IMPROVEMENT: <capability-level proposal, not an invented implementation>
+STATUS: OPEN | WORKED_AROUND | RESOLVED_DURING_RUN | BLOCKING
+FLAGS: extra-prompt, broad-source-read, manual-layer-mapping,
+       manual-runtime-correlation, extra-correction, late-edge-case,
+       late-regression, unresolved-visual-intent = YES | NO | NOT_MEASURED
+```
+
+A manual step that is intentionally documented is not automatically a product defect. An unsupported capability can still be a valuable enhancement candidate. A new component having no existing test is not itself a retrieval failure. Preserve these distinctions before assigning a tool owner.
+
+A safe fallback may allow the feature to continue, but cannot erase the gap, mutate generated verdicts, weaken requirements, or override a staged readiness blocker. Never fabricate a compatibility file, test command, source owner, browser state, or approval to satisfy a gate.
+
+### End-of-run feedback
+
+Write the report even on a block or an otherwise successful feature. Include total material issues, blocking/degraded/informational counts, counts by class and owner, unique causes versus retry count, tool/version identities, the complete records, and the smallest next action. Zero issues is a valid result. Do not manufacture suggestions or precision.
+
+Keep separate outcomes:
+
+```text
+FEATURE_RESULT: PASS_FULL_STACK_VERTICAL_SLICE | NEEDS_CORRECTION | BLOCKED
+ECOSYSTEM_RESULT: PASS | DEGRADED | BLOCKED | NOT_EVALUATED
+```
+
+`FEATURE_RESULT: PASS_FULL_STACK_VERTICAL_SLICE` can coexist with `ECOSYSTEM_RESULT: DEGRADED` only when all feature acceptance is genuinely met through a documented safe fallback. It cannot coexist with a missing required assurance or runtime gate.
+
+To design an improvement plan, group confirmed reproductions and documented limitations, retain raw counts and cost evidence, identify the responsible repository, define a failing regression case, and compare the corrected tool against the same case. Do not reorder the product roadmap automatically from an agent's suggestion.
+
+## 17. Final report and review checklist
+
+Report the exact candidate and actual result, not only a list of files. Include user-flow proof, completed/unfinished layers, API/client wiring evidence, scenario/test results, baseline and final candidate identities, semantic Observer results, correction attempts, final impact review, required assurance, remaining skips/risks, Git actions, and both report paths.
+
+Before accepting PASS, verify:
+
+- No required layer, scenario, protected behavior, test, or assurance gate is skipped, failed, blocked, or not evaluated.
+- Evidence describes the final source and deterministic runtime state.
+- Source absence is not presented as runtime absence, and source edges are not presented as executed behavior.
+- Observer exit 0 is not substituted for comparable/complete/passing required evidence.
+- Cross-tool correlation is not presented as causal source ownership.
+- No baseline, selector, tolerance, fixture, or test was weakened to manufacture success.
+- No generated/private state or unrelated work was committed.
+- Workarounds and missing capabilities appear in feedback even when the feature passed.
+- Native Orchestrator completion rules remain intact when a staged run was used.
+
+## 18. Maintenance and migration notes
+
+The former Orchestrator `docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md` is intentionally removed from that repository's tracked tree. Its historical content remains in Git history. The destination here owns ecosystem composition, including Architecture Assimilation and all lifecycle families formerly documented there. Orchestrator retains its native workflow, artifact, readiness, and command documentation and links here for cross-tool use.
+
+Other repositories should link to this file, not copy it, regenerate it through a hidden sync script, or require private `.txt` references. The installed my-dev-kit package should include this guide under its explicit package-files policy. Repository changes do not retroactively modify an already published npm tarball.
+
+Update recipes only after inspecting the relevant current command/contract owners. Keep facts, manual policies, trial results, limitations, and proposed improvements distinguishable. A newly documented composition becomes empirically verified only when an actual matched execution and its evidence are recorded.

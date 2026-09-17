@@ -1,517 +1,270 @@
-﻿# Workflows
+# Workflows
 
-Practical usage workflows for my-dev-kit. For the full flag reference, see [COMMANDS.md](COMMANDS.md). For artifact and schema details, see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md).
+This guide contains ordered workflows for **my-dev-kit itself**. [COMMANDS.md](COMMANDS.md) owns exact syntax, selectors, defaults, outputs, and command limitations. [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) owns detailed artifact contracts.
 
-## Ecosystem docs first
-
-For any task involving my-dev-kit, my-dev-kit-orchestrator, my-dev-kit-lab, coding-agent workflows, prompt templates, release workflows, audits, experiments, or documentation reconciliation, inspect the local ecosystem docs first:
-
-- `docs/ecosystem/TOOL_ECOSYSTEM_REFERENCE.txt`
-- `docs/ecosystem/WORKFLOW_PROMPT_ASSEMBLY_RULES.txt`
-
-These files define the shared tool boundaries, command expectations, and prompt assembly rules for the local ecosystem.
+For coding-agent execution, full-stack features, runtime verification, Orchestrator stages, Lab assurance, release coordination, recovery, and ecosystem feedback, use the single [Ecosystem development workflows](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) guide in this repository. Companion repositories link there rather than keep another copy. No private local ecosystem text file or undocumented synchronization command is required.
 
 ## Overview
 
-The recommended usage pattern:
+Use an existing valid current index or build one with explicit source roots. Narrow an actual question through search, exact lookup, a relevant slice, and bounded source. Use continuation or same-file expansion for missing context. Refresh evidence after source changes. Keep separate snapshots only when a before/after comparison requires them.
 
-1. Run `index` into `.my-dev-kit`. Re-run `index` to refresh the artifact directory when source changes. Do not create a new index folder for every run unless you are deliberately taking a snapshot.
-2. Use `search` to discover relevant node IDs, including by semantic role when available.
-3. Use `lookup` to inspect exact nodes and their semantic metadata.
-4. Use `slice` to inspect graph neighborhoods while preserving semantic metadata on nodes.
-5. Use `source` to retrieve specific code excerpts.
-6. Use `data-model` for entity, field, and trace-view tasks when data-model artifacts are present.
-7. Use `view` to render the code graph as DOT, SVG, or PNG when a visual overview is needed.
-
-Do not start by reading the full graph or full source tree. Use `search` first to narrow the context.
-
----
+Static evidence is not application execution. A valid command result can still be empty, ambiguous, missing an optional artifact, or inadequate for the task. Inspect semantic results and warnings, not only exit status.
 
 ## Workflow 1: Index a TypeScript or JavaScript project
 
-Run `index` from the project root:
+From the target project root:
 
-```sh
+```powershell
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --call-graph --json
 ```
 
-The `--out` path is relative to `--root`. The above creates or refreshes `.my-dev-kit/`.
+The second command refreshes the same index with an explicitly expanded source contract. `--src` and relative `--out` are relative to `--root`. Do not repeat the root inside a relative output path accidentally.
 
-Re-run the same command to refresh the artifact directory when source changes. The directory is updated in place and stale artifacts are removed.
+For large projects, inspect discovery first and select meaningful roots:
 
-Include a call graph:
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --call-graph --json
-```
-
-Index multiple source roots:
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --json
-```
-
-For large monorepos, avoid indexing broad roots that contain application output, dependency folders, caches, or generated artifacts. Target the source folders that matter for the current workflow:
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
-```
-
-npx @dailephd/my-dev-kit skips common generated, dependency, cache, and build directories by default, including `node_modules`, `.next`, `dist`, `build`, `coverage`, `playwright-report`, `test-results`, `output`, `out`, `.cache`, `.turbo`, `.vercel`, `.git`, `.pytest_cache`, `__pycache__`, `.venv`, and `venv`. Add project-specific exclusions with repeated `--exclude` values:
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --exclude .next --exclude coverage --exclude apps/web/generated --json
-```
-
-Use `--dry-run` before indexing a large tree, and add `--progress` when you want phase and count diagnostics. Progress is written to stderr and does not corrupt JSON stdout.
-
-```sh
+```powershell
 npx @dailephd/my-dev-kit index --root . --src apps/web --out .my-dev-kit-web --dry-run --json
-npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --out .my-dev-kit-web --progress --json
+npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --progress --json
 ```
 
-Split indexes can keep focused workflows faster and easier to inspect:
+Dependencies, generated/build output, common caches, and my-dev-kit output directories are ignored by default. Additional `--exclude` values are directory names or relative prefixes, not globs. Avoid excluding tests or other required evidence accidentally.
 
-```sh
-npx @dailephd/my-dev-kit index --root . --src apps/web/app --src apps/web/lib --src apps/web/prisma --out .my-dev-kit-web --call-graph --json
-npx @dailephd/my-dev-kit index --root . --src apps/web/tests --src apps/web/e2e --out .my-dev-kit-web-tests --exclude playwright-report --exclude test-results --json
-npx @dailephd/my-dev-kit index --root . --src apps/nlp-service/src --language python --out .my-dev-kit-nlp --call-graph --json
-npx @dailephd/my-dev-kit index --root . --src scripts --out .my-dev-kit-scripts --json
-```
+Separate indexes may be useful for web source, web tests, a Python service, or scripts. Record root coverage and do not assume one index contains cross-domain relationships it never analyzed.
 
----
+Completion: the manifest identifies the intended project/source roots, required analyzers/artifacts are present, and warnings or partial analysis are understood. An output directory existing is not sufficient.
 
 ## Workflow 2: Index a Python project
 
-Python indexing requires `python` or `python3` on `PATH` with Python 3.8 or later. The `--language python` flag selects Python mode. Language can also be inferred from `.py` file extensions.
+Python indexing requires an available supported `python` or `python3` interpreter. Missing interpreter support is reported as a warning/skip, not analyzed evidence.
 
-**Step 1: Index the Python source root**
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-dev-kit --json
-```
-
-Include a static call graph when call edges are useful:
-
-```sh
+```powershell
 npx @dailephd/my-dev-kit index --root . --src src --language python --out .my-dev-kit --call-graph --json
-```
-
-**Step 2: Search for Python symbols**
-
-```sh
 npx @dailephd/my-dev-kit search --index .my-dev-kit --query "greet" --limit 20 --json
-```
-
-**Step 3: Look up a Python node**
-
-```sh
-npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node file:src/main.py --depth 1 --json
-```
-
-**Step 4: Retrieve Python source**
-
-```sh
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<returned-node-id>" --depth 1 --json
 npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/main.py --symbol greet --format numbered
 ```
 
-Use line-range retrieval for exact bounds:
-
-```sh
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/main.py --start 1 --end 40 --format numbered
-```
-
-**Python notes:**
-
-- Call-graph extraction is static and conservative. It uses `ast` parsing and may miss dynamic calls.
-- If no Python interpreter is found on `PATH`, Python files are skipped with a warning in the manifest.
-
----
+Select actual project roots, including tests when needed. Static call extraction is conservative and may omit dynamic calls. Source retrieval does not execute the Python program.
 
 ## Workflow 3: Graph-Guided Symbol Retrieval
 
-Graph-Guided Symbol Retrieval is the recommended approach when navigating an unfamiliar codebase. It avoids broad file reading by narrowing context progressively from keyword search to exact graph nodes to targeted source excerpts.
+Use this sequence to answer an ownership or implementation question without dumping the graph or source tree:
 
-**Step 1: Index the project**
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
+```powershell
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol>" --limit 20 --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<returned-node-id>" --depth 1 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<returned-node-id>" --depth 2 --direction both --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<returned-source-node-id>" --format numbered
 ```
 
-**Step 2: Search to narrow candidates**
+Review match reasons, semantic/classification metadata, callers/dependencies, and exact source. Prefer a symbol node for a specific function/type question. Exact lookup is not fuzzy search. Expand only the unresolved relationship or source region.
 
-```sh
-npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<relevant term>" --limit 20 --json
-```
-
-Inspect `nodeId`, `kind`, and `matchReasons` in the results. Prefer symbol nodes when the target is a specific function, class, or type. When semantic metadata is present, result items include `semanticRoles` and `artifactRefs`, and match reasons may include `semanticRole` as a contributing field.
-
-**Step 3: Look up the strongest candidate**
-
-```sh
-npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
-```
-
-Review incoming edges, outgoing edges, and neighbors to understand the node's relationships. Repeat for adjacent nodes as needed.
-
-**Step 4: Slice around the focus node**
-
-```sh
-npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
-```
-
-The slice provides a bounded subgraph view that is easier to reason about than the full graph.
-
-**Step 5: Retrieve source for specific symbols**
-
-Use symbol-mode retrieval when possible:
-
-```sh
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
-```
-
-Use line-range retrieval when symbol-mode is too broad or incomplete:
-
-```sh
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --start <n> --end <n> --format numbered
-```
-
-**What to avoid:**
-
-- Do not read full `code-graph.json` manually to find node IDs. Use `search` first.
-- Do not retrieve large line ranges when a symbol name is known. Use `--symbol` mode first.
-- Do not iterate all files before searching. Let `search` narrow the scope.
-
----
+Record the selected owner, extension point, contract, relevant test, and uncertainty. A top-ranked result is not automatic authorization to edit it. A missing relationship is a retrieval limitation until checked, not proof that no caller exists.
 
 ## Workflow 4: Generate graph visualization
 
-DOT output does not require Graphviz:
-
-```sh
-npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --out .my-dev-kit/graph.dot
-npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --edge-style labeled --out .my-dev-kit/graph.labeled.dot
-npx @dailephd/my-dev-kit view --index .my-dev-kit --format dot --edge-style minimal --out .my-dev-kit/graph.minimal.dot
+```powershell
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph code --format dot --out .my-dev-kit/code.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph react-prop-event-flow --format dot --out .my-dev-kit/react-flow.dot --edge-style labeled --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format svg --allow-dot-fallback --out .my-dev-kit/lineage.svg --json
 ```
 
-SVG output requires Graphviz:
+DOT needs no Graphviz. SVG/PNG require Graphviz unless fallback is enabled. Inspect the returned actual format and output path. Use distinct output filenames for different views.
 
-```sh
-npx @dailephd/my-dev-kit view --index .my-dev-kit --format svg --out .my-dev-kit/graph.svg
+Views render existing evidence, not the application UI. A valid empty Android/Compose view is possible. It is not a placeholder proof that the target has been analyzed completely.
+
+## Workflow 5: Use my-dev-kit output with a coding agent
+
+Provide the smallest evidence packet that answers the task: selected results, exact IDs, relevant relationships, source excerpts, required contracts/tests, and the current index/commit identity. Reference large artifacts by path instead of injecting whole graphs.
+
+The normal sequence is `index -> search -> lookup -> slice -> source -> agent reasoning`. `context` can assemble bounded task evidence and an audit, but neither it nor a successful source command implements code or runs tests.
+
+After source changes, refresh relevant evidence. For an unfamiliar project, follow Architecture Assimilation in the [ecosystem guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#6-existing-project-onboarding-workflow). For a known continuation, do not repeat an entire architecture audit unnecessarily.
+
+If bounded retrieval is insufficient, record the exact gap and use a safe targeted fallback. Do not disguise manual source reading as successful automated recovery, or hand-edit readiness output to allow a staged run to proceed.
+
+## Workflow 6: Source continuation and local dependency expansion
+
+```powershell
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --continue --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --continue-from 161 --max-lines 160 --format numbered
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --include-local-deps --max-bundle-lines 300 --format json
 ```
 
-Fall back to DOT if Graphviz is unavailable:
+Use the returned continuation cursor rather than assume a complete symbol. Local imports, types, props, components, and dependency expansion are same-file static context, not cross-file closure. Follow cross-file dependencies with additional lookup/source calls.
 
-```sh
-npx @dailephd/my-dev-kit view --index .my-dev-kit --format svg --allow-dot-fallback --out .my-dev-kit/graph.dot
-```
+For connected local React components, use `--include-local-component-tree` and the appropriate prop/event slice flags. Do not invent standalone `trace-props`, `trace-events`, or general `refs` commands.
 
-Use `--format dot` for automated checks. Reserve SVG or PNG for interactive review.
-
----
-
-## Workflow 5: Use my-dev-kit output with an LLM or downstream tool
-
-LLM-assisted development works best when the model receives bounded, relevant context rather than whole files or broad project dumps. my-dev-kit helps collect that context deterministically from your local project.
-
-npx @dailephd/my-dev-kit does not call any LLM or external service, does not edit files, and does not act as an autonomous agent. It produces local bounded artifacts that you can provide to an LLM conversation, a coding assistant, or any downstream tool.
-
-```mermaid
-flowchart TD
-  A[index] --> B[search]
-  B --> C[lookup]
-  C --> D[slice]
-  D --> E[source]
-  E --> F[Provide selected outputs to LLM or tool]
-```
-
-**Command sequence**
-
-```sh
-npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
-npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<topic>" --limit 20 --json
-npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
-npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<node-id>" --depth 2 --direction both --json
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
-```
-
-**Recommended outputs to provide**
-
-- Selected search results or a concise summary of the strongest matches
-- Selected lookup output
-- Selected graph slice or a concise summary of nearby nodes and edges
-- Numbered source excerpts with file paths and symbol names
-
-**What to omit**
-
-- The entire source tree
-- Full `symbol-index.json` or `code-graph.json`
-- Broad unrelated files
-- Generated artifacts not relevant to the current task
-
-**When to rerun commands**
-
-- Re-run `index` after source changes so graph artifacts match the current project.
-- Refine the `search` query if results are weak. Try symbol names, feature terms, error text, file names, or imported module names.
-- Use `lookup --depth 1` first. Increase depth only when the immediate graph neighborhood is insufficient.
-- Use `slice --depth 1` or `slice --depth 2` depending on context size.
-- Use line-range source retrieval when symbol retrieval is too broad or incomplete.
-
----
-
-## Workflow 6: Source continuation and local dependency expansion (v1.4.0)
-
-When the initial bounded preview is not enough, continue reading or expand to same-file dependencies instead of reading the whole file.
-
-```sh
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --continue
-npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbol EditorShell --include-local-deps --format numbered
-```
-
-JSON output includes a `continuationCursor` (`nextStartLine`, `previousEndLine`, `exhausted`, `reason`). Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer. Expansion (`--include-imports`, `--include-local-types`, `--include-props`, `--include-local-components`, `--include-local-deps`) is static-analysis only: direct, same-file dependencies — no cross-file closure, no runtime tracing.
+A whole-file read may be justified by a particular invariant or interleaved contract. Report the narrower retrieval attempted, missing information, file/line count, and how the full read changed the conclusion. Do not perform a broad file sweep merely because a preview was capped.
 
 ## Workflow 7: Data-model and model-to-view lineage inspection
 
-```sh
+```powershell
 npx @dailephd/my-dev-kit data-model --index .my-dev-kit --entity User --json
 npx @dailephd/my-dev-kit data-model --index .my-dev-kit --field User.email --json
 npx @dailephd/my-dev-kit data-model --index .my-dev-kit --trace-view User --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph model-view-lineage --format dot --out .my-dev-kit/lineage.dot --json
 ```
 
-`trace-view` is conservative static evidence only: direct transformation functions, direct view-model assignments, direct component prop assignments, and direct JSX rendering where field identity remains explicit. It does not claim route-aware reachability, browser-state behavior, or runtime rendering behavior.
+Generate required model artifacts first when they are absent. Model/lineage generation can write into the index by default, so do not use an immutable snapshot as a working output directory.
 
-## Workflow 8: Context capsule and retrieval audit (v1.6.0)
+Trace-view follows supported explicit model identities through direct transformations, view-model/prop assignments, and JSX rendering. It does not validate a database migration, route-aware runtime reachability, browser state, or all API/service boundaries. Use the [API/data migration recipe](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#95-api-and-data-contract-migration) to combine this evidence with real project tests.
 
-Produce a bounded, deterministic context capsule for a task-like query, with an optional full retrieval audit trail:
+## Workflow 8: Context capsule and retrieval audit
 
-```sh
-npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<task description>" --mode feature-add --out context-capsule.json --json
-npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<task description>" --out context-capsule.json --audit-out retrieval-audit-record.json --json
+```powershell
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "<task description>" --mode feature-add --out .my-dev-kit/context-capsule.json --audit-out .my-dev-kit/retrieval-audit-record.json --json
 ```
 
-`--mode` is one of `general` (default), `feature-add`, or `subsystem`, and adjusts candidate ranking deterministically. Use `--no-source` to suppress source slices/bundles while retaining graph and metadata evidence. The capsule never embeds a raw graph or artifact dump — evidence is bounded and reason-tagged. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for the full schema.
+Modes are `general`, `feature-add`, and `subsystem`. Use `--no-source` only when the task intentionally does not require source selection. The capsule contains bounded, reason-tagged evidence rather than raw source/artifact dumps.
 
-## Workflow 9: Compare two index snapshots with graph-diff (v1.8.0)
+Inspect candidate/focus relevance, selected graph/source evidence, warnings, conflicts, and adequacy. A generated capsule is not automatically ready for implementation. Use the command reference and graph schema for structured request fields and detailed result contracts.
 
-```sh
+## Workflow 9: Compare two index snapshots with graph-diff
+
+```powershell
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-before --json
-# ... make source changes ...
+```
+
+After the authorized source change:
+
+```powershell
 npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit-after --json
 npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-kit-after --json
 ```
 
-`graph-diff` never runs `index` and never modifies either input directory; it reports added/removed/changed nodes, edges, and artifact metadata using each artifact's existing stable IDs. Exit code is `0` for any valid comparison (with or without differences).
+Keep the before snapshot unchanged. `graph-diff` does not index, edit inputs, or fail because a valid difference exists. It is reporting-only. Inspect stable-identity changes, availability and warnings, and combine them with Git diffs and tests.
 
-## Workflow 10: Index and retrieve Android/Kotlin/Java projects (v1.10.0)
+Graph equality does not prove runtime equivalence. For visible regressions, use the [commit-to-commit recipe](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#910-commit-to-commit-regression-localization) and preserve Observer comparability requirements.
 
-```sh
-npx @dailephd/my-dev-kit index --root . --src app/src/main/java --src app/src/main/kotlin --out .my-dev-kit --json
-npx @dailephd/my-dev-kit search --index .my-dev-kit --query "ViewModel" --limit 20 --json
-npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1 --json
+## Workflow 10: Index and retrieve Android/Kotlin/Java projects
+
+```powershell
+npx @dailephd/my-dev-kit index --root . --src app/src/main/kotlin --src app/src/main/java --out .my-dev-kit --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --android-route home --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --permission android.permission.CAMERA --json
 npx @dailephd/my-dev-kit search --index .my-dev-kit --resource string/app_name --json
 npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.example.MainActivity --json
-npx @dailephd/my-dev-kit source --index .my-dev-kit --android-route home --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --android-route home --format numbered
 npx @dailephd/my-dev-kit slice --index .my-dev-kit --android-component com.example.MainActivity --depth 2 --json
-npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-navigation --format dot
 ```
 
-`.kt` and `.java` files under `--src` are indexed like any other language — no new flags. When Android project evidence (`settings.gradle(.kts)`, `AndroidManifest.xml`, source-set layout) is found under `--root`, `index` also writes `android-project.json`, and when Android component roles (Activity, Fragment, ViewModel, Service, Repository, Room entities/DAOs, Retrofit services, Hilt modules, and others) are detected on indexed Kotlin/Java symbols, `index` writes `android-components.json` and attaches compact `androidComponentRoles`/`androidComponentRefs` metadata usable through `search`, `lookup`, `source`, `slice`, `context`, and `graph-diff`. This is conservative static evidence only: it never executes Gradle, javac, or the Kotlin compiler, and does not validate Android runtime behavior, manifest registration, Compose semantics, or Android security posture.
+Use source roots that exist in the target. Kotlin/Java extensions are recognized without a new language flag. Android project/module/source-set, Gradle, component, manifest, resource, and navigation evidence is conditionally generated and registered in the manifest. Artifact-backed nodes enrich the existing code graph.
 
-Android projects additionally produce `android-gradle.json`, `android-manifest.json`, `android-resources.json`, and `android-navigation.json` when the applicable static evidence exists. Android artifact-backed nodes and candidate relationships enrich the existing `code-graph.json`; there is no `android-relationships.json`. Android selectors use exact matching and preserve ambiguity; route/resource source is bounded, binary resources are not decoded, and `android-module`, `android-manifest`, and `android-navigation` views render real graph edges only. This remains static analysis: it does not build Android projects, resolve dependencies, merge manifests, select resources, prove runtime behavior, provide full Compose semantics, or perform Android security validation.
+Exact selectors retain ambiguity. A manifest component is not automatically the same node as its source class. Static evidence does not prove dependency resolution, merged manifests, resource selection, dependency injection, runtime navigation, builds, or security. There is no `android-relationships.json` prerequisite.
 
-## Workflow 11: Stage-role context refresh (v1.10.1)
+## Workflow 11: Stage-role context refresh
 
-Version 1.10.1 introduced this shipped role-aware workflow. It uses the existing `index` and `context` architecture at three points rather than reusing one early capsule for every stage. v1.10.3 (shipped) also gives the capsule and retrieval audit one grounded repository/index identity and validates their shared contract before successful output, without changing the workflow or CLI syntax.
+Role and mode are independent. Refresh evidence at the point its owning stage needs it rather than reuse one early capsule forever.
 
-Use a role directly:
-
-```sh
-npx @dailephd/my-dev-kit context --index .my-dev-kit --query "locate the context extension point" --role architecture --out .my-dev-kit/architecture-context.json --json
-```
-
-Or provide a structured request:
-
-```sh
+```powershell
+npx @dailephd/my-dev-kit context --index .my-dev-kit --query "Locate the extension point and contracts" --role architecture --out .my-dev-kit/architecture-context.json --json
 npx @dailephd/my-dev-kit context --request context-request.json --json
 ```
 
-`role` and `mode` are independent. Refresh the index when the source state changes, and inspect `freshness`, `roleAdequacy`, `truncation.requiredEvidenceLost`, condition-specific missing/blocking conditions, unresolved evidence, provenance, and the matching capsule/audit `index.projectRoot` before using the result. General `truncation.truncated` alone is not a readiness verdict: optional bounded overflow may coexist with adequate context. Do not hand-edit either generated artifact; regenerate the pair from the same request and validated index.
+### Architecture stage
 
-### Architecture-stage flow
+Establish the owner, extension point or grounded no-extension conclusion, contract, and test evidence or explicit test gap. Inspect required condition witnesses and current repository/index identity. This answers where the behavior belongs.
 
-1. Index or refresh the repository using the existing `index` command.
-2. Retrieve architecture-role context for the request.
-3. Inspect requested/applied evidence-group limits and the four architecture conditions: owner, extension point or grounded no-extension conclusion, contract, and test evidence or grounded test gap.
-4. Confirm required provenance and capsule/audit parity. Omitted surplus may remain visible as optional truncation when all applicable witnesses remain covered.
-5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition/provenance is missing, or material ambiguity/conflict cannot be preserved. Do not stop solely because optional truncation is present.
-6. Use the evidence to identify the extension point and avoid parallel architecture.
+### Implementation stage
 
-The primary question is: "Where should the behavior live?"
+Refresh immediately before editing. Retrieve exact owners, source, dependencies, callers/callees, validators, constants/defaults/limits, errors, serializers/schemas, command parsing, compatibility, and closest tests. This answers what must change and what must remain stable.
 
-### Implementation-stage flow
+### Test-implementation stage
 
-1. Refresh the index immediately before production editing.
-2. Retrieve implementation-role context rather than relying only on the earlier architecture capsule.
-3. Inspect exact owners/source, dependencies, callers/callees, validators/constants/defaults/limits/errors, serializers/schemas/command parsing, compatibility surfaces, generated-output contracts, and closest tests. A structurally grounded owner needs request relevance plus independent structural support; a focused or owner-named file is not enough by itself.
-4. Inspect requested/applied evidence-group limits and the implementation owner/contract conditions. Omitted surplus remains visible as optional truncation when both required witnesses remain covered.
-5. Stop when `roleAdequacy` is insufficient, `requiredEvidenceLost` is true, a required condition/provenance is missing, material ambiguity/conflict cannot be preserved, capsule/audit parity fails, context is stale, or freshness is unknown where the workflow requires proof. Do not stop solely because optional truncation is present.
-6. Implement production code outside my-dev-kit context generation.
+Refresh after actual production edits. Supply current changed files/symbols and planner-owned string responsibility IDs. Retrieve test locations, expected-result evidence, fixtures/mocks/setup, infrastructure, and commands. Preserve partial/unmapped status and missing metadata honestly. Do not fabricate a test command or compatibility file to satisfy a mapping.
 
-The primary question is: "What exact current code must be changed or preserved?"
+### Readiness and recovery
 
-### Test-implementation-stage flow
+Inspect freshness, role/context adequacy, provenance, capsule/audit agreement, condition coverage, and required-evidence loss. Optional overflow can coexist with sufficient context. A missing required condition, stale identity, or contradiction cannot be overridden by a prose statement or isolated lookup result.
 
-1. After production changes, refresh the index again.
-2. Collect changed production files/symbols from the implementation report, caller input, or before/after `graph-diff` evidence.
-3. Retrieve test-implementation context using caller-supplied stable test-responsibility IDs. Repeated IDs produce one mapping in first-occurrence order plus an explicit duplicate diagnostic; duplicate and unknown/unmapped diagnostics are independent.
-4. Inspect changed symbols, validators/constants/errors, failure and side-effect boundaries, related tests, fixtures/factories/mocks/setup/configuration, package scripts, exact commands, and responsibility mappings.
-5. Stop if critical responsibilities are unmapped or the changed surface/test infrastructure is inadequate.
-6. Implement tests outside context generation and then run verification.
+The v1.12.1/v1.12.3 corrections remain part of the current producer contract. Use generated condition-aware results rather than older assumptions that every cap or focus-source failure is irreversibly blocking.
 
-The primary question is: "How should approved test responsibilities be implemented against final production code?"
+### Orchestrator and Lab boundary
 
-### Orchestrator and lab boundary
+Orchestrator does not automatically run my-dev-kit. Its native implementation/test stages consume explicitly supplied evidence through their supplemental contracts. They are not replaced by new context stages. Use its actual readiness and correction routing without bypassing `RunIntegrityGate`.
 
-The current orchestrator does not automatically run my-dev-kit and does not expose implementation-context or test-context as native stages. Initial my-dev-kit-orchestrator integration is prompt-guided: existing implementation and test-implementation stages require the manual refresh and reference supplemental context artifacts. Workflow catalogs, instruction packets, TaskState, prompts, lifecycle, stage order, judge/correction handling, and freshness policy remain orchestrator-owned. The producer correction documented here does not implement orchestrator readiness reconciliation, recovery routing, judge enforcement, or final-report enforcement.
+Lab may evaluate documented matched strategies or frozen compatibility fixtures in a separate experiment. It does not decide producer adequacy or make a fixed historical smoke into proof of every current live run. The [ecosystem guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) owns these compositions.
 
-my-dev-kit-lab may run controlled comparisons of full/bounded workflow instructions and architecture/implementation/test refresh strategies, then measure size, explicit evidence recall, irrelevant inclusion, mapping completeness, provenance, determinism, truncation/inadequacy, and target immutability. The lab does not become a required production workflow component, and this producer patch does not implement lab-side producer/orchestrator agreement or judge/final-report integrity validation.
+## Workflow 12: Compose semantic retrieval
 
-Request-file syntax and role contracts are documented in [COMMANDS.md](COMMANDS.md). Legacy invocations without `--role` or `--request` remain compatible.
-
----
-
-## Workflow 12: Compose semantic retrieval (v1.11.0)
-
-This workflow documents the Compose and Android-test retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0`. From a source checkout, build the repository and invoke `node dist/cli.js`.
-
-For an Android project with Jetpack Compose UI, `index` also writes `android-compose-semantic.json`: composable declarations (Batch 1), state/effect/ViewModel/test-tag/visible-text/string-resource facts (Batch 2), and click-handler/navigation-call facts cross-referenced to `android-navigation.json` (Batch 3) — all conservative static evidence, attached to the innermost enclosing composable, never a runtime rendering or reachability claim.
-
-That evidence is projected into `code-graph.json` as compact `android-composable`/`android-compose-fact` nodes, retrievable through the same commands as any other Android evidence:
-
-```sh
-node dist/cli.js search --index .my-dev-kit --composable "HomeScreen" --json
-node dist/cli.js search --index .my-dev-kit --test-tag "login_button" --json
-node dist/cli.js search --index .my-dev-kit --android-ui "Welcome back" --json
-
-node dist/cli.js source --index .my-dev-kit --composable "HomeScreen" --format numbered
-node dist/cli.js source --index .my-dev-kit --composable "HomeScreen" --include-compose-tree --max-bundle-lines 200 --format json
-
-node dist/cli.js slice --index .my-dev-kit --composable "HomeScreen" --include-viewmodel --include-navigation --depth 2 --json
+```powershell
+npx @dailephd/my-dev-kit search --index .my-dev-kit --composable HomeScreen --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --test-tag login_button --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-ui "Welcome back" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --composable HomeScreen --include-compose-tree --max-bundle-lines 200 --format json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --composable HomeScreen --include-viewmodel --include-navigation --depth 2 --json
 ```
 
-`--composable`, `--android-ui`, and `--test-tag` are exact-match only and mutually exclusive with the other selectors; zero matches returns `not-found`, more than one returns `ambiguous` with every candidate — never a picked winner. `--include-compose-tree` (requires `--composable`) returns a bounded, capped, deterministic root-first bundle of the composable and its reachable children, the same bundle/cap contract `--include-local-component-tree` already uses for React. `--include-viewmodel`/`--include-navigation` (both require slice `--composable`) extend the normal depth-bounded slice to directly-resolved ViewModel candidates and navigation-call route candidates respectively — no repository/data-flow expansion. Composable and fact evidence also participates in plain `search --query`, `context`, and exact `lookup --node` automatically, with no new flags needed there.
+Compose evidence includes supported declarations, state/effect/ViewModel facts, test tags, text/string resources, click handlers, navigation calls, and UI regions. Facts are associated with their supported enclosing composable and projected into the graph.
 
-This remains static analysis: no claim is made that a composable renders, a child composable is displayed, a click occurs, navigation succeeds, a route is reachable, a ViewModel is scoped correctly, or a string resource resolves to on-screen text. The implemented graph views are described in Workflow 14 and carry the same static boundary.
+Selectors are exact and retain every ambiguous candidate. A test-tag query uses the resolved literal value. Compose-tree source is bounded and root-first. These commands do not run Compose or prove rendering, clicks, navigation, ViewModel scoping, or resource resolution.
 
-## Workflow 13: Android test-evidence retrieval (v1.11.0 Batch 5)
+## Workflow 13: Android test-evidence retrieval
 
-For an Android project with `test`/`androidTest` source sets, `index` also writes `android-test-semantic.json`: test classes/methods, JUnit4/JUnit5/lifecycle annotations, Compose test rules, visible-text/test-tag assertions, route references, and fake/mock test-double evidence — discovered only under `android-project.json`'s already-detected `test`/`androidTest` roots (never a repository-wide scan, never added to `symbol-index.json`), and exact-matched against production Compose/navigation/ViewModel evidence.
-
-That evidence is projected into `code-graph.json` as compact `android-test-file`/`android-test-class`/`android-test-method`/`android-test-fact` nodes. No new selector flags exist for it — it is retrievable through the exact same generic commands as any other indexed evidence:
-
-```sh
-node dist/cli.js search --index .my-dev-kit --query "HomeScreenTest" --json
-node dist/cli.js search --index .my-dev-kit --query "login_button" --json
-
-node dist/cli.js lookup --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --json
-node dist/cli.js source --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --format numbered
-node dist/cli.js slice --index .my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButton" --depth 2 --direction both --json
+```powershell
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query HomeScreenTest --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query login_button --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<returned-android-test-node-id>" --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<returned-android-test-method-id>" --format numbered
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<returned-android-test-method-id>" --depth 2 --direction both --json
 ```
 
-A test-method slice naturally includes real edges (`android-test-references-composable`, `android-test-references-route`, `android-test-references-viewmodel`, `android-test-uses-double`) whenever the test statically references production evidence — zero, one, or every ambiguous candidate is preserved, never a guessed winner. `graph-diff` reports added/removed/changed test nodes and edges the same way it reports any other code-graph change, with no dedicated diff section.
+The analyzer discovers supported test classes/methods/facts under detected unit/instrumented roots. JUnit/lifecycle, Compose rule, Espresso/Robolectric, assertion, route, and test-double evidence remain distinguishable where supported. Exact links can reference composables, routes, ViewModels, and doubles. No new test-specific selector flag is required.
 
-This remains static analysis: indexing never executes a test, launches an Activity, or proves an assertion passed, a mock was injected, or a Compose rule initialized at runtime. See Workflow 14 below for the `view --graph android-test` graph.
+A test reference is not coverage proof. No indexing or graph command executes the test, initializes a rule, launches an Activity, or verifies an assertion. Use actual project test commands separately.
 
-## Workflow 14: Compose and Android-test graph views (v1.11.0 Batch 6)
+## Workflow 14: Compose and Android-test graph views
 
-`view` accepts three additional `--graph` values, each a bounded filter over the already-projected `code-graph.json` (no source or semantic-artifact reparsing, no new artifact):
-
-```sh
-node dist/cli.js view --index .my-dev-kit --graph compose-ui --format dot --out compose-ui.dot --json
-node dist/cli.js view --index .my-dev-kit --graph compose-navigation --format dot --out compose-navigation.dot --json
-node dist/cli.js view --index .my-dev-kit --graph android-test --format dot --out android-test.dot --json
+```powershell
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph compose-ui --format dot --out .my-dev-kit/compose-ui.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph compose-navigation --format dot --out .my-dev-kit/compose-navigation.dot --json
+npx @dailephd/my-dev-kit view --index .my-dev-kit --graph android-test --format dot --out .my-dev-kit/android-test.dot --json
 ```
 
-- `compose-ui`: every composable and Compose fact (state, effect, ViewModel reference, test tag, visible text, string resource, click handler, navigation call, UI region), plus the defining source and any exact ViewModel-symbol/resource-definition target an existing edge already connects.
-- `compose-navigation`: the static chain `composable -> click-handler fact -> navigation-call fact -> route/destination candidate -> screen candidate` only — unrelated state/effect/test-tag/visible-text/string-resource facts on the same composable are excluded. Every ambiguous route or screen candidate is preserved; an unresolved navigation call is still rendered, never given a fabricated target.
-- `android-test`: the full test file/class/method/fact hierarchy (unit vs. instrumented, JUnit/Compose-rule/Espresso/Robolectric/assertion/route/test-double facts all distinguishable via node label/shape), plus the exact production composable/route/ViewModel-symbol nodes a test fact statically references.
+`compose-ui` shows existing composables/facts and supported source/resource/ViewModel links. `compose-navigation` narrows to the supported composable/click/navigation/route/screen chain. `android-test` shows the static test hierarchy and supported production references. Each view preserves ambiguity and uses already-projected graph evidence.
 
-All three support the existing `--format dot|svg|png`, `--out`, `--edge-style semantic|labeled|minimal`, `--allow-dot-fallback`, and `--json` behavior unchanged. A non-Android index, an Android index without Compose or test evidence, or Compose evidence without navigation evidence all render an empty bounded graph (zero nodes, zero edges) at exit 0 — never an error, never an invented placeholder node. None of the three views render a legend, matching the exact precedent the three v1.10.0 `android-module`/`android-manifest`/`android-navigation` views already established.
+An empty view is a valid result when relevant evidence is absent. No view proves runtime reachability, rendering, navigation, or test success.
 
-This remains static analysis: no view claims a composable renders, a click occurs, navigation succeeds, a destination is reachable, a test executed or passed, or a test's referenced production node is fully covered.
+## Workflow 15: Android-role search and data-flow slicing
 
-## Workflow 15: Android-role search and data-flow slicing (v1.12.0 Batch 5)
-
-Find every node of an exact Android classification role, then follow the full static ownership/data-flow chain from an Activity down to its Room/Retrofit dependencies, then pull in the tests that reference what was reached:
-
-```sh
-node dist/cli.js search --index .my-dev-kit --android-role activity --json
-node dist/cli.js search --index .my-dev-kit --android-role view-model --limit 5 --json
-
-node dist/cli.js slice --index .my-dev-kit --node "symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity" \
-  --depth 3 --include-data-flow --json
-
-node dist/cli.js slice --index .my-dev-kit --node "symbol:app/src/main/kotlin/com/example/LoginViewModel.kt#LoginViewModel" \
-  --depth 1 --include-data-flow --include-tests --json
+```powershell
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role activity --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role view-model --limit 5 --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<activity-node-id>" --depth 3 --include-data-flow --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<viewmodel-node-id>" --depth 2 --include-data-flow --include-tests --json
 ```
 
-`--android-role` is exact and mutually exclusive with `--query` and every other search selector; a role with zero matches still returns `status: ok` with an empty `results` array. `--include-data-flow` (valid with `--node`/`--composable`/`--android-route`/`--android-component`, rejected with `--route`/`--storage-key`/`--ui`) expands bidirectionally along the fixed Activity→Compose→ViewModel→Repository→DAO/Entity/Retrofit/Room-database/route-to-screen edge allowlist, bounded by `--depth`, reported in the additive `androidDataFlow` summary object. Adding `--include-tests` to the same slice pulls in the bounded test file/class/method/fact hierarchy for any reached composable/route/ViewModel node, reported in the additive `androidTests` summary object — both are additive-only, so omitting either flag leaves prior slice output unchanged.
+Use the actual closed Android role vocabulary. Role selection is exact. `--include-data-flow` expands the fixed Android ownership/data-flow edge family within the graph depth. Adding tests includes bounded related Android test evidence for reached supported nodes.
 
-This remains static analysis: `--android-role` never claims a component is active at runtime; `--include-data-flow` never claims a dependency is actually injected or a query/network call executes — only that the static edge already exists in `code-graph.json`; the Android-aware `--include-tests` extension never claims a test ran or passed.
+Do not use this as a generic web/full-stack data-flow flag. It is rejected with web route/storage/UI selectors and does not infer an arbitrary API/service/ORM chain.
 
-## Workflow 16: Android-aware context ownership (v1.12.0 Batch 6)
+## Workflow 16: Android-aware context ownership
 
-`context` needs no new flag to prefer the correct Android owning layer. The existing role-aware pipeline detects the task intent from the query and applies it on top of existing ranking, structural-owner, and adequacy rules:
-
-```sh
-node dist/cli.js context --index .my-dev-kit --role architecture \
-  --query "Locate the owner for changing the Home screen UI." --out capsule.json --json
-
-node dist/cli.js context --index .my-dev-kit --role implementation \
-  --query "Change the loading state behavior shown by HomeScreen." --out capsule.json --json
-
-node dist/cli.js context --index .my-dev-kit --role implementation \
-  --query "Change how Home data is loaded from the repository." --out capsule.json --json
+```powershell
+npx @dailephd/my-dev-kit context --index .my-dev-kit --role architecture --query "Locate the owner for changing the Home screen UI" --out .my-dev-kit/home-architecture.json --json
+npx @dailephd/my-dev-kit context --index .my-dev-kit --role implementation --query "Change the loading state behavior shown by HomeScreen" --out .my-dev-kit/home-implementation.json --json
 ```
 
-The first request's `selectedOwners`/ranked `candidateNodes` prefer the Compose screen/component over a projected UI fact; the second prefers the linked ViewModel over its own collected-state fact; the third prefers the repository over the ViewModel that merely consumes it. Focusing a generated file or a test-only node for production work surfaces `android-generated-primary-target`/`android-test-primary-target` in `conflicts`, rather than silently selecting it as an owner; an ambiguous or unresolved layer is reported (`android-ambiguous-owner`/`android-unresolved-owner`), never guessed. `--role test-implementation` still requires changed production evidence and selects Android unit/instrumented/Compose-UI tests as test locations, never as production owners.
+Supported intent and relationships can prefer Compose for UI work, ViewModel for state, and Repository for data-loading ownership. Generated/test primary targets and ambiguous/unresolved owners can produce explicit conflicts. `compose-ui-component`, not an invented `compose-screen` role, is the relevant vocabulary where classified.
 
-This remains static analysis: no owner selection is edit authorization, no dependency-injection or runtime behavior is proven, and no test-execution/coverage claim is made.
-
----
+Inspect actual required owner/contract evidence. No selected owner is edit authorization or a runtime guarantee. For test implementation, use current changed production and responsibility evidence.
 
 ## Bundled examples
 
-The examples are for cloned repositories, documentation writers, and package smoke tests. Normal npm users should run my-dev-kit inside their own project.
+[examples/README.md](../examples/README.md) explains the repository examples. Normal npm users can run my-dev-kit against their own project without cloning this repository. Do not confuse maintainer benchmark fixtures with required installed-user input.
 
-```sh
+```powershell
 npx @dailephd/my-dev-kit index --root examples/basic-ts --src src --out .my-dev-kit --json
-npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "service" --limit 5 --json
-
+npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query service --limit 5 --json
 npx @dailephd/my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --json
-npx @dailephd/my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
 ```
 
----
+The output in these examples is under the example project root, not a doubly nested repository-relative path.
 
-## Troubleshooting
+## Troubleshooting and feedback
 
-**Problem: "Missing index manifest"**
-The index artifact directory does not contain `manifest.json`. Run `index` first, or check the `--index` path.
+Missing manifest: build the correct index or fix `--index`. Missing/partial analyzer output: inspect source roots, applicability, interpreter requirements and warnings. Unknown identity: search current evidence. Source truncation: continue or expand narrowly. Graphviz failure: use DOT or inspect fallback. Stale context: regenerate the matching capsule/audit pair after index refresh.
 
-**Problem: "Unknown node ID"**
-The node ID passed to `lookup`, `source`, or `slice` is not in the graph. Use `search` to discover valid node IDs.
-
-**Problem: "Symbol not found"**
-The symbol name does not match any indexed symbol in the specified file. Run `search --query <symbol-name>` to confirm spelling and which file contains it.
-
-**Problem: "Graphviz dot executable is not available"**
-SVG and PNG rendering requires Graphviz. Install Graphviz, use `--format dot`, or add `--allow-dot-fallback`.
-
-**Problem: Result content is capped with a preview warning**
-Symbol retrieval is bounded from the start line. Increase `--max-lines` or use line-range mode with explicit `--start` and `--end` values.
-
-**Problem: Python symbols not indexed or warnings about Python interpreter**
-Python indexing requires `python` or `python3` on `PATH`. Install Python 3.8 or later and ensure the interpreter is accessible.
+For a real workflow gap, retain the exact command, version, root/commit/index identity, expected versus observed result, safe fallback and cost. Use the [ecosystem failure record](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#16-failure-feedback-and-improvement-planning). A successful feature workaround must not erase an ecosystem limitation.
