@@ -250,6 +250,7 @@ Current scope does not claim:
 - partial non-fallback call-graph rebuild
 - an automatic or authoritative "safe to edit" decision — classification edit guidance, readiness, and risk labels are advisory signals backed by static evidence, not a substitute for the developer's own judgment
 - the v1.7.0 internal retrieval regression suite or a plugin architecture
+- document-domain indexing, code-to-document traceability, documentation-aware context, documentation impact analysis, or a documentation website renderer
 
 ## What my-dev-kit does not do
 
@@ -262,6 +263,7 @@ my-dev-kit does not provide:
 - semantic similarity search or embedding-based retrieval
 - package publishing automation
 - GitHub release automation
+- documentation website rendering or hosting
 
 ## Product boundary with my-dev-kit-lab
 
@@ -278,6 +280,22 @@ my-dev-kit-orchestrator v1.2.1 owns workflow catalogs and IDs, exact workflow de
 my-dev-kit-lab v0.4.3 owns controlled strategy evaluation, context size, explicit required-evidence recall, irrelevant inclusion, mapping/provenance/truncation/inadequacy/determinism evaluation, target immutability, reports/plots/screenshots, security validation, and code-rot auditing. It must not become a production context or workflow runtime.
 
 my-dev-kit does not own workflow-stage progression, prompt assembly, judge interpretation, agent execution, publication, source/test editing, security validation, or workflow-catalog semantics in v1.10.1. Static repository evidence never proves runtime behavior.
+
+## Planned document-domain expansion
+
+Document indexing is planned after the existing v1.13.0 Android benchmark/documentation milestone and v1.14.0 language/framework expansion. It is not part of the current v1.12.3 command or artifact surface.
+
+The approved sequence is:
+
+1. **v1.15.0 — Document Indexing Foundation:** add `--domain code|docs|all` with `code` as the backward-compatible default; index logical document structure rather than physical lines; introduce `document-index.json` and `document-graph.json`; and reuse `search`, `lookup`, `source`, `slice`, and `view` for document retrieval.
+2. **v1.16.0 — Cross-Domain Code ↔ Documentation Relationships:** add conservative exact reference links between documents and files, symbols, commands, flags, artifacts, tests, and other documents; expose those links through the existing retrieval commands; and make the artifacts usable by a separate first-party documentation website.
+3. **v1.17.0 — Documentation-Aware Context and Change Impact:** extend `context` and `graph-diff` to the document domain; include bounded documentation evidence with code/test evidence; and report potentially affected documentation without claiming that a referenced document is automatically stale.
+4. **v1.18.0 — General-Purpose Document Adapters and Hardening:** add a normalized document-adapter contract, reStructuredText support, optional semantic metadata, conservative document-role classification, large-document/tree protections, and unrelated-repository validation proving the feature is not tied to the my-dev-kit documentation layout.
+5. **v2.0.0:** promote the document-domain concepts that survive real use into the larger artifact/plugin architecture, including candidate document, document-section, documentation-reference, and document-format-plugin abstractions.
+
+The design is intentionally format- and website-renderer-independent. Documents do not need my-dev-kit-specific section IDs or one-line descriptions. Native structure is used when available, while weakly structured text degrades to bounded textual chunks. A first-party documentation site may provide specialized code/test/contract/impact views over these artifacts, but website generation, theming, hosting, and deployment remain outside the core CLI.
+
+See [ROADMAP.md](ROADMAP.md) for the detailed feature, dependency, acceptance, and compatibility contract for v1.15.0 through v1.18.0.
 
 ## Current limitations
 
