@@ -502,9 +502,9 @@ The [ecosystem workflow guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) is the sole h
 - Use my-dev-kit for static evidence. Use the target project's commands for builds, databases, test execution, browser actions, and application startup.
 - Use `my-dev-kit-orchestrator` for its own eight-command lifecycle. `DIRECT_IMPLEMENTATION` and `FULL_STAGE_CONTEXT` are workflow policies, not its `--mode` values.
 - Use installed `my-dev-kit-lab security validate` and `my-dev-kit-lab audit` where supported. Put its global `--workspace` before the command. Do not run Lab's source-checkout npm aliases in the target project.
-- Use `my-frontend-observer` for its own local browser observations and evaluations. Its package is unscoped. Its bounded-context/correction functions are library APIs, not additional CLI subcommands.
+- Use `my-frontend-observer` for its own local browser observations and evaluations. Its current package is `@dailephd/my-frontend-observer`, while the executable remains `my-frontend-observer`. Observer 0.8.1 provides the project workflow `init`, `capture baseline`, and `check baseline --json`. Bounded-context/correction functions also remain library APIs. Do not invent additional CLI subcommands for those functions.
 - Do not pipe unrelated JSON artifacts together without a documented consumer. Runtime/static correlation needs explicit candidate evidence, not equal-looking names.
-- Preserve semantic results. A graph-diff difference, partial observation, incomparable comparison, or not-evaluated fidelity result can accompany exit 0. Required acceptance must inspect the actual result.
+- Preserve semantic results. A graph-diff difference, partial observation, incomparable comparison, or not-evaluated fidelity result can accompany exit 0. Observer project `check` distinguishes PASS, FAIL, REVIEW_REQUIRED, and BLOCKED. Comparison alone remains REVIEW_REQUIRED. Required acceptance must inspect the actual result.
 - A complete full-stack task requires real backend/client/UI wiring, applicable use-case tests, protected behavior, and final-state runtime evidence. None of these is established by a context command alone.
 
 Companion syntax and limitations are linked from the ecosystem guide. There is no requirement to find or synchronize private local ecosystem `.txt` files.
