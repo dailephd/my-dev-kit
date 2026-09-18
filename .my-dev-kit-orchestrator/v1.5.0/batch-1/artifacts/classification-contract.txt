@@ -1,0 +1,331 @@
+Artifact: ClassificationContract
+Batch: v1.5.0 Batch 1
+Inputs used: request-brief.txt, architecture-context-packet.txt, behavior-model.txt
+
+===============================================================================
+1. Artifact decision
+===============================================================================
+
+Proposed artifact name: classification.json
+
+Justification: existing optional artifacts follow a plain descriptive noun
+pattern (data-model.json, data-model-graph.json, frontend-semantic.json,
+frontend-reachability.json), not a compound "layer-classification" style name.
+"classification.json" matches that convention and is unambiguous once
+registered under a `'classification'` IndexAnalyzerId. "layer-classification.json"
+was considered but rejected as redundant (the artifact classifies more than
+"layer" - it also covers generated/config/docs files) and inconsistent with the
+existing one-word-noun naming pattern.
+
+Artifact schema version: `CLASSIFICATION_SCHEMA_VERSION = '1.0.0'`, following
+the exact pattern of `SEMANTIC_SCHEMA_VERSION = '1.0.0'` in
+src/semantics/semanticTypes.ts (architecture-context section 4).
+
+Manifest registration (extends IndexManifest, src/indexing/manifestTypes.ts):
+- Add `'classification'` as a valid value for `IndexAnalyzerId` (already an
+  extensible `(string & {})` union - no breaking type change required).
+- Add a `classification: IndexAnalyzerArtifactRef[]` entry to `analyzers[]`
+  status list, exactly like every other analyzer (data-model,
+  frontend-semantic, etc.), with `id: 'classification'`, `status`,
+  `version`, `schemaVersion`, `artifacts: [{ name: 'classification',
+  path: 'classification.json', artifactKind: 'my-dev-kit-v1-classification' }]`,
+  `warningCount`, `errorCount`, `summary`.
+- Do NOT add a new field to `IndexSemanticArtifacts` (which is a fixed,
+  non-extensible shape for exactly 5 pre-v1.5 artifacts). Reason: extending
+  that interface risks call sites that destructure it exhaustively; the
+  generic `IndexAnalyzerStatus.artifacts` mechanism already supports
+  registering a new artifact's path without touching
+  `IndexSemanticArtifacts` at all (architecture-context section 2). This
+  keeps the change additive-only to manifest.json consumers.
+
+Analyzer status behavior: classification analyzer reports one of the existing
+`IndexAnalyzerStatusValue` values (`'not-run' | 'complete' | 'partial' |
+'failed' | 'skipped'`) - no new status vocabulary introduced (behavior-model
+section 11).
+
+Stale artifact refresh/removal behavior: add a `CLASSIFICATION_FILENAME`
+constant to src/indexing/managedArtifacts.ts and include it in
+`OPTIONAL_INDEX_ARTIFACT_FILENAMES` (and therefore
+`MANAGED_INDEX_ARTIFACT_FILENAMES`), so it participates in the same
+managedArtifacts.removed stale-cleanup pass observed directly in this batch's
+own `index --call-graph --json` run (architecture-context section 3).
+
+===============================================================================
+2. Target model
+===============================================================================
+
+Target kinds, justified by architecture context and behavior-model section 3:
+
+- file: file-level categories (generated-file, configuration-file,
+  command-handler, analyzer, validator, public-docs, internal-planning-docs)
+  need a target kind that isn't a symbol.
+- symbol: existing SemanticRoleName-overlapping categories (canonical-type,
+  database-model, artifact-type, projection-type, view-model, ui-only-state,
+  persistence-adapter, test-fixture) attach at the symbol/type level, matching
+  how SemanticRole already attaches to GraphSymbolRecord entries.
+- type: kept distinct from `symbol` because a type declaration (interface,
+  type alias) is graph-represented as a symbol in this codebase's index
+  (architecture-context: CodeGraphNode.symbolKind), so `type` is not a
+  separate physical target kind but a `targetKind: 'symbol'` entry whose
+  evidence includes `symbolKind` - this contract keeps `type` as a listed
+  target kind value for clarity in the schema, resolved to the same storage
+  as `symbol` at the implementation level (Batch 2 decision, not a schema
+  split).
+- artifact: needed for classifying analyzer-produced artifacts themselves
+  (e.g. is data-model.json canonical state or a projection?) - relevant to
+  `artifact-type` classification and to future planner-packet consumption
+  (v1.6, non-goal here, but the target kind must exist now so v1.6 doesn't
+  need a schema migration).
+- route: justified directly by the existing frontend-reachability analyzer's
+  route facts (architecture-context section 6, 8) - route-handler
+  classification needs to reference a route target, not only a file/symbol.
+- component: justified by client-component/server-component categories and
+  the existing frontend-reachability UI-reachability facts.
+- command: justified by the command-handler category (behavior-model BEH-022)
+  and the concrete src/commands/*.ts files found in architecture context.
+- test: justified by test-fixture category and the existing
+  tests/semantics/*.spec.ts, tests/index/*.spec.ts files found.
+- docs: justified by public-docs / internal-planning-docs categories
+  (behavior-model BEH-022) and the concrete docs/ROADMAP.md /
+  .my-dev-kit-orchestrator/ precedent found in architecture context.
+
+Not included: no `database-table` or `api-endpoint` target kind - no static
+evidence source for either was found in architecture context (no ORM schema
+introspection, no OpenAPI/route-spec artifact); adding them now would violate
+the conservative/evidence-backed constraint (behavior-model BEH-011).
+
+===============================================================================
+3. Classification entry shape
+===============================================================================
+
+Plain-text JSON-like contract for one entry in classification.json's
+`entries[]` array:
+
+  ClassificationEntry {
+    id: string                        // stable id, e.g. "classification:<targetKind>:<targetId>"
+    targetId: string                  // node id (file:..., symbol:...) or route/artifact id
+    targetKind: 'file' | 'symbol' | 'type' | 'artifact' | 'route' | 'component' | 'command' | 'test' | 'docs'
+    filePath: string | null
+    symbolName: string | null
+    nodeId: string | null             // graph node id when the target has one (file:/symbol: prefixed)
+    classifications: ClassificationRole[]   // 0 or more; see below (empty allowed per behavior-model section 11 "Empty states")
+    editGuidance: EditGuidance         // exactly one; required (behavior-model BEH-030)
+    readiness: Readiness               // exactly one primary readiness state
+    risks: RiskLabel[]                 // 0 or more, additive (behavior-model BEH-042)
+    evidence: ClassificationEvidence[]  // required if any classification has 'certain' confidence (INV-001)
+    uncertainty: UncertaintyTier        // exactly one, overall tier for this entry
+    reason: string                     // human-readable explanation, required
+    sourceRefs: SourceRef[]             // 0 or more file/line pointers
+    artifactRefs: SemanticArtifactRef[] // 0 or more; REUSES the existing SemanticArtifactRef shape
+                                         // from src/semantics/semanticTypes.ts verbatim (architecture-context
+                                         // section 13) - no new artifact-ref shape is invented
+    warnings: ClassificationWarning[]   // 0 or more
+  }
+
+  ClassificationRole {
+    role: ClassificationRoleName        // see category list in behavior-model section 3
+    subtype?: string | null
+    confidence: UncertaintyTier         // per-role confidence, distinct from the entry-level `uncertainty`
+                                         // (an entry can hold multiple candidate roles at different confidence
+                                         // when evidence is ambiguous - behavior-model BEH-060)
+  }
+
+Field naming rationale: `id`, `targetId`, `filePath`, `symbolName`, `nodeId`,
+`evidence`, `reason`, `sourceRefs`, `artifactRefs`, `warnings` all mirror
+existing naming style already used by `SemanticArtifactRef`, `SemanticEvidenceRef`,
+`IndexAnalyzerArtifactRef` (camelCase, `Ref`/`Refs` suffix for pointer arrays,
+`reason`/`warnings` as free-text + structured-kind pairs) - consistent with
+architecture-context section 13's "reuse existing shapes as a template"
+recommendation.
+
+===============================================================================
+4. Compact metadata shape
+===============================================================================
+
+Decision: do NOT overload `semanticRoles` / `artifactRefs` on CodeGraphNode /
+GraphSymbolRecord. Add two new, separate optional fields instead:
+
+  CodeGraphNode {
+    ...existing fields unchanged...
+    semanticRoles?: SemanticRole[]        // unchanged, v1.1/v1.2 meaning preserved
+    artifactRefs?: SemanticArtifactRef[]  // unchanged, v1.1/v1.2 meaning preserved
+    classificationRoles?: ClassificationRoleRef[]   // NEW, v1.5
+    classificationRefs?: SemanticArtifactRef[]      // NEW, v1.5 - reuses SemanticArtifactRef type
+  }
+
+  GraphSymbolRecord {
+    ...existing fields unchanged...
+    semanticRoles?: SemanticRole[]        // unchanged
+    artifactRefs?: SemanticArtifactRef[]  // unchanged
+    classificationRoles?: ClassificationRoleRef[]   // NEW
+    classificationRefs?: SemanticArtifactRef[]      // NEW
+  }
+
+  ClassificationRoleRef {                 // compact projection of ClassificationRole, NOT the full entry
+    role: ClassificationRoleName
+    editGuidance: EditGuidance
+    readiness: Readiness
+    uncertainty: UncertaintyTier
+  }
+
+Rationale for a new field rather than reuse, directly answering the task's
+required question:
+- `semanticRoles`/`artifactRefs` are produced by v1.1's typescript-model-
+  analyzer / v1.2's model-view-lineage-analyzer and carry a specific meaning:
+  "this symbol's role in the data model / view lineage." v1.5 classification
+  is broader (files, routes, commands, docs - many of which have no data-model
+  role at all) and is evidence-conservative in a different way (edit guidance/
+  readiness/risk, which semanticRoles does not carry today).
+- Silently adding editGuidance/readiness/risk fields onto the existing
+  `SemanticRole` type would change its meaning for every v1.1/v1.2 consumer
+  and test (tests/semantics/semanticRoleEnrichment.spec.ts,
+  tests/semantics/semanticTypes.spec.ts) without those consumers asking for
+  it - directly the outcome the task instructs against ("do not silently
+  overload existing semantic fields").
+- A new field pair keeps the enrichment functions
+  (applySemanticRolesToCodeGraph / applySemanticRolesToSymbolIndex) reusable
+  as a PATTERN (new applyClassificationToCodeGraph /
+  applyClassificationToSymbolIndex functions, same map-by-id shape) without
+  modifying their existing bodies or existing call sites.
+- Symbol/type role NAME strings are still reused (BEH-020: category name
+  "database-model" is spelled identically whether it comes from
+  `semanticRoles[].role` or `classificationRoles[].role`), avoiding vocabulary
+  drift while keeping the fields structurally independent.
+
+`classificationRefs` deliberately reuses the existing `SemanticArtifactRef`
+type verbatim (not a new type) since it already generically points at "an
+artifact + id + optional path" with no v1.1/v1.2-specific semantics baked in.
+
+===============================================================================
+5. Evidence model
+===============================================================================
+
+  ClassificationEvidence {
+    kind: EvidenceKind                  // see below
+    source: string                      // analyzer/producer name, e.g. 'classification-file-analyzer'
+    staticPattern?: string | null        // e.g. "filename matches *.generated.ts", "extends TypeORM Entity"
+    sourceLocation?: SourceRef | null    // file path + line/endLine, reusing SemanticEvidenceRef shape
+    artifactSource?: SemanticArtifactRef | null  // reuses existing type
+    relatedRole?: ClassificationRoleName | null
+    reason: string
+    uncertaintyReason?: string | null    // populated only when this evidence entry contributes to
+                                          // lowering the overall uncertainty tier (e.g. "pattern also
+                                          // matches view-model heuristic")
+  }
+
+  EvidenceKind =
+    | 'filename-pattern'
+    | 'import-pattern'
+    | 'decorator-or-annotation'
+    | 'directory-convention'
+    | 'artifact-cross-reference'   // e.g. data-model.json entry backs this classification
+    | 'existing-semantic-role'     // e.g. reused SemanticRoleName evidence from v1.1/v1.2
+    | 'frontend-reachability-fact' // e.g. route/UI-reachability fact from v1.3 analyzer
+    | 'test-directory-convention'
+    | 'unknown'
+
+`sourceLocation` reuses `SemanticEvidenceRef` (filePath, symbolId, line,
+endLine, source, analyzer) verbatim from src/semantics/semanticTypes.ts -
+same rationale as reusing `SemanticArtifactRef` (architecture-context section
+13, behavior-model's "reuse existing shapes as evidence/uncertainty template").
+
+===============================================================================
+6. Uncertainty model
+===============================================================================
+
+Chosen names (kept from behavior-model's candidate list; consistent with
+existing `SemanticRoleConfidence` style of short lowercase-hyphen tokens):
+
+  UncertaintyTier = 'certain' | 'likely' | 'possible' | 'unknown'
+
+Rejected alternative: reusing `SemanticRoleConfidence` verbatim
+('explicit' | 'inferred-static' | 'partial' | 'unknown') was considered for
+naming consistency, but rejected because its terms describe HOW a role was
+derived (explicitly declared vs. statically inferred), whereas v1.5's tiers
+describe confidence IN the classification's correctness regardless of
+derivation method - a different axis. `'unknown'` is intentionally kept
+identical in both enums since both use it for the same meaning (no usable
+signal).
+
+Conservative rules (behavior-model BEH-060, BEH-061, INV-001, INV-002):
+- Ambiguous cases (multiple plausible categories, comparable evidence
+  strength) cap at `possible`, never `certain` or `likely`.
+- Unsupported runtime claims are `unknown` or the field is omitted entirely -
+  never guessed into a higher tier.
+- `certain` requires >= 1 evidence entry (INV-001).
+- `unknown` uncertainty pairs only with `uncertain` edit guidance (INV-002).
+- Warnings must explain WHY a classification is limited whenever uncertainty
+  is `possible` or `unknown` (ClassificationWarning.message is required, not
+  optional, in those two tiers).
+
+  ClassificationWarning {
+    kind: ClassificationWarningKind
+    message: string   // required when uncertainty is 'possible' or 'unknown'
+  }
+
+  ClassificationWarningKind =
+    | 'ambiguous-evidence'          // reused name/spelling from SemanticRoleWarningKind
+    | 'missing-artifact-ref'        // reused
+    | 'missing-source-ref'          // reused
+    | 'partial-classification'      // reused
+    | 'unsupported-pattern'         // reused
+    | 'conflicting-category'        // NEW - two categories both statically plausible
+    | 'no-static-evidence'          // NEW - file/symbol exists but nothing matched
+    | 'unknown'
+
+Reuses `SemanticRoleWarningKind` spellings where the concept is identical
+(architecture-context section 13), adds two new kinds specific to
+classification's broader target model.
+
+===============================================================================
+7. Backward compatibility
+===============================================================================
+
+- Existing artifacts (manifest.json, symbol-index.json, code-graph.json,
+  data-model.json, data-model-graph.json, frontend-semantic.json,
+  frontend-reachability.json) remain readable and unchanged in shape; v1.5
+  only adds new optional fields/files, never removes or renames existing ones
+  (behavior-model BEH-074).
+- classification.json absence must not break search/lookup/slice/source:
+  `classificationRoles`/`classificationRefs` are optional fields; consumers
+  must treat their absence identically to how `semanticRoles`/`artifactRefs`
+  absence is already handled today (INV-004).
+- Existing `semanticRoles`/`artifactRefs` behavior is untouched - no v1.5
+  code writes to those fields; they remain exclusively owned by the v1.1/v1.2
+  producers and their existing enrichment functions.
+- search/lookup/slice/source must degrade gracefully when classification data
+  is missing: same output shape as v1.1-v1.4, just without the new optional
+  fields populated (no null-shaped placeholders, no errors).
+- v1.5 does not require v1.6 planner packets to exist or be implemented;
+  classification.json and the compact refs are consumable standalone through
+  the existing four commands, matching the request brief's non-goal
+  boundary.
+
+===============================================================================
+8. Command integration contract for later batches (not implemented here)
+===============================================================================
+
+- search: result entries for classified targets should include a compact
+  classification summary (role + editGuidance + readiness + uncertainty),
+  sourced from `classificationRoles` on the matched node/symbol - mirrors how
+  search already surfaces `semanticRoles` today.
+- lookup: node output should include the full `classificationRoles` /
+  `classificationRefs` compact arrays already present on the node object (no
+  special-casing needed beyond what already happens for `semanticRoles` -
+  architecture-context section 8), plus an option to resolve `classificationRefs`
+  into full `ClassificationEntry` detail from classification.json on request.
+- slice: must preserve `classificationRoles`/`classificationRefs` fields on
+  every node in the slice output, same as it is expected to already preserve
+  `semanticRoles`/`artifactRefs` (architecture-context section 9, listed as
+  an assumption to confirm in Batch 2).
+- source: rendered source output should surface classification warnings and
+  edit guidance inline near the retrieved source text, following the existing
+  pattern already used for semantic evidence annotations
+  (src/source/renderSourceOutput.ts, src/source/findExactMatches.ts -
+  architecture-context section 10).
+
+None of the above is implemented in this batch; this section exists so Batch
+2's producer/artifact work and a later command-integration batch share one
+settled contract.
+
+Status: complete

@@ -1,0 +1,232 @@
+Artifact: ArchitectureContextPacket
+Batch: v1.5.0 Batch 1
+Source: .my-dev-kit-orchestrator/v1.5.0/batch-1/reports/architecture-context-retrieval-report.txt
+
+1. What subsystem currently owns semantic analyzer registration?
+`src/indexing/runSemanticAnalyzers.ts` (function `runSemanticAnalyzers`, plus
+`replaceAnalyzerStatuses` for updating manifest analyzer entries). It is invoked
+from the index pipeline (src/indexing/runIndexCommand.ts) and is the single place
+that runs the registered semantic analyzers (data-model derived roles today, plus
+frontend/frontend-reachability). A v1.5 classification analyzer should register
+here as an additional analyzer step, not a separate pipeline.
+
+2. Where does manifest artifact registration happen?
+`src/indexing/manifestTypes.ts` defines the manifest shape (`IndexManifest`,
+`IndexSemanticArtifacts`, `IndexAnalyzerId`, `IndexAnalyzerStatusValue`,
+`IndexAnalyzerArtifactRef`, `IndexAnalyzerStatus`). `IndexManifest.analyzers` is an
+array of `IndexAnalyzerStatus` (id, status, version, schemaVersion, artifacts,
+warningCount, errorCount, summary). `IndexManifest.semanticArtifacts` is a fixed-
+shape object (`dataModel`, `dataModelGraph`, `modelViewLineage`,
+`frontendSemantic`, `frontendReachability?`) pointing at top-level artifact file
+paths. New artifacts register by (a) adding an entry to `analyzers[]` with a new
+`IndexAnalyzerId` value (the type already allows arbitrary strings via
+`(string & {})`, so no type-breaking change is required to add
+`'classification'`), and (b) either extending `IndexSemanticArtifacts` with an
+optional new field or relying solely on the generic `IndexAnalyzerArtifactRef[]`
+already present per-analyzer-status (which already supports name/path/artifactKind
+without a manifest type change).
+
+3. Where does stale artifact refresh/removal happen?
+`src/indexing/managedArtifacts.ts` defines filename constants
+(`INDEX_MANIFEST_FILENAME`, `SYMBOL_INDEX_FILENAME`, `CODE_GRAPH_FILENAME`,
+`CALL_GRAPH_FILENAME`, `DATA_MODEL_FILENAME`, `DATA_MODEL_GRAPH_FILENAME`,
+`FRONTEND_SEMANTIC_FILENAME`, `FRONTEND_REACHABILITY_FILENAME`) and three lists:
+`REQUIRED_INDEX_ARTIFACT_FILENAMES`, `OPTIONAL_INDEX_ARTIFACT_FILENAMES`
+(currently call-graph, data-model, data-model-graph, frontend-semantic,
+frontend-reachability), and `MANAGED_INDEX_ARTIFACT_FILENAMES` (the union). The
+index command's managedArtifacts.removed list in its JSON summary (observed
+directly in this batch's own `index --call-graph --json` run) confirms this list
+drives which stale files get deleted/rewritten on each index run. A v1.5
+classification artifact filename constant belongs in this file, added to
+`OPTIONAL_INDEX_ARTIFACT_FILENAMES`.
+
+4. Where are semanticRoles and artifactRefs produced today?
+`src/semantics/buildSemanticRolesFromDataModel.ts` builds `SemanticRole[]` /
+`SemanticArtifactRef[]` per symbol (`SemanticMetadataForSymbol`,
+`buildSemanticRolesFromDataModel`) from the data-model artifact. The result is a
+`ReadonlyMap<symbolId, SemanticMetadataForSymbol>` that two enrichment functions
+then apply:
+- `src/semantics/applySemanticRolesToCodeGraph.ts` (`applySemanticRolesToCodeGraph`)
+  maps over `CodeGraph.nodes`, and for nodes with `kind === 'symbol'`, spreads
+  `{ semanticRoles, artifactRefs }` from the matched map entry (keyed by
+  `node.id`) onto the node. Non-symbol nodes (files, etc.) are untouched.
+- `src/semantics/applySemanticRolesToSymbolIndex.ts`
+  (`applySemanticRolesToSymbolIndex`) performs the equivalent enrichment on
+  `SymbolIndex.files[].symbols[]` (`GraphSymbolRecord`), keyed by
+  `buildSymbolId(file.path, symbol.name)`.
+This is the exact "compact refs embedded into existing artifacts" pattern the
+v1.5 contract needs to either reuse or mirror.
+
+5. Where are data-model semantic roles produced today?
+`src/data-model/*` (types.ts, buildDataModelArtifact.ts,
+buildDataModelFromIndex.ts, buildDataModelGraph.ts, dataModelGraphTypes.ts,
+normalizedTypes.ts, readDataModelArtifacts.ts, writeDataModelArtifacts.ts,
+dataModelArtifactPaths.ts) build data-model.json / data-model-graph.json.
+`buildSemanticRolesFromDataModel.ts` (in src/semantics/) then derives
+`SemanticRole` entries from that artifact - this is the "typescript-model-analyzer"
+/ "model-view-lineage-analyzer" source in `SemanticRoleSource`.
+
+6. Where are frontend semantic artifacts produced today?
+`src/frontend/` (frontendTypes.ts, frontendAnalyzer.ts / `RunFrontendAnalyzerOptions`
+/ `RunFrontendAnalyzerResult`) produces frontend-semantic.json.
+`src/frontend-reachability/` (runFrontendReachabilityAnalyzer.ts,
+buildReachabilitySearchResult.ts) produces frontend-reachability.json (routes,
+storage keys, UI reachability edges) - this is the v1.3 analyzer confirmed present
+and complete in the current index run.
+
+7. How does search currently index and return semantic metadata?
+`src/commands/searchCommand.ts` (`registerSearchCommand`,
+`loadOptionalFrontendArtifact`, `printTextResult`,
+`printReachabilitySearchResult`, `parseLimit`, `DEFAULT_LIMIT`/`MAX_LIMIT`) reads
+from `src/search/searchTypes.ts`. Search results are graph nodes/symbols
+(including their embedded `semanticRoles`/`artifactRefs` from code-graph.json /
+symbol-index.json), plus an optional frontend-reachability-specific result path.
+No dedicated "classification" output branch exists yet; today search surfaces
+whatever compact metadata is already embedded on the node/symbol record.
+
+8. How does lookup currently return semantic metadata?
+Lookup (used directly in this batch) returns the graph node object plus
+incoming/outgoing edges for a given node id. Since compact `semanticRoles` /
+`artifactRefs` already live on `CodeGraphNode`, a lookup on a symbol node already
+surfaces them as part of the node object today (no special-casing needed) - the
+same pattern would apply to any new compact classification fields added to
+`CodeGraphNode`.
+
+9. How does slice currently preserve metadata?
+Not directly exercised in this batch (not needed for the required questions);
+based on the `CodeGraphNode` shape being the single node representation shared by
+lookup/slice/search, and codeGraphTypes.ts being the canonical node type, slice
+output is expected to preserve whatever fields exist on `CodeGraphNode` (including
+any new classification fields), consistent with how `semanticRoles`/`artifactRefs`
+already flow through. This is a reasonable architecture inference from the shared
+type, not a directly observed slice run - flagged as an assumption.
+
+10. How does source currently propagate metadata?
+`src/source/renderSourceOutput.ts` and `src/source/findExactMatches.ts`
+(`SemanticSource`) show that `source` output already carries semantic
+source-context (e.g. semantic evidence, per tests/source/semanticEvidenceSource.spec.ts).
+Warnings and evidence are rendered alongside retrieved source text. A v1.5
+classification field would extend this existing "semantic annotation on source
+output" pattern rather than replace it.
+
+11. Where should v1.5 classification plug in?
+- Producer: new analyzer module(s) under a new `src/classification/` directory
+  (parallel to `src/semantics/`, `src/data-model/`, `src/frontend/`), registered
+  via `runSemanticAnalyzers.ts` (or a sibling pipeline step invoked alongside it)
+  so it runs after data-model/frontend/frontend-reachability artifacts exist,
+  since file/symbol classification needs their output as evidence.
+- Manifest: new `IndexAnalyzerId` value `'classification'` added to
+  `IndexAnalyzerStatus[]` in manifest.json; new artifact filename constant added
+  to `managedArtifacts.ts` and `OPTIONAL_INDEX_ARTIFACT_FILENAMES`.
+- Compact refs: mirror the existing `applySemanticRolesToCodeGraph` /
+  `applySemanticRolesToSymbolIndex` enrichment pattern for embedding compact
+  classification references into code-graph.json / symbol-index.json.
+- Command surfaces (future batches): search/lookup/slice/source all already
+  pass through `CodeGraphNode` / `GraphSymbolRecord`, so once compact fields
+  exist there, no per-command special-casing should be required for basic
+  visibility; only summarization/formatting logic needs updates.
+
+12. Should classification be a detailed separate artifact plus compact refs in existing artifacts?
+Yes. This matches the existing project pattern exactly: data-model.json /
+frontend-semantic.json / frontend-reachability.json are each a detailed,
+independently-versioned artifact, and only a compact projection
+(`semanticRoles`/`artifactRefs`) is embedded into code-graph.json /
+symbol-index.json. v1.5 classification should follow the same two-tier shape:
+one detailed `classification.json` (or similar) artifact, plus compact
+classification refs embedded into the existing graph/index artifacts.
+
+13. What existing extension points should be reused?
+- `IndexAnalyzerId` (extensible string type - safe to add 'classification')
+- `IndexAnalyzerStatus` / `IndexAnalyzerArtifactRef` (generic; no change needed
+  to register a new analyzer's artifacts)
+- `OPTIONAL_INDEX_ARTIFACT_FILENAMES` / `MANAGED_INDEX_ARTIFACT_FILENAMES` list
+  pattern in managedArtifacts.ts
+- The `applySemanticRolesToCodeGraph` / `applySemanticRolesToSymbolIndex`
+  map-by-id enrichment pattern
+- `SemanticEvidenceRef` / `SemanticRoleWarning` / `SemanticRoleConfidence` shapes
+  as a template for the new evidence/uncertainty model (see classification
+  contract for whether to literally reuse or mirror these types)
+- `SemanticRoleName` already defines ~11 of v1.5's ~13 planned symbol/type
+  categories (canonical-type, database-model [as 'database-model'], artifact-type,
+  projection-type, view-model, ui-only-state, persistence-adapter, route-handler,
+  client-component, server-component, test-fixture). Only generated-file and
+  configuration-file (file-level, not symbol-level, concepts) are new.
+
+14. What files are likely candidates for future (Batch 2+) implementation?
+- New: src/classification/classificationTypes.ts, buildClassification*.ts,
+  applyClassificationToCodeGraph.ts, applyClassificationToSymbolIndex.ts
+- Modify: src/indexing/manifestTypes.ts (IndexAnalyzerId addition, optional
+  IndexSemanticArtifacts field), src/indexing/managedArtifacts.ts (new filename
+  constant + list entries), src/indexing/runSemanticAnalyzers.ts (register new
+  analyzer step), src/graph/codeGraphTypes.ts (new compact field on
+  CodeGraphNode), src/symbol-index/types.ts (new compact field on
+  GraphSymbolRecord), src/commands/searchCommand.ts / lookup / slice / source
+  command modules (surface classification in output - deferred per contract,
+  Section 8 below)
+
+15. What tests should be extended or added later?
+tests/semantics/semanticRoleEnrichment.spec.ts and
+tests/semantics/semanticTypes.spec.ts (pattern reference for classification
+enrichment/type tests), tests/index/manifestArtifactRegistry.spec.ts and
+tests/index/manifestAnalyzerRegistry.spec.ts (pattern reference for manifest
+registration tests), tests/source/semanticEvidenceSource.spec.ts (pattern
+reference for evidence propagation through source output). New spec files under
+tests/classification/ are expected in Batch 2+, following the existing
+tests/<subsystem>/ convention.
+
+16. What docs should be updated later?
+docs/ROADMAP.md already has a "## Version 1.5.0" section (lines 370-421) that
+should be reconciled/expanded once implementation lands, not rewritten now.
+docs/ARCHITECTURE.md and docs/COMMANDS.md are likely candidates for later
+updates describing the classification artifact and its command surface. Not
+touched in this batch (explicit non-goal).
+
+17. What files or subsystems should be avoided?
+- Do not modify docs/*.md, package.json, or any release/publish tooling in this
+  batch (explicit non-goal; also several of these are already mid-edit in the
+  working tree from a prior uncommitted v1.4.0 session and must not be
+  conflated with v1.5.0 planning work).
+- Do not touch src/frontend-reachability or src/data-model producers themselves;
+  v1.5 classification is a consumer/aggregator of their output, not a
+  replacement.
+- Do not create a second search/lookup/slice/source-like command surface;
+  classification must surface through the existing four commands only.
+
+18. Risks and compatibility concerns:
+- Field-name collision risk: reusing `semanticRoles`/`artifactRefs` directly for
+  file-level classification would conflate v1.1/v1.2 data-model-derived symbol
+  semantics with v1.5's broader file/layer classification (e.g. a config file has
+  no "data model role" but does have a classification). The classification
+  contract (Stage 4) must decide a distinct field name for this reason, matching
+  the task's explicit instruction not to silently overload existing semantic
+  fields.
+- `SemanticRoleName`/`SemanticRoleSubtype` already overlap ~85% with v1.5's
+  planned symbol-level categories; the contract should decide whether v1.5
+  reuses `SemanticRoleName` values by reference (avoiding vocabulary drift) or
+  defines a fully independent enum. Recommendation to carry into Stage 4: reuse
+  the existing category vocabulary/names for symbol-level classification where
+  categories already exist, and add file-level-only categories
+  (generated-file, configuration-file, docs, etc.) as new values or a new
+  parallel taxonomy - final decision deferred to the classification contract.
+- Manifest analyzer/artifact registration is already generic enough that adding
+  a new analyzer is additive and low-risk to v1.1-v1.4 behavior, provided
+  `OPTIONAL_INDEX_ARTIFACT_FILENAMES` handling and stale-removal logic treat the
+  new filename the same way existing optional artifacts are treated.
+- Command integration (search/lookup/slice/source surfacing classification) is
+  explicitly deferred past this batch; no risk introduced here since no command
+  code changes in this batch.
+
+Context adequacy statement: context sufficient with listed assumptions
+
+Listed assumptions:
+1. Slice-command metadata preservation (Section 9) was inferred from the shared
+   CodeGraphNode type rather than a directly observed `slice` command run; low
+   risk since slice is documented to operate on the same graph node objects as
+   lookup/search.
+2. The route/storage/reachability-specific semantic vocabulary for
+   frontend-reachability facts (beyond confirming the analyzer's existence) was
+   not fully enumerated; not required for any Batch 1 contract decision.
+3. docs/ARCHITECTURE.md, docs/COMMANDS.md, and docs/GRAPH_SCHEMA.md were not
+   opened in this batch; docs/ROADMAP.md's existing v1.5.0 section was
+   sufficient corroboration for the behavior model and classification contract,
+   and no conflicting direction was found there.
