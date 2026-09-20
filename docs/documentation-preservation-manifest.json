@@ -185,7 +185,13 @@
         "Dependency-upgrade impact review", "Pre-pull-request evidence convergence",
         "Greenfield-to-first-feature handoff", "Commit-to-commit regression localization",
         "Critical-journey contract bank", "Security-sensitive user flow",
-        "Release-candidate runtime assurance", "Field failure to ecosystem improvement"
+        "Release-candidate runtime assurance", "Field failure to ecosystem improvement",
+        "Command-surface compatibility map", "Audit finding to dependency-safe repair",
+        "Runtime failure to source candidate to correlated context",
+        "Real stage-context experiment from current workflow evidence",
+        "Interaction-heavy runtime evidence plus visual acceptance",
+        "Android static ownership plus Android security validation",
+        "Final-candidate multi-tool evidence packet"
       ]
     },
     "requiredBoundaryKeywords": [
