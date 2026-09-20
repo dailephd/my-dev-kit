@@ -118,7 +118,7 @@ Repository context (from my-dev-kit, local static analysis only):
 Instructions: use only the context above; do not assume behavior outside it.
 ```
 
-For the full set of retrieval workflows (index → manifest → artifacts, search → lookup → slice → source with continuation and local expansion, data-model/lineage, context capsules, graph-diff, and Android/Kotlin/Java retrieval), see [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
+For the full set of retrieval workflows (index → manifest → artifacts, search → lookup → slice → source with continuation and local expansion, data-model/lineage, context capsules, graph-diff, and Android/Kotlin/Java retrieval), see [docs/WORKFLOWS.md](docs/WORKFLOWS.md). For whole-ecosystem composition across my-dev-kit, Orchestrator, Lab, and Observer, including command-surface-derived handoffs, see [docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md).
 
 ## Graph visualization example
 
