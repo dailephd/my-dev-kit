@@ -499,6 +499,8 @@ Exit 0 means a valid comparison, including one with differences. Graph equality 
 
 The [ecosystem workflow guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) is the sole home for cross-repository recipes. This section defines how to use this command reference without importing foreign syntax.
 
+The command-by-command compatibility audit is in [section 9.15 of the ecosystem guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#915-command-surface-compatibility-map). It distinguishes direct file/CLI handoffs, programmatic adapters, manual synthesis, complementary evidence, and look-alike artifacts that are **not** directly compatible. Use that classification before wiring my-dev-kit output into another ecosystem tool.
+
 - Use my-dev-kit for static evidence. Use the target project's commands for builds, databases, test execution, browser actions, and application startup.
 - Use `my-dev-kit-orchestrator` for its own eight-command lifecycle. `DIRECT_IMPLEMENTATION` and `FULL_STAGE_CONTEXT` are workflow policies, not its `--mode` values.
 - Use installed `my-dev-kit-lab security validate` and `my-dev-kit-lab audit` where supported. Put its global `--workspace` before the command. Do not run Lab's source-checkout npm aliases in the target project.
