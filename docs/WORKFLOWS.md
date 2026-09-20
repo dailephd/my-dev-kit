@@ -2,7 +2,7 @@
 
 This guide contains ordered workflows for **my-dev-kit itself**. [COMMANDS.md](COMMANDS.md) owns exact syntax, selectors, defaults, outputs, and command limitations. [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) owns detailed artifact contracts.
 
-For coding-agent execution, full-stack features, runtime verification, Orchestrator stages, Lab assurance, release coordination, recovery, and ecosystem feedback, use the single [Ecosystem development workflows](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) guide in this repository. Companion repositories link there rather than keep another copy. No private local ecosystem text file or undocumented synchronization command is required.
+For coding-agent execution, full-stack features, runtime verification, Orchestrator stages, Lab assurance, release coordination, recovery, and ecosystem feedback, use the single [Ecosystem development workflows](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) guide in this repository. Its [command-surface compatibility map](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#915-command-surface-compatibility-map) records additional cross-tool combinations discovered by matching actual command inputs/outputs, including combinations not named in the individual workflow guides. Companion repositories link there rather than keep another copy. No private local ecosystem text file or undocumented synchronization command is required.
 
 ## Overview
 
