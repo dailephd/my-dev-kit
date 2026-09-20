@@ -441,6 +441,158 @@ Inspect the run result and canonical artifacts: `artifacts/tutorial.webm`, reque
 
 **Output:** assertion-backed runtime evidence plus synchronized human-facing tutorial artifacts. The WebM is reviewable documentation, not proof by itself. Tutorial generation does not replace project tests, Observer acceptance contracts, security validation, or release authorization.
 
+## 9.15 Command-surface compatibility map
+
+This section comes from a command-by-command review of all four current public surfaces, not only their named workflow guides. Use these five compatibility classes when composing tools:
+
+- **Direct file or CLI handoff:** the downstream command explicitly accepts the upstream file/artifact type.
+- **Programmatic adapter:** the downstream library contract accepts a mapped form of the upstream evidence, but there is no direct CLI pipe.
+- **Manual synthesis:** a coding agent or human must author the downstream contract/report from the upstream evidence.
+- **Complementary evidence:** both tools inspect the same candidate but neither consumes the other's artifact.
+- **Not directly compatible:** similar-looking paths or JSON are different contracts and must not be connected without a documented adapter.
+
+### my-dev-kit to Orchestrator
+
+- **Manual synthesis:** `my-dev-kit context --out ... --audit-out ...` produces the raw capsule/audit evidence referenced by Orchestrator's implementation/test supplemental packet and retrieval-report contracts. Orchestrator does not accept a raw context capsule as a native artifact. The agent populates the fixed supplemental wrappers, preserving producer identity, freshness, adequacy, truncation, responsibility mappings, and the raw evidence paths.
+- **Manual synthesis:** `search`, `lookup`, `slice`, and `source` evidence can support `reports/architecture-context-retrieval-report.txt` and `artifacts/architecture-context-packet.txt`. One top-ranked result is not a completed architecture packet.
+- **Manual synthesis:** `graph-diff --before ... --after ... --json` is useful verification/judge evidence for changed ownership and relationships, but Orchestrator has no direct graph-diff ingestion command.
+
+### my-dev-kit to Observer
+
+- **Programmatic adapter:** Observer's released `deriveRuntimeStaticCorrelations(...)` / `attachRuntimeStaticCorrelations(...)` library surface accepts plain caller-supplied static candidate records. A small adapter may map my-dev-kit file/symbol IDs and evidence references into those records. Do not pass raw my-dev-kit search/lookup/context JSON directly.
+- **Manual synthesis:** Observer target IDs, test IDs, visible text, or failure diagnostics can become my-dev-kit `search --ui`, `source --contains`, ordinary `search --query`, or exact-node follow-up questions. This is a runtime-to-source investigation, not automatic causal ownership.
+- **Not directly compatible:** Observer `view --context-file` accepts exactly one Observer `BoundedAgentContextArtifact` schema value. It does **not** accept a my-dev-kit context capsule or retrieval audit.
+
+### Observer to Orchestrator
+
+- **Direct programmatic handoff:** Orchestrator's `consumeBoundedObserverEvidence(...)` mirrors and validates Observer's `my-frontend-observer/bounded-agent-context` schema `1.0.0`. The producer artifact can therefore cross this boundary without inventing a second schema.
+- This is a **library-to-library boundary**, not an Orchestrator CLI command. Orchestrator does not launch Observer.
+- **Manual synthesis:** Observer `check [baseline] --json` is concise final-candidate runtime acceptance evidence for Orchestrator verification/final reporting. No current Orchestrator CLI parses that JSON automatically.
+
+### my-dev-kit and Orchestrator to Lab
+
+- **Programmatic adapter:** Lab's released stage-context experiment support can consume explicit my-dev-kit context-capsule/retrieval-audit paths and Orchestrator `WorkflowInstructionPacket` inputs through its documented `v043StrategyInputs` / `v043RunAssurance` programmatic configuration.
+- There are **no installed CLI flags** that turn arbitrary live capsule/audit/packet paths into that six-strategy stage-context experiment. Use the programmatic experiment path or a separately authorized source-checkout adapter.
+- **Direct experiment ownership:** Lab's `context-strategy-comparison` plugin owns the `raw-full-file` versus `my-dev-kit-guided` comparison. A caller should not pre-run both strategies and then relabel unrelated outputs as one Lab experiment.
+- **Direct command injection exists only where documented:** `my-dev-kit-lab demo final ... --kit-command <command>` accepts an explicit my-dev-kit-compatible command for the final-demo pipeline. The generic installed `experiment run` command does not expose `--kit-command`.
+
+### Lab to my-dev-kit
+
+- **Manual synthesis:** JSON/text findings from `audit --types code-rot|security` and `security validate` can supply file paths, categories, or candidate surfaces for my-dev-kit `search`, `lookup`, `slice`, and bounded `source` inspection.
+- A Lab code-rot finding is a candidate, not deletion authority. Use graph/source evidence to check consumers and ownership before changing code.
+- A Lab security finding is not a source owner. Use my-dev-kit to find validators, boundaries, callers, data paths, manifest/component evidence, or tests before repair.
+
+### Lab to Observer
+
+- **Direct file-type handoff:** Lab tutorial runs can emit PNG screenshots. A deliberately selected tutorial screenshot can be supplied to Observer `import-reference <image-file>`, because that command accepts PNG/JPEG/WebP input. It becomes only an imported external reference until explicitly approved and supplied with selected requirements/bindings.
+- This is useful for source-to-target extraction or UI reconstruction when the tutorial state is the selected visual precedent. The screenshot does not transfer tutorial assertions, behavior, authentication, or application state.
+- **Not directly compatible:** Lab tutorial manifests, experiment reports, security reports, and audit reports are not Observer observation/comparison/contract artifacts.
+- **Not directly compatible:** Lab's gallery currently does not consume tutorial manifests, and its `--visualizations` inputs refer to Lab visualization-demo artifacts rather than arbitrary my-dev-kit graph SVG/DOT directories or Observer evidence roots.
+
+### Observer to Lab
+
+- **Complementary evidence:** run Observer project acceptance and Lab security/audit against the same exact candidate revision when both runtime presentation and risk evidence matter.
+- **Not directly compatible:** Lab report renderers, plot generators, galleries, and experiment commands do not generically ingest Observer observation/comparison/evaluation artifacts.
+- A future experiment may deliberately model Observer evidence, but do not claim that integration until a registered experiment/adapter exists.
+
+### Orchestrator to Lab and Observer
+
+- **Manual synthesis:** Orchestrator's verification/final-report stages may reference Lab security/audit outputs and Observer project-check results. They remain independent authorities with their own pass/block semantics.
+- **Not directly compatible:** `my-dev-kit-orchestrator export` is a human/coding-agent handoff document, not a machine input accepted by my-dev-kit, Lab, or Observer.
+- **Complementary evidence:** an Orchestrator `harden`, `repair`, `refactor`, `feature`, or `extraction` run can coordinate the other tools, but the coding agent executes those commands externally and records exact evidence.
+
+### Same-target convergence
+
+Several of the most useful compositions have no artifact pipe at all:
+
+- my-dev-kit indexes and maps the exact source candidate.
+- Observer evaluates the exact browser-visible candidate.
+- Lab audits or security-validates the exact filesystem candidate.
+- Orchestrator, when selected, governs lifecycle/readiness around those independent results.
+- Project tests remain the authority for executed application behavior that none of the static/browser/audit tools prove alone.
+
+Record the same Git commit/worktree identity and deterministic runtime/test data for all of them. Never combine evidence from different candidates into one PASS.
+
+## 9.16 Audit finding to dependency-safe repair
+
+**Use when:** Lab reports a code-rot or security candidate and you need to decide what actually owns the behavior before editing.
+
+1. Run Lab against the exact target, preferably with JSON plus text output. For exploratory code-rot collection, `--fail-on none` prevents the report threshold from becoming a release gate.
+2. Take the reported path/category/candidate term into my-dev-kit `search`.
+3. Resolve exact nodes with `lookup`, inspect bounded callers/dependencies with `slice`, and retrieve only the necessary source.
+4. For Android findings, add the relevant manifest/resource/component/data-flow selectors rather than treating a text hit as the owner.
+5. Decide whether the finding is confirmed, benign, unsupported, or needs a bounded repair. Use Orchestrator `repair` or `harden` only when formal staging adds value.
+6. Add the regression/security test, rerun project tests, refresh the index, rerun the same Lab check, and compare the changed static surface.
+
+**Output:** a repair justified by both the original finding and the actual source dependency/ownership evidence. A Lab candidate alone is never permission to delete or rewrite code.
+
+## 9.17 Runtime failure to source candidate to correlated context
+
+**Use when:** Observer reports a failing target/contract/reference result and a coding agent needs a small source candidate set.
+
+1. Preserve the Observer baseline, failing candidate, target IDs, diagnostics, and contract/reference result.
+2. Translate only observable identifiers into my-dev-kit questions: stable test ID, visible text, route, component term, or exact known symbol. Use `search --ui`, ordinary search, `source --contains`, then exact lookup/slice/source.
+3. Keep multiple plausible static candidates when evidence is ambiguous.
+4. When a programmatic adapter is available, map those file/symbol candidates into Observer's plain static-evidence records and call `deriveRuntimeStaticCorrelations(...)` / `attachRuntimeStaticCorrelations(...)`.
+5. Produce the Observer-owned `BoundedAgentContextArtifact` with correlated/ambiguous/unavailable status preserved.
+6. Optionally inspect that exact artifact with `my-frontend-observer view --context-file <artifact.json>`.
+7. In staged work, pass the same artifact to Orchestrator's `consumeBoundedObserverEvidence(...)` boundary and record its independent readiness result.
+
+**Output:** bounded runtime evidence plus a conservative static candidate set. "Correlated" still means evidence association, not proven causal ownership.
+
+## 9.18 Real stage-context experiment from current workflow evidence
+
+**Use when:** evaluating whether my-dev-kit context and/or Orchestrator instruction packets actually improve coding-agent work.
+
+1. Freeze one target commit and task.
+2. Generate the required my-dev-kit capsule/audit pair from that exact target.
+3. Create the relevant Orchestrator run and preserve the exact `WorkflowInstructionPacket` sidecar for the stage being studied.
+4. Use Lab's programmatic `context-strategy-comparison` stage-context configuration with explicit `v043StrategyInputs` and expectation fixture. Do not invent installed CLI flags for these artifact paths.
+5. Run matched strategies with identical target, agent, task, budgets, and acceptance criteria.
+6. Keep cold indexing/setup cost separate from warm retrieval/agent cost.
+7. Freeze each arm before cross-arm adjudication and retain partial/time-out/unavailable outcomes.
+
+**Output:** an evidence-backed comparison of actual stage-context strategies. This is the correct ecosystem path for testing context usefulness, not an informal comparison of unrelated transcripts.
+
+## 9.19 Interaction-heavy runtime evidence plus visual acceptance
+
+**Use when:** a user flow needs real clicks/fills/drags plus a stable visual/layout contract.
+
+1. Use Lab `tutorial validate` and `tutorial run` for the declared interaction sequence and assertion-backed runtime recording when its `TutorialScenarioV1` vocabulary fits the flow.
+2. Use project setup commands to establish deterministic data/state. Do not treat an Observer state declaration as setup.
+3. At the visual checkpoint, use Observer's project workflow (`init`, `capture baseline`, `check baseline --json`) for layout/contract/reference acceptance.
+4. If a tutorial screenshot is deliberately selected as a design precedent for another target, feed that PNG to Observer `import-reference`, then explicitly approve/select requirements and bindings.
+5. Use my-dev-kit to map failing runtime identifiers or tutorial locators/test IDs back to source candidates when needed.
+
+**Output:** separate behavioral-interaction proof and frontend visual/contract proof for the same candidate. Do not pipe the tutorial manifest into Observer or merge the two verdict systems.
+
+## 9.20 Android static ownership plus Android security validation
+
+**Use when:** changing Android permissions, exported components, deep links, repositories/data paths, or security-sensitive platform behavior.
+
+1. Index the Android source with my-dev-kit and retrieve the relevant `--permission`, `--android-component`, `--android-route`, resource, role, Compose, and bounded data-flow/test evidence.
+2. Run Lab `security validate --profile android` against the same target. Android defaults remain static unless explicit Gradle/external-tool/network operations are requested.
+3. For exploratory auditing, use Lab `audit --types security --android`; preserve the underlying security report.
+4. Reconcile each Lab finding with the actual my-dev-kit owner/dependency evidence before editing.
+5. Run the project's real Android tests/build checks required by the change. If explicitly authorized and useful, select Lab's closed Android Gradle operations, but do not assume they replace project CI.
+6. Refresh static evidence and rerun the same Lab profile after the repair.
+
+**Output:** Android change evidence that combines architecture/ownership with security checks while keeping each tool's limits explicit.
+
+## 9.21 Final-candidate multi-tool evidence packet
+
+**Use when:** a coding agent, reviewer, or release gate needs one concise record of a final candidate without inventing a universal ecosystem verdict.
+
+Collect, for one exact source revision:
+
+- Git diff and relevant project test/build results.
+- my-dev-kit current index identity plus focused lookup/slice/source evidence and graph-diff when it materially explains the change.
+- Observer `check <baseline> --json` result for each required frontend journey/state.
+- Lab security/audit reports required by risk or release policy.
+- Orchestrator status/check/judge/final eligibility when staged execution was selected.
+
+The implementation/final report references these artifacts and records each independent semantic result. A required failure remains a failure. A missing required result remains missing. There is no command that averages them into one score.
+
 ## 10. Version, patch, extraction, and coordinated work
 
 ### Feature-version workflow
