@@ -24,7 +24,7 @@ The recipes in this guide are agent compositions. A successful execution must su
 - Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
 - Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).
 
-The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.6`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
+The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.8`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
 
 ## 2. Responsibility and execution boundaries
 
@@ -84,7 +84,7 @@ npx @dailephd/my-frontend-observer --help
 
 Verify versions and command-specific help from the actual installation before using an example. A local dependency can determine what `npx` resolves. Record that identity rather than assuming `npx` always downloads the newest release.
 
-Lab `security validate` and `audit` are installed CLI commands in the reviewed `0.4.6` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
+Lab `security validate`, `audit`, and the `tutorial` family are installed CLI commands in the reviewed `0.4.8` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
 
 ```powershell
 npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" audit --target "<absolute-target>" --types code-rot --format text,json --fail-on none
@@ -92,6 +92,15 @@ npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" secu
 ```
 
 Select a profile appropriate to the target. Use `--out` explicitly when separate executions need separate reports. An audit with `--fail-on none` collects findings but is not an acceptance gate by exit status. Lab's low-level `security deps`, `security package`, `security codeql`, `security semgrep`, and `security fuzz` are not installed CLI routes in this baseline. Do not invent them.
+
+Lab's installed tutorial surface is also current in this baseline:
+
+```powershell
+npx @dailephd/my-dev-kit-lab tutorial validate --scenario "<scenario.json>" --target-contract "<target-contract.json>" --json
+npx @dailephd/my-dev-kit-lab tutorial run --scenario "<scenario.json>" --target-contract "<target-contract.json>" --out "<run-root>" --json
+```
+
+`tutorial validate` is contract validation and does not require Chromium. `tutorial run` requires a compatible locally installed Chromium; Lab does not download the browser automatically. A successful tutorial produces assertion-backed runtime evidence plus synchronized `tutorial.webm`, requested screenshots, SRT/VTT subtitles, Markdown, and `tutorial-manifest.json`. Product-specific scenarios and demo targets remain owned by the product repository. Video is reviewable documentation, not a substitute for passing assertions.
 
 ## 4. Selecting direct or staged execution
 
@@ -341,7 +350,7 @@ Implement the connected slice, run database/API/client tests, inspect changed ev
 
 **Input:** verified scaffold and first slice. Reuse the completed run, source index, environment commands, tests, and approved behavior. Confirm architecture and project identity, then create a normal bounded feature contract and execute the vertical slice. Refresh only affected architecture domains.
 
-**Output:** continuation without respecifyinging the project or treating the scaffold as a finished app. This is manual coordination, not the deferred native greenfield handoff implementation.
+**Output:** continuation without respecifying the project or treating the scaffold as a finished app. This is manual coordination, not the deferred native greenfield handoff implementation.
 
 ### 9.10 Commit-to-commit regression localization
 
@@ -374,6 +383,63 @@ Intersect changed static candidates with affected runtime targets, test hypothes
 Where the question fits Lab's existing experiment contracts, use `experiment list`, `experiment describe`, and `experiment run` or its documented library strategy inputs. Otherwise use a separately authorized project test/experiment adapter. Lab does not automatically ingest arbitrary feedback Markdown or arbitrary full-stack edit campaigns.
 
 Compare matched baselines and candidates with identical tasks, revisions, agent settings, budgets, and acceptance criteria. Keep independent sessions, frozen arm reports, and neutral adjudication. Separate cold-index setup from warm retrieval effort. **Output:** an improvement proposal supported by reproduction, regression tests, measured cost, and replay of the original failure. Report raw counts and limitations, not invented savings or a universal winner.
+
+### 9.15 Verification-only or proof-only evidence
+
+**Input:** a bounded claim about behavior that should be verified without a planned production-code change. Define the exact verification responsibility first. Use current repository evidence and project-owned verification commands, and use Orchestrator proof-only only when the formal lifecycle, readiness, judge, and final-report gates add value.
+
+When formal staging is useful:
+
+```powershell
+npx @dailephd/my-dev-kit-orchestrator start --proof-only --verification-responsibility artifacts/proof.txt "verify the existing behavior"
+```
+
+The responsibility path must be safe and explicit, and the proof artifact must satisfy the current Orchestrator proof contract, including the exact `Proof result: PASS` evidence when required. An empty Git diff never implies proof-only automatically. A verification task that discovers a real implementation defect must return to an authorized implementation or repair workflow rather than silently edit production code under proof-only authority.
+
+**Output:** reproducible evidence for the declared responsibility with no unnecessary source change. Report the exact revision, commands, proof artifact, skips, and remaining limits. Proof-only does not bypass repository-context readiness, lifecycle, judge integrity, or final-report eligibility.
+
+### 9.16 Existing Android or Compose feature, repair, refactor, or hardening
+
+**Input:** an existing Android/Kotlin/Java project, a bounded behavior change or defect, actual module/source roots, and project-owned build/test commands. Use my-dev-kit Android and Compose evidence to locate current ownership before editing. Select the Orchestrator mode by intent: `feature` for changed behavior, `repair` for a reproduced divergence, `refactor` for behavior-preserving structure, and `harden` for guards and failure handling.
+
+Typical bounded retrieval includes:
+
+```powershell
+npx @dailephd/my-dev-kit index --root . --src app/src/main/kotlin --src app/src/main/java --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --composable HomeScreen --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --android-role view-model --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --test-tag login_button --json
+npx @dailephd/my-dev-kit lookup --index .my-dev-kit --android-component com.example.MainActivity --json
+npx @dailephd/my-dev-kit slice --index .my-dev-kit --node "<returned-viewmodel-node-id>" --depth 2 --include-data-flow --include-tests --json
+```
+
+Use the returned Activity, Composable, ViewModel, Repository, navigation, resource, manifest, Gradle, and test evidence only where supported and applicable. Preserve ambiguity instead of guessing ownership. Static Android evidence does not prove merged manifests, Gradle resolution, runtime resource selection, dependency injection, navigation, rendering, or test execution.
+
+Implement through the established owners and run the target project's real Gradle/build/unit/instrumented checks as required by the task. my-dev-kit does not run Gradle. Orchestrator's `android-compose` identifier is a greenfield starter profile, not a Lab security profile. Lab's security profile is `android`, and its default Android validation starts no Gradle, external-tool, or network operation unless explicitly requested. Observer is a browser/frontend evidence tool and is not a native Android UI runtime verifier.
+
+**Output:** a verified Android change grounded in current static ownership plus project-owned runtime/build/test evidence, with optional Lab Android assurance when the task requires it.
+
+### 9.17 Assertion-backed browser tutorial generation
+
+**Input:** a verified local browser workflow, a product-owned declarative `TutorialScenarioV1`, and a matching trusted `TutorialTargetContractV1`. Use this after the behavior to demonstrate is already implemented and stable enough to document. Product repositories own product-specific demo pages, selectors, scenarios, and target contracts; Lab owns the generic tutorial runtime.
+
+Validate before execution:
+
+```powershell
+npx @dailephd/my-dev-kit-lab tutorial validate --scenario "<scenario.json>" --target-contract "<target-contract.json>" --json
+```
+
+Then run with a compatible locally installed Chromium:
+
+```powershell
+npx @dailephd/my-dev-kit-lab tutorial run --scenario "<scenario.json>" --target-contract "<target-contract.json>" --out "<run-root>" --json
+```
+
+The current declarative action vocabulary includes `goto`, `click`, `fill`, `press`, `hover`, element-to-element `drag`, `wait-for`, and locator-anchored `pointer-click`/`pointer-drag` using normalized fraction coordinates. Use the scenario's assertions as the acceptance evidence; visible cursor/callout/highlight presentation and the resulting video do not become application state.
+
+Inspect the run result and canonical artifacts: `artifacts/tutorial.webm`, requested `screenshots/`, `artifacts/tutorial.srt`, `artifacts/tutorial.vtt`, `artifacts/tutorial.md`, and `artifacts/tutorial-manifest.json`. A tutorial succeeds only when required actions/assertions and required artifacts succeed and cleanup remains acceptable. Missing Chromium is an explicit unavailable/failure result with setup guidance; Lab does not silently download it.
+
+**Output:** assertion-backed runtime evidence plus synchronized human-facing tutorial artifacts. The WebM is reviewable documentation, not proof by itself. Tutorial generation does not replace project tests, Observer acceptance contracts, security validation, or release authorization.
 
 ## 10. Version, patch, extraction, and coordinated work
 
