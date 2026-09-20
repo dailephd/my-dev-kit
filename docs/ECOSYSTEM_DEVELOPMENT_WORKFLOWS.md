@@ -513,6 +513,25 @@ Several of the most useful compositions have no artifact pipe at all:
 
 Record the same Git commit/worktree identity and deterministic runtime/test data for all of them. Never combine evidence from different candidates into one PASS.
 
+### Pairwise coverage checklist
+
+The command-surface audit explicitly checked every directed pair among the four tools:
+
+- **my-dev-kit → Orchestrator:** manual wrapper/synthesis around raw capsule/audit and architecture evidence.
+- **Orchestrator → my-dev-kit:** manual query/request derivation from the active stage, supplemental template, blocker, or correction target. No Orchestrator artifact is a direct my-dev-kit CLI input.
+- **my-dev-kit → Observer:** programmatic static-candidate adapter for runtime/static correlation, plus manual source lookup from known runtime identifiers.
+- **Observer → my-dev-kit:** manual runtime-target/test-id/text/route-to-static investigation. No Observer artifact is a direct my-dev-kit CLI input.
+- **my-dev-kit → Lab:** Lab-owned guided-retrieval experiments and explicit `demo final --kit-command`; stage-context capsule/audit consumption is programmatic rather than a generic installed-file flag.
+- **Lab → my-dev-kit:** manual finding-to-owner/dependency investigation.
+- **Orchestrator → Observer:** external execution coordinated by the coding agent; Orchestrator does not launch Observer.
+- **Observer → Orchestrator:** direct bounded-agent-context wire-contract consumption at the library boundary; concise `check --json` remains manually cited.
+- **Orchestrator → Lab:** programmatic `WorkflowInstructionPacket` / stage-context experiment inputs, plus ordinary external assurance execution.
+- **Lab → Orchestrator:** manual verification/final-report references to security/audit/experiment evidence; no generic report importer.
+- **Observer → Lab:** complementary same-candidate evidence only in the current public surfaces; no generic Observer-artifact experiment/report input.
+- **Lab → Observer:** direct image-file compatibility for deliberately selected tutorial screenshots into `import-reference`; other Lab artifacts are not Observer inputs.
+
+This pairwise inventory is the completeness check for the current four-tool public surfaces. Re-run it whenever a tool adds a command, artifact family, installed CLI route, or public library handoff.
+
 ## 9.16 Audit finding to dependency-safe repair
 
 **Use when:** Lab reports a code-rot or security candidate and you need to decide what actually owns the behavior before editing.
