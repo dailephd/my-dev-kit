@@ -1,0 +1,407 @@
+Artifact: BehaviorModel
+Workflow mode: feature
+Batch: v1.5.0 Batch 1
+Inputs used: request-brief.txt, architecture-context-packet.txt
+
+Behavior summary:
+v1.5.0 adds a conservative, static, evidence-backed classification layer over
+files, symbols, types, and artifacts already known to my-dev-kit's index. It
+does not create new retrieval commands; it enriches the existing detailed-
+artifact + compact-ref pattern (already used by data-model/frontend semantics)
+with classification, edit guidance, readiness, risk, evidence, and uncertainty,
+then that data becomes visible through the existing search/lookup/slice/source
+commands (in later batches). This section defines WHAT the system must do,
+not HOW.
+
+===============================================================================
+1. Externally visible behavior
+===============================================================================
+
+BEH-001: When a coding agent runs search/lookup/slice/source (future batches)
+on a file, symbol, type, or artifact that has been classified, the output may
+include a classification label, edit guidance, readiness, risk labels, evidence,
+and an uncertainty level for that target.
+
+BEH-002: Edit guidance must be worded as an actionable instruction, not just a
+label - e.g. "avoid-primary-edit-target: this file is a database model; edit
+the corresponding view-model instead" rather than a bare enum value with no
+reasoning. The `reason` field (see classification-contract) carries this text;
+edit-guidance values themselves stay short, stable enum-like strings.
+
+BEH-003: Uncertainty must always be visible alongside a classification, never
+hidden. When evidence is weak or ambiguous, the output must say so explicitly
+(uncertainty level + warnings) rather than presenting a guess as fact.
+
+BEH-004: This should reduce wrong-layer edits: an agent inspecting a
+`database-model` symbol when asked to change UI-facing behavior should see
+guidance suggesting it look at the `view-model` or `projection-type` instead,
+if one is known.
+
+BEH-005: When classification data does not exist for a target (not yet
+classified, or classification analyzer not run), existing command output must
+be unchanged from v1.1-v1.4 behavior - no missing-field errors, no broken
+output shape.
+
+===============================================================================
+2. Internal supporting behavior
+===============================================================================
+
+BEH-010: Classification is static: derived only from source text, the existing
+index graph, and existing semantic/data-model/frontend artifacts. No runtime
+execution, no browser, no database connection.
+
+BEH-011: Classification is conservative: a target is only assigned a specific
+category when static evidence supports it. Ambiguous or insufficient evidence
+must not be rounded up to a confident category - it goes to `uncertain`
+edit guidance and a lower uncertainty tier (see classification-contract for
+exact tier names).
+
+BEH-012: Classification must not claim runtime behavior it cannot observe
+(e.g. "this component is reachable by an authenticated user in production").
+It may reuse existing static reachability facts already produced by the v1.3
+frontend-reachability analyzer as evidence, but must not fabricate new runtime
+claims beyond what that analyzer already establishes statically.
+
+BEH-013: Classification must not create a parallel retrieval system. All
+classification output is consumed through the existing four commands
+(search, lookup, slice, source) and the existing two-tier artifact model
+(detailed artifact + compact refs in code-graph.json/symbol-index.json),
+per architecture-context-packet.txt section 12.
+
+===============================================================================
+3. Classification categories
+===============================================================================
+
+File-level and symbol/type-level categories included in v1.5.0 (per the
+task's required list and corroborated by docs/ROADMAP.md's existing
+"## Version 1.5.0" section):
+
+- canonical-type
+- artifact-type
+- database-model
+- projection-type
+- view-model
+- ui-only-state
+- test-fixture
+- persistence-adapter
+- route-handler
+- client-component
+- server-component
+- generated-file
+- configuration-file
+
+Architecture-context finding (see architecture-context-packet.txt section 13):
+11 of these 13 already exist as `SemanticRoleName` values today
+(canonical-type, database-model, artifact-type, projection-type, view-model,
+ui-only-state, persistence-adapter, route-handler, client-component,
+server-component, test-fixture). Only generated-file and configuration-file
+are new, file-level-only concepts with no existing symbol-role equivalent.
+
+BEH-020: For symbol/type-level categories that already exist as
+`SemanticRoleName` values, v1.5 classification should reuse the same category
+name (not invent a synonym), to avoid vocabulary drift between v1.1/v1.2/v1.4
+semantic roles and v1.5 classification. This is a behavior requirement (naming
+consistency), not the storage-shape decision (deferred to
+classification-contract.txt).
+
+BEH-021: generated-file and configuration-file apply at the file level, not
+the symbol level, since a whole file (not an individual exported symbol) is
+what is generated or configuration.
+
+Project-role classifications to evaluate for inclusion vs. deferral (per task
+instructions):
+- command-handler: INCLUDE. Directly relevant to "avoid editing the wrong
+  layer" - my-dev-kit's own src/commands/*.ts are exactly the kind of file an
+  agent should not confuse with a data-layer file. Architecture context found
+  concrete examples (searchCommand.ts).
+- analyzer: INCLUDE. Same reasoning; src/semantics/*, src/data-model/*,
+  src/frontend/* producer modules are analyzer files, high wrong-layer-edit
+  risk if confused with their own output artifacts.
+- graph-renderer: DEFER to Batch 2+ implementation detail. No concrete
+  "graph-renderer" file family was found distinct from source/renderSourceOutput.ts
+  during architecture context; treat as a possible subtype of a broader
+  renderer category if evidence supports it in Batch 2, not a v1.5.0 Batch 1
+  contract commitment.
+- report-renderer: DEFER, same reasoning as graph-renderer.
+- validator: INCLUDE. Static, file-identifiable role; low risk to define now.
+- adapter: INCLUDE as a generalization of persistence-adapter already in the
+  required list; keep persistence-adapter as the concrete category and treat
+  bare "adapter" as a possible future generalization, not a separate v1.5.0
+  category, to avoid two overlapping category names.
+- fixture: already covered by test-fixture in the required list; do not add
+  a second bare "fixture" category.
+- public-docs: INCLUDE as a docs-level category, since docs/ROADMAP.md and
+  similar files are exactly the kind of file an agent should not treat as a
+  primary code-edit target.
+- internal-planning-docs: INCLUDE. Architecture context confirms this repo
+  already has planning-artifact directories (.my-dev-kit-orchestrator/,
+  formerly .my-dev-kit-v11-planning/) that are structurally different from
+  public docs/*.md and should be labeled read-only-reference /
+  internal-planning-docs, not edited during feature work.
+
+BEH-022: command-handler, analyzer, validator, public-docs, and
+internal-planning-docs are included in v1.5.0's category set. graph-renderer
+and report-renderer are deferred pending concrete evidence in Batch 2. adapter
+and fixture are not added as separate categories because they duplicate
+persistence-adapter and test-fixture respectively.
+
+===============================================================================
+4. Edit guidance behavior
+===============================================================================
+
+Candidate edit guidance values (final naming confirmed in
+classification-contract.txt):
+- safe-primary-edit-target
+- inspect-before-edit
+- avoid-primary-edit-target
+- read-only-reference
+- generated-do-not-edit
+- test-only
+- docs-only
+- uncertain
+
+BEH-030: Every classified target must receive exactly one edit guidance value.
+If evidence does not clearly support any other value, the target receives
+`uncertain` - there is no "no guidance" state.
+
+BEH-031: generated-file classification always maps to
+`generated-do-not-edit` edit guidance (deterministic pairing - not evidence-
+dependent once generated-file is established).
+
+BEH-032: database-model and persistence-adapter default toward
+`inspect-before-edit` or `avoid-primary-edit-target` rather than
+`safe-primary-edit-target`, reflecting that these are typically not the
+correct layer for UI/behavior-facing changes - exact default mapping is an
+implementation decision for Batch 2, constrained by this conservative
+direction.
+
+===============================================================================
+5. Readiness and risk behavior
+===============================================================================
+
+Readiness/risk labels (task-required list, matches docs/ROADMAP.md's existing
+v1.5.0 section for the first 7):
+- ready
+- needs-more-context
+- risky-assumption
+- wrong-layer-risk
+- unreachable-ui-risk
+- requires-test-validation
+- requires-browser-validation
+- generated-file-risk
+- public-contract-risk
+- migration-risk
+
+BEH-040: `unreachable-ui-risk` and `requires-browser-validation` reuse the
+existing v1.3 frontend-reachability analyzer's static reachability facts as
+evidence where available (architecture-context section 6, 12) - they must not
+require new runtime/browser instrumentation to compute.
+
+BEH-041: `requires-test-validation` is assigned when a target has no
+associated test evidence discoverable in the existing index/tests directory,
+not when tests merely exist but weren't executed (classification is static;
+it cannot run tests).
+
+BEH-042: readiness/risk labels are additive (a target can carry multiple risk
+labels) but exactly one primary readiness state (`ready`, `needs-more-context`,
+or `risky-assumption`) should be assigned as a top-level readiness field,
+separate from the risk label list - final field shape decided in
+classification-contract.txt.
+
+===============================================================================
+6. Evidence behavior
+===============================================================================
+
+BEH-050: Every classification must carry evidence explaining:
+- evidence source (which analyzer or static pattern produced it)
+- file path
+- symbol or node ID when available
+- matched static pattern (e.g. "extends TypeORM Entity", "imported only by
+  test files", "filename matches *.generated.ts")
+- artifact reference when available (e.g. which data-model.json entry backs
+  a database-model classification)
+- confidence or uncertainty level
+- reason (human-readable explanation)
+
+INV-001: A classification with `certain`-tier confidence (see uncertainty
+model below) must always have at least one non-empty evidence entry. A
+classification can never be `certain` with zero evidence.
+
+BEH-050 -> classification-contract "Evidence model" section (trace forward).
+
+===============================================================================
+7. Uncertainty model
+===============================================================================
+
+Candidate uncertainty tiers (final naming in classification-contract.txt):
+- certain
+- likely
+- possible
+- unknown
+
+BEH-060: Ambiguous cases must not be promoted to `certain`. If two categories
+are both statically plausible for a target with comparable evidence strength,
+the target's uncertainty tier must be `possible` or lower, and both candidate
+categories (or the ambiguity itself) should be visible via warnings.
+
+BEH-061: Unsupported runtime behavior is never asserted; if a classification
+would require runtime proof, its uncertainty tier is `unknown` or the claim is
+omitted entirely rather than guessed.
+
+INV-002: uncertainty tier and edit guidance must be consistent: `unknown`
+uncertainty must not pair with `safe-primary-edit-target` or
+`avoid-primary-edit-target` edit guidance - it pairs with `uncertain` edit
+guidance only.
+
+===============================================================================
+8. Behavior to preserve (from architecture context + task constraints)
+===============================================================================
+
+BEH-070: Local-first - no LLM calls, no network calls from my-dev-kit itself,
+no database connections, no source file edits, ever, at any confidence level.
+
+BEH-071: Deterministic artifacts - given the same source tree and index,
+classification output must be byte-identical across runs (same ordering, same
+field values). This matches the "preserve deterministic ordering" requirement
+carried into the pseudocode packet.
+
+BEH-072: manifest.json remains the single authoritative artifact registry;
+classification does not introduce a second registry.
+
+BEH-073: Separate detailed semantic artifacts remain separate; compact
+metadata remains compact. Classification follows the same two-tier shape
+already used by data-model/frontend semantics (architecture-context section
+12), it does not merge into a single monolithic artifact.
+
+BEH-074: v1.1 (data-model), v1.2 (frontend semantic), v1.3 (frontend-
+reachability / route+storage+UI reachability), and v1.4 (source continuation/
+expansion) behavior is unchanged when classification is absent, and unchanged
+in its own field shapes when classification is present (classification adds
+new fields; it does not rewrite semanticRoles/artifactRefs values produced by
+existing analyzers).
+
+===============================================================================
+9. State variables, inputs, events, derived values (conceptual, not implementation)
+===============================================================================
+
+Inputs: source tree under --src, existing index artifacts (symbol-index.json,
+code-graph.json, data-model.json, data-model-graph.json, frontend-semantic.json,
+frontend-reachability.json), manifest.json analyzer/artifact registry.
+
+State variables (per classification target): category assignment(s), edit
+guidance, readiness, risk label set, evidence list, uncertainty tier, warnings.
+
+Events: index run triggers classification analyzer run (if registered);
+classification analyzer reads upstream artifacts, computes classification
+entries, emits detailed artifact, embeds compact refs, updates manifest.
+
+Derived values: edit guidance and readiness/risk are derived FROM category +
+evidence + uncertainty, not set independently by the analyzer author - this
+keeps the mapping auditable and conservative (see BEH-031, BEH-032, INV-002
+for concrete derivation constraints).
+
+===============================================================================
+10. Invariants
+===============================================================================
+
+INV-001: certain-tier classification requires >=1 evidence entry (see above).
+INV-002: unknown uncertainty pairs only with `uncertain` edit guidance (see above).
+INV-003: generated-file always pairs with generated-do-not-edit (BEH-031).
+INV-004: classification artifact absence never changes existing command output
+  shape or values (BEH-005, BEH-072-074) - graceful degradation is mandatory,
+  not best-effort.
+INV-005: classification output ordering is deterministic given identical input
+  (BEH-071).
+
+===============================================================================
+11. Valid / invalid / boundary / empty / error / pending states
+===============================================================================
+
+Valid states: a target has 0 or more category assignments (0 is valid - not
+every file/symbol needs a category, e.g. a trivial re-export), exactly one
+edit guidance, exactly one primary readiness state, 0 or more risk labels,
+0 or more evidence entries (0 only allowed outside `certain` tier per INV-001),
+exactly one uncertainty tier.
+
+Invalid states: a `certain`-tier entry with zero evidence (INV-001 violation);
+an `unknown`-tier entry with `safe-primary-edit-target` guidance (INV-002
+violation); a generated-file entry without generated-do-not-edit (INV-003
+violation).
+
+Boundaries / partitions: file-level classification vs. symbol/type-level
+classification are separate partitions (a file can be `configuration-file`
+while a symbol inside a non-configuration file is `database-model` - they are
+independent target kinds, not a strict parent/child override).
+
+Empty states: a project or file with no statically classifiable content
+(e.g. a pure re-export barrel file) produces zero classification entries for
+that target, not a forced `unknown` entry - absence of an entry is itself
+meaningful and distinct from an explicit `unknown` entry.
+
+Error / pending states: if the classification analyzer fails or is skipped,
+manifest.json analyzer status must reflect `failed` or `skipped` per the
+existing `IndexAnalyzerStatusValue` enum ('not-run' | 'complete' | 'partial' |
+'failed' | 'skipped'), consistent with how other analyzers report status
+today - no new status vocabulary is introduced.
+
+===============================================================================
+12. External contracts / state transitions
+===============================================================================
+
+TRN-001: index run (no prior classification artifact) -> classification
+analyzer runs -> classification.json (or chosen name) created -> manifest
+analyzer status set to complete/partial/failed -> compact refs embedded in
+code-graph.json/symbol-index.json.
+
+TRN-002: index run (existing classification artifact present, source
+unchanged relevant to a target) -> deterministic re-computation produces an
+identical entry (BEH-071) -> no meaningful diff.
+
+TRN-003: index run (source changed for a classified target) -> re-
+classification -> stale entry replaced, not appended (matches existing stale-
+artifact refresh pattern per architecture-context section 3).
+
+External contracts: classification.json schema version, manifest.json
+analyzer/artifact registration shape, compact-ref field shape on
+CodeGraphNode/GraphSymbolRecord - all finalized in classification-contract.txt
+(Stage 4), not in this behavior model.
+
+===============================================================================
+13. Behavior intentionally changed vs. v1.1-v1.4
+===============================================================================
+
+None at the command-output level in this batch (no command code changes in
+Batch 1). At the artifact level, v1.5.0 intentionally ADDS a new optional
+artifact and new optional compact-ref fields; it does not change the meaning
+or values of any existing field produced by v1.1-v1.4 analyzers.
+
+===============================================================================
+14. Non-goals
+===============================================================================
+
+- v1.6 planner packets / context capsules (explicit ROADMAP.md v1.6.0 scope -
+  classification is the schema v1.6 will consume, not part of v1.6 itself)
+- LLM semantic similarity
+- runtime React visibility proof
+- browser execution
+- database introspection
+- plugin architecture
+- schema v2 migration
+- broad language/framework expansion (v1.9)
+- pre-release/publish workflows
+
+===============================================================================
+15. Unresolved design questions (carried into classification-contract.txt)
+===============================================================================
+
+- Exact field name for compact classification refs (new field vs. extending
+  semanticRoles/artifactRefs) - architecture context recommends a distinct
+  field name to avoid overloading existing v1.1/v1.2 semantics (architecture-
+  context-packet.txt section 18).
+- Exact artifact filename (classification.json vs layer-classification.json).
+- Exact enum value spelling for edit-guidance/readiness/uncertainty tiers
+  (candidates listed above, final names in classification-contract.txt).
+- Whether graph-renderer/report-renderer should be added as classification
+  categories in a later batch once concrete file evidence is found.
+
+Status: complete
