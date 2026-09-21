@@ -24,7 +24,7 @@ The recipes in this guide are agent compositions. A successful execution must su
 - Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
 - Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).
 
-The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.4.8`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
+The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.5.0`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
 
 ## 2. Responsibility and execution boundaries
 
@@ -84,7 +84,7 @@ npx @dailephd/my-frontend-observer --help
 
 Verify versions and command-specific help from the actual installation before using an example. A local dependency can determine what `npx` resolves. Record that identity rather than assuming `npx` always downloads the newest release.
 
-Lab `security validate`, `audit`, and the `tutorial` family are installed CLI commands in the reviewed `0.4.8` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
+Lab `security validate`, `audit`, the `tutorial` family, and experiment discovery/execution are installed CLI commands in the reviewed `0.5.0` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
 
 ```powershell
 npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" audit --target "<absolute-target>" --types code-rot --format text,json --fail-on none
@@ -92,6 +92,20 @@ npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" secu
 ```
 
 Select a profile appropriate to the target. Use `--out` explicitly when separate executions need separate reports. An audit with `--fail-on none` collects findings but is not an acceptance gate by exit status. Lab's low-level `security deps`, `security package`, `security codeql`, `security semgrep`, and `security fuzz` are not installed CLI routes in this baseline. Do not invent them.
+
+The installed Lab experiment surface includes:
+
+```powershell
+my-dev-kit-lab experiment list
+my-dev-kit-lab experiment describe --experiment warm-index-reuse
+my-dev-kit-lab experiment run --experiment warm-index-reuse [options]
+```
+
+The `--kit-command <command>` option is specific to `warm-index-reuse`; it is not a context-strategy-comparison option. The registered Lab plugins are `context-strategy-comparison` and `warm-index-reuse`.
+
+The warm-index experiment prepares one my-dev-kit index per benchmark-project group and reuses it across that group's tasks. Each task also receives a matched raw-full-file baseline. Deterministic fake-agent correctness and token evidence are produced; fake-agent token evidence is simulated harness telemetry, not provider billing telemetry. Real Codex/Claude warm-index campaigns remain future Lab scope.
+
+Warm-index executions produce bounded `report.json`, `report.txt`, and `report.html` outputs with the warm-index evidence section. Plot generation supports four warm-index families: amortized index cost, raw versus retrieved context size, fake-agent correctness, and cumulative fake-agent token usage.
 
 Lab's installed tutorial surface is also current in this baseline:
 
@@ -474,7 +488,7 @@ This section comes from a command-by-command review of all four current public s
 - **Programmatic adapter:** Lab's released stage-context experiment support can consume explicit my-dev-kit context-capsule/retrieval-audit paths and Orchestrator `WorkflowInstructionPacket` inputs through its documented `v043StrategyInputs` / `v043RunAssurance` programmatic configuration.
 - There are **no installed CLI flags** that turn arbitrary live capsule/audit/packet paths into that six-strategy stage-context experiment. Use the programmatic experiment path or a separately authorized source-checkout adapter.
 - **Direct experiment ownership:** Lab's `context-strategy-comparison` plugin owns the `raw-full-file` versus `my-dev-kit-guided` comparison. A caller should not pre-run both strategies and then relabel unrelated outputs as one Lab experiment.
-- **Direct command injection exists only where documented:** `my-dev-kit-lab demo final ... --kit-command <command>` accepts an explicit my-dev-kit-compatible command for the final-demo pipeline. The generic installed `experiment run` command does not expose `--kit-command`.
+- **Direct command injection exists only where documented:** `my-dev-kit-lab demo final ... --kit-command <command>` accepts an explicit my-dev-kit-compatible command for the final-demo pipeline, and `experiment run --experiment warm-index-reuse --kit-command <command>` accepts the warm-index-specific command. Context-strategy-comparison does not expose `--kit-command`.
 
 ### Lab to my-dev-kit
 
@@ -521,7 +535,7 @@ The command-surface audit explicitly checked every directed pair among the four 
 - **Orchestrator → my-dev-kit:** manual query/request derivation from the active stage, supplemental template, blocker, or correction target. No Orchestrator artifact is a direct my-dev-kit CLI input.
 - **my-dev-kit → Observer:** programmatic static-candidate adapter for runtime/static correlation, plus manual source lookup from known runtime identifiers.
 - **Observer → my-dev-kit:** manual runtime-target/test-id/text/route-to-static investigation. No Observer artifact is a direct my-dev-kit CLI input.
-- **my-dev-kit → Lab:** Lab-owned guided-retrieval experiments and explicit `demo final --kit-command`; stage-context capsule/audit consumption is programmatic rather than a generic installed-file flag.
+- **my-dev-kit → Lab:** Lab-owned guided-retrieval and warm-index experiments plus explicit `demo final --kit-command`; stage-context capsule/audit consumption is programmatic rather than a generic installed-file flag.
 - **Lab → my-dev-kit:** manual finding-to-owner/dependency investigation.
 - **Orchestrator → Observer:** external execution coordinated by the coding agent; Orchestrator does not launch Observer.
 - **Observer → Orchestrator:** direct bounded-agent-context wire-contract consumption at the library boundary; concise `check --json` remains manually cited.
@@ -658,7 +672,9 @@ Lab contributor self-validation remains a separate checkout workflow. `npm test`
 
 ### Experiments and reporting
 
-The registered experiment plugin is `context-strategy-comparison`. Inspect it before selecting cases and strategies. CLI strategies and programmatic stage-context inputs are distinct. The fixed context-integrity smoke is a historical/frozen-fixture developer workflow, not a configurable arbitrary-run replay CLI.
+The registered experiment plugins are `context-strategy-comparison` and `warm-index-reuse`. Inspect the selected plugin before choosing cases and strategies. For warm-index-reuse, `experiment run --kit-command <command>` supplies the warm-index-specific kit command; context-strategy-comparison does not accept that option. CLI strategies and programmatic stage-context inputs are distinct. The fixed context-integrity smoke is a historical/frozen-fixture developer workflow, not a configurable arbitrary-run replay CLI.
+
+Warm-index-reuse is a Lab-owned experiment/reporting capability: Lab evaluates the experiment, audits/security checks, and reports, while my-dev-kit remains the index/search producer and the ecosystem does not make warm-index-reuse a mandatory orchestration workflow.
 
 Preserve partial agent outcomes, timeouts, usage limits, target immutability, missing metrics, and unmatched evidence. Use `report render`, `plots generate`, and `gallery build` only with the artifact families they support. Do not feed raw Observer or workflow-feedback files into a Lab renderer and assume compatibility.
 
