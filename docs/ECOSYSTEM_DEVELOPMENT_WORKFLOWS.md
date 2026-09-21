@@ -6,6 +6,8 @@ This is the single cross-repository workflow guide for **my-dev-kit**, **my-dev-
 
 Use this guide to select and combine workflows. Use each tool's own command and contract documentation for exact syntax and artifact schemas. Documentation ownership does not change runtime ownership: my-dev-kit remains a static evidence producer, not an orchestrator, browser, test runner, or security scanner.
 
+For dependency-aware future sequencing, shared contract governance, proposed version coordination, compatibility certification, and the gap-to-milestone plan, see [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md). The coordinated roadmap is planning authority for cross-repository sequencing only; repository-local `ROADMAP.md` files remain normative for their own version scope until explicitly reconciled.
+
 This guide consolidates the former Orchestrator ecosystem guide, the web/full-stack vertical-slice workflow, and the cross-tool recipes below. It preserves onboarding, greenfield work, version batches, patches, coordinated changes, documentation reconciliation, security, release, recovery, and handoff responsibilities. It does not change any roadmap or publish a new product capability.
 
 ### Evidence labels
