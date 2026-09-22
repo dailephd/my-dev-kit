@@ -61,7 +61,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 ### Flags
 
 - `--root <path>`: project root.
-- `--src <path>`: required source root relative to the project root. Repeat for additional source/test roots.
+- `--src <path>`: required source root relative to the project root. Repeat for additional source/test roots. Supported `.test.`/`.spec.` files beneath a selected root are indexed like other supported files; `.d.ts` declaration files are excluded.
 - `--language <language>`: `typescript`, `javascript`, or `python`. Kotlin and Java are discovered by extension, not `--language kotlin` or `--language java`.
 - `--out <dir>`: output directory, default `.my-dev-kit`, relative to `--root` when not absolute.
 - `--exclude <path-or-name>`: additional directory name or relative path prefix. Repeat as needed. This is not a glob expression.

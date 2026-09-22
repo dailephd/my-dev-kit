@@ -32,7 +32,14 @@ export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
  */
 export const DEFAULT_IGNORED_DIRECTORY_PREFIXES = ['.my-dev-kit-'] as const
 
-const DEFAULT_FILE_EXCLUDE_PATTERNS = ['.d.ts', '.test.', '.spec.']
+/**
+ * Filename patterns excluded from core indexing by default. Only declaration
+ * files are excluded: supported `.test.`/`.spec.` files beneath an explicitly
+ * selected source root are ordinary indexed files (v1.12.4). Part of the
+ * incremental-cache configuration fingerprint so a cache built under a
+ * different exclusion policy is never reused as equivalent.
+ */
+export const DEFAULT_FILE_EXCLUDE_PATTERNS = ['.d.ts'] as const
 const SAMPLE_LIMIT = 20
 const LARGEST_FILE_LIMIT = 10
 

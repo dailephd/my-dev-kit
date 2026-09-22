@@ -8,6 +8,7 @@ import { buildIndex, type BuildIndexProgressEvent, type FileExtractionMeta } fro
 import type { CallGraph, SymbolIndex } from '../symbol-index/types.js'
 import { buildIndexManifest } from './buildIndexManifest.js'
 import {
+  DEFAULT_FILE_EXCLUDE_PATTERNS,
   DEFAULT_IGNORED_DIRECTORY_NAMES,
   DEFAULT_IGNORED_DIRECTORY_PREFIXES,
   discoverSourceFiles,
@@ -359,6 +360,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     language: options.language ?? null,
     defaultIgnoredDirectoryNames: [...DEFAULT_IGNORED_DIRECTORY_NAMES],
     defaultIgnoredDirectoryPrefixes: [...DEFAULT_IGNORED_DIRECTORY_PREFIXES],
+    defaultFileExcludePatterns: [...DEFAULT_FILE_EXCLUDE_PATTERNS],
     androidEvidenceFingerprint: androidResult.evidenceFingerprint,
     androidGradleEvidenceFingerprint: androidGradleResult.evidenceFingerprint,
     androidManifestEvidenceFingerprint: androidManifestResult.evidenceFingerprint,
@@ -428,7 +430,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   if (cacheRead.metadata.configFingerprint !== configFingerprint) {
     return fullRebuild(
       'incremental-full-config-changed',
-      'Index configuration changed (source roots, --exclude values, --call-graph, --language, default ignore rules, or detected Android project/module/source-set evidence).'
+      'Index configuration changed (source roots, --exclude values, --call-graph, --language, default ignore or file-exclusion rules, or detected Android project/module/source-set evidence).'
     )
   }
 

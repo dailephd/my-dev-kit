@@ -307,7 +307,7 @@ The `manifest.json` will include a `frontendSemantic` artifact path when TSX/JSX
 
 The frontend analyzer infrastructure supports extracting test facts from test files: `describe`/`test`/`it` block titles, setup/teardown hooks, locator expressions, and route-like strings. Test facts are included in `frontend-semantic.json` alongside component facts when present.
 
-**Current limitation:** The base indexer excludes files matching `.test.` and `.spec.` patterns from default file discovery. Test files must be placed in a source root that the indexer processes and must not match these exclusion patterns. The `view --graph frontend-test` graph view produces output only when test files reach `frontend-semantic.json`.
+Supported `.test.`/`.spec.` files are indexed like any other supported file when they are beneath a selected `--src` root (for example `--src tests`, or colocated tests under `--src src`); `.d.ts` declaration files remain excluded, and `--exclude` and the default ignored directories still apply. The `view --graph frontend-test` graph view produces output only when test files reach `frontend-semantic.json`, so include the test roots you want analyzed. Indexing test files is static evidence only and does not prove the tests run or pass.
 
 ## Exact source retrieval
 
