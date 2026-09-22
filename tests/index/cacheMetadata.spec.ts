@@ -18,6 +18,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules', 'dist'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      defaultFileExcludePatterns: ['.d.ts'],
       androidEvidenceFingerprint: 'no-android-evidence',
       androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
@@ -37,6 +38,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      defaultFileExcludePatterns: ['.d.ts'],
       androidEvidenceFingerprint: 'no-android-evidence',
       androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
@@ -51,6 +53,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      defaultFileExcludePatterns: ['.d.ts'],
       androidEvidenceFingerprint: 'no-android-evidence',
       androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
@@ -69,6 +72,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      defaultFileExcludePatterns: ['.d.ts'],
       androidEvidenceFingerprint: 'no-android-evidence',
       androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
@@ -89,6 +93,7 @@ describe('computeConfigFingerprint', () => {
       language: null,
       defaultIgnoredDirectoryNames: ['node_modules'],
       defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      defaultFileExcludePatterns: ['.d.ts'],
       androidEvidenceFingerprint: 'no-android-evidence',
       androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
       androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
@@ -100,6 +105,27 @@ describe('computeConfigFingerprint', () => {
     const b = computeConfigFingerprint({ ...base, sourceRoots: ['src', 'lib'] })
 
     expect(a).not.toBe(b)
+  })
+
+  it('changes when the default file exclusion policy changes (v1.12.4 test-file admission)', () => {
+    const base = {
+      sourceRoots: ['src', 'tests'],
+      excludePatterns: [],
+      callGraphEnabled: false,
+      language: null,
+      defaultIgnoredDirectoryNames: ['node_modules'],
+      defaultIgnoredDirectoryPrefixes: ['.my-dev-kit-'],
+      androidEvidenceFingerprint: 'no-android-evidence',
+      androidGradleEvidenceFingerprint: 'no-android-gradle-evidence',
+      androidManifestEvidenceFingerprint: 'no-android-manifest-evidence',
+      androidResourcesEvidenceFingerprint: 'no-android-resources-evidence',
+      androidNavigationXmlEvidenceFingerprint: 'no-android-navigation-evidence',
+      androidTestEvidenceFingerprint: 'no-android-project',
+    }
+    const legacyPolicy = computeConfigFingerprint({ ...base, defaultFileExcludePatterns: ['.d.ts', '.test.', '.spec.'] })
+    const currentPolicy = computeConfigFingerprint({ ...base, defaultFileExcludePatterns: ['.d.ts'] })
+
+    expect(legacyPolicy).not.toBe(currentPolicy)
   })
 })
 

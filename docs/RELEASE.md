@@ -197,7 +197,7 @@ Graph visualization docs must also match the implemented renderer. Confirm:
 - DOT output is described as not requiring Graphviz
 - SVG and PNG output are described as requiring a local Graphviz installation
 - node/edge family styling and any legend described in the docs match the current renderer output
-- the frontend-test indexing limitation (`.test.`/`.spec.` files excluded from default file discovery) is stated wherever `view --graph frontend-test` is documented
+- the frontend-test indexing scope (`.test.`/`.spec.` files are indexed only when beneath a selected `--src` root) is stated wherever `view --graph frontend-test` is documented
 
 Confirm the expected artifacts are created.
 

@@ -1,13 +1,11 @@
 /**
  * v1.10.1 Batch 3: bounded, conservative discovery of existing test infrastructure.
  *
- * IMPORTANT architectural note: the existing indexer (`discoverSourceFiles.ts`)
- * hard-excludes any path containing ".test." or ".spec." from the symbol index
- * and code graph by default (`DEFAULT_FILE_EXCLUDE_PATTERNS`) — this is a
- * pre-existing Batch 1/1.10.0 boundary, not something Batch 3 introduces. That
- * means the code graph can never contain a `*.spec.ts`/`*.test.ts` node, so
- * related-test discovery cannot be implemented purely via graph edges (one
- * endpoint would never exist). Instead this module performs a bounded,
+ * Architectural note: this module was written while the indexer
+ * (`discoverSourceFiles.ts`) excluded ".test."/".spec." paths from the symbol
+ * index and code graph. Since v1.12.4 supported test files beneath a selected
+ * source root are core-indexed, but this discovery path is kept as-is for
+ * compatibility: it does not depend on test files being indexed. It performs a bounded,
  * read-only directory walk restricted to the index's own `sourceRoots`
  * (reusing `discoverSourceFiles.ts`'s ignored-directory list rather than a
  * second one) to find test-shaped files, then does a lightweight, bounded,

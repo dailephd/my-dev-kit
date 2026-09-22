@@ -96,6 +96,13 @@ export interface ConfigFingerprintInput {
   defaultIgnoredDirectoryNames: string[]
   defaultIgnoredDirectoryPrefixes: string[]
   /**
+   * Default filename exclusion patterns applied by source discovery
+   * (v1.12.4), so an index cached under an older policy (e.g. one that
+   * excluded `.test.`/`.spec.` files) triggers a full rebuild instead of
+   * being reused as configuration-equivalent.
+   */
+  defaultFileExcludePatterns: string[]
+  /**
    * Fingerprint of Android project/module/source-set detection facts
    * (v1.9.0 Batch 1), so a Gradle/manifest edit that changes what was
    * statically detected invalidates the cache even though those files live
@@ -167,6 +174,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     language: input.language,
     defaultIgnoredDirectoryNames: [...input.defaultIgnoredDirectoryNames].sort(),
     defaultIgnoredDirectoryPrefixes: [...input.defaultIgnoredDirectoryPrefixes].sort(),
+    defaultFileExcludePatterns: [...input.defaultFileExcludePatterns].sort(),
     androidEvidenceFingerprint: input.androidEvidenceFingerprint,
     androidGradleEvidenceFingerprint: input.androidGradleEvidenceFingerprint,
     androidManifestEvidenceFingerprint: input.androidManifestEvidenceFingerprint,

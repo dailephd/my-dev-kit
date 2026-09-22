@@ -1378,6 +1378,40 @@ The goal is to make final role readiness depend on the evidence genuinely requir
 - capsule and retrieval-audit readiness facts remain in parity and deterministic across repeated runs
 - focused context tests, the full test suite, typecheck, build, documentation checks, retrieval regression benchmarks, package verification, and cross-platform validation pass before release preparation
 
+## Version 1.12.4
+
+**Status: published.**
+
+Version 1.12.4 is a bounded corrective patch for core test-file indexing and retrieval. Supported `.test.` / `.spec.` files beneath explicitly selected `--src` roots now participate in the ordinary core indexing and retrieval surfaces instead of being dropped by a default filename-pattern exclusion. Earlier roadmap text that describes test-path files as excluded from the core symbol index/code graph (for example the v1.10.1 test-infrastructure design) records the behavior of those versions.
+
+### Corrected behavior
+
+- supported test-shaped files (`.test.` / `.spec.` with `.ts`, `.tsx`, `.js`, `.jsx`, or another registry-supported extension) beneath a selected source root are core-index eligible; only `.d.ts` declaration files remain excluded by default filename pattern
+- indexed test files receive ordinary `file:<path>` nodes, symbols, and import edges in the existing symbol index and code graph, with no test-specific namespace or second graph
+- `search` consumes that normal indexed evidence (file paths, declared symbols, and existing frontend-test titles) through its existing relevance ranking
+- exact `source --contains "<literal>" --path "<test-path-prefix>"` matches text in indexed test files
+- `lookup --node file:<test-path>` and `slice --node file:<test-path>` operate through the existing graph
+- the incremental configuration fingerprint includes the default file-exclusion policy, so a cache written under the earlier policy is rebuilt as a configuration change rather than reused as equivalent
+- frontend-test semantic extraction (`describe`/`it`/`test` titles, UI strings, locators) runs over the newly indexed test files once per file, as enrichment rather than as the admission mechanism
+- the bounded `testInfrastructureDiscovery` directory walk remains available as compatibility/additional discovery for test infrastructure and related-test evidence
+
+### Compatibility boundaries
+
+- user `--exclude` values and default ignored directories remain authoritative; no scanning outside the selected roots
+- no new command, flag, artifact family, graph, or artifact schema major; existing artifact types gain a broader producer file set
+- no search ranking redesign, production-first raw-search preference, or arbitrary raw full-text search engine; raw search rank remains relevance evidence, not edit ownership
+- no context role, owner-selection, or adequacy redesign
+- indexing a test file is static evidence only; no test execution, runtime proof, or coverage claim
+- no v1.13.0 Android benchmark, example, or workflow-documentation work and no v1.14.0 Python classifier expansion
+
+### Acceptance criteria
+
+- test files beneath a selected root appear in `symbol-index.json` and as `file:<path>` code-graph nodes; `.d.ts`, user-excluded, and default-ignored files do not
+- `source --contains --path`, `lookup`, `slice`, and `search` return evidence for indexed test files, while production-file results remain unchanged
+- a cache built under the earlier exclusion policy triggers a full configuration-changed rebuild, followed by a no-change run
+- frontend-test semantic entries and graph node identities remain unique; context test-implementation output remains grounded in the changed production surface
+- an external five-file reproduction against a real multi-root repository passes indexing, lookup, slice, exact-text, and file-source checks for all five previously unreachable test files
+- focused tests, the full test suite, typecheck, build, documentation checks, and retrieval regression benchmarks pass before release preparation
 
 ## Version 1.13.0
 

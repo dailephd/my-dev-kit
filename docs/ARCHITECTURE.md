@@ -122,7 +122,7 @@ This artifact is built by `data-model --trace-view`. It is separate from both th
 
 - `frontend-semantic.json` — React component facts, local component facts, prop type facts, hook blocks, event handlers, JSX regions, test blocks, locators, route strings, UI strings, and statically extracted flow relationships between them
 
-This artifact is built by the frontend analyzer during `index` when `.tsx`, `.jsx`, or test files are found. It is separate from `code-graph.json`, `data-model.json`, and `model-view-lineage.json`.
+This artifact is built by the frontend analyzer during `index` when `.tsx`, `.jsx`, or test files are found. It is separate from `code-graph.json`, `data-model.json`, and `model-view-lineage.json`. The analyzer reads the core symbol index's file set, so test files reach it because they are core-indexed beneath a selected `--src` root. Frontend-test facts enrich those files. They are not the mechanism that admits tests into the index, and they do not replace core `file:`/`symbol:` graph evidence.
 
 The frontend semantic artifact is consumed by:
 - `source --contains` (exact string search, uses symbol-index.json but enriches results with frontend context)
@@ -219,7 +219,7 @@ Raw evidence identity is now constructed once by `rawEvidenceIdentity.ts` from t
 
 The audit's additive `index.projectRoot` and `index.manifestSchemaVersion` fields remain optional at the schema-major-1 reader boundary so old audits parse without fabricated identity. They are required in every newly generated audit because the current producer always has validated manifest metadata. Before/after identities remain in the shared `freshness.comparedIdentities` contract rather than being duplicated into a second audit-only shape. The audit stays a bounded provenance/selection record, not a copy of the capsule.
 
-Batch 3's evidence-group builder (`src/context/evidenceGroups.ts`) is the internal extension point anticipated below: one bounded, additive layer that organizes Batch 2's already-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model into named, capped, auditable groups. Because the existing indexer excludes `.test.`/`.spec.` paths from the symbol index/code graph by default, `src/context/testInfrastructureDiscovery.ts` cannot rely on graph edges to find test files; it instead performs a bounded, read-only directory walk (reusing the indexer's own ignored-directory list) plus a lightweight, bounded, regex-based import-specifier scan restricted to test-shaped files — not a second index, and never code execution/evaluation of the scanned file.
+Batch 3's evidence-group builder (`src/context/evidenceGroups.ts`) is the internal extension point anticipated below: one bounded, additive layer that organizes Batch 2's already-ranked candidates, the existing selected graph neighborhood, and the existing changed-surface model into named, capped, auditable groups. Since v1.12.4, supported `.test.`/`.spec.` files beneath an explicitly selected `--src` root are ordinary core-indexed files (symbol index, code graph `file:<path>` nodes, exact-source retrieval, lookup, slice, and search); only `.d.ts` declaration files remain excluded by filename pattern. Indexing a test file is static evidence only and does not prove the test runs or passes. `src/context/testInfrastructureDiscovery.ts` predates that change and keeps its own discovery as compatibility/additional machinery that does not depend on test files being indexed: a bounded, read-only directory walk (reusing the indexer's own ignored-directory list) plus a lightweight, bounded, regex-based import-specifier scan restricted to test-shaped files — not a second index, and never code execution/evaluation of the scanned file.
 
 Batch 4 reads Batch 2/3's output rather than re-deriving evidence: `responsibilityMapping.ts` groups caller-supplied `testResponsibilityRefs` IDs against changed/focus symbols and Batch 3's evidence groups/test-infrastructure summary; `contextRoleAdequacy.ts` extends (never replaces) the existing Batch 1 `contextAdequacy` verdict with role-specific required/missing/blocking conditions; `contextFreshness.ts` classifies `fresh`/`stale`/`unknown` from whether the active index matches a supplied `beforeIndex`/`afterIndex`, with a read-only, optional, never-throwing `git rev-parse HEAD` read as informational-only evidence (the index manifest does not record a repository commit to compare it against — recording one would be a new artifact-family decision out of Batch 4 scope); `contextBudget.ts` reports declared-vs-used `ContextRequestLimits` usage and rolls up truncation (critical-first for responsibility mappings, so a required/critical drop is distinguishable from an optional/noncritical one); `fullFileFallback.ts` extends the existing source-selection/continuation model with one bounded, capped, auditable whole-file read (counts only, never content) for evidence no selected source slice covered; `contextProvenance.ts` classifies and deduplicates evidence-item provenance into stable categories without duplicating any evidence payload.
 
@@ -269,7 +269,7 @@ Workflow-catalog semantics, native context stages, prompt assembly, automatic ag
 
 ### Incremental indexing and cache layer (v1.8.0)
 
-- `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules, plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry
+- `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules/default file-exclusion patterns (the latter since v1.12.4, so a cache written while `.test.`/`.spec.` files were excluded is rebuilt rather than reused), plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry
 - `index --incremental` compares the current file set against `cache-metadata.json` and reuses unchanged files' analysis for a partial rebuild of `symbol-index.json`/`code-graph.json`; `call-graph.json` is always fully regenerated during a partial rebuild (reported via `manifest.json`'s `partialRebuildFallbackArtifacts`)
 - `index --reset-cache` deletes only `cache-metadata.json`, never other artifacts
 - `manifest.json` records `indexMode`, `cacheMode`, `cacheInvalidationReason`, and `changedFileSummary` on relevant builds
@@ -349,8 +349,8 @@ The indexing layer owns the full index run.
 Responsibilities:
 
 - resolve the project root and source roots
-- discover source files
-- apply default ignored directories and `--exclude` rules
+- discover source files beneath the selected roots, including supported `.test.`/`.spec.` files, which enter the same symbol-index, code-graph, and classification pipeline as any other supported file (no test-specific namespace or parallel index)
+- apply default ignored directories, the default `.d.ts` filename exclusion, and `--exclude` rules
 - support `--dry-run`
 - support progress diagnostics
 - dispatch files to language adapters
@@ -471,7 +471,7 @@ These layers consume index artifacts.
 
 Responsibilities:
 
-- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present. Indexed test files are ordinary candidates, and rank reflects relevance rather than production edit ownership (see [COMMANDS.md](COMMANDS.md#search))
 - `lookup`: exact node lookup with bounded neighbor expansion, semantic and classification metadata in the result, and an opt-in `--resolve-classification` flag to resolve the full `classification.json` entry
 - `source`: bounded read-only source retrieval with path containment, semantic and classification metadata propagated when present
 - `slice`: bounded graph-neighborhood extraction, semantic and classification metadata preserved on nodes

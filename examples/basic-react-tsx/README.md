@@ -88,7 +88,7 @@ DOT output does not require Graphviz. All graph views are backed by the `fronten
 
 - Generated `.my-dev-kit-index` output is local only and is not tracked.
 - This example does not require a database, network access, or Graphviz.
-- The `view --graph frontend-test` view will produce an empty graph for this example because the base indexer excludes `.test.` files from default discovery.
+- The `view --graph frontend-test` view will produce an empty graph for this example because the example contains no test files. Supported `.test.`/`.spec.` files beneath a selected `--src` root are indexed and would contribute frontend-test facts.
 
 Clean up after the workflow:
 
