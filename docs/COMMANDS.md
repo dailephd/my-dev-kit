@@ -112,7 +112,7 @@ Reported cache modes are:
 
 - `incremental-full-initial`: no usable cache, full build and cache creation.
 - `incremental-full-cache-incompatible`: incompatible/unreadable cache or required prior data, full rebuild.
-- `incremental-full-config-changed`: changed configuration fingerprint, full rebuild.
+- `incremental-full-config-changed`: changed configuration fingerprint, full rebuild. The fingerprint covers source roots, `--exclude`, `--call-graph`, `--language`, default ignore and file-exclusion rules, and detected Android evidence. A cache written under an earlier default file-exclusion policy, such as one that dropped `.test.`/`.spec.` files, is rebuilt once on this path.
 - `incremental-no-change`: reuse of existing artifacts without rewriting them.
 - `incremental-partial`: eligible structural partial rebuild.
 - `incremental-partial-with-artifact-fallback`: partial structural rebuild plus reported full artifact regeneration.
@@ -172,6 +172,8 @@ Use the installed help's closed Android role vocabulary. `compose-ui-component` 
 
 General results expose IDs, kinds, scores/match reasons, paths, and supported semantic/classification/Android metadata. Ranking helps discovery. It does not grant edit authority or prove a unique owner.
 
+Raw `search` ranks available indexed evidence by its existing relevance logic. It does not prefer production files over tests. When test roots are indexed, test files, test-declared symbols, and `describe`/`it`/`test` titles are ordinary search evidence, so a strongly matching test can rank above a production candidate. Search rank alone does not establish production edit ownership. Confirm ownership with `lookup`/`slice` relationships, classification, and `context` role-specific owner selection.
+
 ## lookup
 
 Inspect an exact graph node or a supported exact fact selector.
@@ -214,9 +216,9 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region "<indexed-reg
 - `--node <node-id>`: source-capable graph node.
 - `--file <path>` with `--symbol <name>`: exact symbol in a file.
 - `--file <path>` with `--start <n>` and `--end <n>`: bounded numbered range.
-- `--contains <string>`: exact text matches across indexed source files.
+- `--contains <string>`: exact text matches across indexed source files, including test files indexed beneath a selected `--src` root. Files outside the indexed roots are not searched.
 - `--context <n>`: bounded context around exact matches. Use installed help for its documented default and maximum.
-- `--path <prefix>`: source-path prefix filter for `--contains`.
+- `--path <prefix>`: indexed source-path prefix filter for `--contains` (for example `--path tests` or a specific test file path).
 - `--react-region <region>`: indexed React component/hook/JSX/prop-type region name, not a new arbitrary region taxonomy.
 - Web selectors: `--route <path>`, `--storage-key <key>`, `--ui <value>`.
 - Android selectors: `--android-route <route>`, `--resource <name>`, `--composable <name>`, `--android-ui <value>`, `--test-tag <tag>`.

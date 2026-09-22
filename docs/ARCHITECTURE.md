@@ -122,7 +122,7 @@ This artifact is built by `data-model --trace-view`. It is separate from both th
 
 - `frontend-semantic.json` — React component facts, local component facts, prop type facts, hook blocks, event handlers, JSX regions, test blocks, locators, route strings, UI strings, and statically extracted flow relationships between them
 
-This artifact is built by the frontend analyzer during `index` when `.tsx`, `.jsx`, or test files are found. It is separate from `code-graph.json`, `data-model.json`, and `model-view-lineage.json`.
+This artifact is built by the frontend analyzer during `index` when `.tsx`, `.jsx`, or test files are found. It is separate from `code-graph.json`, `data-model.json`, and `model-view-lineage.json`. The analyzer reads the core symbol index's file set, so test files reach it because they are core-indexed beneath a selected `--src` root. Frontend-test facts enrich those files. They are not the mechanism that admits tests into the index, and they do not replace core `file:`/`symbol:` graph evidence.
 
 The frontend semantic artifact is consumed by:
 - `source --contains` (exact string search, uses symbol-index.json but enriches results with frontend context)
@@ -269,7 +269,7 @@ Workflow-catalog semantics, native context stages, prompt assembly, automatic ag
 
 ### Incremental indexing and cache layer (v1.8.0)
 
-- `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules, plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry
+- `cache-metadata.json` — internal indexer bookkeeping (SHA-256 content hash per file, plus a config fingerprint over source roots/`--exclude`/`--call-graph`/`--language`/default-ignore rules/default file-exclusion patterns (the latter since v1.12.4, so a cache written while `.test.`/`.spec.` files were excluded is rebuilt rather than reused), plus a detected-Android-structure fingerprint since v1.9.0); not part of the public `manifest.json` artifact registry
 - `index --incremental` compares the current file set against `cache-metadata.json` and reuses unchanged files' analysis for a partial rebuild of `symbol-index.json`/`code-graph.json`; `call-graph.json` is always fully regenerated during a partial rebuild (reported via `manifest.json`'s `partialRebuildFallbackArtifacts`)
 - `index --reset-cache` deletes only `cache-metadata.json`, never other artifacts
 - `manifest.json` records `indexMode`, `cacheMode`, `cacheInvalidationReason`, and `changedFileSummary` on relevant builds
@@ -349,8 +349,8 @@ The indexing layer owns the full index run.
 Responsibilities:
 
 - resolve the project root and source roots
-- discover source files
-- apply default ignored directories and `--exclude` rules
+- discover source files beneath the selected roots, including supported `.test.`/`.spec.` files, which enter the same symbol-index, code-graph, and classification pipeline as any other supported file (no test-specific namespace or parallel index)
+- apply default ignored directories, the default `.d.ts` filename exclusion, and `--exclude` rules
 - support `--dry-run`
 - support progress diagnostics
 - dispatch files to language adapters
@@ -471,7 +471,7 @@ These layers consume index artifacts.
 
 Responsibilities:
 
-- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present. Indexed test files are ordinary candidates, and rank reflects relevance rather than production edit ownership (see [COMMANDS.md](COMMANDS.md#search))
 - `lookup`: exact node lookup with bounded neighbor expansion, semantic and classification metadata in the result, and an opt-in `--resolve-classification` flag to resolve the full `classification.json` entry
 - `source`: bounded read-only source retrieval with path containment, semantic and classification metadata propagated when present
 - `slice`: bounded graph-neighborhood extraction, semantic and classification metadata preserved on nodes

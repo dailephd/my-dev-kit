@@ -6,6 +6,26 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.3` is the latest published release.
 
+## Implemented but unreleased: v1.12.4
+
+The `fix/v1.12.4-test-file-core-indexing` branch contains the complete my-dev-kit v1.12.4 core test-file indexing and retrieval correction (implementation commit `dc9df2f`). Package metadata remains `1.12.3`. npm, Git tags, and GitHub Releases still identify v1.12.3 as latest, because implementation is not publication.
+
+- Supported `.test.` / `.spec.` files beneath explicitly selected `--src` roots are core-indexed. They get ordinary `file:<path>` nodes and symbols and work with `search`, `lookup`, `slice`, and exact `source --contains --path`. Only `.d.ts` files remain excluded by default filename pattern. User `--exclude` values and default ignored directories remain authoritative.
+- The incremental configuration fingerprint includes the default file-exclusion policy, so a cache written under the earlier policy is fully rebuilt once.
+- Frontend-test semantic extraction and `context` test-infrastructure discovery remain compatible. Context focus, selected owners, and role adequacy were unchanged in every checked case.
+- Accepted behavior: raw `search` may rank a strongly matching test above a production candidate. Search ranking was deliberately not changed. Rank is relevance evidence, not edit ownership (see [COMMANDS.md](COMMANDS.md#search)).
+- No new command, flag, artifact family, or artifact schema major. No v1.13.0 scope.
+
+### v1.12.4 validation evidence
+
+- Focused suites (`tests/index/testFileCoreIndexing.spec.ts`, `tests/index/cacheMetadata.spec.ts`, `tests/index/incrementalIndexing.spec.ts`, `tests/data-model/sourceDiscovery.spec.ts`, `tests/context/testInfrastructureDiscoveryResolver.spec.ts`): passing.
+- Full suite: 2,617/2,617 tests passing across 209 files.
+- `npm run verify` (typecheck, build, docs check): passing.
+- `npm run benchmark:retrieval`: PASS, 6/6 tasks.
+- External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
+
+Status: no implementation blocker. Documentation reconciliation is complete. The next lifecycle stage is pre-release readiness. Version 1.13.0 remains the next planned feature milestone.
+
 ## Shipped: v1.12.3
 
 Version 1.12.3 is published. Package metadata and the CLI report `1.12.3`. It is a bounded corrective patch for the role-aware `context` command's readiness semantics.

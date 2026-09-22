@@ -228,6 +228,8 @@ Top-level fields:
 - `symbolCount`
 - `files`
 
+`files` lists every supported file discovered beneath `sourceRoots` after default ignored directories, the default `.d.ts` filename exclusion, and `--exclude` rules are applied. Since v1.12.4 this includes supported `.test.`/`.spec.` files, which receive the same file summary and `file:<path>`/`symbol:` code-graph nodes as any other file. This change widens which files the producer admits. The artifact shape and `schemaVersion` are unchanged.
+
 Each file summary may include:
 
 - `path`

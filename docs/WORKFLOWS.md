@@ -19,7 +19,7 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --json
 npx @dailephd/my-dev-kit index --root . --src src --src tests --out .my-dev-kit --call-graph --json
 ```
 
-The second command refreshes the same index with an explicitly expanded source contract. `--src` and relative `--out` are relative to `--root`. Do not repeat the root inside a relative output path accidentally.
+The second command refreshes the same index with an explicitly expanded source contract. `--src` and relative `--out` are relative to `--root`. Do not repeat the root inside a relative output path accidentally. Supported `.test.`/`.spec.` files beneath a selected root, including colocated tests under `src`, are indexed as ordinary files. They are then reachable through `search`, `lookup`, `slice`, and `source`. `.d.ts` declaration files are not indexed.
 
 For large projects, inspect discovery first and select meaningful roots:
 
@@ -60,7 +60,15 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<returned-source-nod
 
 Review match reasons, semantic/classification metadata, callers/dependencies, and exact source. Prefer a symbol node for a specific function/type question. Exact lookup is not fuzzy search. Expand only the unresolved relationship or source region.
 
-Record the selected owner, extension point, contract, relevant test, and uncertainty. A top-ranked result is not automatic authorization to edit it. A missing relationship is a retrieval limitation until checked, not proof that no caller exists.
+Record the selected owner, extension point, contract, relevant test, and uncertainty. A top-ranked result is not automatic authorization to edit it. When test roots are indexed, a matching test can outrank the production owner for a behavior-shaped query, because raw search ranks by relevance and not by production ownership. A missing relationship is a retrieval limitation until checked, not proof that no caller exists.
+
+Indexed test files use the same sequence. Use `lookup`/`slice --node file:<test-path>` for a test's imports and neighborhood. Use exact text such as a test title or assertion literal to get bounded test source:
+
+```powershell
+npx @dailephd/my-dev-kit source --index .my-dev-kit --contains "<exact test literal>" --path tests --context 5 --format numbered
+```
+
+Test evidence retrieved this way is static source evidence. It does not show that the test runs or passes. Use `context` role-specific output and the bounded test-infrastructure discovery for related-test and test-command evidence. Report any full-file fallback explicitly.
 
 ## Workflow 4: Generate graph visualization
 

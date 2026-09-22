@@ -252,6 +252,14 @@ The v1.12.0 owners live under `src/classification/` (Android category/risk class
 
 Use `tests/fixtures/android-retrieval/combined-app` as the representative fixture for full-pipeline scenarios, and `tests/fixtures/android-test-semantic/basic-app` when Android test evidence (unit/instrumented tests referencing a ViewModel) is required. Full-versus-incremental and determinism comparisons normalize only documented volatile fields (timestamps, output paths) - never node/edge/classification-entry ordering, which must remain stable by construction.
 
+### v1.12.4 core test-file indexing validation
+
+Source discovery (`src/indexing/discoverSourceFiles.ts`, `DEFAULT_FILE_EXCLUDE_PATTERNS`) and the incremental configuration fingerprint (`src/indexing/cacheMetadata.ts`, assembled in `src/indexing/runIndexCommand.ts`) own test-file admission. When changing either one, keep these focused suites together:
+
+- `tests/index/testFileCoreIndexing.spec.ts` - `.test.`/`.spec.` admission beneath selected roots, the `.d.ts`/`--exclude`/ignored-directory boundaries, exact `source --contains --path`, `file:<path>` nodes, `lookup`, `slice`, `search`, legacy-cache config-changed rebuild, frontend-test semantic uniqueness, and context test-infrastructure compatibility
+- `tests/index/cacheMetadata.spec.ts` and `tests/index/incrementalIndexing.spec.ts` - fingerprint coverage of the default file-exclusion policy and incremental behavior
+- `tests/data-model/sourceDiscovery.spec.ts` and `tests/context/testInfrastructureDiscoveryResolver.spec.ts` - unchanged downstream discovery consumers
+
 ## Local CLI smoke test
 
 After building, run a basic TypeScript smoke test:
