@@ -2,11 +2,13 @@
 
 ## Unreleased
 
+## 1.12.4 - 2026-09-22
+
 - Supported `.test.` / `.spec.` files beneath an explicitly selected `--src` root now participate in core indexing like any other supported file. Previously a default filename-pattern exclusion dropped them even when their root was selected. `.d.ts` declaration files remain excluded, and user `--exclude` values and default ignored directories remain authoritative.
 - Indexed test files therefore work with the ordinary retrieval surfaces: `file:<path>` code-graph nodes, `lookup`, `slice`, `search`, and exact `source --contains ... --path <test-path-prefix>` matching. Raw `search` ranks this evidence by its existing relevance logic, so a strongly matching test can rank above a production candidate; search rank is not an edit-ownership decision.
 - The `index --incremental` configuration fingerprint now includes the default file-exclusion policy. The first incremental run over a cache written under the earlier policy performs one full `incremental-full-config-changed` rebuild instead of reusing that cache as equivalent.
 - Existing frontend-test semantic extraction and `context` test-infrastructure discovery remain compatible, and test entries and graph node identities stay unique.
-- No new command, flag, artifact family, or artifact schema major. Search ranking and context owner selection are unchanged.
+- No new command, flag, artifact family, or artifact schema major. Search ranking was not redesigned, and context owner selection is unchanged.
 
 ## 1.12.3 - 2026-09-05
 

@@ -1,6 +1,6 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.3`: nine commands, with the v1.12.1 evidence-limit corrections and v1.12.3 context-readiness and responsibility-mapping corrections. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.4`: nine commands, with the v1.12.1 evidence-limit corrections, the v1.12.3 context-readiness and responsibility-mapping corrections, and v1.12.4 core indexing of test files beneath selected source roots. Package versions and artifact schema versions are separate.
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 

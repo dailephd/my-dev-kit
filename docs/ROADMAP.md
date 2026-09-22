@@ -1380,7 +1380,7 @@ The goal is to make final role readiness depend on the evidence genuinely requir
 
 ## Version 1.12.4
 
-**Status: implemented in the current repository; unreleased.**
+**Status: published.**
 
 Version 1.12.4 is a bounded corrective patch for core test-file indexing and retrieval. Supported `.test.` / `.spec.` files beneath explicitly selected `--src` roots now participate in the ordinary core indexing and retrieval surfaces instead of being dropped by a default filename-pattern exclusion. Earlier roadmap text that describes test-path files as excluded from the core symbol index/code graph (for example the v1.10.1 test-infrastructure design) records the behavior of those versions.
 
