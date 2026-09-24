@@ -21,7 +21,7 @@ The recipes in this guide are agent compositions. A successful execution must su
 
 ### Command and contract authorities
 
-- my-dev-kit: [Commands](COMMANDS.md), [tool-local workflows](WORKFLOWS.md), [contracts](CONTRACTS.md), [graph and artifact schemas](GRAPH_SCHEMA.md).
+- my-dev-kit: [Commands](COMMANDS.md), [tool-local workflows](WORKFLOWS.md), [contracts](https://github.com/dailephd/my-dev-kit/blob/main/docs/CONTRACTS.md), [graph and artifact schemas](GRAPH_SCHEMA.md).
 - Orchestrator: [Commands](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/COMMANDS.md), [native workflows](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/WORKFLOWS.md), [artifacts](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/ARTIFACTS.md), [contracts](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/CONTRACTS.md).
 - Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
 - Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).

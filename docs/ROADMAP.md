@@ -1293,7 +1293,7 @@ Version 1.12.3 is a bounded corrective patch for false context-readiness blocker
 
 The goal is to make final role readiness depend on the evidence genuinely required for that role while preserving conservative failure when required evidence is actually missing. The patch must not weaken real blockers or pull v1.13.0 Android benchmark, example, or workflow-documentation scope forward.
 
-### Planned corrections
+### Shipped corrections
 
 #### Recoverable role adequacy
 
@@ -1414,6 +1414,8 @@ Version 1.12.4 is a bounded corrective patch for core test-file indexing and ret
 - focused tests, the full test suite, typecheck, build, documentation checks, and retrieval regression benchmarks pass before release preparation
 
 ## Version 1.13.0
+
+**Status: planned.**
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.
 
