@@ -1522,7 +1522,7 @@ Additional language support should be added through language adapters rather tha
 
 Version 1.15.0 is reserved as **KIT-API-01**.
 
-The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change impact after the broader framework evidence planned for v1.14.0 is in place.
+The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change evidence after the broader framework evidence planned for v1.14.0 is in place.
 
 Planned boundaries:
 
