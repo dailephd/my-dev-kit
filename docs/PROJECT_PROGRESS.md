@@ -26,7 +26,7 @@ Version 1.12.4 is published. Package metadata and the CLI report `1.12.4`. It is
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) is the next planned milestone.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) is the next planned milestone. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; it reserves Kit 1.15.0 (KIT-API-01) and 1.16.0 (KIT-OPS-01) without changing the next local implementation version or the current package.
 
 ## Shipped: v1.12.3
 

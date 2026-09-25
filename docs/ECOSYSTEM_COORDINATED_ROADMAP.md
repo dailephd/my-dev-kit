@@ -1,9 +1,9 @@
 # Coordinated my-dev-kit ecosystem development roadmap
 
-Date: 2026-09-21
-Status: PROPOSED COORDINATED PLAN — saving this file does not by itself reassign repository-local roadmap versions, implement contracts, or certify package compatibility.
-Authority: cross-repository sequencing, contract governance, dependency logic, and proposed version mapping; each repository retains authority over its own normative version scope until explicitly reconciled.
-Scope: four independently versioned programs; shared contract governance; bounded software/web assurance additions.
+Date: 2026-09-25
+Status: ECO-00 ADOPTED — the contract and roadmap freeze is now the authoritative cross-repository coordination baseline. It does not by itself implement runtime features or certify package compatibility.
+Authority: cross-repository sequencing, contract governance, dependency logic, and adopted version reservations; each repository retains authority over its own normative implementation scope.
+Scope: four independently versioned programs; shared reference/compatibility contracts; bounded software/web assurance additions.
 
 ## 1. Decision
 
@@ -19,22 +19,22 @@ Use contract dependencies for architecture, package dependencies only for genuin
 
 ## 2. Inspected baseline and existing commitments
 
-Read-only source snapshots inspected:
-- my-dev-kit: main, 3707ab1eecef289eb6c91ffc1f45d4215e7232d3; package metadata 1.12.3.
-- my-dev-kit-orchestrator: main, 46e923e9ce643c8a47cd30933ea653ac6ed9edb3; current-state documentation 1.4.1.
-- my-dev-kit-lab: main, 449ed7e884bfdc4591bca04ea5d9efa12d0f6686; package/current roadmap 0.5.0.
-- my-frontend-observer: master, 7dc3c0879b4677884547904d200c85eb77bcdc18; current-state documentation 0.9.1.
+ECO-00 frozen baseline (inspection evidence, not compatibility certification):
+- my-dev-kit: main, 675b6373144b962efe1c6d870cec238181d07e14; package/release 1.12.4.
+- my-dev-kit-orchestrator: main, a658fb89520ce6987fbd96dee0c5719c50c7659b; package/release 1.5.0.
+- my-dev-kit-lab: main, d642e8ac0d1f14436b216c898b4f4bca6e30fb06; package/release 0.6.0.
+- my-frontend-observer: master, 251cfcd7c6dde6d0d8a423b89dd5791ff31329db; package/release 0.10.0.
 
-These snapshots are inspection provenance, not a newly executed four-way certification. Registry, tag, release, and package identity must be reconciled again at actual release start. Some Lab current-state and command prose retains release-preparation/unreleased wording while the roadmap identifies 0.5.0 as current. Do not let those historical sentences control release actions. The central workflow guide's review baseline also retains an older Observer version; preserve that as a dated review rather than interpreting it as the latest compatible package.
+The package/tag/GitHub-release state was rechecked before this freeze. This baseline is not a newly executed four-way compatibility certification. Exact candidate artifacts, environments, fixtures, and hashes must still be recorded by later tested/certified bundles.
 
-Existing commitments to preserve:
-- Kit 1.13.0: Android retrieval benchmarks, examples, workflows.
-- Kit 1.14.0: broader Python/JavaScript/framework evidence. Kit 2.0.0 remains a separate artifact/plugin initiative, not a prerequisite for this work.
-- Orchestrator 1.5.0: semantic continuity/evidence-to-implementation bridge.
-- Orchestrator 1.6.0: workflow economics and run telemetry, not target-application observability.
-- Observer 0.10.0: full visual human–LLM workflow using its existing canonical acceptance surface.
-- Lab 0.5.1 and 0.5.2: warm-index benchmark expansion and real-agent campaign work.
-- Lab's existing freshness, scaling, retrieval, agent-success, provider-telemetry, and report/gallery scopes must survive any re-sequencing.
+Existing commitments preserved by ECO-00:
+- Kit 1.13.0 remains Android retrieval benchmarks, examples, and workflows.
+- Kit 1.14.0 remains broader Python/JavaScript/framework evidence. Kit 2.0.0 remains a separate artifact/plugin initiative.
+- Orchestrator 1.5.0 is published Semantic Continuity and owns canonical RSP-NNN responsibility identity.
+- Orchestrator 1.6.0 remains workflow economics and deterministic run telemetry.
+- Observer 0.10.0 is published full visual human–LLM workflow.
+- Lab 0.6.0 is published index freshness/changed-file detection; Lab 0.6.1-0.9.2 keep their existing local roadmap purposes.
+- No previously assigned Lab future milestone is moved by ECO-00; new assurance work starts at the first unreserved minor, 0.10.0.
 
 
 ### 2.1 Current ecosystem architecture
@@ -475,9 +475,9 @@ consumer dual-reader release
 
 If a producer change is truly backward-compatible under the existing reader contract, producer-first publication is permitted, but the new ecosystem capability remains uncertified until integration testing completes.
 
-## 7. Proposed package-version reservations
+## 7. Adopted package-version reservations
 
-These are proposed scheduling targets, not existing releases. Recheck tag/package availability and active branches before committing reservations. Published history never changes. New milestones are referenced by stable IDs even when a future version target moves.
+These reservations were adopted by ECO-00 on 2026-09-25. Published history does not change, and adoption does not imply implementation. Stable milestone IDs remain the coordination identity if a later explicit planning decision moves an unimplemented target.
 
 ### 7.1 Kit
 - 1.13.0: existing Android proof/example scope unchanged.
@@ -487,41 +487,38 @@ These are proposed scheduling targets, not existing releases. Recheck tag/packag
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
 ### 7.2 Orchestrator
-- 1.5.0: existing semantic continuity scope unchanged; define stable responsibility IDs usable by later evidence.
+- 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is now an existing native contract that later evidence references rather than redefines.
 - 1.6.0: existing workflow telemetry scope unchanged; link run/invocation identities without claiming application observability.
 - 1.7.0 / ORC-EVIDENCE-01: typed evidence-plan/reference intake; adapters for existing native artifacts; cross-tool freshness/compatibility enforcement through canonical integrity/judge owners; structured status/check output; preservation across prompt/mark/check/status/export/correction paths.
 - Further Orchestrator releases are not automatically required for each new Lab check. Versioned generic requirement/evidence interfaces should allow new externally evaluated profiles without duplicating their policy. A genuinely new mandatory lifecycle semantic requires a separately scoped minor.
 
 ### 7.3 Observer
-- 0.10.0: existing full visual workflow scope unchanged. It must not wait for the entire new assurance program.
+- 0.10.0: published full visual workflow, unchanged.
 - 0.11.0 / OBS-DIAG-01: bounded/redacted console, page-error, request-failure and HTTP-response evidence; distinguish network transport failure from an expected HTTP error; explicit observation windows and optional diagnostic contracts.
 - 0.12.0 / OBS-STATE-01: governed project-supplied test-state/session setup contract with achieved-state evidence. Reuse ownership boundaries; do not turn Observer into a general journey runner or authentication platform.
 - 0.13.0 / OBS-PERF-01: versioned local performance capture, browser/environment provenance, comparable baseline/candidate samples, unavailable metrics explicit.
 - 0.14.0 / OBS-BROWSER-01: bounded browser/viewport matrix; preserve each browser's identity and capabilities. Unsupported browser metrics remain unavailable. Do not compare baselines across incompatible engines as though identical.
 
-### 7.4 Lab — deliberate proposal to rebaseline only unimplemented future slots
+### 7.4 Lab — adopted additive reservations with no rebaseline of existing scope
 
-The old roadmap already reserves 0.6–0.9. The new features cannot silently take those numbers. Recommended new schedule:
+ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0.6.0 is already published as index freshness and changed-file detection. It also avoids moving the already-agreed 0.6.1-0.9.2 roadmap. Existing assignments remain intact:
 
-- 0.5.1: existing warm-index benchmark expansion, unchanged.
-- 0.5.2: existing real-agent warm-index campaigns, unchanged.
-- 0.6.0 / LAB-EVIDENCE-01: authorized verification capture/import, evidence identity and integrity, pure adapter contracts, controlled target boundary, and isolated ecosystem certification harness. Reuse existing process/browser/report infrastructure. Not an unrestricted task runner.
-- 0.7.0–0.7.3 / LAB-FRESHNESS: former 0.6.0–0.6.3 scope, preserved; candidate/index freshness, neighborhoods, staleness experiments, partial-refresh planning.
-- 0.8.0 / LAB-A11Y-01: quality-audit substrate and bounded live accessibility adapters, manual-review requirements, explicit target-state provenance. Reuse existing planned quality audit type rather than a parallel audit engine.
-- 0.9.0 / LAB-WEBSEC-01: bounded local web-app security profile through the existing security-validation owner; safe target setup and authorization tests, versioned control coverage; no remote or manual pentesting by default.
-- 0.10.0–0.10.2 / LAB-SCALING: former 0.7.0–0.7.2 context-window, synthetic-scale, and real/local repository work, preserved.
-- 0.11.0–0.11.2 / LAB-RETRIEVAL: former 0.8.0–0.8.2 precision/recall, query strategy, and context-pack evaluation, preserved.
-- 0.12.0 / LAB-PERF-01: performance budget/regression adapters, statistical comparison and applicability rules; consume compatible Observer performance evidence where selected, or other explicitly supported collectors.
-- 0.13.0–0.13.2 / LAB-AGENT: former 0.9.0–0.9.2 agent success, provider telemetry/scheduler, and report/gallery work, preserved.
-- 0.14.0 / LAB-API-01: API/schema compatibility evidence and project-owned database/migration verification. Kit association evidence is optional enrichment; executing a migration test does not require a full static graph.
-- 0.15.0 / LAB-SUPPLY-01: SBOM/license-policy/provenance adapters; distinguish manifest presence, signature verification, and artifact-to-source correspondence. No automatic publication or legal-conformance claim.
-- 0.16.0 / LAB-TEST-01: test-quality adapters and non-heuristic raw evidence for coverage, mutation and repeated-run flakiness where supported. No universal composite quality score.
-- 0.17.0 / LAB-OPS-01: bounded observability/configuration/IaC evidence adapters if demanded by actual target projects. Integrate existing telemetry/scanning tools; do not build a hosted monitoring or deployment platform.
-- 1.0.0 and the existing 1.1.0–1.4.0 post-stable milestones retain their purposes. Revisit graduation criteria explicitly; do not imply that every aspirational optional adapter is mandatory for stable release.
+- 0.6.0: published index freshness and changed-file detection.
+- 0.6.1-0.6.3: affected-neighborhood, incremental-change/staleness, and partial-refresh planning, unchanged.
+- 0.7.0-0.7.2: context-window scaling, synthetic large-repository generation, and real/local-repository experiments, unchanged.
+- 0.8.0-0.8.2: retrieval precision/recall, query-strategy comparison, and context-pack experiments, unchanged.
+- 0.9.0-0.9.2: agent-success, provider telemetry/scheduler, and hardened prompt/report/gallery work, unchanged.
+- 0.10.0 / LAB-EVIDENCE-01: authorized verification capture/import, evidence identity/integrity, pure adapter contracts, controlled target boundary, and isolated ecosystem certification harness. Reuse existing process/browser/report infrastructure; not an unrestricted task runner.
+- 0.11.0 / LAB-A11Y-01: quality-audit substrate and bounded live accessibility adapters, manual-review requirements, explicit target-state provenance.
+- 0.12.0 / LAB-WEBSEC-01: bounded local web-app security profile through the existing security-validation owner; no remote or manual pentesting by default.
+- 0.13.0 / LAB-PERF-01: performance budget/regression adapters, statistical comparison and applicability rules.
+- 0.14.0 / LAB-API-01: API/schema compatibility evidence and project-owned database/migration verification.
+- 0.15.0 / LAB-SUPPLY-01: SBOM/license-policy/provenance adapters with explicit claim-strength boundaries.
+- 0.16.0 / LAB-TEST-01: test-quality adapters and non-heuristic raw evidence for coverage, mutation, and repeated-run flakiness where supported.
+- 0.17.0 / LAB-OPS-01: bounded observability/configuration/IaC evidence adapters only when demanded by real target projects.
+- 1.0.0 and existing 1.1.0-1.4.0 post-stable milestones retain their current purposes.
 
-This mapping is a proposed prioritization change. Before adoption, retain each old heading or redirect, stable work ID, old target, new target, rationale, and all acceptance criteria. If any supposedly unimplemented scope is active by adoption time, finish that bounded active work or record an explicit reschedule; do not overwrite its branch or history.
-
-The chronological order within a package is a delivery constraint, not a claim that accessibility technically depends on freshness research, or that performance technically depends on retrieval experiments.
+This is an additive reservation, not a relocation. No existing Lab version heading, feature scope, or acceptance criterion is reassigned by ECO-00. Chronological order inside the package is a release constraint, not a claim of technical dependency among unrelated evidence domains.
 
 
 ### 7.5 Proposed dependency matrix by milestone
@@ -617,10 +614,10 @@ These arrows indicate actual prerequisite capabilities. Unrelated research, visu
 - Exit: each contract has one owner, each consumer has explicit requirements, versions have no collisions, and all hard dependencies form an acyclic graph.
 
 ### 8.2 ECO-01: first end-to-end evidence milestone
-- Producer work: LAB-EVIDENCE-01 / Lab 0.6.0, plus bounded adapters over existing Kit/Observer artifacts.
-- Consumer work: ORC-EVIDENCE-01 / Orchestrator 1.7.0, following its existing 1.5/1.6 delivery commitments.
+- Producer work: LAB-EVIDENCE-01 / Lab 0.10.0, plus bounded adapters over existing Kit/Observer artifacts.
+- Consumer work: ORC-EVIDENCE-01 / Orchestrator 1.7.0, following the published 1.5.0 semantic-continuity contract and planned 1.6.0 telemetry milestone.
 - Kit and Observer production changes are not required unless adapter tests demonstrate genuinely missing provenance that cannot be honestly represented as unknown.
-- First proposed proof tuple: Kit 1.12.3 + Observer 0.9.1 + Lab 0.6.0 candidate + Orchestrator 1.7.0 candidate. This is a test target, NOT certified compatibility. If other upstreams have advanced, test that tuple separately rather than silently changing the lock.
+- ECO-00 baseline proof tuple: Kit 1.12.4 + Observer 0.10.0 + Lab 0.10.0 candidate + Orchestrator 1.7.0 candidate. This is a future test target, NOT certified compatibility. If upstreams advance before execution, preserve this tuple as the ECO-00 baseline and certify any newer tuple separately rather than silently changing the lock.
 - Fixture: one small local full-stack app plus a small CLI project, frozen source and deterministic data. Use the CLI to prove that no browser is required for ordinary software verification.
 - Exit: final eligibility passes only with current required native evidence. A deliberately failed project test prevents completion even when visual evidence passes. No core retrieval-engine rewrite.
 
@@ -1112,7 +1109,7 @@ docs/ecosystem/milestones.json
 docs/ecosystem/bundles/*.json
 ```
 
-Only `docs/ECOSYSTEM_COORDINATED_ROADMAP.md` is created by the current documentation task. The machine-readable registry/schema/bundle paths are planned ECO-00 outputs, not claimed current files.
+ECO-00 now creates the machine-readable coordination assets listed above: the contract registry, v1 reference schemas and fixtures, milestone registry, and the non-certified ECO-00 baseline bundle. These files are repository-level coordination assets; they are not part of the @dailephd/my-dev-kit runtime contract unless a later version explicitly adopts them.
 
 ### 13.3 Documentation-preservation rule for roadmap adoption
 
@@ -1135,15 +1132,15 @@ Canonical compatibility test implementation and sanitized reports:
 - Lab's existing tests/fixtures/ecosystem structure and docs/reports/ convention, extended deliberately.
 - Raw logs, screenshots, credentials, tarballs, and private source remain out of Git. Committed manifests contain references/hashes and sanitized result summaries.
 
-No generated artifact in this handoff is a repository write. Adoption requires a documentation-only change set before production implementation begins.
+ECO-00 adoption is a documentation/contract-only repository change. It changes no runtime package version, dependency, command, native artifact schema, release, tag, or publication state.
 
 ## 14. Immediate next work
 
-ECO-00 is the next task. Freeze the small common contract and negative fixtures, record version reservations and the Lab old-to-new mapping, reconcile current-state prose, and extend each roadmap through its existing preservation rules. This is planning/docs work, not a release, dependency upgrade, schema runtime implementation, or source-engine redesign.
+ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
-After ECO-00, finish already-active bounded work and the retained near-term milestones. Begin LAB-EVIDENCE-01 and ORC-EVIDENCE-01 against the frozen interface, using candidate tarballs and a proposed lock. Prove one CLI and one full-stack end-to-end case before adding a collection of assurance adapters.
+The next retained Orchestrator feature is 1.6.0 Workflow Economics and Deterministic Run Telemetry. Kit 1.13.0 and Lab 0.6.1 remain valid independent local next milestones. Lab continues its preserved 0.6.1-0.9.2 sequence before LAB-EVIDENCE-01 at 0.10.0. ORC-EVIDENCE-01 remains reserved for Orchestrator 1.7.0.
 
-The working rule is: freeze the contract; build producers and consumers against exact evidence; test the exact combination; activate only the certified capability. Matching version numbers are unnecessary.
+ECO-01 begins only when its producer and consumer milestones are available as exact candidates or releases. Prove one CLI and one full-stack end-to-end case before adding broader assurance adapters. The working rule remains: freeze the contract; build against exact evidence; test the exact combination; activate only a certified capability. Matching package version numbers are unnecessary.
 
 
 ### 14.1 Definition of done for ECO-00
@@ -1154,7 +1151,7 @@ ECO-00 is complete only when:
 - central contract registry semantics are agreed;
 - minimal contract fixture files exist and validate;
 - no existing roadmap feature was removed or silently reassigned;
-- proposed version reservations have no known collision at that point in time;
+- adopted version reservations have no known collision;
 - producer/consumer ownership is unambiguous;
 - first certification profiles and canonical fixtures are defined;
 - compatibility and release sequencing rules are documented;
@@ -1177,7 +1174,7 @@ A milestone is not complete merely because all repository-local implementations 
 
 ### 14.3 First implementation after this document
 
-Do **not** immediately start Observer diagnostics, accessibility, performance, and API graph work in parallel. The next coding milestone is ECO-00 itself: contract/fixture design and explicit adoption decisions. Only after ECO-00 freezes the minimum interfaces should LAB-EVIDENCE-01 and ORC-EVIDENCE-01 begin.
+Do **not** start the later assurance domains in parallel merely because their version reservations now exist. The next ecosystem-prerequisite implementation is Orchestrator 1.6.0. Repository-local work such as Kit 1.13.0 or Lab 0.6.1 may proceed independently. ORC-EVIDENCE-01 (1.7.0) can implement against the frozen ECO-00 reference contracts, but ECO-01 certification must wait for the required Lab producer capability at 0.10.0 and the exact-version compatibility run.
 
 ## 15. Source record
 
@@ -1187,7 +1184,7 @@ Repository sources read at the commits in section 2:
 - Lab: docs/CURRENT_STATE.md; docs/ROADMAP.md; docs/COMMANDS.md.
 - Observer: docs/CURRENT_STATE.md; docs/ROADMAP.md.
 
-Public reference pages checked on 2026-09-21:
+Public reference pages last checked for the original proposal on 2026-09-21; repository/release state was reverified for ECO-00 on 2026-09-25:
 - Semantic Versioning 2.0.0: `https://semver.org/`
 - Pact consumer/provider compatibility matrix: `https://docs.pact.io/pact_broker/can_i_deploy`
 - W3C accessibility evaluation tool limitations: `https://www.w3.org/WAI/test-evaluate/tools/selecting/`

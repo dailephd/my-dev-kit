@@ -1516,6 +1516,41 @@ Candidate future languages:
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
 
+## Version 1.15.0
+
+**Status: planned.**
+
+Version 1.15.0 is reserved as **KIT-API-01**.
+
+The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change impact after the broader framework evidence planned for v1.14.0 is in place.
+
+Planned boundaries:
+
+- extend existing adapter/artifact/retrieval architecture rather than introduce a second graph system
+- expose evidence-backed relationships and uncertainty, not runtime authorization claims
+- do not execute APIs, databases, migrations, browsers, or deployment systems
+- do not treat a static relationship as proof that a runtime path is reachable or authorized
+- preserve compatibility with the bounded retrieval and context architecture
+
+This milestone supports later full-stack contract assurance but is not required for Android v1.13.0 work.
+
+## Version 1.16.0
+
+**Status: planned.**
+
+Version 1.16.0 is reserved as **KIT-OPS-01**.
+
+The goal is bounded static evidence for configuration, instrumentation, and deployment-source relationships when real downstream assurance workflows demonstrate a need for them.
+
+Planned boundaries:
+
+- configuration and source evidence only
+- no hosted monitoring, deployment execution, cloud control plane, or secret collection
+- no claim that static configuration proves runtime operational state
+- implement only evidence families justified by concrete consumers and fixtures
+
+This milestone is optional for the first ECO-01 executable-evidence integration.
+
 ## Version 2.0.0
 
 Version 2.0.0 focuses on a larger artifact and plugin model.

@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "1.0.0",
+  "frozenAt": "2026-09-25",
+  "status": "adopted",
+  "baseline": {
+    "kit": {
+      "package": "@dailephd/my-dev-kit",
+      "version": "1.12.4",
+      "branch": "main",
+      "commit": "675b6373144b962efe1c6d870cec238181d07e14"
+    },
+    "orchestrator": {
+      "package": "@dailephd/my-dev-kit-orchestrator",
+      "version": "1.5.0",
+      "branch": "main",
+      "commit": "a658fb89520ce6987fbd96dee0c5719c50c7659b"
+    },
+    "lab": {
+      "package": "@dailephd/my-dev-kit-lab",
+      "version": "0.6.0",
+      "branch": "main",
+      "commit": "d642e8ac0d1f14436b216c898b4f4bca6e30fb06"
+    },
+    "observer": {
+      "package": "@dailephd/my-frontend-observer",
+      "version": "0.10.0",
+      "branch": "master",
+      "commit": "251cfcd7c6dde6d0d8a423b89dd5791ff31329db"
+    }
+  },
+  "reservations": {
+    "kit": [
+      [
+        "1.13.0",
+        "ANDROID-PROOF"
+      ],
+      [
+        "1.14.0",
+        "FRAMEWORK-EXPANSION"
+      ],
+      [
+        "1.15.0",
+        "KIT-API-01"
+      ],
+      [
+        "1.16.0",
+        "KIT-OPS-01"
+      ]
+    ],
+    "orchestrator": [
+      [
+        "1.6.0",
+        "ORC-TELEMETRY"
+      ],
+      [
+        "1.7.0",
+        "ORC-EVIDENCE-01"
+      ]
+    ],
+    "lab": [
+      [
+        "0.6.1",
+        "LAB-FRESHNESS-NEIGHBORHOOD"
+      ],
+      [
+        "0.6.2",
+        "LAB-FRESHNESS-STALENESS"
+      ],
+      [
+        "0.6.3",
+        "LAB-FRESHNESS-PARTIAL-REFRESH"
+      ],
+      [
+        "0.7.0",
+        "LAB-SCALING-01"
+      ],
+      [
+        "0.7.1",
+        "LAB-SCALING-02"
+      ],
+      [
+        "0.7.2",
+        "LAB-SCALING-03"
+      ],
+      [
+        "0.8.0",
+        "LAB-RETRIEVAL-01"
+      ],
+      [
+        "0.8.1",
+        "LAB-RETRIEVAL-02"
+      ],
+      [
+        "0.8.2",
+        "LAB-RETRIEVAL-03"
+      ],
+      [
+        "0.9.0",
+        "LAB-AGENT-01"
+      ],
+      [
+        "0.9.1",
+        "LAB-AGENT-02"
+      ],
+      [
+        "0.9.2",
+        "LAB-AGENT-03"
+      ],
+      [
+        "0.10.0",
+        "LAB-EVIDENCE-01"
+      ],
+      [
+        "0.11.0",
+        "LAB-A11Y-01"
+      ],
+      [
+        "0.12.0",
+        "LAB-WEBSEC-01"
+      ],
+      [
+        "0.13.0",
+        "LAB-PERF-01"
+      ],
+      [
+        "0.14.0",
+        "LAB-API-01"
+      ],
+      [
+        "0.15.0",
+        "LAB-SUPPLY-01"
+      ],
+      [
+        "0.16.0",
+        "LAB-TEST-01"
+      ],
+      [
+        "0.17.0",
+        "LAB-OPS-01"
+      ]
+    ],
+    "observer": [
+      [
+        "0.11.0",
+        "OBS-DIAG-01"
+      ],
+      [
+        "0.12.0",
+        "OBS-STATE-01"
+      ],
+      [
+        "0.13.0",
+        "OBS-PERF-01"
+      ],
+      [
+        "0.14.0",
+        "OBS-BROWSER-01"
+      ]
+    ]
+  },
+  "dependencies": [
+    {
+      "from": "ORC-TELEMETRY",
+      "to": "ORC-EVIDENCE-01",
+      "kind": "prerequisite"
+    },
+    {
+      "from": "LAB-AGENT-03",
+      "to": "LAB-EVIDENCE-01",
+      "kind": "release-sequence"
+    },
+    {
+      "from": "LAB-EVIDENCE-01",
+      "to": "ECO-01",
+      "kind": "producer"
+    },
+    {
+      "from": "ORC-EVIDENCE-01",
+      "to": "ECO-01",
+      "kind": "consumer"
+    },
+    {
+      "from": "ECO-01",
+      "to": "OBS-DIAG-01",
+      "kind": "ecosystem-sequence"
+    },
+    {
+      "from": "KIT-API-01",
+      "to": "ECO-05",
+      "kind": "producer"
+    }
+  ],
+  "nextEcosystemPrerequisite": {
+    "repository": "dailephd/my-dev-kit-orchestrator",
+    "version": "1.6.0",
+    "milestoneId": "ORC-TELEMETRY"
+  }
+}

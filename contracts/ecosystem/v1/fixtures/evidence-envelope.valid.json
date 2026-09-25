@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0.0",
+  "evidenceId": "ev-eco00-001",
+  "capabilityId": "verification.test-result",
+  "subject": {
+    "schemaVersion": "1.0.0",
+    "authority": "@dailephd/my-dev-kit-orchestrator",
+    "namespace": "my-dev-kit-orchestrator/semantic-responsibility",
+    "value": "RSP-001",
+    "repository": {
+      "owner": "dailephd",
+      "name": "my-dev-kit-orchestrator",
+      "commit": "a658fb89520ce6987fbd96dee0c5719c50c7659b"
+    }
+  },
+  "environment": {
+    "schemaVersion": "1.0.0",
+    "environmentId": "node24-windows",
+    "dimensions": {
+      "os": "windows",
+      "node": "24"
+    }
+  },
+  "nativeArtifact": {
+    "schemaVersion": "1.0.0",
+    "producer": {
+      "packageName": "@dailephd/my-dev-kit-lab",
+      "packageVersion": "0.10.0"
+    },
+    "artifactKind": "my-dev-kit-lab/verification-record",
+    "artifactSchemaVersion": "1.0.0",
+    "locator": {
+      "kind": "path",
+      "value": "lab-output/verification/manifest.json"
+    }
+  },
+  "freshness": "current"
+}

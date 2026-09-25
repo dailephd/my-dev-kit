@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0.0",
+  "bundleId": "eco-00-baseline-2026-09-25",
+  "status": "supported",
+  "components": [
+    {
+      "packageName": "@dailephd/my-dev-kit",
+      "packageVersion": "1.12.4",
+      "commit": "675b6373144b962efe1c6d870cec238181d07e14"
+    },
+    {
+      "packageName": "@dailephd/my-dev-kit-orchestrator",
+      "packageVersion": "1.5.0",
+      "commit": "a658fb89520ce6987fbd96dee0c5719c50c7659b"
+    },
+    {
+      "packageName": "@dailephd/my-dev-kit-lab",
+      "packageVersion": "0.6.0",
+      "commit": "d642e8ac0d1f14436b216c898b4f4bca6e30fb06"
+    },
+    {
+      "packageName": "@dailephd/my-frontend-observer",
+      "packageVersion": "0.10.0",
+      "commit": "251cfcd7c6dde6d0d8a423b89dd5791ff31329db"
+    }
+  ],
+  "contracts": [
+    {
+      "contractId": "eco.subject-identity",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "contractId": "eco.environment-identity",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "contractId": "eco.native-artifact-reference",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "contractId": "eco.evidence-envelope",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "contractId": "eco.evidence-requirement",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "contractId": "eco.compatibility-bundle",
+      "schemaVersion": "1.0.0"
+    }
+  ]
+}
