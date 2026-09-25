@@ -521,7 +521,7 @@ ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0
 This is an additive reservation, not a relocation. No existing Lab version heading, feature scope, or acceptance criterion is reassigned by ECO-00. Chronological order inside the package is a release constraint, not a claim of technical dependency among unrelated evidence domains.
 
 
-### 7.5 Proposed dependency matrix by milestone
+### 7.5 Adopted dependency matrix by milestone
 
 This table describes *capability prerequisites*, not permanent package pins.
 
@@ -537,50 +537,52 @@ This table describes *capability prerequisites*, not permanent package pins.
 
 ### 7.6 Version-number collision rules
 
-Before reserving any proposed version:
+Before changing an adopted reservation:
 
 1. inspect current package metadata, tags/releases, active branches, and current roadmap;
 2. preserve any already assigned unreleased scope;
-3. if a version is occupied by active work, choose the next free version rather than silently redefining it;
-4. stable milestone IDs (`ECO-*`, `KIT-*`, `ORC-*`, `LAB-*`, `OBS-*`) survive version movement;
-5. update the central mapping only after the user explicitly approves a rebaseline that changes an existing repo-local roadmap assignment.
+3. if a reserved version becomes occupied by other approved work, choose the next free version rather than silently redefining it;
+4. stable milestone IDs (`ECO-*`, `KIT-*`, `ORC-*`, `LAB-*`, `OBS-*`) survive an explicitly approved version move;
+5. update both the central mapping and affected local roadmap only after an explicit decision authorizes the move.
 
-The Lab mapping in this document is therefore a **proposed rebaseline**. Saving this central roadmap does not itself move those local version headings.
+ECO-00 resolved the Lab collision by preserving all existing 0.6.0-0.9.2 assignments and adding LAB-EVIDENCE-01 at 0.10.0. No Lab roadmap scope was rebaselined.
 
 
-### 7.7 Proposed release train view
+### 7.7 Adopted release train view
 
-The release train preserves each repository's already assigned work and shows where the new coordinated capabilities would enter if the proposal is adopted.
+The release train reflects the ECO-00 baseline and adopted reservations.
 
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K12[1.12.3 current baseline] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
+    K124[1.12.4 current] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
   end
 
   subgraph ORC[orchestrator]
-    O14[1.4.1 current baseline] --> O15[1.5 semantic continuity] --> O16[1.6 workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
+    O15[1.5.0 current semantic continuity] --> O16[1.6 workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
   end
 
   subgraph OBS[observer]
-    B09[0.9.1 current baseline] --> B10[0.10 visual workflow] --> B11[0.11 diagnostics] --> B12[0.12 state] --> B13[0.13 performance] --> B14[0.14 browser matrix]
+    B10[0.10.0 current visual workflow] --> B11[0.11 diagnostics] --> B12[0.12 controlled state] --> B13[0.13 performance] --> B14[0.14 browser matrix]
   end
 
-  subgraph LAB[lab — proposed rebaseline]
-    L05[0.5.0 current baseline] --> L051[0.5.1 warm-index suite] --> L052[0.5.2 real-agent warm-index] --> L06[0.6 evidence foundation] --> L07[0.7 freshness family] --> L08[0.8 accessibility] --> L09[0.9 web security] --> L10[0.10 scaling family] --> L11[0.11 retrieval family] --> L12[0.12 performance] --> L13[0.13 agent family] --> L14[0.14 API assurance]
+  subgraph LAB[lab]
+    L060[0.6.0 current freshness] --> L061[0.6.1 neighborhoods] --> L062[0.6.2 staleness] --> L063[0.6.3 partial-refresh planning]
+    L063 --> L07[0.7 scaling] --> L08[0.8 retrieval] --> L09[0.9 agent/provider work] --> L010[0.10 LAB-EVIDENCE-01]
+    L010 --> L011[0.11 accessibility] --> L012[0.12 web security] --> L013[0.13 performance] --> L014[0.14 API assurance]
   end
 
-  L06 -. ECO-01 .-> O17
+  L010 -. ECO-01 .-> O17
   B11 -. ECO-02 .-> O17
-  B12 -. ECO-02 .-> L08
-  B12 -. controlled state .-> L09
-  B13 -. ECO-04 .-> L12
-  K15 -. ECO-05 .-> L14
+  B12 -. controlled state .-> L011
+  B12 -. controlled state .-> L012
+  B13 -. ECO-04 .-> L013
+  K15 -. ECO-05 .-> L014
 ```
 
-The dashed edges are capability relationships, not npm dependencies. If actual repository progress reaches these proposed version numbers differently, keep the milestone IDs and move the proposed target versions rather than rewriting history.
+The dashed edges are capability relationships, not npm dependencies. If a future explicit decision moves an unimplemented reservation, retain the stable milestone ID and preserve the prior mapping in the change ledger rather than rewriting history.
 
-### 7.8 Proposed certification bundle sequence
+### 7.8 Planned certification bundle sequence
 
 Use stable bundle/profile IDs independent of package version:
 
@@ -656,29 +658,30 @@ These arrows indicate actual prerequisite capabilities. Unrelated research, visu
 
 The following batch structure is the recommended starting plan when each milestone begins. The version-start planner must still inspect the then-current source and may split batches further, but it should not collapse the contract and integration gates.
 
-#### ECO-00 batches — contract and roadmap freeze
+#### ECO-00 completed work — contract and roadmap freeze
 
-**Batch ECO-00.1 — inventory and reconciliation**
-- Re-resolve all four current branches, package versions, tags/releases, roadmaps, open/active version branches, and documented schemas.
-- Record conflicting/stale documentation without changing publication status from inference.
-- Build the protected-content/version-assignment inventory required by each repository's documentation policy.
+**ECO-00.1 — inventory and reconciliation: complete**
+- Re-resolved all four current branches, package versions, releases, roadmaps, and documented ownership boundaries.
+- Reconciled the published Orchestrator 1.5.0, Lab 0.6.0, Observer 0.10.0, and Kit 1.12.4 baseline.
+- Identified and removed the stale Lab 0.6.0 / LAB-EVIDENCE-01 collision.
 
-**Batch ECO-00.2 — contract registry foundation**
-- Define contract IDs, ownership, schema locations, capability IDs, policy IDs, and change-class rules.
-- Define `SubjectIdentityV1`, `EnvironmentIdentityV1`, `NativeArtifactReferenceV1`, `EvidenceEnvelopeV1`, `EvidenceRequirementV1`, and the minimum compatibility-bundle structure.
-- Create positive and negative JSON fixtures before implementation.
+**ECO-00.2 — contract registry foundation: complete**
+- Added the contract registry and the six minimal v1 reference-layer schemas.
+- Added positive and negative JSON fixtures.
+- Preserved native contract ownership; the common layer references rather than copies native evidence.
 
-**Batch ECO-00.3 — compatibility and certification specification**
-- Define supported/tested/certified/active states.
-- Define candidate-tarball isolation, bundle identity, certification matrix, and supersession rules.
-- Define how current Kit, Observer, Lab, and Orchestrator native artifacts are referenced without changing their schemas.
+**ECO-00.3 — compatibility and certification specification: complete**
+- Frozen states are supported, tested, certified, and active.
+- Bundle identity and supersession rules are defined.
+- The ECO-00 baseline bundle is explicitly supported-only, not tested/certified/active.
 
-**Batch ECO-00.4 — roadmap extraction plan**
-- Produce an explicit per-repo proposed change ledger.
-- For every proposed moved Lab milestone, preserve old version, proposed new version, acceptance criteria, and rationale.
-- Do not edit local roadmap assignments until that rebaseline receives explicit approval.
+**ECO-00.4 — roadmap adoption: complete**
+- Kit reserves 1.15.0/1.16.0 without changing 1.13.0/1.14.0.
+- Orchestrator reserves 1.7.0 after its retained 1.6.0 milestone.
+- Lab preserves 0.6.0-0.9.2 and adds new assurance milestones at 0.10.0-0.17.0.
+- Observer adopts Milestones/versions 0.11.0-0.14.0 through its Project Description, Project Milestones, Roadmap, and Current State authority chain.
 
-**ECO-00 gate:** documentation, contract fixtures, and dependency graph are internally consistent; no circular mandatory dependency exists; no existing roadmap scope disappears.
+**ECO-00 gate:** no existing roadmap scope was removed or silently reassigned; the shared contracts introduce no mandatory circular dependency.
 
 #### ECO-01 batches — executable verification evidence
 
@@ -1080,9 +1083,9 @@ Repository-specific normative feature scopes:
 
 ### 13.1 Documentation authority and synchronization
 
-This coordinated roadmap owns **cross-repository sequencing, dependency logic, contract governance, and proposed version mapping**. It does not replace repository-local roadmap ownership.
+This coordinated roadmap owns **cross-repository sequencing, dependency logic, contract governance, and adopted version reservations**. It does not replace repository-local roadmap ownership.
 
-When a proposed milestone is explicitly adopted:
+When a future coordinated milestone or reservation is explicitly changed or adopted:
 
 - update each affected repository's `ROADMAP.md` with that repository's normative scope and target version;
 - update `CONTRACTS.md`/`ARTIFACTS.md`/`GRAPH_SCHEMA.md` only when that repository actually owns or consumes a contract there;
@@ -1096,7 +1099,7 @@ When a proposed milestone is explicitly adopted:
 
 Never copy this whole document into all four repositories. Sibling repos should link to the central roadmap and keep only their normative local plan.
 
-### 13.2 Proposed repository file layout
+### 13.2 Adopted repository file layout
 
 Central coordination in `my-dev-kit`:
 
@@ -1113,9 +1116,9 @@ ECO-00 now creates the machine-readable coordination assets listed above: the co
 
 ### 13.3 Documentation-preservation rule for roadmap adoption
 
-A coordinated roadmap proposal may recommend moving an unimplemented version. It does not itself authorize editing the local roadmap assignment. Adoption requires an explicit decision that can be recorded as the evidence for the move under the repository documentation-preservation policy.
+A future coordinated change may recommend moving an unimplemented reservation. ECO-00 does not grant blanket authority for later moves. Any move still requires an explicit decision recorded under the affected repository's documentation-preservation policy.
 
-When adopted, preserve:
+When a reservation is moved, preserve:
 
 - old version heading/reference or a clear relocation record;
 - new version assignment;
@@ -1155,7 +1158,7 @@ ECO-00 is complete only when:
 - producer/consumer ownership is unambiguous;
 - first certification profiles and canonical fixtures are defined;
 - compatibility and release sequencing rules are documented;
-- each affected repo has a proposed extraction list;
+- the per-repository ECO-00 adoption/change ledger is recorded;
 - documentation preservation checks pass for every repository actually edited.
 
 ### 14.2 Definition of done for later ecosystem milestones
