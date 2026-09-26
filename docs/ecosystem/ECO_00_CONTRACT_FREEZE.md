@@ -23,7 +23,7 @@ This tuple is inspection provenance and a supported planning baseline. It is not
 ## Adopted version decisions
 
 - Kit keeps 1.13.0 and 1.14.0 unchanged; 1.15.0 is KIT-API-01 and 1.16.0 is KIT-OPS-01.
-- Orchestrator 1.5.0 is published; 1.6.0 remains telemetry/economics; 1.7.0 is ORC-EVIDENCE-01.
+- Orchestrator 1.5.0 is published Semantic Continuity; 1.6.0 / ORC-TELEMETRY is published as of 2026-09-26; 1.7.0 remains ORC-EVIDENCE-01.
 - Lab 0.6.0-0.9.2 keep their existing meanings. LAB-EVIDENCE-01 is assigned to the first unreserved minor, 0.10.0. Later assurance reservations are 0.11.0-0.17.0. No existing Lab feature is moved.
 - Observer 0.11.0-0.14.0 are adopted as diagnostics, controlled state, performance evidence, and bounded browser/viewport matrix milestones, subject to Observer's Project Description and Project Milestones authority.
 
@@ -64,14 +64,14 @@ Positive fixtures must validate against their schema. Files named `*.invalid.jso
 
 ## Dependency outcome
 
-The next ecosystem-prerequisite implementation is Orchestrator 1.6.0. Kit 1.13.0 and Lab 0.6.1 are independent valid local next milestones.
+ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.13.0 and Lab 0.6.1 remain independent valid local next milestones.
 
 ECO-01 requires LAB-EVIDENCE-01 (Lab 0.10.0) and ORC-EVIDENCE-01 (Orchestrator 1.7.0) as exact candidates or releases. ORC-EVIDENCE-01 may be implemented against these frozen contracts before the Lab producer exists, but certification cannot occur until the producer and consumer tuple is tested together.
 
 ## Repository adoption/change ledger
 
 - **my-dev-kit:** central roadmap changed from proposal to adopted ECO-00 baseline; shared registry/schemas/fixtures/milestone registry/baseline bundle added; local roadmap gained 1.15.0 and 1.16.0; 1.13.0/1.14.0/2.0.0 preserved.
-- **my-dev-kit-orchestrator:** 1.5.0 remains current; 1.6.0 remains next; 1.7.0 added as ORC-EVIDENCE-01; native RSP-NNN and integrity ownership unchanged.
+- **my-dev-kit-orchestrator:** 1.6.0 is now current/published; 1.7.0 remains next as ORC-EVIDENCE-01; native RSP-NNN, telemetry, and integrity ownership remain Orchestrator-owned.
 - **my-dev-kit-lab:** 0.6.0-0.9.2 preserved without relocation; 0.10.0-0.17.0 added as new assurance reservations; exact next local action remains 0.6.1.
 - **my-frontend-observer:** durable intent and milestone authority extended first, then roadmap/current-state updated for 0.11.0-0.14.0; 0.10.0 remains current.
 

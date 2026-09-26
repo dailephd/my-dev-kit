@@ -192,7 +192,16 @@
   ],
   "nextEcosystemPrerequisite": {
     "repository": "dailephd/my-dev-kit-orchestrator",
-    "version": "1.6.0",
-    "milestoneId": "ORC-TELEMETRY"
-  }
+    "version": "1.7.0",
+    "milestoneId": "ORC-EVIDENCE-01"
+  },
+  "completedMilestones": [
+    {
+      "milestoneId": "ORC-TELEMETRY",
+      "repository": "dailephd/my-dev-kit-orchestrator",
+      "version": "1.6.0",
+      "publishedAt": "2026-09-26T15:27:05Z",
+      "commit": "cb9f8c02b2ce4e80231159f8d9d21e8509d8ab57"
+    }
+  ]
 }

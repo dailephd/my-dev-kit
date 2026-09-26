@@ -31,7 +31,7 @@ Existing commitments preserved by ECO-00:
 - Kit 1.13.0 remains Android retrieval benchmarks, examples, and workflows.
 - Kit 1.14.0 remains broader Python/JavaScript/framework evidence. Kit 2.0.0 remains a separate artifact/plugin initiative.
 - Orchestrator 1.5.0 is published Semantic Continuity and owns canonical RSP-NNN responsibility identity.
-- Orchestrator 1.6.0 remains workflow economics and deterministic run telemetry.
+- Orchestrator 1.6.0 is published Workflow Economics and Deterministic Run Telemetry; Orchestrator 1.7.0 remains the next generic-evidence consumer milestone.
 - Observer 0.10.0 is published full visual human–LLM workflow.
 - Lab 0.6.0 is published index freshness/changed-file detection; Lab 0.6.1-0.9.2 keep their existing local roadmap purposes.
 - No previously assigned Lab future milestone is moved by ECO-00; new assurance work starts at the first unreserved minor, 0.10.0.
@@ -487,9 +487,9 @@ These reservations were adopted by ECO-00 on 2026-09-25. Published history does 
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
 ### 7.2 Orchestrator
-- 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is now an existing native contract that later evidence references rather than redefines.
-- 1.6.0: existing workflow telemetry scope unchanged; link run/invocation identities without claiming application observability.
-- 1.7.0 / ORC-EVIDENCE-01: typed evidence-plan/reference intake; adapters for existing native artifacts; cross-tool freshness/compatibility enforcement through canonical integrity/judge owners; structured status/check output; preservation across prompt/mark/check/status/export/correction paths.
+- 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
+- 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.
+- 1.7.0 / ORC-EVIDENCE-01: next planned feature; typed evidence-plan/reference intake, adapters for existing native artifacts, cross-tool freshness/compatibility enforcement through canonical integrity/judge owners, structured status/check output, and preservation across prompt/mark/check/status/export/correction paths.
 - Further Orchestrator releases are not automatically required for each new Lab check. Versioned generic requirement/evidence interfaces should allow new externally evaluated profiles without duplicating their policy. A genuinely new mandatory lifecycle semantic requires a separately scoped minor.
 
 ### 7.3 Observer
@@ -559,7 +559,7 @@ flowchart LR
   end
 
   subgraph ORC[orchestrator]
-    O15[1.5.0 current semantic continuity] --> O16[1.6 workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
+    O15[1.5.0 semantic continuity] --> O16[1.6.0 current workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
   end
 
   subgraph OBS[observer]
@@ -617,7 +617,7 @@ These arrows indicate actual prerequisite capabilities. Unrelated research, visu
 
 ### 8.2 ECO-01: first end-to-end evidence milestone
 - Producer work: LAB-EVIDENCE-01 / Lab 0.10.0, plus bounded adapters over existing Kit/Observer artifacts.
-- Consumer work: ORC-EVIDENCE-01 / Orchestrator 1.7.0, following the published 1.5.0 semantic-continuity contract and planned 1.6.0 telemetry milestone.
+- Consumer work: ORC-EVIDENCE-01 / Orchestrator 1.7.0, following the published 1.5.0 semantic-continuity contract and published 1.6.0 telemetry substrate.
 - Kit and Observer production changes are not required unless adapter tests demonstrate genuinely missing provenance that cannot be honestly represented as unknown.
 - ECO-00 baseline proof tuple: Kit 1.12.4 + Observer 0.10.0 + Lab 0.10.0 candidate + Orchestrator 1.7.0 candidate. This is a future test target, NOT certified compatibility. If upstreams advance before execution, preserve this tuple as the ECO-00 baseline and certify any newer tuple separately rather than silently changing the lock.
 - Fixture: one small local full-stack app plus a small CLI project, frozen source and deterministic data. Use the CLI to prove that no browser is required for ordinary software verification.
@@ -677,7 +677,7 @@ The following batch structure is the recommended starting plan when each milesto
 
 **ECO-00.4 — roadmap adoption: complete**
 - Kit reserves 1.15.0/1.16.0 without changing 1.13.0/1.14.0.
-- Orchestrator reserves 1.7.0 after its retained 1.6.0 milestone.
+- Orchestrator 1.6.0 is now published; 1.7.0 remains reserved as the next ORC-EVIDENCE-01 milestone.
 - Lab preserves 0.6.0-0.9.2 and adds new assurance milestones at 0.10.0-0.17.0.
 - Observer adopts Milestones/versions 0.11.0-0.14.0 through its Project Description, Project Milestones, Roadmap, and Current State authority chain.
 
@@ -1141,7 +1141,7 @@ ECO-00 adoption is a documentation/contract-only repository change. It changes n
 
 ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
-The next retained Orchestrator feature is 1.6.0 Workflow Economics and Deterministic Run Telemetry. Kit 1.13.0 and Lab 0.6.1 remain valid independent local next milestones. Lab continues its preserved 0.6.1-0.9.2 sequence before LAB-EVIDENCE-01 at 0.10.0. ORC-EVIDENCE-01 remains reserved for Orchestrator 1.7.0.
+Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.13.0 and Lab 0.6.1 remain valid independent local next milestones. Lab continues its preserved 0.6.1-0.9.2 sequence before LAB-EVIDENCE-01 at 0.10.0.
 
 ECO-01 begins only when its producer and consumer milestones are available as exact candidates or releases. Prove one CLI and one full-stack end-to-end case before adding broader assurance adapters. The working rule remains: freeze the contract; build against exact evidence; test the exact combination; activate only a certified capability. Matching package version numbers are unnecessary.
 
@@ -1177,7 +1177,7 @@ A milestone is not complete merely because all repository-local implementations 
 
 ### 14.3 First implementation after this document
 
-Do **not** start the later assurance domains in parallel merely because their version reservations now exist. The next ecosystem-prerequisite implementation is Orchestrator 1.6.0. Repository-local work such as Kit 1.13.0 or Lab 0.6.1 may proceed independently. ORC-EVIDENCE-01 (1.7.0) can implement against the frozen ECO-00 reference contracts, but ECO-01 certification must wait for the required Lab producer capability at 0.10.0 and the exact-version compatibility run.
+Do **not** start the later assurance domains in parallel merely because their version reservations exist. ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer implementation is ORC-EVIDENCE-01 (Orchestrator 1.7.0), which can build against the frozen ECO-00 reference contracts. Repository-local work such as Kit 1.13.0 or Lab 0.6.1 may proceed independently. ECO-01 certification must still wait for LAB-EVIDENCE-01 at Lab 0.10.0 and an exact producer/consumer compatibility run.
 
 ## 15. Source record
 
