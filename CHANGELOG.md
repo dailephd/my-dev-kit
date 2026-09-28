@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.12.5 - 2026-09-28
+
+- Added `index --incremental --refresh-scope <changed-files|affected-neighborhood>`. Plain `index --incremental` remains backward-compatible and is equivalent to explicit `--refresh-scope changed-files`. `--refresh-scope` is rejected without `--incremental`, and rejected together with `--dry-run`.
+- `--refresh-scope affected-neighborhood` additionally forces fresh extraction of otherwise-unchanged files exactly one code-graph hop (bidirectional, every structurally valid retained edge kind, non-recursive) from modified or removed baseline files, using the previous accepted index as the seed baseline. Added files are freshly extracted as usual but never used to fabricate baseline seeds. Removed files may seed surviving neighbors but never reappear in current output.
+- Trusted-baseline identity: internal cache schema bumped to `1.2.0`, adding SHA-256 identity of the exact `manifest.json` and the manifest-referenced `symbol-index.json`/`code-graph.json` the previous build produced, so a later run can prove the cache and public artifacts describe one compatible baseline. A missing, older, or incompatible cache triggers one full rebuild to establish a new baseline.
+- Fail-closed fallback: any untrustworthy, missing, incompatible, or mismatched baseline evidence (or ineligible partial-rebuild reuse) causes a truthful full rebuild under `--refresh-scope affected-neighborhood`. It never silently downgrades to `changed-files` reuse.
+- New public execution evidence on the command result (`incrementalRefresh`, `null` for an ordinary non-incremental index) and, additively, on `manifest.json` when an incremental invocation actually writes the index: `requestedScope`, `appliedScope`, `selectionStatus`, `fallbackReason`, `seedFileCount`, `seedSymbolCount`, `affectedNodeCount`, `affectedEdgeCount`, `forcedNeighborReanalysisFileCount`, `forcedNeighborSample` (bounded to 20 paths), `freshExtractionFileCount`, `reusedFileCount`. No public manifest schema-major bump.
+- A no-change incremental invocation remains a no-op: it applies scope `none` with status `not-needed`, performs zero fresh extraction, does not run affected-neighborhood selection, and does not rewrite the on-disk manifest/cache/artifacts merely to record the request; the command result still reports the current request's evidence.
+- Call-graph full regeneration during a partial rebuild remains a separate, truthful `partialRebuildFallbackArtifacts` report from `appliedScope`; a successful `affected-neighborhood` partial run can still report a call-graph artifact fallback.
+- No second index or graph engine, no graph mutation, no graph-diff dependency, and no multi-hop/recursive neighborhood traversal.
+
 ## 1.12.4 - 2026-09-22
 
 - Supported `.test.` / `.spec.` files beneath an explicitly selected `--src` root now participate in core indexing like any other supported file. Previously a default filename-pattern exclusion dropped them even when their root was selected. `.d.ts` declaration files remain excluded, and user `--exclude` values and default ignored directories remain authoritative.

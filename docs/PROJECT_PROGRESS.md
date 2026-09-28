@@ -4,15 +4,19 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.4` is the latest published release.
+`@dailephd/my-dev-kit@1.12.5` is the current release.
 
-## Planned next: v1.12.5
+## Shipped: v1.12.5
 
-Version 1.12.5 is the next planned my-dev-kit patch. It adds an explicit affected-neighborhood refresh scope to the existing incremental-indexing pipeline while preserving the current v1.13.0 Android benchmark/example/workflow milestone and all later roadmap assignments.
+Version 1.12.5 ships affected-neighborhood incremental refresh in the existing indexing pipeline. The installed CLI supports `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains compatible with `changed-files`. The affected-neighborhood scope freshly extracts unchanged files exactly one graph hop from modified or removed baseline files, verified against the trusted prior index. Missing, incompatible, unreadable, or mismatched baseline evidence fails closed to a truthful full rebuild. No-change invocations remain no-ops, and call-graph regeneration remains separately reported.
 
-The planned capability keeps plain `index --incremental` backward-compatible with changed-files refresh, adds an explicit affected-neighborhood scope based on the trusted previous one-hop code-graph neighborhood, and fails closed to a truthful full rebuild when the required baseline identity/evidence cannot be established. It extends per-file extraction/reuse selection only; the existing merged-index, global graph/analyzer, managed-artifact, and call-graph fallback architecture remains the owner.
+This release provides the published Kit capability required for Lab's planned v0.6.3 affected-neighborhood treatment. Lab v0.6.3 remains its own planned milestone. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) remains the next planned Kit milestone; later roadmap scope is unchanged.
 
-This patch is also the upstream prerequisite for my-dev-kit-lab v0.6.3 to execute a real four-treatment partial-refresh experiment without simulating or mutating Kit index artifacts. See [ROADMAP.md](ROADMAP.md#version-1125) for the frozen planned scope.
+### v1.12.5 release validation
+
+- Full suite: 2,707 tests passed across 211 files.
+- `npm run verify`, retrieval benchmark (6/6), repository security tests (60), and target-applicable Lab static/adversarial/fuzz validation passed.
+- Cross-platform readiness CI run [36474736363](https://github.com/dailephd/my-dev-kit/actions/runs/36474736363) passed on Ubuntu, macOS, and Windows with Node.js 24.x.
 
 ## Shipped: v1.12.4
 
@@ -34,7 +38,7 @@ Version 1.12.4 is published. Package metadata and the CLI report `1.12.4`. It is
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the next planned Kit patch. Version 1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone after it. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the later explicit v1.12.5 decision is additive and does not move the existing 1.13.0-1.16.0 assignments.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the current Kit release. Version 1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone next. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the later explicit v1.12.5 decision is additive and does not move the existing 1.13.0-1.16.0 assignments.
 
 ## Shipped: v1.12.3
 

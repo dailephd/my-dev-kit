@@ -260,6 +260,15 @@ Source discovery (`src/indexing/discoverSourceFiles.ts`, `DEFAULT_FILE_EXCLUDE_P
 - `tests/index/cacheMetadata.spec.ts` and `tests/index/incrementalIndexing.spec.ts` - fingerprint coverage of the default file-exclusion policy and incremental behavior
 - `tests/data-model/sourceDiscovery.spec.ts` and `tests/context/testInfrastructureDiscoveryResolver.spec.ts` - unchanged downstream discovery consumers
 
+### v1.12.5 affected-neighborhood incremental refresh validation
+
+Trusted-baseline identity (`src/indexing/trustedBaseline.ts`, cache schema `1.2.0` in `src/indexing/cacheMetadata.ts`), the pure affected-neighborhood selector (`src/indexing/affectedNeighborhood.ts`), forced unchanged-neighbor re-extraction (`src/indexing/partialRebuild.ts`), and the public `--refresh-scope` orchestration/evidence contract (`src/indexing/runIndexCommand.ts`, `src/indexing/incrementalRefreshTypes.ts`) own this capability. When changing any of these, keep these focused suites together:
+
+- `tests/index/incrementalRefreshScope.spec.ts` - the real-CLI `--refresh-scope` contract: accepted forms, invalid-combination rejection, `null`/manifest-additive `incrementalRefresh` behavior, human output, full/changed-files/affected-neighborhood convergence on equivalent final semantic artifacts (symbol-index, code-graph, classification, data-model, data-model-graph, frontend-semantic, frontend-reachability), and every full-fallback reason
+- `tests/index/affectedNeighborhoodRefresh.spec.ts` - `loadTrustedBaseline` and `selectAffectedNeighborhood` unit coverage: baseline identity/hash verification, seeding, one-hop bidirectional geometry, current-file mapping, and fail-closed unsafe conditions
+- `tests/index/partialRebuild.spec.ts` and `tests/index/cacheMetadata.spec.ts` - forced-reextraction-path validation and cache schema `1.2.0`/`baselineArtifacts` coverage
+- `tests/index/incrementalIndexing.spec.ts` - unchanged v1.8.0 incremental behavior stays green alongside the new scope
+
 ## Local CLI smoke test
 
 After building, run a basic TypeScript smoke test:

@@ -38,6 +38,8 @@ replacement for manifest identity. Detailed relationships are defined in
 [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md). Producer flow is in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
+**v1.12.5:** `index --incremental` gains an additive `--refresh-scope <changed-files|affected-neighborhood>` selector; plain `--incremental` remains equivalent to `--refresh-scope changed-files`. `manifest.json` remains the primary identity/registry authority. Internal `cache-metadata.json` (schema `1.2.0`) additionally carries SHA-256 identity of the manifest and manifest-referenced symbol-index/code-graph artifacts to strengthen incremental baseline trust, but this stays internal bookkeeping — it does not replace or bypass manifest authority, and it is never registered in `manifest.json`'s `artifacts` map. `manifest.json` gains an additive optional `incrementalRefresh` field (present only when an incremental invocation actually writes the index) carrying requested-versus-applied scope, selection status, fallback reason, and fresh/reused evidence; the command result carries the same object, `null` for an ordinary non-incremental index. Untrustworthy, missing, or mismatched baseline evidence fails closed to a full rebuild, reported truthfully rather than silently narrowed to `changed-files` reuse. A no-change incremental invocation leaves the on-disk manifest untouched; only the command result reflects the current no-change request. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) for the exact `incrementalRefresh` shape and [COMMANDS.md](COMMANDS.md) for CLI syntax.
+
 ## Graph and schema compatibility
 
 Stable artifact kinds, schema versions, node IDs, node/edge kinds, semantic and

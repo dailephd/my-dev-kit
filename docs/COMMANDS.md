@@ -1,6 +1,8 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.4`: nine commands, with the v1.12.1 evidence-limit corrections, the v1.12.3 context-readiness and responsibility-mapping corrections, and v1.12.4 core indexing of test files beneath selected source roots. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.5`: nine commands, including core indexing and retrieval of selected test files and the additive incremental refresh-scope selector. Package versions and artifact schema versions are separate.
+
+`index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
@@ -69,6 +71,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 - `--progress`: bounded progress diagnostics on stderr.
 - `--call-graph`: produce conservative static call-graph evidence for supported languages.
 - `--incremental`: use eligible cached per-file analysis and report reuse/fallback.
+- `--refresh-scope <scope>` (v1.12.5): with `--incremental`, `changed-files` or `affected-neighborhood`. See "Incremental refresh scope (v1.12.5)" below.
 - `--reset-cache`: clear internal cache metadata before running. It does not delete ordinary public artifacts by itself.
 - `--json`: structured command result.
 
@@ -126,6 +129,28 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cach
 ```
 
 Do not delete the baseline required by a pending comparison. Watch mode and universal artifact-specific partial reuse are not implied by incremental indexing.
+
+### Incremental refresh scope (v1.12.5)
+
+This subsection describes the installed v1.12.5 CLI behavior.
+
+```powershell
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --json
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
+```
+
+- Allowed scope values: `changed-files`, `affected-neighborhood`.
+- Plain `--incremental` (no `--refresh-scope`) is equivalent to explicit `--refresh-scope changed-files` — the same behavior documented above under "Incremental indexing (v1.8.0)".
+- `--refresh-scope` requires `--incremental`; used without it, the command rejects the invocation. `--refresh-scope` combined with `--dry-run` is also rejected.
+- `--refresh-scope affected-neighborhood` additionally forces fresh extraction of otherwise-unchanged files exactly one code-graph hop (both directions, every structurally valid retained edge kind, no neighbors-of-neighbors) from modified or removed baseline files. Modified/removed baseline files (and their baseline symbols) seed the neighborhood; added files are freshly extracted as usual but never seed a fabricated baseline. Files outside the selected neighborhood remain ordinary reused unchanged files.
+- Bootstrap/full fallback: a missing or old-schema cache, a project/source-root/config mismatch, or any baseline artifact whose recorded SHA-256 no longer matches its file causes a full rebuild. Under `affected-neighborhood`, this is always a truthful `full` fallback — it never silently narrows to `changed-files` reuse. `--reset-cache` also forces this path (reported as fallback reason `cache-missing`).
+- No-change behavior: when no add/change/remove is detected, the invocation is a no-op — it applies scope `none` with status `not-needed`, performs no affected-neighborhood selection, and leaves the on-disk `manifest.json` exactly as the previous build wrote it. The command result still truthfully reports the current request's `requestedScope`/`appliedScope`.
+- Call-graph interaction: when `--call-graph` is requested during a partial rebuild, `call-graph.json` is always fully regenerated and reported via `partialRebuildFallbackArtifacts: ["call-graph"]`, independent of and never conflated with `incrementalRefresh.appliedScope` (a successful `affected-neighborhood` partial run can carry both at once).
+- JSON result: the command result carries `incrementalRefresh` (`null` for an ordinary non-incremental index; non-null for every `--incremental` invocation) with fields `requestedScope`, `appliedScope` (`none` | `changed-files` | `affected-neighborhood` | `full`), `selectionStatus` (`not-needed` | `applied` | `fallback-full`), `fallbackReason` (a machine-readable reason code, `null` unless `fallback-full`), `seedFileCount`/`seedSymbolCount`/`affectedNodeCount`/`affectedEdgeCount` (`null` unless a trusted neighborhood was actually applied), `forcedNeighborReanalysisFileCount`, `forcedNeighborSample` (sorted, capped at 20 paths — the same bounded-sample convention as `changedFileSummary`), `freshExtractionFileCount`, and `reusedFileCount`.
+- Human output: a plain-text run additionally prints a `Refresh scope: requested=... applied=... status=...` line, a `Refresh fallback reason: ...` line when applicable, extraction counts, and, when a neighborhood was applied, seed/node/edge counts.
+- Manifest: `manifest.json` gains the same `incrementalRefresh` object additively, but only when an incremental invocation actually writes the index — a no-change run's on-disk manifest is untouched and therefore does not reflect the no-change request. No public artifact schema-major bump was made for this.
+- `--reset-cache` composes with `--refresh-scope` exactly as with plain `--incremental`: it clears `cache-metadata.json` first, so the following run always bootstraps with a full rebuild and `fallbackReason: 'cache-missing'`.
 
 ### Artifacts and Android evidence
 

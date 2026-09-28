@@ -488,16 +488,18 @@ These reservations were adopted by ECO-00 on 2026-09-25. Published history does 
 
 #### 7.1.1 Post-ECO-00 Kit v1.12.5 additive patch decision — 2026-09-28
 
-A later explicit planning decision adds Kit v1.12.5 between the published v1.12.4 baseline and the already-reserved v1.13.0 milestone. This is an additive patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation.
+A later explicit planning decision added Kit v1.12.5 between the published v1.12.4 baseline and the already-reserved v1.13.0 milestone. This is an additive patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation.
 
-- 1.12.5: affected-neighborhood incremental refresh over the existing partial-rebuild architecture.
-- 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged.
+**Status update: Kit v1.12.5 is published.** Its affected-neighborhood refresh capability is available as an installable prerequisite for Lab v0.6.3; this does not imply that Lab v0.6.3's consuming implementation now exists.
+
+- 1.12.5: affected-neighborhood incremental refresh over the existing partial-rebuild architecture — published.
+- 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged (planned).
 - 1.14.0: framework expansion remains unchanged.
 - 1.15.0 / KIT-API-01 remains unchanged.
 - 1.16.0 / KIT-OPS-01 remains unchanged.
 - 2.0.0 remains the separate larger schema/plugin program.
 
-Kit v1.12.5 is a prerequisite for Lab v0.6.3 to execute the planned affected-neighborhood-refresh treatment against a real upstream Kit capability. The dependency is capability-level rather than an npm dependency: Lab must record requested treatment and actual Kit execution/fallback and must not simulate the upstream refresh by editing index artifacts.
+Kit v1.12.5 is the published prerequisite for Lab v0.6.3 to execute the planned affected-neighborhood-refresh treatment against a real upstream Kit capability. The dependency is capability-level rather than an npm dependency: Lab must record requested treatment and actual Kit execution/fallback and must not simulate the upstream refresh by editing index artifacts. Publishing Kit v1.12.5 makes the prerequisite available; it does not mark the separate Lab v0.6.3 implementation complete.
 
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
@@ -568,7 +570,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4 current] --> K125[1.12.5 affected-neighborhood refresh] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
+    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
   end
 
   subgraph ORC[orchestrator]

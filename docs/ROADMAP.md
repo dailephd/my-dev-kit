@@ -1415,9 +1415,9 @@ Version 1.12.4 is a bounded corrective patch for core test-file indexing and ret
 
 ## Version 1.12.5
 
-**Status: planned.**
+**Status: published.**
 
-Version 1.12.5 adds affected-neighborhood incremental refresh to the existing incremental-indexing pipeline without moving or changing the scope of v1.13.0 or any later roadmap version.
+Version 1.12.5 adds affected-neighborhood incremental refresh to the existing incremental-indexing pipeline without moving or changing the scope of v1.13.0 or any later roadmap version. The released capability includes trusted baseline identity and selection, forced neighbor re-extraction, the public `--refresh-scope` selector, runtime orchestration, and truthful execution evidence. See [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1125) for current release status.
 
 The goal is to let an incremental run conservatively re-extract otherwise-unchanged files that lie in the trusted previous index's one-hop affected neighborhood, while preserving the current merged-index, global graph rebuild, semantic-analyzer, managed-artifact, and call-graph fallback architecture.
 

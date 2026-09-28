@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import { runIndexCommand, type IndexCacheSummary, type RunIndexCommandOptions } from '../indexing/runIndexCommand.js'
 import type { PreflightWarning } from '../indexing/preflight.js'
 import type { CacheResetResult } from '../indexing/cacheMetadata.js'
+import type { IncrementalRefreshSummary } from '../indexing/incrementalRefreshTypes.js'
 
 export function registerIndexCommand(program: Command): void {
   program
@@ -18,6 +19,10 @@ export function registerIndexCommand(program: Command): void {
     .option(
       '--incremental',
       'partially rebuild using internal cache metadata: reuse unchanged files, re-analyze changed/added files, drop removed files; falls back to a full rebuild when partial reuse is unsafe (see docs/COMMANDS.md)'
+    )
+    .option(
+      '--refresh-scope <scope>',
+      'with --incremental: changed-files (default) re-analyzes only added/changed files; affected-neighborhood also re-analyzes unchanged files one graph hop from modified/removed files; falls back to a full rebuild when the previous index is not a trusted baseline'
     )
     .option('--reset-cache', 'clear internal incremental-index cache metadata for --out before running')
     .option('--json', 'print JSON output')
@@ -40,6 +45,7 @@ export function registerIndexCommand(program: Command): void {
         console.log('Call graph: call-graph.json')
       }
       printCacheSummary(result.cache)
+      printIncrementalRefresh(result.incrementalRefresh)
       printPreflightWarnings(result.preflightWarnings)
     })
 }
@@ -74,6 +80,22 @@ function printCacheSummary(cache: IndexCacheSummary): void {
   }
   if (cache.partialRebuildFallbackArtifacts.length > 0) {
     console.log(`Partial rebuild artifact fallback: ${cache.partialRebuildFallbackArtifacts.join(', ')} regenerated in full (not incrementally reused).`)
+  }
+}
+
+function printIncrementalRefresh(refresh: IncrementalRefreshSummary | null): void {
+  if (!refresh) return
+  console.log(
+    `Refresh scope: requested=${refresh.requestedScope} applied=${refresh.appliedScope} status=${refresh.selectionStatus}`
+  )
+  if (refresh.fallbackReason) console.log(`Refresh fallback reason: ${refresh.fallbackReason}`)
+  console.log(
+    `Refresh extraction: fresh=${refresh.freshExtractionFileCount} reused=${refresh.reusedFileCount} forced-neighbors=${refresh.forcedNeighborReanalysisFileCount}`
+  )
+  if (refresh.seedFileCount !== null) {
+    console.log(
+      `Affected neighborhood: seed-files=${refresh.seedFileCount} seed-symbols=${refresh.seedSymbolCount} nodes=${refresh.affectedNodeCount} edges=${refresh.affectedEdgeCount}`
+    )
   }
 }
 
