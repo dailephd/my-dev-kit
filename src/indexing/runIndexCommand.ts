@@ -36,6 +36,17 @@ import {
   type ChangedFileSummary,
 } from './cacheMetadata.js'
 import { checkPartialRebuildEligibility, buildPartialSymbolIndex } from './partialRebuild.js'
+import { loadTrustedBaseline } from './trustedBaseline.js'
+import { selectAffectedNeighborhood } from './affectedNeighborhood.js'
+import {
+  INCREMENTAL_REFRESH_SCOPES,
+  buildAffectedNeighborhoodRefreshSummary,
+  buildChangedFilesRefreshSummary,
+  buildFullFallbackRefreshSummary,
+  buildNoChangeRefreshSummary,
+  type IncrementalRefreshScope,
+  type IncrementalRefreshSummary,
+} from './incrementalRefreshTypes.js'
 import type { IndexManifest } from './manifestTypes.js'
 import { refreshIndexOutput, type RefreshIndexOutputResult } from './refreshIndexOutput.js'
 import { replaceAnalyzerStatuses, runSemanticAnalyzers } from './runSemanticAnalyzers.js'
@@ -112,6 +123,8 @@ export interface RunIndexCommandOptions {
   dryRun?: boolean
   progress?: boolean
   incremental?: boolean
+  /** Only valid with `incremental`. Defaults to `changed-files` at runtime; never defaulted by the CLI parser. */
+  refreshScope?: IncrementalRefreshScope
   resetCache?: boolean
 }
 
@@ -164,6 +177,8 @@ export interface RunIndexCommandIndexResult {
   androidTestSemanticPath: string | null
   cache: IndexCacheSummary
   cacheReset: CacheResetResult | null
+  /** v1.12.5: `null` for a plain (non-incremental) index; non-null for every `--incremental` invocation. */
+  incrementalRefresh: IncrementalRefreshSummary | null
 }
 
 export interface RunIndexCommandDryRunResult {
@@ -208,6 +223,20 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
 
   if (options.language && !SUPPORTED_LANGUAGES.has(options.language)) {
     throw new Error(`Unsupported language "${options.language}". Supported values: typescript, javascript, python.`)
+  }
+
+  if (options.refreshScope !== undefined) {
+    if (!(INCREMENTAL_REFRESH_SCOPES as readonly string[]).includes(options.refreshScope)) {
+      throw new Error(
+        `Unsupported refresh scope "${options.refreshScope}". Supported values: ${INCREMENTAL_REFRESH_SCOPES.join(', ')}.`
+      )
+    }
+    if (options.incremental !== true) {
+      throw new Error('--refresh-scope requires --incremental.')
+    }
+    if (options.dryRun) {
+      throw new Error('--refresh-scope cannot be combined with --dry-run.')
+    }
   }
 
   const normalizedSourceRoots = sourceRoots.map((sourceRoot) => toForwardSlash(sourceRoot))
@@ -300,6 +329,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
         partialRebuildFallbackArtifacts: [],
       },
       cacheReset,
+      incrementalRefresh: null,
     }
   }
 
@@ -374,8 +404,13 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   })
 
   const cacheRead = readCacheMetadata(outputDir)
+  const requestedScope: IncrementalRefreshScope = options.refreshScope ?? 'changed-files'
 
-  const fullRebuild = (cacheMode: CacheMode, invalidationReason: string | null): RunIndexCommandIndexResult => {
+  const fullRebuild = (
+    cacheMode: CacheMode,
+    invalidationReason: string | null,
+    refreshFallbackReason: string
+  ): RunIndexCommandIndexResult => {
     const built = runFullIndexBuild({
       projectRoot,
       normalizedSourceRoots,
@@ -388,6 +423,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       cacheInvalidationReason: invalidationReason,
       changedFileSummary: null,
       partialRebuildFallbackArtifacts: [],
+      fullFallback: { requestedScope, reason: refreshFallbackReason },
       androidResult,
       androidGradleResult,
       androidManifestResult,
@@ -416,22 +452,27 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   }
 
   if (cacheRead.status === 'missing') {
-    return fullRebuild('incremental-full-initial', null)
+    return fullRebuild('incremental-full-initial', null, 'cache-missing')
   }
 
   if (cacheRead.status === 'invalid') {
-    return fullRebuild('incremental-full-cache-incompatible', cacheRead.reason)
+    return fullRebuild('incremental-full-cache-incompatible', cacheRead.reason, 'cache-incompatible')
   }
 
   const compatibility = checkCacheCompatibility(cacheRead.metadata)
   if (!compatibility.compatible) {
-    return fullRebuild('incremental-full-cache-incompatible', compatibility.reason ?? 'Cache metadata is incompatible.')
+    return fullRebuild(
+      'incremental-full-cache-incompatible',
+      compatibility.reason ?? 'Cache metadata is incompatible.',
+      'cache-incompatible'
+    )
   }
 
   if (cacheRead.metadata.configFingerprint !== configFingerprint) {
     return fullRebuild(
       'incremental-full-config-changed',
-      'Index configuration changed (source roots, --exclude values, --call-graph, --language, default ignore or file-exclusion rules, or detected Android project/module/source-set evidence).'
+      'Index configuration changed (source roots, --exclude values, --call-graph, --language, default ignore or file-exclusion rules, or detected Android project/module/source-set evidence).',
+      'config-changed'
     )
   }
 
@@ -453,7 +494,100 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     const detailed = classifyChangedFilePaths(cacheRead.metadata.files, currentFileEntries)
     const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
 
+    // Full rebuild for a change-detected run whose partial reuse was not possible or trusted.
+    const changeDetectedFullRebuild = (
+      invalidationReason: string | null,
+      refreshFallbackReason: string
+    ): RunIndexCommandIndexResult => {
+      const built = runFullIndexBuild({
+        projectRoot,
+        normalizedSourceRoots,
+        options,
+        outputDir,
+        progress,
+        commandStartTime,
+        indexMode: 'incremental',
+        cacheMode: 'incremental-change-detected-full-rebuild',
+        cacheInvalidationReason: invalidationReason,
+        changedFileSummary,
+        partialRebuildFallbackArtifacts: [],
+        fullFallback: { requestedScope, reason: refreshFallbackReason },
+        androidResult,
+        androidGradleResult,
+        androidManifestResult,
+        androidResourcesResult,
+      })
+      writeMergedCacheMetadata({
+        outputDir,
+        projectRoot,
+        normalizedSourceRoots,
+        configFingerprint,
+        baseFiles: buildCacheFileEntries(built.discoveryFiles),
+        fileExtractionMeta: built.fileExtractionMeta,
+      })
+      return {
+        ...built.result,
+        cache: {
+          requested: true,
+          mode: 'incremental-change-detected-full-rebuild',
+          cacheMetadataPath,
+          invalidationReason,
+          changedFileSummary,
+          partialRebuildFallbackArtifacts: [],
+        },
+        cacheReset,
+      }
+    }
+
     if (eligibility.eligible) {
+      // Affected-neighborhood: select unchanged neighbors to freshly re-extract, or fall back to full.
+      let forceReextractPaths = new Set<string>()
+      let neighborhood: {
+        seedFileCount: number
+        seedSymbolCount: number
+        affectedNodeCount: number
+        affectedEdgeCount: number
+      } | null = null
+      if (requestedScope === 'affected-neighborhood') {
+        const baseline = loadTrustedBaseline({
+          outputDir,
+          projectRoot,
+          sourceRoots: normalizedSourceRoots,
+          configFingerprint,
+        })
+        const selection = selectAffectedNeighborhood({
+          baseline,
+          classification: detailed,
+          currentPaths: currentFileEntries.map((entry) => entry.path),
+          sourceRoots: normalizedSourceRoots,
+        })
+        const fallback = (reason: string, detail: string) =>
+          changeDetectedFullRebuild(`Affected-neighborhood selection was not safe (${reason}): ${detail}`, reason)
+
+        if (selection.status === 'baseline-not-trusted') return fallback(selection.reason, selection.detail)
+        if (selection.status === 'unsafe') return fallback(selection.reason, selection.detail)
+        if (selection.unseededPaths.length > 0) {
+          return fallback(
+            'unseeded-changed-path',
+            `Modified/removed path(s) have no baseline identity: ${selection.unseededPaths.slice(0, 5).join(', ')}`
+          )
+        }
+
+        // Defensive boundary check: the builder accepts only current, discovered, unchanged paths.
+        const discovered = new Set(discovery.files.map((file) => toForwardSlash(file.relPath)))
+        const unchanged = new Set(detailed.unchanged)
+        if (!selection.unchangedNeighborFilePaths.every((neighbor) => discovered.has(neighbor) && unchanged.has(neighbor))) {
+          return fallback('invalid-forced-reextract-selection', 'A selected neighbor is not a current unchanged discovered file.')
+        }
+        forceReextractPaths = new Set(selection.unchangedNeighborFilePaths)
+        neighborhood = {
+          seedFileCount: selection.seedFileCount,
+          seedSymbolCount: selection.seedSymbolCount,
+          affectedNodeCount: selection.affectedNodeCount,
+          affectedEdgeCount: selection.affectedEdgeCount,
+        }
+      }
+
       const previousCacheEntriesByPath = new Map(cacheRead.metadata.files.map((entry) => [entry.path, entry]))
       const partial = buildPartialSymbolIndex({
         repoRoot: projectRoot,
@@ -461,9 +595,20 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
         buildCallGraph: options.callGraph === true,
         discoveryFiles: discovery.files,
         unchangedPaths: new Set(detailed.unchanged),
+        forceReextractPaths,
         previousFileSummariesByPath: eligibility.previousFileSummariesByPath,
         previousCacheEntriesByPath,
       })
+      const freshExtractionFileCount = partial.freshlyExtractedPaths.length
+      const reusedFileCount = partial.reusedPaths.length
+      const incrementalRefresh: IncrementalRefreshSummary = neighborhood
+        ? buildAffectedNeighborhoodRefreshSummary({
+            ...neighborhood,
+            forcedNeighborPaths: partial.forcedReextractPaths,
+            freshExtractionFileCount,
+            reusedFileCount,
+          })
+        : buildChangedFilesRefreshSummary({ freshExtractionFileCount, reusedFileCount })
       const cacheMode: CacheMode = partial.callGraphFallback
         ? 'incremental-partial-with-artifact-fallback'
         : 'incremental-partial'
@@ -490,6 +635,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
         cacheInvalidationReason: null,
         changedFileSummary,
         partialRebuildFallbackArtifacts,
+        incrementalRefresh,
         androidResult,
         androidGradleResult,
         androidManifestResult,
@@ -516,48 +662,13 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
           partialRebuildFallbackArtifacts,
         },
         cacheReset,
+        incrementalRefresh,
       }
     }
 
     // Partial reuse was not safely possible this run: fall back honestly to
     // a full rebuild, exactly as Batch 2 always did for any detected change.
-    const built = runFullIndexBuild({
-      projectRoot,
-      normalizedSourceRoots,
-      options,
-      outputDir,
-      progress,
-      commandStartTime,
-      indexMode: 'incremental',
-      cacheMode: 'incremental-change-detected-full-rebuild',
-      cacheInvalidationReason: eligibility.reason,
-      changedFileSummary,
-      partialRebuildFallbackArtifacts: [],
-      androidResult,
-      androidGradleResult,
-      androidManifestResult,
-      androidResourcesResult,
-    })
-    writeMergedCacheMetadata({
-      outputDir,
-      projectRoot,
-      normalizedSourceRoots,
-      configFingerprint,
-      baseFiles: buildCacheFileEntries(built.discoveryFiles),
-      fileExtractionMeta: built.fileExtractionMeta,
-    })
-    return {
-      ...built.result,
-      cache: {
-        requested: true,
-        mode: 'incremental-change-detected-full-rebuild',
-        cacheMetadataPath,
-        invalidationReason: eligibility.reason,
-        changedFileSummary,
-        partialRebuildFallbackArtifacts: [],
-      },
-      cacheReset,
-    }
+    return changeDetectedFullRebuild(eligibility.reason, 'partial-rebuild-ineligible')
   }
 
   // No changes: attempt the no-op fast path by reusing the existing
@@ -569,7 +680,8 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   if (!existingManifest) {
     return fullRebuild(
       'incremental-full-cache-incompatible',
-      'Cache metadata is valid but the existing index artifacts are missing or unreadable.'
+      'Cache metadata is valid but the existing index artifacts are missing or unreadable.',
+      'existing-artifacts-unavailable'
     )
   }
 
@@ -625,6 +737,7 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       partialRebuildFallbackArtifacts: [],
     },
     cacheReset,
+    incrementalRefresh: buildNoChangeRefreshSummary(requestedScope, existingManifest.summary.fileCount),
   }
 }
 
@@ -718,6 +831,8 @@ interface RunFullIndexBuildParams {
   cacheInvalidationReason: string | null | undefined
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
+  /** Set for incremental invocations that fell back to (or bootstrapped with) a full build. */
+  fullFallback?: { requestedScope: IncrementalRefreshScope; reason: string }
   androidResult: DetectAndroidProjectResult
   androidGradleResult: BuildAndroidGradleProjectResult
   androidManifestResult: BuildAndroidManifestProjectResult
@@ -747,12 +862,18 @@ function runFullIndexBuild(params: RunFullIndexBuildParams): RunFullIndexBuildRe
     totalFilesEligibleForIndexing: buildResult.discovery.totalFilesEligibleForIndexing,
   })
 
-  const result = finishIndexBuild({
-    ...params,
+  const { fullFallback, ...finishParams } = params
+  const incrementalRefresh = fullFallback
+    ? buildFullFallbackRefreshSummary(fullFallback.requestedScope, fullFallback.reason, buildResult.index.files.length)
+    : undefined
+  const built = finishIndexBuild({
+    ...finishParams,
     index: buildResult.index,
     callGraph: buildResult.callGraph,
     preflightWarnings,
+    incrementalRefresh,
   })
+  const result = { ...built, incrementalRefresh: incrementalRefresh ?? null }
 
   return { result, discoveryFiles: buildResult.discovery.files, fileExtractionMeta: buildResult.fileExtractionMeta }
 }
@@ -780,13 +901,17 @@ interface FinishIndexBuildParams {
   cacheInvalidationReason: string | null | undefined
   changedFileSummary: ChangedFileSummary | null | undefined
   partialRebuildFallbackArtifacts: string[] | undefined
+  /** Public refresh evidence recorded additively on the manifest; absent for a plain (non-incremental) index. */
+  incrementalRefresh?: IncrementalRefreshSummary | undefined
   androidResult: DetectAndroidProjectResult
   androidGradleResult: BuildAndroidGradleProjectResult
   androidManifestResult: BuildAndroidManifestProjectResult
   androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
-function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandIndexResult, 'cache' | 'cacheReset'> {
+function finishIndexBuild(
+  params: FinishIndexBuildParams
+): Omit<RunIndexCommandIndexResult, 'cache' | 'cacheReset' | 'incrementalRefresh'> {
   const {
     projectRoot,
     normalizedSourceRoots,
@@ -802,6 +927,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     cacheInvalidationReason,
     changedFileSummary,
     partialRebuildFallbackArtifacts,
+    incrementalRefresh,
     androidResult,
     androidGradleResult,
     androidManifestResult,
@@ -830,6 +956,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     cacheInvalidationReason,
     changedFileSummary,
     partialRebuildFallbackArtifacts,
+    incrementalRefresh,
   })
   const outputManifestPath = path.join(outputDir, 'manifest.json')
   const callGraphPath = baseManifest.artifacts.callGraph ? path.join(outputDir, baseManifest.artifacts.callGraph) : null
@@ -1094,6 +1221,7 @@ function finishIndexBuild(params: FinishIndexBuildParams): Omit<RunIndexCommandI
     cacheInvalidationReason,
     changedFileSummary,
     partialRebuildFallbackArtifacts,
+    incrementalRefresh,
   })
 
   progress?.({

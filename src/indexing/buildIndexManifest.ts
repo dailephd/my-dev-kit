@@ -2,6 +2,7 @@ import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { IndexAnalyzerStatus, IndexManifest, IndexModeValue, IndexSemanticArtifacts } from './manifestTypes.js'
 import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
+import type { IncrementalRefreshSummary } from './incrementalRefreshTypes.js'
 
 export interface BuildIndexManifestOptions {
   projectRoot: string
@@ -21,6 +22,7 @@ export interface BuildIndexManifestOptions {
   cacheInvalidationReason?: string | null
   changedFileSummary?: ChangedFileSummary | null
   partialRebuildFallbackArtifacts?: string[]
+  incrementalRefresh?: IncrementalRefreshSummary
 }
 
 export function buildIndexManifest(options: BuildIndexManifestOptions): IndexManifest {
@@ -63,6 +65,7 @@ export function buildIndexManifest(options: BuildIndexManifestOptions): IndexMan
     ...(options.partialRebuildFallbackArtifacts !== undefined
       ? { partialRebuildFallbackArtifacts: options.partialRebuildFallbackArtifacts }
       : {}),
+    ...(options.incrementalRefresh !== undefined ? { incrementalRefresh: options.incrementalRefresh } : {}),
   }
 }
 

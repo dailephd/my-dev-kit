@@ -1,4 +1,5 @@
 import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
+import type { IncrementalRefreshSummary } from './incrementalRefreshTypes.js'
 
 export interface IndexManifest {
   artifactKind: 'my-dev-kit-v1-manifest'
@@ -36,6 +37,12 @@ export interface IndexManifest {
    * empty array outside the two `incremental-partial*` cache modes.
    */
   partialRebuildFallbackArtifacts?: string[]
+  /**
+   * v1.12.5: requested/applied refresh scope and fresh-vs-reused evidence.
+   * Additive and optional. Present only when an incremental invocation wrote
+   * this index; a no-change run leaves the on-disk manifest untouched.
+   */
+  incrementalRefresh?: IncrementalRefreshSummary
 }
 
 export type IndexModeValue = 'full' | 'incremental'
