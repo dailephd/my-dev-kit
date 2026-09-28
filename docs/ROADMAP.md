@@ -1413,6 +1413,103 @@ Version 1.12.4 is a bounded corrective patch for core test-file indexing and ret
 - an external five-file reproduction against a real multi-root repository passes indexing, lookup, slice, exact-text, and file-source checks for all five previously unreachable test files
 - focused tests, the full test suite, typecheck, build, documentation checks, and retrieval regression benchmarks pass before release preparation
 
+## Version 1.12.5
+
+**Status: planned.**
+
+Version 1.12.5 adds an explicit affected-neighborhood refresh scope to the existing incremental-indexing pipeline without moving or changing the scope of v1.13.0 or any later roadmap version.
+
+The goal is to let an incremental run conservatively re-extract otherwise-unchanged files that lie in the trusted previous index's one-hop affected neighborhood, while preserving the current merged-index, global graph rebuild, semantic-analyzer, managed-artifact, and call-graph fallback architecture.
+
+### Planned command contract
+
+- add `index --incremental --refresh-scope changed-files`
+- add `index --incremental --refresh-scope affected-neighborhood`
+- keep plain `index --incremental` backward-compatible with the current changed-files behavior
+- reject `--refresh-scope` when `--incremental` is not active
+- keep ordinary full indexing as the full-refresh path; do not add a separate full-refresh scope value
+
+### Planned affected-neighborhood semantics
+
+- use the previous accepted index as the baseline; never compute the selection from a graph already refreshed by the current invocation
+- seed the baseline neighborhood from modified and removed indexed file nodes and the baseline symbol nodes owned by those files
+- freshly extract added files, but do not fabricate baseline graph nodes for files that did not exist in the baseline
+- traverse exactly one graph hop in both directions over every structurally valid retained code-graph edge kind
+- include the seeds plus opposite endpoints of edges incident to the seeds; do not recurse through neighbors-of-neighbors
+- map affected nodes back to grounded surviving current files; selected otherwise-unchanged files are freshly extracted
+- reuse cached per-file extraction evidence for the remaining unchanged files
+- keep removed files absent from current output even though their baseline nodes may seed surviving neighbors
+
+### Baseline identity and fail-closed behavior
+
+- neighborhood selection must establish that the previous cache metadata, `manifest.json`, `symbol-index.json`, and `code-graph.json` belong to one compatible baseline index for the same normalized project/source-root/configuration contract
+- strengthen internal cache identity as needed rather than treating cache metadata as a replacement for public manifest authority
+- an older or incompatible cache may trigger one full rebuild to establish a trustworthy new baseline
+- missing, unreadable, incompatible, mixed, or otherwise untrustworthy baseline evidence causes an explicit full rebuild
+- an explicit affected-neighborhood request must never silently degrade to changed-files-only reuse
+
+### Planned execution evidence
+
+Incremental results must make requested versus applied behavior distinguishable. Planned evidence includes:
+
+- requested refresh scope
+- applied refresh scope
+- whether no refresh was needed
+- whether a full fallback occurred and why
+- baseline seed file/symbol counts when applicable
+- affected node/edge counts when applicable
+- count and bounded sample of otherwise-unchanged files forced to fresh extraction
+- fresh-extraction and reused-file counts
+
+A no-change incremental invocation remains a no-op over the existing index rather than rewriting artifacts merely to record the request.
+
+### Architecture and compatibility boundaries
+
+- extend the existing `runIncrementalIndex` / partial-rebuild path rather than create a second index or graph engine
+- change file extraction/reuse selection only; preserve the existing complete merged symbol-index construction, global graph/code-graph rebuild, semantic-analyzer pipeline, managed-artifact refresh, and deterministic ordering
+- preserve current call-graph semantics: when requested during a partial rebuild, the call graph is fully regenerated and reported separately as an artifact fallback
+- preserve manifest authority, stable forward-slash file/symbol identities, existing source-root/exclusion behavior, and fail-closed cache compatibility
+- successful changed-files and affected-neighborhood partial runs should converge with an ordinary full build on equivalent final semantic artifacts for the same final source tree
+- materially different final artifacts between successful refresh scopes are treated as a correctness issue to investigate, not as an expected treatment difference
+
+### Downstream Lab dependency
+
+my-dev-kit-lab v0.6.3 may consume the real upstream capability for its planned four-treatment partial-refresh experiment:
+
+- no refresh -> retain the prepared baseline index
+- changed-files refresh -> `index --incremental --refresh-scope changed-files`
+- affected-neighborhood refresh -> `index --incremental --refresh-scope affected-neighborhood`
+- full refresh -> ordinary full index
+
+Lab must record requested treatment and actual upstream execution/fallback. It must not claim an affected-neighborhood partial run when Kit fell back to full rebuild, and it must not simulate the upstream refresh by hand-editing index artifacts.
+
+### Acceptance criteria
+
+- plain `--incremental` remains backward-compatible
+- explicit changed-files scope reproduces current incremental behavior
+- affected-neighborhood traversal is exactly one hop, bidirectional, edge-kind agnostic over structurally valid retained edges, and non-recursive
+- modified and removed baseline files seed the neighborhood; added files are freshly extracted without fabricated baseline seeds
+- selected unchanged neighbors are freshly extracted and unrelated unchanged files remain reused
+- untrustworthy baseline evidence produces a truthful full rebuild rather than a changed-files-only downgrade
+- requested and applied refresh behavior is observable in command/result evidence
+- no-change behavior and current call-graph fallback semantics remain intact
+- full, changed-files, and affected-neighborhood builds converge on equivalent final semantic artifacts when their respective partial paths complete successfully
+- repeated runs remain deterministic and path normalization remains portable across Windows, macOS, and Linux
+- existing incremental tests, full tests, typecheck, build, documentation checks, retrieval regression, package validation, and cross-platform readiness pass before release preparation
+
+### Explicit non-goals
+
+- no recursive or multi-hop affected neighborhood
+- no graph-diff dependency
+- no true semantic symbol-diff redesign
+- no graph artifact hand-editing or selective graph-node mutation
+- no second partial-index implementation
+- no automatic claim that one refresh treatment is safest or best
+- no Lab-side simulation of upstream refresh
+- no orchestrator/workflow ownership
+- no v1.13.0 Android proof/example/documentation work
+- no v1.14.0 framework expansion, KIT-API-01, KIT-OPS-01, or v2.0.0 plugin work
+
 ## Version 1.13.0
 
 **Status: planned.**
