@@ -259,6 +259,38 @@ Supported intent and relationships can prefer Compose for UI work, ViewModel for
 
 Inspect actual required owner/contract evidence. No selected owner is edit authorization or a runtime guarantee. For test implementation, use current changed production and responsibility evidence.
 
+## Workflow 17: Choose an incremental refresh strategy (v1.12.5, unreleased)
+
+**This workflow uses the current repository source, run from a source checkout (`node dist/cli.js ...` after `npm run build`). It is implemented but not yet published; the installed `@dailephd/my-dev-kit@1.12.4` package does not have `--refresh-scope`.**
+
+### Default / changed-files
+
+```powershell
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --json
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
+```
+
+Use either form for the existing minimal fresh-extraction behavior: only added/changed files are freshly extracted, and every other unchanged file is reused. The two forms are equivalent.
+
+### Affected-neighborhood
+
+```powershell
+node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
+```
+
+Use this when a more conservative one-hop fresh-extraction scope is desired: unchanged files exactly one graph hop from a modified or removed file are also freshly re-extracted, rather than only reused from the previous run.
+
+Keep in mind:
+
+- a first invocation, or one against an old/incompatible cache, may perform one full rebuild to establish a trustworthy baseline;
+- a removed file can cause a surviving neighbor to be re-extracted, even though the removed file itself never reappears in current output;
+- an added file is already freshly extracted, but it never seeds the baseline neighborhood itself;
+- an unsafe or untrustworthy baseline selection falls back to a truthful full rebuild rather than silently narrowing to changed-files reuse;
+- a no-change invocation remains a no-op regardless of the requested scope;
+- this does not use graph-diff, and it does not recurse past one hop.
+
+Inspect the command result's `incrementalRefresh` (or the printed `Refresh scope: ...` line) to see requested versus applied scope and the fallback reason, if any, rather than assuming the requested scope always ran. Neither scope is documented here as universally "safer" or "best" — pick based on how conservative the desired fresh-extraction boundary should be for the change being made.
+
 ## Bundled examples
 
 [examples/README.md](../examples/README.md) explains the repository examples. Normal npm users can run my-dev-kit against their own project without cloning this repository. Do not confuse maintainer benchmark fixtures with required installed-user input.

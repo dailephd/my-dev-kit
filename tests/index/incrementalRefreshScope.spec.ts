@@ -44,10 +44,25 @@ const modifyA = (root: string) => write(root, 'a.ts', 'export function fa(): num
 const readJson = (root: string, file: string, out = OUT) => JSON.parse(readFileSync(join(root, out, file), 'utf8'))
 const sha = (text: string | Buffer) => createHash('sha256').update(text).digest('hex')
 
+/**
+ * Compares every semantic artifact the minimal a/b/c.ts fixture actually
+ * produces, not just symbol-index.json/code-graph.json: the roadmap's v1.12.5
+ * acceptance criterion is "equivalent final semantic artifacts", and
+ * classification/data-model/frontend-semantic/frontend-reachability are each
+ * written for this fixture even though it declares no entities/components
+ * (see manifest.semanticArtifacts / manifest.analyzers). Android artifacts
+ * are not produced for this fixture (no Android project evidence) and are
+ * therefore not applicable to this comparison.
+ */
 function normalizedArtifacts(root: string, out = OUT) {
   return {
     symbolIndex: { ...readJson(root, 'symbol-index.json', out), buildTime: 'N', repoRoot: 'R' },
     codeGraph: { ...readJson(root, 'code-graph.json', out), createdAt: 'N' },
+    classification: { ...readJson(root, 'classification.json', out), createdAt: 'N' },
+    dataModel: { ...readJson(root, 'data-model.json', out), createdAt: 'N' },
+    dataModelGraph: { ...readJson(root, 'data-model-graph.json', out), createdAt: 'N' },
+    frontendSemantic: { ...readJson(root, 'frontend-semantic.json', out), createdAt: 'N' },
+    frontendReachability: { ...readJson(root, 'frontend-reachability.json', out), generatedAt: 'N', sourceRoot: 'R' },
   }
 }
 

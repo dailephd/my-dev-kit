@@ -25,6 +25,8 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 Version 1.12.4 is the latest published release. It retains the complete v1.12.0 Android architecture and data-flow surface, the v1.12.1 architecture evidence-allocation and required-witness adequacy corrections, and a bounded NodeNext/Node16-style related-test import-resolution correction (v1.12.2), plus recoverable role adequacy, structure-aware Python contract evidence, and core-vs-supplemental test-responsibility mapping (v1.12.3), plus core indexing and retrieval of supported `.test.`/`.spec.` files beneath selected source roots (v1.12.4; see [ROADMAP.md](ROADMAP.md)).
 
+The current repository source additionally implements v1.12.5 (affected-neighborhood incremental refresh: `index --incremental --refresh-scope <changed-files|affected-neighborhood>`), but it is **implemented and unreleased**, not part of the published `1.12.4` package. See [ROADMAP.md](ROADMAP.md#version-1125) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#implemented-unreleased-v1125) for status, and [COMMANDS.md](COMMANDS.md#incremental-refresh-scope-v1125-unreleased) for source-checkout syntax.
+
 The current repository and package metadata contain these shipped implementation capabilities:
 
 - indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
@@ -223,6 +225,7 @@ Current repository scope (published through v1.12.4):
 - incremental indexing cache metadata, changed-file detection, and `--reset-cache` (v1.8.0 Batch 2)
 - partial incremental rebuild for `symbol-index.json`/`code-graph.json`, with honest `call-graph.json` artifact fallback (v1.8.0 Batch 3)
 - deterministic read-only `graph-diff` comparison of two index directories (v1.8.0 Batch 4)
+- affected-neighborhood incremental refresh scope (`--refresh-scope affected-neighborhood`), trusted-baseline cache identity (schema `1.2.0`), and truthful requested/applied execution evidence — **implemented on the current repository source, not yet published** (v1.12.5)
 - static Android/Gradle project, module, and source-set detection producing `android-project.json` — detection only, no Java structural indexing (v1.9.0 Batch 1)
 - conservative static Kotlin structural indexing (`.kt` files under `--src`): package/imports, top-level classes/interfaces/objects/data classes/sealed classes/enums/functions/extension functions/properties, surfaced in `symbol-index.json`/`code-graph.json` — no class-member symbols, no call-graph edges, no Kotlin compiler execution (v1.9.0 Batch 2)
 - conservative static Java structural indexing (`.java` files under `--src`): package/imports (including `static` and wildcard forms), top-level classes/interfaces/enums/records/annotation-type declarations, surfaced in `symbol-index.json`/`code-graph.json` — no method/field/constructor symbols, no call-graph edges, no `javac`/Maven/Gradle execution (v1.9.0 Batch 3)

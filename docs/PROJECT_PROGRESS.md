@@ -6,13 +6,26 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.4` is the latest published release.
 
-## Planned next: v1.12.5
+## Implemented, unreleased: v1.12.5
 
-Version 1.12.5 is the next planned my-dev-kit patch. It adds an explicit affected-neighborhood refresh scope to the existing incremental-indexing pipeline while preserving the current v1.13.0 Android benchmark/example/workflow milestone and all later roadmap assignments.
+Version 1.12.5 (affected-neighborhood incremental refresh) is implemented on the `feature/v1.12.5-affected-neighborhood-refresh` branch across three completed implementation batches, but it is **not yet published**. Package metadata and the published npm package remain `1.12.4`; installing `@dailephd/my-dev-kit` still installs the v1.12.4 command surface. This section describes current repository source behavior, not the published package.
 
-The planned capability keeps plain `index --incremental` backward-compatible with changed-files refresh, adds an explicit affected-neighborhood scope based on the trusted previous one-hop code-graph neighborhood, and fails closed to a truthful full rebuild when the required baseline identity/evidence cannot be established. It extends per-file extraction/reuse selection only; the existing merged-index, global graph/analyzer, managed-artifact, and call-graph fallback architecture remains the owner.
+- **Batch 1** — trusted baseline identity (cache schema `1.2.0`, SHA-256 identity of the manifest and manifest-referenced symbol-index/code-graph artifacts) and the pure, internal affected-neighborhood selector (one-hop, bidirectional, edge-kind-agnostic, non-recursive).
+- **Batch 2** — forced re-extraction of affected unchanged neighbors in the existing partial-rebuild pipeline, wired to the Batch 1 selector.
+- **Batch 3** — public `index --incremental --refresh-scope <changed-files|affected-neighborhood>`, runtime orchestration, truthful requested/applied execution evidence (`incrementalRefresh` on both the command result and, additively, `manifest.json`), and full fail-closed fallback.
 
-This patch is also the upstream prerequisite for my-dev-kit-lab v0.6.3 to execute a real four-treatment partial-refresh experiment without simulating or mutating Kit index artifacts. See [ROADMAP.md](ROADMAP.md#version-1125) for the frozen planned scope.
+Public behavior: plain `index --incremental` remains backward-compatible with `--refresh-scope changed-files`. `--refresh-scope affected-neighborhood` additionally forces fresh extraction of unchanged files one graph hop from modified/removed baseline files, using the previous accepted index as a cryptographically verified trusted baseline. Untrustworthy, missing, incompatible, or mismatched baseline evidence causes a truthful full rebuild (never a silent downgrade to changed-files reuse). A no-change incremental invocation stays a no-op: the on-disk manifest is left untouched and no affected-neighborhood selection runs. Call-graph full regeneration during a partial rebuild remains reported separately (`partialRebuildFallbackArtifacts`) from `appliedScope`. No second index/graph engine, no graph mutation, no graph-diff dependency, and no multi-hop traversal were introduced.
+
+This patch is also the upstream prerequisite for my-dev-kit-lab v0.6.3 to execute a real four-treatment partial-refresh experiment without simulating or mutating Kit index artifacts. See [ROADMAP.md](ROADMAP.md#version-1125) for the full frozen contract and acceptance criteria.
+
+After v1.12.5 is released, v1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) remains the next planned roadmap milestone; this implemented-unreleased state does not move or change v1.13.0 or any later roadmap version.
+
+### v1.12.5 implementation-completeness evidence (unreleased)
+
+- Focused suites: `tests/index/incrementalRefreshScope.spec.ts`, `tests/index/affectedNeighborhoodRefresh.spec.ts`, `tests/index/partialRebuild.spec.ts`, `tests/index/cacheMetadata.spec.ts`, `tests/index/incrementalIndexing.spec.ts` — all passing, including a convergence check that a full build, a `changed-files` incremental build, and an `affected-neighborhood` incremental build of the same final tree produce equivalent `symbol-index.json`, `code-graph.json`, `classification.json`, `data-model.json`, `data-model-graph.json`, `frontend-semantic.json`, and `frontend-reachability.json` (Android artifacts are not applicable to that fixture).
+- `npm run verify` (typecheck, build, docs check) and full `npm test`: passing on the branch at commit `533ee44`.
+- Source-built CLI smokes confirmed: `index --help` exposes `--refresh-scope`; `--version` remains `1.12.4`; `incrementalRefresh` is `null` for a plain full index and non-null for every incremental invocation; a no-change run leaves the on-disk manifest's `incrementalRefresh` unchanged while the top-level result reports the current no-change request; a tampered baseline artifact truthfully falls back to `full` with a trusted-baseline reason code rather than silently downgrading to `changed-files`.
+- This is implementation-completeness and documentation-reconciliation evidence only — it is not pre-release readiness, cross-platform release validation, security release validation, or a publication decision. See the separate v1.12.5 pre-release readiness workflow for that gate.
 
 ## Shipped: v1.12.4
 
