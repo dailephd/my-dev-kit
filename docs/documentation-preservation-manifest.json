@@ -99,11 +99,10 @@
       "1.12.1",
       "1.12.2",
       "1.12.3",
-      "1.12.4"
-    ],
-    "implementedUnreleasedVersions": [
+      "1.12.4",
       "1.12.5"
     ],
+    "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",
@@ -304,19 +303,16 @@
   "statusBoundaries": {
     "documentKeywords": {
       "README.md": [
-        "latest published release",
-        "@dailephd/my-dev-kit@1.12.4",
+        "Latest release: v1.12.5",
+        "@dailephd/my-dev-kit@1.12.5",
         "planned scopes"
       ],
       "docs/ROADMAP.md": [
-        "**Status: published.**",
-        "## Version 1.12.4",
-        "**Status: published.**",
         "## Version 1.12.5",
-        "**Status: implemented, unreleased.**"
+        "**Status: published.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "published through v1.12.4"
+        "Version 1.12.5 is the current release"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -347,15 +343,14 @@
         "## Enforcement"
       ],
       "docs/PROJECT_PROGRESS.md": [
-        "latest published release",
+        "current release",
+        "## Shipped: v1.12.5",
         "## Shipped: v1.12.4",
-        "Package metadata and the CLI report `1.12.4`",
         "## Shipped: v1.12.3",
         "## Shipped: v1.12.1",
         "## Shipped: v1.12.0",
         "## Shipped: v1.10.3",
-        "## Shipped: v1.10.4",
-        "## Implemented, unreleased: v1.12.5"
+        "## Shipped: v1.10.4"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",

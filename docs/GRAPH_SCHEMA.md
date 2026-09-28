@@ -160,7 +160,7 @@ Main fields:
 - `cacheInvalidationReason` (v1.8.0): human-readable reason when `cacheMode` reflects an invalidated/incompatible cache, or when partial-rebuild reuse was not safely possible; `null` otherwise
 - `changedFileSummary` (v1.8.0): added/changed/removed/unchanged counts and bounded samples from the incremental change-detection pass that produced this build; `null` when not applicable (a plain full run, or an incremental run whose cache had no prior baseline to diff against)
 - `partialRebuildFallbackArtifacts` (v1.8.0 Batch 3): artifact families fully regenerated rather than partially reused during a partial rebuild (currently only ever `["call-graph"]`, when `--call-graph` was requested); `[]` outside the two `incremental-partial*` cache modes
-- `incrementalRefresh` (v1.12.5, implemented on `feature/v1.12.5-affected-neighborhood-refresh`, **not yet published**): additive optional `IncrementalRefreshSummary` object. See "incrementalRefresh (v1.12.5, unreleased)" below.
+- `incrementalRefresh` (v1.12.5): additive optional `IncrementalRefreshSummary` object. See "incrementalRefresh (v1.12.5)" below.
 
 ### artifacts
 
@@ -211,9 +211,7 @@ Top-level summary fields:
 
 When `index` refreshes the artifact directory, it removes artifacts that were present from a previous run but are not produced in the current run. `manifest.json` always reflects the current artifact state. Consumers should read `manifest.json` to determine which artifacts are available rather than assuming fixed file names are always present.
 
-### incrementalRefresh (v1.12.5, unreleased)
-
-**This subsection describes current repository source-checkout behavior only. It is implemented but not yet published; no released `manifest.json` schema documents this field yet.**
+### incrementalRefresh (v1.12.5)
 
 `incrementalRefresh` is an additive, optional `IndexManifest` field and an identically-shaped field on the `index` command's own result object (`RunIndexCommandIndexResult.incrementalRefresh`). It carries the requested-versus-applied refresh scope and fresh/reused evidence for one `--incremental` invocation. No public manifest schema-major bump was made to add it, and `cache-metadata.json` remains internal bookkeeping — it is not promoted to a public semantic artifact by this field.
 
@@ -237,7 +235,7 @@ Distinguishing `incrementalRefresh` full fallback from `partialRebuildFallbackAr
 
 `index --incremental` writes `cache-metadata.json` inside the output directory. It is **internal indexer bookkeeping, not a public semantic artifact**: it is not listed in `manifest.json`'s `artifacts` map, it is not documented as part of the artifact set below, and its shape is not guaranteed to stay stable across `my-dev-kit` versions the way `manifest.json`/`symbol-index.json`/`code-graph.json` are. It records a config fingerprint and, per file, a SHA-256 content hash, size, and (as of v1.8.0 Batch 3) the `reExportSpecifiers`/`exportAllSpecifiers` extraction fields not present in the public `symbol-index.json` shape — used to detect added/changed/removed/unchanged files and to safely reuse an unchanged file's analysis during a partial rebuild, without re-parsing it. Consumers building on `my-dev-kit` artifacts should read `manifest.json` and the artifacts it references, not `cache-metadata.json`. See [`index` → Incremental indexing](COMMANDS.md#incremental-indexing-v180) in `docs/COMMANDS.md` for behavior details.
 
-As of cache schema `1.2.0` (v1.12.5, implemented on `feature/v1.12.5-affected-neighborhood-refresh`, **not yet published**), it additionally carries `baselineArtifacts`: SHA-256 identity of the exact `manifest.json` and manifest-referenced `symbol-index.json`/`code-graph.json` the build produced. This lets a later `--refresh-scope affected-neighborhood` invocation prove the cache and public artifacts describe one compatible baseline before trusting it as a graph seed source; it remains internal bookkeeping, never a public manifest-registered artifact, and never a replacement for `manifest.json`'s own identity/registry authority. A cache written under an older schema version is treated as incompatible and triggers one full rebuild rather than being partially reused.
+As of cache schema `1.2.0` (v1.12.5), it additionally carries `baselineArtifacts`: SHA-256 identity of the exact `manifest.json` and manifest-referenced `symbol-index.json`/`code-graph.json` the build produced. This lets a later `--refresh-scope affected-neighborhood` invocation prove the cache and public artifacts describe one compatible baseline before trusting it as a graph seed source; it remains internal bookkeeping, never a public manifest-registered artifact, and never a replacement for `manifest.json`'s own identity/registry authority. A cache written under an older schema version is treated as incompatible and triggers one full rebuild rather than being partially reused.
 
 ## symbol-index.json
 

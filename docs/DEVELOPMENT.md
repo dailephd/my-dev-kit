@@ -260,7 +260,7 @@ Source discovery (`src/indexing/discoverSourceFiles.ts`, `DEFAULT_FILE_EXCLUDE_P
 - `tests/index/cacheMetadata.spec.ts` and `tests/index/incrementalIndexing.spec.ts` - fingerprint coverage of the default file-exclusion policy and incremental behavior
 - `tests/data-model/sourceDiscovery.spec.ts` and `tests/context/testInfrastructureDiscoveryResolver.spec.ts` - unchanged downstream discovery consumers
 
-### v1.12.5 affected-neighborhood incremental refresh validation (implemented on `feature/v1.12.5-affected-neighborhood-refresh`, unreleased)
+### v1.12.5 affected-neighborhood incremental refresh validation
 
 Trusted-baseline identity (`src/indexing/trustedBaseline.ts`, cache schema `1.2.0` in `src/indexing/cacheMetadata.ts`), the pure affected-neighborhood selector (`src/indexing/affectedNeighborhood.ts`), forced unchanged-neighbor re-extraction (`src/indexing/partialRebuild.ts`), and the public `--refresh-scope` orchestration/evidence contract (`src/indexing/runIndexCommand.ts`, `src/indexing/incrementalRefreshTypes.ts`) own this capability. When changing any of these, keep these focused suites together:
 

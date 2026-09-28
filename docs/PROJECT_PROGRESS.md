@@ -4,28 +4,19 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.4` is the latest published release.
+`@dailephd/my-dev-kit@1.12.5` is the current release.
 
-## Implemented, unreleased: v1.12.5
+## Shipped: v1.12.5
 
-Version 1.12.5 (affected-neighborhood incremental refresh) is implemented on the `feature/v1.12.5-affected-neighborhood-refresh` branch across three completed implementation batches, but it is **not yet published**. Package metadata and the published npm package remain `1.12.4`; installing `@dailephd/my-dev-kit` still installs the v1.12.4 command surface. This section describes current repository source behavior, not the published package.
+Version 1.12.5 ships affected-neighborhood incremental refresh in the existing indexing pipeline. The installed CLI supports `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains compatible with `changed-files`. The affected-neighborhood scope freshly extracts unchanged files exactly one graph hop from modified or removed baseline files, verified against the trusted prior index. Missing, incompatible, unreadable, or mismatched baseline evidence fails closed to a truthful full rebuild. No-change invocations remain no-ops, and call-graph regeneration remains separately reported.
 
-- **Batch 1** — trusted baseline identity (cache schema `1.2.0`, SHA-256 identity of the manifest and manifest-referenced symbol-index/code-graph artifacts) and the pure, internal affected-neighborhood selector (one-hop, bidirectional, edge-kind-agnostic, non-recursive).
-- **Batch 2** — forced re-extraction of affected unchanged neighbors in the existing partial-rebuild pipeline, wired to the Batch 1 selector.
-- **Batch 3** — public `index --incremental --refresh-scope <changed-files|affected-neighborhood>`, runtime orchestration, truthful requested/applied execution evidence (`incrementalRefresh` on both the command result and, additively, `manifest.json`), and full fail-closed fallback.
+This release provides the published Kit capability required for Lab's planned v0.6.3 affected-neighborhood treatment. Lab v0.6.3 remains its own planned milestone. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) remains the next planned Kit milestone; later roadmap scope is unchanged.
 
-Public behavior: plain `index --incremental` remains backward-compatible with `--refresh-scope changed-files`. `--refresh-scope affected-neighborhood` additionally forces fresh extraction of unchanged files one graph hop from modified/removed baseline files, using the previous accepted index as a cryptographically verified trusted baseline. Untrustworthy, missing, incompatible, or mismatched baseline evidence causes a truthful full rebuild (never a silent downgrade to changed-files reuse). A no-change incremental invocation stays a no-op: the on-disk manifest is left untouched and no affected-neighborhood selection runs. Call-graph full regeneration during a partial rebuild remains reported separately (`partialRebuildFallbackArtifacts`) from `appliedScope`. No second index/graph engine, no graph mutation, no graph-diff dependency, and no multi-hop traversal were introduced.
+### v1.12.5 release validation
 
-This patch is also the upstream prerequisite for my-dev-kit-lab v0.6.3 to execute a real four-treatment partial-refresh experiment without simulating or mutating Kit index artifacts. See [ROADMAP.md](ROADMAP.md#version-1125) for the full frozen contract and acceptance criteria.
-
-After v1.12.5 is released, v1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) remains the next planned roadmap milestone; this implemented-unreleased state does not move or change v1.13.0 or any later roadmap version.
-
-### v1.12.5 implementation-completeness evidence (unreleased)
-
-- Focused suites: `tests/index/incrementalRefreshScope.spec.ts`, `tests/index/affectedNeighborhoodRefresh.spec.ts`, `tests/index/partialRebuild.spec.ts`, `tests/index/cacheMetadata.spec.ts`, `tests/index/incrementalIndexing.spec.ts` — all passing, including a convergence check that a full build, a `changed-files` incremental build, and an `affected-neighborhood` incremental build of the same final tree produce equivalent `symbol-index.json`, `code-graph.json`, `classification.json`, `data-model.json`, `data-model-graph.json`, `frontend-semantic.json`, and `frontend-reachability.json` (Android artifacts are not applicable to that fixture).
-- `npm run verify` (typecheck, build, docs check) and full `npm test`: passing on the branch at commit `533ee44`.
-- Source-built CLI smokes confirmed: `index --help` exposes `--refresh-scope`; `--version` remains `1.12.4`; `incrementalRefresh` is `null` for a plain full index and non-null for every incremental invocation; a no-change run leaves the on-disk manifest's `incrementalRefresh` unchanged while the top-level result reports the current no-change request; a tampered baseline artifact truthfully falls back to `full` with a trusted-baseline reason code rather than silently downgrading to `changed-files`.
-- This is implementation-completeness and documentation-reconciliation evidence only — it is not pre-release readiness, cross-platform release validation, security release validation, or a publication decision. See the separate v1.12.5 pre-release readiness workflow for that gate.
+- Full suite: 2,707 tests passed across 211 files.
+- `npm run verify`, retrieval benchmark (6/6), repository security tests (60), and target-applicable Lab static/adversarial/fuzz validation passed.
+- Cross-platform readiness CI run [36474736363](https://github.com/dailephd/my-dev-kit/actions/runs/36474736363) passed on Ubuntu, macOS, and Windows with Node.js 24.x.
 
 ## Shipped: v1.12.4
 
@@ -47,7 +38,7 @@ Version 1.12.4 is published. Package metadata and the CLI report `1.12.4`. It is
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the next planned Kit patch. Version 1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone after it. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the later explicit v1.12.5 decision is additive and does not move the existing 1.13.0-1.16.0 assignments.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the current Kit release. Version 1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone next. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the later explicit v1.12.5 decision is additive and does not move the existing 1.13.0-1.16.0 assignments.
 
 ## Shipped: v1.12.3
 

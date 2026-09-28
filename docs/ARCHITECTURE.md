@@ -274,7 +274,7 @@ Workflow-catalog semantics, native context stages, prompt assembly, automatic ag
 - `index --reset-cache` deletes only `cache-metadata.json`, never other artifacts
 - `manifest.json` records `indexMode`, `cacheMode`, `cacheInvalidationReason`, and `changedFileSummary` on relevant builds
 
-### Affected-neighborhood incremental refresh (v1.12.5, implemented on `feature/v1.12.5-affected-neighborhood-refresh`, unreleased)
+### Affected-neighborhood incremental refresh (v1.12.5)
 
 Files:
 
@@ -287,7 +287,7 @@ Files:
 
 This does not add a second index or graph engine: `buildPartialSymbolIndex()` still feeds the same `buildGraphSection()` a full build uses, and the shared `finishIndexBuild()` finishing pipeline (semantic analyzers, classification, Android projection, manifest write) runs identically regardless of whether its input came from a full build or a partial rebuild — the pipeline does not know or care which one produced it. Affected-neighborhood selection only changes which otherwise-unchanged files are forced into fresh per-file extraction before that shared pipeline runs; it never mutates a graph node/edge in place and has no graph-diff dependency. Call-graph regeneration during a partial rebuild keeps its existing v1.8.0 semantics (always fully regenerated, reported via `partialRebuildFallbackArtifacts`), reported independently of `incrementalRefresh.appliedScope`. A no-change incremental invocation is a no-op: the existing on-disk manifest is left untouched, and the top-level result alone reports the current request's evidence.
 
-Status: implemented and covered by `tests/index/affectedNeighborhoodRefresh.spec.ts` (including `loadTrustedBaseline` and `selectAffectedNeighborhood` unit coverage), `tests/index/incrementalRefreshScope.spec.ts`, `tests/index/partialRebuild.spec.ts`, and `tests/index/cacheMetadata.spec.ts`; not yet published. See [ROADMAP.md](ROADMAP.md#version-1125) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#implemented-unreleased-v1125).
+Status: released in v1.12.5 and covered by `tests/index/affectedNeighborhoodRefresh.spec.ts` (including `loadTrustedBaseline` and `selectAffectedNeighborhood` unit coverage), `tests/index/incrementalRefreshScope.spec.ts`, `tests/index/partialRebuild.spec.ts`, and `tests/index/cacheMetadata.spec.ts`. See [ROADMAP.md](ROADMAP.md#version-1125) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1125).
 
 ### Graph comparison layer (v1.8.0)
 

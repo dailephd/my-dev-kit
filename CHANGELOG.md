@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Implemented on `feature/v1.12.5-affected-neighborhood-refresh`; not yet published. Package metadata remains `1.12.4`.
+## 1.12.5 - 2026-09-28
 
 - Added `index --incremental --refresh-scope <changed-files|affected-neighborhood>`. Plain `index --incremental` remains backward-compatible and is equivalent to explicit `--refresh-scope changed-files`. `--refresh-scope` is rejected without `--incremental`, and rejected together with `--dry-run`.
 - `--refresh-scope affected-neighborhood` additionally forces fresh extraction of otherwise-unchanged files exactly one code-graph hop (bidirectional, every structurally valid retained edge kind, non-recursive) from modified or removed baseline files, using the previous accepted index as the seed baseline. Added files are freshly extracted as usual but never used to fabricate baseline seeds. Removed files may seed surviving neighbors but never reappear in current output.

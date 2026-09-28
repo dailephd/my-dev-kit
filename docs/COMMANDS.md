@@ -1,8 +1,8 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.4`: nine commands, with the v1.12.1 evidence-limit corrections, the v1.12.3 context-readiness and responsibility-mapping corrections, and v1.12.4 core indexing of test files beneath selected source roots. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.5`: nine commands, including core indexing and retrieval of selected test files and the additive incremental refresh-scope selector. Package versions and artifact schema versions are separate.
 
-The current repository source also implements v1.12.5 (`index --incremental --refresh-scope <changed-files|affected-neighborhood>`), which is **implemented but not yet published**. It is not part of the installed `1.12.4` package. See "Incremental refresh scope (v1.12.5, unreleased)" below for the source-checkout syntax, and [ROADMAP.md](ROADMAP.md#version-1125) for status.
+`index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
@@ -71,7 +71,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 - `--progress`: bounded progress diagnostics on stderr.
 - `--call-graph`: produce conservative static call-graph evidence for supported languages.
 - `--incremental`: use eligible cached per-file analysis and report reuse/fallback.
-- `--refresh-scope <scope>` (v1.12.5, unreleased source behavior; not in the installed `1.12.4` package): with `--incremental`, `changed-files` or `affected-neighborhood`. See "Incremental refresh scope (v1.12.5, unreleased)" below.
+- `--refresh-scope <scope>` (v1.12.5): with `--incremental`, `changed-files` or `affected-neighborhood`. See "Incremental refresh scope (v1.12.5)" below.
 - `--reset-cache`: clear internal cache metadata before running. It does not delete ordinary public artifacts by itself.
 - `--json`: structured command result.
 
@@ -130,9 +130,9 @@ npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --reset-cach
 
 Do not delete the baseline required by a pending comparison. Watch mode and universal artifact-specific partial reuse are not implied by incremental indexing.
 
-### Incremental refresh scope (v1.12.5, unreleased)
+### Incremental refresh scope (v1.12.5)
 
-**This subsection describes current repository source-checkout behavior only. It is implemented but not yet published; the installed `@dailephd/my-dev-kit@1.12.4` package does not have `--refresh-scope`.**
+This subsection describes the installed v1.12.5 CLI behavior.
 
 ```powershell
 node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --json

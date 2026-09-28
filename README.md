@@ -132,19 +132,17 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.12.4
+## Latest release: v1.12.5
 
-`@dailephd/my-dev-kit@1.12.4` is the latest published release, and `npx @dailephd/my-dev-kit ...` installs this version. It is a bounded corrective patch for core test-file indexing and retrieval. Supported `.test.`/`.spec.` files beneath an explicitly selected `--src` root are now indexed like any other supported file. They get ordinary `file:<path>` graph nodes and work with `search`, `lookup`, `slice`, and exact `source --contains --path` matching. `.d.ts` files, `--exclude` values, and default ignored directories remain excluded. The incremental cache fingerprint now covers the default file-exclusion policy, so the first `--incremental` run after upgrading rebuilds once. Raw `search` ranking is unchanged and can rank a strongly matching test above a production file; rank is not edit ownership. No new public command, flag, artifact family, or artifact schema major.
+`@dailephd/my-dev-kit@1.12.5` is the current release and adds affected-neighborhood incremental refresh to the existing indexing pipeline. Use `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains equivalent to `changed-files`. The affected-neighborhood scope freshly extracts unchanged files one graph hop from modified or removed baseline files, using a cryptographically trusted prior index and a truthful full rebuild when that baseline cannot be trusted. No-change runs remain no-ops. See [Incremental refresh scope](docs/COMMANDS.md#incremental-refresh-scope-v1125), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [ROADMAP.md](docs/ROADMAP.md#version-1125).
 
-### Repository source: v1.12.5 (implemented, unreleased)
-
-The current repository source (not yet published; `npx @dailephd/my-dev-kit` still installs `1.12.4`) additionally implements an affected-neighborhood incremental refresh scope: `index --incremental --refresh-scope <changed-files|affected-neighborhood>`. Plain `index --incremental` stays backward-compatible. The `affected-neighborhood` scope conservatively forces fresh extraction of otherwise-unchanged files one graph hop from modified/removed files, verified against a cryptographically trusted previous baseline, and fails closed to a truthful full rebuild otherwise. See [docs/COMMANDS.md](docs/COMMANDS.md#incremental-refresh-scope-v1125-unreleased) for syntax, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design, and [docs/ROADMAP.md](docs/ROADMAP.md#version-1125) for status.
+Version 1.12.4 was the previous release. It added core indexing and retrieval of supported `.test.`/`.spec.` files beneath selected source roots, with the existing exclusion and cache-fingerprint boundaries. Search ranking remains relevance evidence, not edit ownership.
 
 Version 1.12.3 was a bounded corrective patch for the role-aware `context` command's readiness semantics: final role adequacy (`architecture`/`implementation`/`test-implementation`) now recovers from an early, non-material base-retrieval or helper-classification failure whenever independently retained evidence still satisfies the role's actual required conditions, while genuinely missing required evidence, unresolved material conflict, and required-witness truncation remain blocking as before. Implementation-contract discovery recognizes legitimate neutral-named Python contract owners (for example `result.py`, `cases.py`) from grounded structural evidence rather than relying on filename hints alone. Test-responsibility mapping distinguishes core evidence (production, contract/validator/error, related-test, and oracle/assertion) from supplemental test-command evidence: a core-complete responsibility with no discovered test command remains sufficiently mapped with an explicit warning, unless the request explicitly asks for `test-commands` evidence, in which case grounded command evidence is required. Test-command discovery also now checks a repository `Makefile` `test` target alongside the existing `package.json` script discovery. This is a backward-compatible defect correction; no new public command, flag, role, or artifact schema major. The command syntax and artifact schema major remain unchanged.
 
 ## v1.12.0 Android architecture and data-flow retrieval
 
-v1.12.0 shipped Android architecture and data-flow retrieval and remains fully included in v1.12.4.
+v1.12.0 shipped Android architecture and data-flow retrieval and remains fully included in v1.12.5.
 
 The release adds a complete Android classification vocabulary (`classification.json` schema `1.1.0`) covering Android project/module structure, manifest components, navigation routes, resources, Compose screens/UI components, ViewModels, and UI-only state/events, each with edit guidance, readiness, uncertainty, and up to seven advisory risk labels. `android-components.json` (schema `1.1.0`) adds `dependencyFacts[]` — exact static component-dependency relationships (ViewModel→Repository, Repository→DAO/Service, DAO→Entity, Room Database→DAO) projected into `code-graph.json` as new edges. `android-compose-semantic.json` (schema `1.3.0`) adds Compose collected-state ownership and Activity-to-Compose hosting evidence, projected as `compose-state-reads-viewmodel` and `activity-hosts-composable` graph edges.
 
@@ -592,7 +590,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.4 is the latest published release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.5 is the current release. Later versions retain their separate planned scopes: v1.13.0 Android retrieval benchmarks/examples/workflow documentation, and the longer-term v1.14.0 and v2.0.0 plans. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

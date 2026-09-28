@@ -259,9 +259,9 @@ Supported intent and relationships can prefer Compose for UI work, ViewModel for
 
 Inspect actual required owner/contract evidence. No selected owner is edit authorization or a runtime guarantee. For test implementation, use current changed production and responsibility evidence.
 
-## Workflow 17: Choose an incremental refresh strategy (v1.12.5, unreleased)
+## Workflow 17: Choose an incremental refresh strategy (v1.12.5)
 
-**This workflow uses the current repository source, run from a source checkout (`node dist/cli.js ...` after `npm run build`). It is implemented but not yet published; the installed `@dailephd/my-dev-kit@1.12.4` package does not have `--refresh-scope`.**
+This workflow uses the installed `@dailephd/my-dev-kit@1.12.5` CLI.
 
 ### Default / changed-files
 
