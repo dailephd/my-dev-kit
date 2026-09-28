@@ -486,6 +486,19 @@ These reservations were adopted by ECO-00 on 2026-09-25. Published history does 
 - 1.16.0 / KIT-OPS-01: bounded configuration/instrumentation/deployment-source facts where real consumer needs justify them; not required for the initial rollout.
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
+#### 7.1.1 Post-ECO-00 Kit v1.12.5 additive patch decision — 2026-09-28
+
+A later explicit planning decision adds Kit v1.12.5 between the published v1.12.4 baseline and the already-reserved v1.13.0 milestone. This is an additive patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation.
+
+- 1.12.5: affected-neighborhood incremental refresh over the existing partial-rebuild architecture.
+- 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged.
+- 1.14.0: framework expansion remains unchanged.
+- 1.15.0 / KIT-API-01 remains unchanged.
+- 1.16.0 / KIT-OPS-01 remains unchanged.
+- 2.0.0 remains the separate larger schema/plugin program.
+
+Kit v1.12.5 is a prerequisite for Lab v0.6.3 to execute the planned affected-neighborhood-refresh treatment against a real upstream Kit capability. The dependency is capability-level rather than an npm dependency: Lab must record requested treatment and actual Kit execution/fallback and must not simulate the upstream refresh by editing index artifacts.
+
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.
@@ -555,7 +568,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4 current] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
+    K124[1.12.4 current] --> K125[1.12.5 affected-neighborhood refresh] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
   end
 
   subgraph ORC[orchestrator]
@@ -577,6 +590,7 @@ flowchart LR
   B12 -. controlled state .-> L011
   B12 -. controlled state .-> L012
   B13 -. ECO-04 .-> L013
+  K125 -. partial-refresh capability .-> L063
   K15 -. ECO-05 .-> L014
 ```
 
@@ -604,6 +618,7 @@ ECO-00 — contract and roadmap freeze
        -> ECO-04 — performance contracts and browser matrices
        -> ECO-06 — supply-chain, test quality, operational evidence
 
+Kit 1.12.5 -> Lab 0.6.3 — real affected-neighborhood partial-refresh treatment
 Kit 1.13 -> Kit 1.14 -> KIT-API-01
                          + ECO-01 -> ECO-05 — full-stack contract assurance
 
@@ -1141,7 +1156,7 @@ ECO-00 adoption is a documentation/contract-only repository change. It changes n
 
 ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
-Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.13.0 and Lab 0.6.1 remain valid independent local next milestones. Lab continues its preserved 0.6.1-0.9.2 sequence before LAB-EVIDENCE-01 at 0.10.0.
+Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. A later explicit local planning decision adds Kit 1.12.5 as the next Kit patch without moving Kit 1.13.0 or later reservations. Kit 1.12.5 provides the real affected-neighborhood refresh capability required by Lab 0.6.3; Lab 0.6.3 must consume actual Kit execution/fallback evidence rather than simulate the upstream refresh. The remaining Lab 0.6.1-0.9.2 sequence and LAB-EVIDENCE-01 at 0.10.0 remain otherwise unchanged.
 
 ECO-01 begins only when its producer and consumer milestones are available as exact candidates or releases. Prove one CLI and one full-stack end-to-end case before adding broader assurance adapters. The working rule remains: freeze the contract; build against exact evidence; test the exact combination; activate only a certified capability. Matching package version numbers are unnecessary.
 
