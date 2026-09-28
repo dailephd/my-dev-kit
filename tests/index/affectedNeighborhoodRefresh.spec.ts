@@ -408,6 +408,24 @@ describe('selectAffectedNeighborhood geometry', () => {
     parts.codeGraph.nodes.push({ ...original, line: 99 })
     expect(select({ changed: ['src/a.ts'] }, parts).status).toBe('selected')
   })
+
+  it('does not treat duplicate node ids that differ only in line or symbol kind metadata as conflicting', () => {
+    const parts = baselineParts()
+    const original = parts.codeGraph.nodes.find((node) => node.id === 'symbol:src/a.ts#fa')!
+    parts.codeGraph.nodes.push({ ...original, line: 42, symbolKind: 'const', exported: false })
+    const result = select({ changed: ['src/a.ts'] }, parts)
+    expect(result.status).toBe('selected')
+    expect(result).toEqual(select({ changed: ['src/a.ts'] }))
+  })
+
+  it('still rejects duplicate node ids with conflicting kind, path or symbol identity', () => {
+    for (const conflict of [{ kind: 'file' as const }, { path: 'src/b.ts' }, { symbolName: 'other' }]) {
+      const parts = baselineParts()
+      const original = parts.codeGraph.nodes.find((node) => node.id === 'symbol:src/a.ts#fa')!
+      parts.codeGraph.nodes.push({ ...original, ...conflict })
+      expect(select({ changed: ['src/a.ts'] }, parts)).toMatchObject({ status: 'unsafe', reason: 'conflicting-duplicate-node' })
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -489,10 +507,53 @@ describe('selectAffectedNeighborhood current-file mapping', () => {
 // ---------------------------------------------------------------------------
 
 describe('selectAffectedNeighborhood fail-closed behavior', () => {
-  it('reports a dangling edge as unsafe', () => {
+  it('reports a dangling edge incident to a seed (either direction) as unsafe', () => {
+    const outgoing = baselineParts()
+    outgoing.codeGraph.edges.push({ id: 'x', source: 'file:src/a.ts', target: 'file:src/missing.ts', kind: 'imports' })
+    expect(select({ changed: ['src/a.ts'] }, outgoing)).toMatchObject({ status: 'unsafe', reason: 'dangling-edge' })
+
+    const incoming = baselineParts()
+    incoming.codeGraph.edges.push({ id: 'y', source: 'file:src/missing.ts', target: 'symbol:src/a.ts#fa', kind: 'related-to' })
+    expect(select({ changed: ['src/a.ts'] }, incoming)).toMatchObject({ status: 'unsafe', reason: 'dangling-edge' })
+  })
+
+  it('ignores a dangling edge that is not incident to any seed, without changing counts or result', () => {
+    const clean = select({ changed: ['src/a.ts'] })
     const parts = baselineParts()
-    parts.codeGraph.edges.push({ id: 'x', source: 'file:src/a.ts', target: 'file:src/missing.ts', kind: 'imports' })
-    expect(select({ changed: ['src/a.ts'] }, parts)).toMatchObject({ status: 'unsafe', reason: 'dangling-edge' })
+    // Representative of Kit's own react-flow edges: valid source node, absent target; and both endpoints absent.
+    parts.codeGraph.edges.push(
+      { id: 'react-flow:1', source: 'file:src/d.ts', target: 'proptype:missing', kind: 'related-to' },
+      { id: 'react-flow:2', source: 'component:missing', target: 'prop:missing', kind: 'related-to' }
+    )
+    const withDangling = select({ changed: ['src/a.ts'] }, parts)
+    if (clean.status !== 'selected' || withDangling.status !== 'selected') throw new Error('expected selected')
+    expect(withDangling.ignoredDanglingEdgeCount).toBe(2)
+    expect(withDangling.affectedEdgeCount).toBe(clean.affectedEdgeCount)
+    expect(withDangling.affectedNodeIds).toEqual(clean.affectedNodeIds)
+    expect(withDangling.selectedCurrentFilePaths).toEqual(clean.selectedCurrentFilePaths)
+    expect(select({ changed: ['src/a.ts'] }, parts)).toEqual(withDangling)
+  })
+
+  it('treats a dangling edge to a removed-seed file as unsafe only when incident to that seed', () => {
+    const parts = baselineParts()
+    parts.codeGraph.edges.push({ id: 'z', source: 'file:src/r.ts', target: 'file:src/gone.ts', kind: 'imports' })
+    expect(select({ removed: ['src/r.ts'] }, parts)).toMatchObject({ status: 'unsafe', reason: 'dangling-edge' })
+    expect(select({ changed: ['src/a.ts'] }, parts).status).toBe('selected')
+  })
+
+  it('reports an edge whose endpoints cannot be established as unsafe even if it could be unrelated', () => {
+    const parts = baselineParts()
+    ;(parts.codeGraph.edges as unknown[]).push({ id: 'bad', source: 'file:src/d.ts', kind: 'imports' })
+    expect(select({ changed: ['src/a.ts'] }, parts)).toMatchObject({ status: 'unsafe', reason: 'malformed-edge' })
+  })
+
+  it('still reports a conflicting duplicate edge id involving a dangling edge as unsafe', () => {
+    const parts = baselineParts()
+    parts.codeGraph.edges.push(
+      { id: 'dup', source: 'file:src/d.ts', target: 'file:src/nope.ts', kind: 'imports' },
+      { id: 'dup', source: 'file:src/d.ts', target: 'file:src/other.ts', kind: 'imports' }
+    )
+    expect(select({ changed: ['src/a.ts'] }, parts)).toMatchObject({ status: 'unsafe', reason: 'conflicting-duplicate-edge' })
   })
 
   it('reports a conflicting duplicate node id as unsafe', () => {

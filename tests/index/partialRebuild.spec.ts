@@ -3,6 +3,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { buildIndex } from '../../src/symbol-index/builder.js'
+import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
+import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { buildCacheFileEntries, classifyChangedFilePaths, readCacheMetadata } from '../../src/indexing/cacheMetadata.js'
+import { discoverSourceFiles } from '../../src/indexing/discoverSourceFiles.js'
+import { buildPartialSymbolIndex, checkPartialRebuildEligibility } from '../../src/indexing/partialRebuild.js'
+import { loadTrustedBaseline } from '../../src/indexing/trustedBaseline.js'
+import { selectAffectedNeighborhood } from '../../src/indexing/affectedNeighborhood.js'
 
 const tempDirs: string[] = []
 
@@ -241,5 +249,197 @@ describe('index --incremental partial rebuild equivalence', () => {
     expect(result.cache.mode).toBe('incremental-change-detected-full-rebuild')
     expect(result.cache.invalidationReason).toBeTruthy()
     expect(existsSync(join(root, 'cache-out', 'symbol-index.json'))).toBe(true)
+  })
+})
+
+describe('buildPartialSymbolIndex forced re-extraction (v1.12.5 affected-neighborhood integration)', () => {
+  const OUT = 'cache-out'
+
+  /** a.ts <- b.ts (imports a); c.ts is unrelated. */
+  function createNeighborhoodFixture(): string {
+    const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-neighborhood-'))
+    tempDirs.push(root)
+    const src = join(root, 'src')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'a.ts'), 'export function fa(): number { return 1 }\n')
+    writeFileSync(join(src, 'b.ts'), "import { fa } from './a'\nexport function fb(): number { return fa() + 1 }\n")
+    writeFileSync(join(src, 'c.ts'), 'export function fc(): number { return 3 }\n')
+    return root
+  }
+
+  function plan(root: string, buildCallGraph = false) {
+    const outputDir = join(root, OUT)
+    const cacheRead = readCacheMetadata(outputDir)
+    if (cacheRead.status !== 'ok') throw new Error('expected a readable cache')
+    const cache = cacheRead.metadata
+    const discovery = discoverSourceFiles({ repoRoot: root, sourceRoots: ['src'] })
+    const currentEntries = buildCacheFileEntries(discovery.files)
+    const detailed = classifyChangedFilePaths(cache.files, currentEntries)
+    const baseline = loadTrustedBaseline({
+      outputDir,
+      projectRoot: root,
+      sourceRoots: ['src'],
+      configFingerprint: cache.configFingerprint,
+    })
+    const selection = selectAffectedNeighborhood({
+      baseline,
+      classification: detailed,
+      currentPaths: currentEntries.map((entry) => entry.path),
+      sourceRoots: ['src'],
+    })
+    const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
+    const buildPartial = (forced: readonly string[] | undefined) =>
+      buildPartialSymbolIndex({
+        repoRoot: root,
+        sourceRoots: ['src'],
+        buildCallGraph,
+        discoveryFiles: discovery.files,
+        unchangedPaths: new Set(detailed.unchanged),
+        forceReextractPaths: forced ? new Set(forced) : undefined,
+        previousFileSummariesByPath: eligibility.previousFileSummariesByPath,
+        previousCacheEntriesByPath: new Map(cache.files.map((entry) => [entry.path, entry])),
+      })
+    return { discovery, detailed, baseline, selection, eligibility, buildPartial }
+  }
+
+  function fullBuild(root: string, buildCallGraph = false) {
+    return buildIndex({ repoRoot: root, sourceRoots: ['src'], buildCallGraph })
+  }
+
+  function normalized(index: SymbolIndex) {
+    return { ...index, buildTime: 'NORMALIZED' }
+  }
+
+  function normalizedGraph(index: SymbolIndex) {
+    return { ...buildCodeGraph({ symbolIndex: index }), createdAt: 'NORMALIZED' }
+  }
+
+  it('freshly extracts changed and selected neighbor files, and reuses unrelated unchanged files', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    writeFileSync(join(root, 'src', 'a.ts'), 'export function fa(): number { return 1 }\nexport function fa2(): number { return 2 }\n')
+
+    const { detailed, selection, buildPartial } = plan(root)
+    expect(detailed).toMatchObject({ changed: ['src/a.ts'], unchanged: ['src/b.ts', 'src/c.ts'], added: [], removed: [] })
+    if (selection.status !== 'selected') throw new Error(`expected selected, got ${JSON.stringify(selection)}`)
+    expect(selection.unchangedNeighborFilePaths).toEqual(['src/b.ts'])
+
+    const partial = buildPartial(selection.unchangedNeighborFilePaths)
+    expect(partial.freshlyExtractedPaths).toEqual(['src/a.ts', 'src/b.ts'])
+    expect(partial.forcedReextractPaths).toEqual(['src/b.ts'])
+    expect(partial.reusedPaths).toEqual(['src/c.ts'])
+  })
+
+  it('converges with an ordinary full extraction of the same final source tree', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    writeFileSync(join(root, 'src', 'a.ts'), 'export function fa(): number { return 1 }\nexport function fa2(): number { return 2 }\n')
+
+    const { selection, buildPartial } = plan(root)
+    if (selection.status !== 'selected') throw new Error('expected selected')
+    const partial = buildPartial(selection.unchangedNeighborFilePaths)
+    const full = fullBuild(root)
+
+    expect(normalized(partial.index)).toEqual(normalized(full.index))
+    expect(normalizedGraph(partial.index)).toEqual(normalizedGraph(full.index))
+    expect(partial.fileExtractionMeta).toEqual(full.fileExtractionMeta)
+    const paths = partial.index.files.map((file) => file.path)
+    expect(paths).toEqual([...paths].sort())
+  })
+
+  it('uses fresh per-file evidence, not the stale previous summary, for a forced file', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    const { detailed, eligibility, buildPartial } = plan(root)
+    expect(detailed.changed).toEqual([])
+
+    // Poison the previous summary of b.ts: only a fresh extraction can overwrite it.
+    const stale = eligibility.previousFileSummariesByPath.get('src/b.ts')!
+    eligibility.previousFileSummariesByPath.set('src/b.ts', { ...stale, symbols: [], exports: ['STALE'], lineCount: 999 })
+
+    const reused = buildPartial(undefined).index.files.find((file) => file.path === 'src/b.ts')!
+    expect(reused.exports).toEqual(['STALE'])
+
+    const forced = buildPartial(['src/b.ts'])
+    const fresh = forced.index.files.find((file) => file.path === 'src/b.ts')!
+    expect(fresh.exports).toEqual(['fb'])
+    expect(fresh.lineCount).not.toBe(999)
+    expect(forced.fileExtractionMeta.get('src/b.ts')).toEqual(fullBuild(root).fileExtractionMeta.get('src/b.ts'))
+    expect(forced.forcedReextractPaths).toEqual(['src/b.ts'])
+    expect(forced.reusedPaths).toEqual(['src/a.ts', 'src/c.ts'])
+  })
+
+  it('leaves behavior unchanged when no force set is supplied', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    writeFileSync(join(root, 'src', 'c.ts'), 'export function fc(): number { return 4 }\nexport const extra = 1\n')
+    writeFileSync(join(root, 'src', 'd.ts'), 'export function fd(): number { return 5 }\n')
+
+    const { buildPartial } = plan(root)
+    for (const forced of [undefined, []] as const) {
+      const partial = buildPartial(forced)
+      expect(partial.freshlyExtractedPaths).toEqual(['src/c.ts', 'src/d.ts'])
+      expect(partial.reusedPaths).toEqual(['src/a.ts', 'src/b.ts'])
+      expect(partial.forcedReextractPaths).toEqual([])
+      expect(normalized(partial.index)).toEqual(normalized(fullBuild(root).index))
+    }
+  })
+
+  it('keeps added files fresh independent of the force set', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    writeFileSync(join(root, 'src', 'd.ts'), "import { fc } from './c'\nexport function fd(): number { return fc() }\n")
+    const { detailed, selection, buildPartial } = plan(root)
+    expect(detailed.added).toEqual(['src/d.ts'])
+    expect(selection.status).toBe('no-seeds')
+    const partial = buildPartial([])
+    expect(partial.freshlyExtractedPaths).toEqual(['src/d.ts'])
+    expect(partial.reusedPaths).toEqual(['src/a.ts', 'src/b.ts', 'src/c.ts'])
+  })
+
+  it('treats a removed seed as a baseline seed while the removed file stays absent from current output', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    rmSync(join(root, 'src', 'a.ts'))
+
+    const { detailed, selection, buildPartial } = plan(root)
+    expect(detailed.removed).toEqual(['src/a.ts'])
+    if (selection.status !== 'selected') throw new Error('expected selected')
+    expect(selection.seedFilePaths).toEqual(['src/a.ts'])
+    expect(selection.unchangedNeighborFilePaths).toEqual(['src/b.ts'])
+
+    const partial = buildPartial(selection.unchangedNeighborFilePaths)
+    expect(partial.freshlyExtractedPaths).toEqual(['src/b.ts'])
+    expect(partial.reusedPaths).toEqual(['src/c.ts'])
+    expect(partial.index.files.map((file) => file.path)).toEqual(['src/b.ts', 'src/c.ts'])
+    for (const paths of [partial.freshlyExtractedPaths, partial.reusedPaths, partial.forcedReextractPaths]) {
+      expect(paths).not.toContain('src/a.ts')
+    }
+    expect(normalized(partial.index)).toEqual(normalized(fullBuild(root).index))
+    expect(normalizedGraph(partial.index)).toEqual(normalizedGraph(fullBuild(root).index))
+  })
+
+  it('rejects forced paths that are not current unchanged discovered files', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT)
+    writeFileSync(join(root, 'src', 'a.ts'), 'export function fa(): number { return 9 }\n')
+    const { buildPartial } = plan(root)
+    expect(() => buildPartial(['src/missing.ts'])).toThrow(/not a current unchanged discovered file/)
+    expect(() => buildPartial(['src/a.ts'])).toThrow(/not a current unchanged discovered file/)
+  })
+
+  it('still fully regenerates the call graph, identically to a full build, when files are forced', () => {
+    const root = createNeighborhoodFixture()
+    runIncremental(root, OUT, ['--call-graph'])
+    writeFileSync(join(root, 'src', 'a.ts'), 'export function fa(): number { return 1 }\nexport function fa2(): number { return fa() }\n')
+
+    const { selection, buildPartial } = plan(root, true)
+    if (selection.status !== 'selected') throw new Error('expected selected')
+    const partial = buildPartial(selection.unchangedNeighborFilePaths)
+    const full = fullBuild(root, true)
+
+    expect(partial.callGraphFallback).toBe(true)
+    expect(partial.callGraph?.edges).toEqual(full.callGraph?.edges)
+    expect(normalized(partial.index)).toEqual(normalized(full.index))
   })
 })

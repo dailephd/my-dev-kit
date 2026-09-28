@@ -95,6 +95,13 @@ export interface BuildPartialSymbolIndexInput {
   /** All currently discovered files (unchanged + changed + added; removed files must not be present). */
   discoveryFiles: SourceDiscoveryResult['files']
   unchangedPaths: ReadonlySet<string>
+  /**
+   * Unchanged paths that must nevertheless be freshly extracted (v1.12.5
+   * affected-neighborhood reanalysis). Each must be a current discovered file
+   * that is also in `unchangedPaths`; anything else throws rather than being
+   * silently reinterpreted. Absent/empty keeps ordinary unchanged-file reuse.
+   */
+  forceReextractPaths?: ReadonlySet<string>
   previousFileSummariesByPath: ReadonlyMap<string, FileSummary>
   previousCacheEntriesByPath: ReadonlyMap<string, CacheFileEntry>
 }
@@ -105,6 +112,12 @@ export interface BuildPartialSymbolIndexResult {
   /** True whenever `--call-graph` was requested — call-graph is always fully regenerated, never partially reused. */
   callGraphFallback: boolean
   fileExtractionMeta: Map<string, FileExtractionMeta>
+  /** Internal execution evidence: sorted, de-duplicated current paths. Removed files appear in none. */
+  freshlyExtractedPaths: string[]
+  /** Unchanged paths whose previous per-file evidence was reused. Excludes forced paths. */
+  reusedPaths: string[]
+  /** Forced unchanged paths that were freshly extracted; always a subset of `freshlyExtractedPaths`. */
+  forcedReextractPaths: string[]
 }
 
 /** Strips semantic/classification stamping fields so reused symbols start from a clean slate, exactly like a fresh extraction. */
@@ -130,13 +143,25 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
   const callGraphInputsByAdapter = new Map<LanguageAdapter, SourceFileInput[]>()
+  const freshPaths = new Set<string>()
+  const reusedPaths = new Set<string>()
+
+  const forcedPaths = new Set([...(input.forceReextractPaths ?? [])].map(toForwardSlash))
+  if (forcedPaths.size > 0) {
+    const discovered = new Set(input.discoveryFiles.map((file) => toForwardSlash(file.relPath)))
+    for (const forced of forcedPaths) {
+      if (!discovered.has(forced) || !input.unchangedPaths.has(forced)) {
+        throw new Error(`Forced re-extraction path "${forced}" is not a current unchanged discovered file.`)
+      }
+    }
+  }
 
   for (const file of input.discoveryFiles) {
     const relPath = toForwardSlash(file.relPath)
     const adapter = registry.adapterForFile(relPath)
     if (!adapter) continue
 
-    if (input.unchangedPaths.has(relPath)) {
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath)) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
@@ -166,6 +191,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         },
       })
       fileExtractionMeta.set(relPath, { reExportSpecifiers, exportAllSpecifiers })
+      reusedPaths.add(relPath)
 
       if (input.buildCallGraph && adapter.supportsCallGraph && adapter.extractCallGraphEdges) {
         const sourceText = readFileSafely(file.absPath)
@@ -178,10 +204,11 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       continue
     }
 
-    // Changed or added file: analyze it exactly like a full build would.
+    // Changed, added, or forced-unchanged file: analyze it exactly like a full build would.
     const sourceText = readFileSafely(file.absPath)
     if (sourceText === null) continue
     const extraction = adapter.extractFromSource(relPath, sourceText)
+    freshPaths.add(relPath)
     rawExtractions.push({ relPath, extraction })
     fileExtractionMeta.set(relPath, {
       reExportSpecifiers: extraction.reExportSpecifiers,
@@ -245,6 +272,9 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     callGraph,
     callGraphFallback: input.buildCallGraph === true,
     fileExtractionMeta,
+    freshlyExtractedPaths: [...freshPaths].sort(),
+    reusedPaths: [...reusedPaths].sort(),
+    forcedReextractPaths: [...forcedPaths].filter((forced) => freshPaths.has(forced)).sort(),
   }
 }
 

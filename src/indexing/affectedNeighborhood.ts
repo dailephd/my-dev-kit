@@ -48,6 +48,8 @@ export interface AffectedNeighborhoodEvidence {
   unchangedNeighborFilePaths: string[]
   /** Affected nodes that did not yield a grounded surviving current file. */
   unmappedAffectedNodeCount: number
+  /** Distinct dangling baseline edges not incident to any seed: omitted from traversal, never counted as affected. */
+  ignoredDanglingEdgeCount: number
 }
 
 export type AffectedNeighborhoodSelection =
@@ -91,7 +93,10 @@ function insideSourceRoots(filePath: string, sourceRoots: readonly string[] | un
 
 interface GraphModel {
   nodes: Map<string, CodeGraphNode>
+  /** Structurally valid edges (both endpoints resolve to nodes). */
   edges: Map<string, CodeGraphEdge>
+  /** Well-formed edges with an unresolvable endpoint. Unsafe only if incident to a seed. */
+  danglingEdges: Map<string, CodeGraphEdge>
 }
 
 /**
@@ -99,7 +104,11 @@ interface GraphModel {
  * Node duplicates that differ only in non-identity fields (e.g. `line` for
  * overloaded symbols, which `buildCodeGraph` emits under one ID) are not
  * conflicts; differing kind/path/symbolName is. Edge duplicates conflict when
- * source, target or kind differ.
+ * source, target or kind differ. Dangling edges (an endpoint is not a graph
+ * node) are set aside rather than rejected: they can only make the result unsafe
+ * when incident to a seed, because otherwise they cannot alter a one-hop seed
+ * neighborhood. An edge whose id/source/target/kind cannot be established is
+ * unclassifiable and always unsafe.
  */
 function buildGraphModel(rawNodes: unknown[], rawEdges: unknown[]): GraphModel | AffectedNeighborhoodSelection {
   const nodes = new Map<string, CodeGraphNode>()
@@ -119,6 +128,7 @@ function buildGraphModel(rawNodes: unknown[], rawEdges: unknown[]): GraphModel |
   }
 
   const edges = new Map<string, CodeGraphEdge>()
+  const danglingEdges = new Map<string, CodeGraphEdge>()
   for (const raw of rawEdges) {
     const edge = raw as Partial<CodeGraphEdge> | null
     if (
@@ -131,7 +141,7 @@ function buildGraphModel(rawNodes: unknown[], rawEdges: unknown[]): GraphModel |
     ) {
       return unsafe('malformed-edge', 'A baseline code-graph edge lacks a string id/source/target/kind.')
     }
-    const existing = edges.get(edge.id)
+    const existing = edges.get(edge.id) ?? danglingEdges.get(edge.id)
     if (existing) {
       if (existing.source !== edge.source || existing.target !== edge.target || existing.kind !== edge.kind) {
         return unsafe('conflicting-duplicate-edge', `Baseline edge id "${edge.id}" is repeated with conflicting endpoints/kind.`)
@@ -139,11 +149,12 @@ function buildGraphModel(rawNodes: unknown[], rawEdges: unknown[]): GraphModel |
       continue
     }
     if (!nodes.has(edge.source) || !nodes.has(edge.target)) {
-      return unsafe('dangling-edge', `Baseline edge "${edge.id}" references a node that is not in the graph.`)
+      danglingEdges.set(edge.id, edge as CodeGraphEdge)
+      continue
     }
     edges.set(edge.id, edge as CodeGraphEdge)
   }
-  return { nodes, edges }
+  return { nodes, edges, danglingEdges }
 }
 
 export function selectAffectedNeighborhood(input: SelectAffectedNeighborhoodInput): AffectedNeighborhoodSelection {
@@ -216,6 +227,13 @@ export function selectAffectedNeighborhood(input: SelectAffectedNeighborhoodInpu
     seedSymbolCount += seededForFile.size
   }
 
+  // A dangling edge incident to a seed means the seed's one-hop neighborhood is incomplete.
+  for (const edge of model.danglingEdges.values()) {
+    if (seedNodeIds.has(edge.source) || seedNodeIds.has(edge.target)) {
+      return unsafe('dangling-edge', `Baseline edge "${edge.id}" is incident to a seed but references a node that is not in the graph.`)
+    }
+  }
+
   // Exactly one hop, both directions, every valid edge kind; neighbors never become seeds.
   const affectedNodeIds = new Set(seedNodeIds)
   let affectedEdgeCount = 0
@@ -255,6 +273,7 @@ export function selectAffectedNeighborhood(input: SelectAffectedNeighborhoodInpu
     selectedCurrentFilePaths,
     unchangedNeighborFilePaths: selectedCurrentFilePaths.filter((filePath) => !freshPaths.has(filePath)),
     unmappedAffectedNodeCount: unmapped,
+    ignoredDanglingEdgeCount: model.danglingEdges.size,
   }
   return { status: seedNodeIds.size === 0 ? 'no-seeds' : 'selected', ...evidence }
 }
