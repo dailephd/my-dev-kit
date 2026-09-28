@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,6 +50,47 @@ afterEach(() => {
 })
 
 describe('index --incremental', () => {
+  function sha256Of(path: string): string {
+    return createHash('sha256').update(readFileSync(path)).digest('hex')
+  }
+
+  function expectBaselineIdentityMatchesDisk(root: string): void {
+    const out = join(root, 'cache-out')
+    const cache = JSON.parse(readFileSync(join(out, 'cache-metadata.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'))
+    expect(cache.cacheSchemaVersion).toBe('1.2.0')
+    expect(cache.baselineArtifacts).toEqual({
+      manifestSha256: sha256Of(join(out, 'manifest.json')),
+      symbolIndexSha256: sha256Of(join(out, manifest.artifacts.symbolIndex)),
+      codeGraphSha256: sha256Of(join(out, manifest.artifacts.codeGraph)),
+    })
+  }
+
+  it('records baseline artifact identities for the initial full build and a partial rebuild', () => {
+    const root = createFixture()
+    runIncremental(root)
+    expectBaselineIdentityMatchesDisk(root)
+
+    writeFileSync(join(root, 'src', 'userTypes.ts'), 'export interface User { id: string; name: string; age: number }\n')
+    const partial = runIncremental(root)
+    expect(partial.cache.mode).toBe('incremental-partial')
+    expectBaselineIdentityMatchesDisk(root)
+  })
+
+  it('treats a pre-1.2.0 cache as incompatible and rebuilds it with identities', () => {
+    const root = createFixture()
+    runIncremental(root)
+    const cachePath = join(root, 'cache-out', 'cache-metadata.json')
+    const legacy = JSON.parse(readFileSync(cachePath, 'utf8'))
+    legacy.cacheSchemaVersion = '1.1.0'
+    delete legacy.baselineArtifacts
+    writeFileSync(cachePath, JSON.stringify(legacy))
+
+    const rebuilt = runIncremental(root)
+    expect(rebuilt.cache.mode).toBe('incremental-full-cache-incompatible')
+    expectBaselineIdentityMatchesDisk(root)
+  })
+
   it('performs an initial full build and writes cache metadata on the first run', () => {
     const root = createFixture()
     const parsed = runIncremental(root)

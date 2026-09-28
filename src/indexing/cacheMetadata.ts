@@ -19,6 +19,13 @@
  * `graph.symbols` without re-parsing the file. `CACHE_SCHEMA_VERSION` was
  * bumped so a pre-Batch-3 cache is treated as incompatible and rebuilt once
  * rather than silently misread (its file entries lack these two fields).
+ *
+ * Cache schema 1.2.0 (v1.12.5) adds `baselineArtifacts`: SHA-256 identities of
+ * the exact `manifest.json`, manifest-referenced `symbol-index.json` and
+ * manifest-referenced `code-graph.json` the build produced, so a later run can
+ * prove the cache and public artifacts describe the same baseline build. It is
+ * internal bookkeeping only; `manifest.json` stays authoritative for public
+ * artifact registration.
  */
 
 import * as fs from 'node:fs'
@@ -26,9 +33,10 @@ import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { VERSION } from '../version.js'
+import { readIndexManifest } from './readIndexManifest.js'
 
 export const CACHE_METADATA_FILENAME = 'cache-metadata.json'
-export const CACHE_SCHEMA_VERSION = '1.1.0'
+export const CACHE_SCHEMA_VERSION = '1.2.0'
 export const INDEX_ARTIFACT_SCHEMA_VERSION = '1.0.0'
 
 const SAMPLE_LIMIT = 20
@@ -42,6 +50,13 @@ export interface CacheFileEntry {
   exportAllSpecifiers?: string[]
 }
 
+/** Lowercase hex SHA-256 identities of the exact previous public artifacts (cache schema 1.2.0+). */
+export interface BaselineArtifactIdentity {
+  manifestSha256: string
+  symbolIndexSha256: string
+  codeGraphSha256: string
+}
+
 export interface CacheMetadata {
   artifactKind: 'my-dev-kit-v1-cache-metadata'
   cacheSchemaVersion: string
@@ -52,6 +67,7 @@ export interface CacheMetadata {
   configFingerprint: string
   generatedAt: string
   files: CacheFileEntry[]
+  baselineArtifacts: BaselineArtifactIdentity
 }
 
 export type CacheReadStatus =
@@ -234,7 +250,47 @@ function validateCacheMetadataShape(value: unknown): string | null {
   if (typeof candidate.packageVersion !== 'string') return 'Cache metadata is missing packageVersion.'
   if (typeof candidate.configFingerprint !== 'string') return 'Cache metadata is missing configFingerprint.'
   if (!Array.isArray(candidate.files)) return 'Cache metadata is missing a files array.'
+  // Older schemas legitimately lack `baselineArtifacts`; they are rejected by
+  // checkCacheCompatibility instead. A current-schema cache must carry it.
+  if (candidate.cacheSchemaVersion === CACHE_SCHEMA_VERSION && !isBaselineArtifactIdentity(candidate.baselineArtifacts)) {
+    return 'Cache metadata is missing valid baselineArtifacts SHA-256 identities.'
+  }
   return null
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/
+
+function isBaselineArtifactIdentity(value: unknown): value is BaselineArtifactIdentity {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<BaselineArtifactIdentity>
+  return (
+    typeof candidate.manifestSha256 === 'string' &&
+    SHA256_HEX.test(candidate.manifestSha256) &&
+    typeof candidate.symbolIndexSha256 === 'string' &&
+    SHA256_HEX.test(candidate.symbolIndexSha256) &&
+    typeof candidate.codeGraphSha256 === 'string' &&
+    SHA256_HEX.test(candidate.codeGraphSha256)
+  )
+}
+
+/** Lowercase hex SHA-256 of raw bytes. */
+export function sha256Hex(content: Uint8Array): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+/**
+ * Hashes the exact `manifest.json` in `outputDir` plus the symbol-index and
+ * code-graph files that manifest registers (paths resolved and contained by
+ * `readIndexManifest`, never assumed from filenames). Call only after the
+ * build has written its final manifest; throws if the artifacts are unreadable.
+ */
+export function computeBaselineArtifactIdentity(outputDir: string): BaselineArtifactIdentity {
+  const resolved = readIndexManifest(outputDir)
+  return {
+    manifestSha256: hashFileContent(resolved.manifestPath),
+    symbolIndexSha256: hashFileContent(resolved.artifactPaths.symbolIndex),
+    codeGraphSha256: hashFileContent(resolved.artifactPaths.codeGraph),
+  }
 }
 
 /** Schema/version compatibility only. Config-fingerprint mismatch is checked separately. */
@@ -357,6 +413,7 @@ export function buildCacheMetadata(input: {
   sourceRoots: string[]
   configFingerprint: string
   files: CacheFileEntry[]
+  baselineArtifacts: BaselineArtifactIdentity
   generatedAt?: string
 }): CacheMetadata {
   return {
@@ -369,5 +426,6 @@ export function buildCacheMetadata(input: {
     configFingerprint: input.configFingerprint,
     generatedAt: input.generatedAt ?? new Date().toISOString(),
     files: input.files,
+    baselineArtifacts: input.baselineArtifacts,
   }
 }

@@ -21,6 +21,7 @@ import {
   buildCacheFileEntries,
   buildCacheMetadata,
   cacheMetadataPathFor,
+  computeBaselineArtifactIdentity,
   checkCacheCompatibility,
   classifyChangedFilePaths,
   classifyChangedFiles,
@@ -696,6 +697,7 @@ function writeMergedCacheMetadata(params: {
       sourceRoots: params.normalizedSourceRoots,
       configFingerprint: params.configFingerprint,
       files,
+      baselineArtifacts: computeBaselineArtifactIdentity(params.outputDir),
     })
   )
 }

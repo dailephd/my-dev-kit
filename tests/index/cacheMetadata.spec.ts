@@ -1,7 +1,17 @@
+import { createHash } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  CACHE_SCHEMA_VERSION,
+  buildCacheMetadata,
+  checkCacheCompatibility,
   classifyChangedFiles,
+  computeBaselineArtifactIdentity,
   computeConfigFingerprint,
+  readCacheMetadata,
+  writeCacheMetadata,
   type CacheFileEntry,
 } from '../../src/indexing/cacheMetadata.js'
 
@@ -180,5 +190,96 @@ describe('classifyChangedFiles', () => {
     const current: CacheFileEntry[] = [entry('src/a.ts', 'hash-a-changed'), entry('src/b.ts', 'hash-b')]
 
     expect(classifyChangedFiles(previous, current)).toEqual(classifyChangedFiles(previous, current))
+  })
+})
+
+describe('cache schema 1.2.0 baseline artifact identity', () => {
+  const sha = (text: string) => createHash('sha256').update(text).digest('hex')
+
+  function writeIndex(symbolIndexName = 'symbol-index.json'): string {
+    const dir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-cache-identity-'))
+    writeFileSync(join(dir, symbolIndexName), 'SYMBOLS')
+    writeFileSync(join(dir, 'code-graph.json'), 'GRAPH')
+    writeFileSync(
+      join(dir, 'manifest.json'),
+      JSON.stringify({
+        artifactKind: 'my-dev-kit-v1-manifest',
+        version: '1.0.0',
+        projectRoot: '/p',
+        sourceRoots: ['src'],
+        artifacts: { symbolIndex: symbolIndexName, codeGraph: 'code-graph.json', callGraph: null },
+      })
+    )
+    return dir
+  }
+
+  it('advances the internal cache schema to 1.2.0', () => {
+    expect(CACHE_SCHEMA_VERSION).toBe('1.2.0')
+  })
+
+  it('hashes the exact manifest and the manifest-registered symbol index and code graph, deterministically', () => {
+    const dir = writeIndex('registered-symbols.json')
+    try {
+      writeFileSync(join(dir, 'symbol-index.json'), 'STALE-UNREGISTERED')
+      const identity = computeBaselineArtifactIdentity(dir)
+      expect(identity).toEqual(computeBaselineArtifactIdentity(dir))
+      expect(identity.symbolIndexSha256).toBe(sha('SYMBOLS'))
+      expect(identity.codeGraphSha256).toBe(sha('GRAPH'))
+      expect(identity.manifestSha256).toMatch(/^[0-9a-f]{64}$/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('round-trips baselineArtifacts through the cache file', () => {
+    const dir = writeIndex()
+    try {
+      const baselineArtifacts = computeBaselineArtifactIdentity(dir)
+      writeCacheMetadata(
+        dir,
+        buildCacheMetadata({ projectRoot: '/p', sourceRoots: ['src'], configFingerprint: 'fp', files: [], baselineArtifacts })
+      )
+      const read = readCacheMetadata(dir)
+      expect(read.status).toBe('ok')
+      if (read.status === 'ok') {
+        expect(read.metadata.cacheSchemaVersion).toBe('1.2.0')
+        expect(read.metadata.baselineArtifacts).toEqual(baselineArtifacts)
+        expect(checkCacheCompatibility(read.metadata).compatible).toBe(true)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects a current-schema cache that lacks valid baseline identities', () => {
+    const dir = writeIndex()
+    try {
+      const metadata = buildCacheMetadata({
+        projectRoot: '/p',
+        sourceRoots: ['src'],
+        configFingerprint: 'fp',
+        files: [],
+        baselineArtifacts: { manifestSha256: 'nope', symbolIndexSha256: 'x', codeGraphSha256: 'y' },
+      })
+      writeCacheMetadata(dir, metadata)
+      expect(readCacheMetadata(dir).status).toBe('invalid')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('still reads a 1.1.0 cache but reports it incompatible through the normal compatibility check', () => {
+    const dir = writeIndex()
+    try {
+      const baselineArtifacts = computeBaselineArtifactIdentity(dir)
+      const metadata = buildCacheMetadata({ projectRoot: '/p', sourceRoots: ['src'], configFingerprint: 'fp', files: [], baselineArtifacts })
+      const { baselineArtifacts: _dropped, ...legacy } = { ...metadata, cacheSchemaVersion: '1.1.0' }
+      writeFileSync(join(dir, 'cache-metadata.json'), JSON.stringify(legacy))
+      const read = readCacheMetadata(dir)
+      expect(read.status).toBe('ok')
+      if (read.status === 'ok') expect(checkCacheCompatibility(read.metadata).compatible).toBe(false)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
