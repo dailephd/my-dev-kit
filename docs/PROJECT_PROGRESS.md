@@ -6,11 +6,22 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.5` is the current release.
 
+## Planned next: v1.12.6
+
+Version 1.12.6 is the next planned Kit milestone. It is a bounded retrieval-precision patch and is **not yet implemented or published**.
+
+Planned scope has two generic retrieval corrections:
+
+- **Ownership-oriented search:** preserve raw relevance-ranked `search --query` behavior while adding an explicit ownership-oriented mode that keeps grounded production owners discoverable within a bounded result set for natural-language implementation queries, without removing relevant test evidence.
+- **Trustworthy symbol boundaries:** add optional extractor-proven `endLine` evidence for supported generic symbols (initially TypeScript/TSX/JavaScript/JSX and Python where trustworthy), so `source --node` and `source --file --symbol` can return the complete known symbol within `--max-lines`; uncertain boundaries retain the existing conservative continuation fallback.
+
+Planned implementation order: ownership-search contract; bounded graph-supported owner recovery; trustworthy symbol-boundary/source-continuation support; integrated retrieval hardening and documentation reconciliation. The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
+
 ## Shipped: v1.12.5
 
 Version 1.12.5 ships affected-neighborhood incremental refresh in the existing indexing pipeline. The installed CLI supports `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains compatible with `changed-files`. The affected-neighborhood scope freshly extracts unchanged files exactly one graph hop from modified or removed baseline files, verified against the trusted prior index. Missing, incompatible, unreadable, or mismatched baseline evidence fails closed to a truthful full rebuild. No-change invocations remain no-ops, and call-graph regeneration remains separately reported.
 
-This release provides the published Kit capability required for Lab's planned v0.6.3 affected-neighborhood treatment. Lab v0.6.3 remains its own planned milestone. Version 1.13.0 (Android retrieval benchmarks, examples, and workflow documentation) remains the next planned Kit milestone; later roadmap scope is unchanged.
+This release provides the published Kit capability required for Lab's planned v0.6.3 affected-neighborhood treatment. Lab v0.6.3 remains its own planned milestone. Version 1.12.6 (bounded retrieval precision) is now the next planned Kit milestone; v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and later roadmap scope is unchanged.
 
 ### v1.12.5 release validation
 
@@ -38,7 +49,7 @@ Version 1.12.4 is published. Package metadata and the CLI report `1.12.4`. It is
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the current Kit release. Version 1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone next. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the later explicit v1.12.5 decision is additive and does not move the existing 1.13.0-1.16.0 assignments.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the current Kit release. Version 1.12.6 is the next planned local retrieval-precision patch; v1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone after it. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the additive v1.12.5 and v1.12.6 local decisions do not move the existing 1.13.0-1.16.0 assignments.
 
 ## Shipped: v1.12.3
 
