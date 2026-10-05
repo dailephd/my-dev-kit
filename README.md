@@ -594,7 +594,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.5 is the current release. Version 1.12.6 is the next planned bounded retrieval-precision patch; v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.5 is the current release. Version 1.12.6 is the next planned bounded retrieval-precision patch. Later versions retain their separate planned scopes: v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 
