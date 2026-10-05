@@ -27,6 +27,7 @@
       "## Version 1.12.3",
       "## Version 1.12.4",
       "## Version 1.12.5",
+      "## Version 1.12.6",
       "## Version 1.13.0",
       "## Version 1.14.0",
       "## Version 1.15.0",
@@ -57,6 +58,7 @@
       "1.12.3",
       "1.12.4",
       "1.12.5",
+      "1.12.6",
       "1.13.0",
       "1.14.0",
       "1.15.0",
@@ -149,6 +151,12 @@
         "refresh-scope",
         "one-hop",
         "full rebuild"
+      ],
+      "1.12.6": [
+        "bounded retrieval precision",
+        "ownership-oriented search",
+        "endLine",
+        "symbol-end-unknown"
       ]
     },
     "androidVersionScopeKeywords": {
@@ -305,14 +313,18 @@
       "README.md": [
         "Latest release: v1.12.5",
         "@dailephd/my-dev-kit@1.12.5",
-        "planned scopes"
+        "planned scopes",
+        "Planned next: v1.12.6"
       ],
       "docs/ROADMAP.md": [
         "## Version 1.12.5",
-        "**Status: published.**"
+        "**Status: published.**",
+        "## Version 1.12.6",
+        "**Status: planned.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.12.5 is the current release"
+        "Version 1.12.5 is the current release",
+        "Planned next: v1.12.6"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -322,7 +334,8 @@
       "docs/ECOSYSTEM_COORDINATED_ROADMAP.md": [
         "# Coordinated my-dev-kit ecosystem development roadmap",
         "Status: ECO-00 ADOPTED",
-        "Kit 1.13.0 remains Android retrieval benchmarks, examples, and workflows."
+        "Kit 1.13.0 remains Android retrieval benchmarks, examples, and workflows.",
+        "Kit v1.12.6"
       ],
       "docs/DEVELOPMENT.md": [
         "# Development",
@@ -350,7 +363,8 @@
         "## Shipped: v1.12.1",
         "## Shipped: v1.12.0",
         "## Shipped: v1.10.3",
-        "## Shipped: v1.10.4"
+        "## Shipped: v1.10.4",
+        "## Planned next: v1.12.6"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",
