@@ -1514,7 +1514,7 @@ Lab must record requested treatment and actual upstream execution/fallback. It m
 
 **Status: planned.**
 
-Version 1.12.6 is a bounded retrieval-precision patch over the published v1.12.5 baseline. It improves two generic stages of the existing graph-guided retrieval workflow without changing the scope of v1.13.0 or any later roadmap version:
+Version 1.12.6 is a bounded retrieval precision patch over the published v1.12.5 baseline. It improves two generic stages of the existing graph-guided retrieval workflow without changing the scope of v1.13.0 or any later roadmap version:
 
 - ownership-oriented discovery for natural-language implementation queries; and
 - trustworthy generic symbol end-line evidence for more complete bounded source retrieval.
