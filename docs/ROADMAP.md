@@ -1510,6 +1510,165 @@ Lab must record requested treatment and actual upstream execution/fallback. It m
 - no v1.13.0 Android proof/example/documentation work
 - no v1.14.0 framework expansion, KIT-API-01, KIT-OPS-01, or v2.0.0 plugin work
 
+## Version 1.12.6
+
+**Status: planned.**
+
+Version 1.12.6 is a bounded retrieval-precision patch over the published v1.12.5 baseline. It improves two generic stages of the existing graph-guided retrieval workflow without changing the scope of v1.13.0 or any later roadmap version:
+
+- ownership-oriented discovery for natural-language implementation queries; and
+- trustworthy generic symbol end-line evidence for more complete bounded source retrieval.
+
+The goal is to use static evidence that my-dev-kit already has, or can derive reliably from its existing language extractors, so coding agents are less likely to miss a production owner during search or require unnecessary source continuation after the correct symbol is known.
+
+The core workflow remains:
+
+```text
+index -> manifest -> artifacts -> search -> lookup -> slice -> source -> view
+```
+
+### Ownership-oriented search
+
+Raw `search --query` remains relevance-ranked and backward-compatible. Indexed tests remain ordinary searchable evidence and may continue to outrank production files under raw relevance search.
+
+Add an explicit ownership-oriented search mode for implementation-ownership discovery. The exact public option spelling is an implementation-plan decision; the semantic contract is fixed here.
+
+The ownership mode must:
+
+- reuse the existing search candidate pool, classification metadata, code graph, and deterministic ranking infrastructure rather than introduce a second search engine;
+- preserve the ordinary lexical relevance score and expose deterministic ownership adjustments separately;
+- prefer grounded production-owner evidence such as production symbols, producer relationships, and suitable classification/edit-guidance evidence;
+- avoid selecting test-only, test-fixture, generated, docs-only, or projection-only evidence as the primary production owner when a stronger grounded owner is available;
+- retain relevant tests and other supporting evidence rather than removing them from results;
+- permit bounded graph-supported promotion of a plausible production owner when a strongly matching test or usage candidate references that owner, so a weak direct lexical match does not make the owner disappear behind the result limit;
+- preserve ambiguity when multiple production owners remain plausible;
+- remain deterministic, inspectable, local, and static.
+
+The ownership mode must not use embeddings, semantic-similarity services, LLM ranking, network calls, or automatic edit authorization.
+
+### Trustworthy symbol end-line evidence
+
+Extend the existing generic symbol-location contract additively with an optional inclusive `endLine`.
+
+`line` remains the existing inclusive 1-based declaration start line. `endLine`, when present, means that the current language extractor can establish a trustworthy inclusive declaration end line. When it cannot, the field remains absent.
+
+Initial supported boundary producers:
+
+- TypeScript, TSX, JavaScript, and JSX: derive boundaries from the existing TypeScript compiler AST used by the current extractor;
+- Python: preserve `ast` `end_lineno` evidence already produced by the current Python extraction path when available and valid;
+- Kotlin and Java: retain unknown generic symbol boundaries under the current conservative line/brace scanners rather than claim exactness they cannot guarantee.
+
+Future language extractors may begin supplying `endLine` through the same optional contract when they gain trustworthy boundary evidence.
+
+The optional boundary may be projected into the existing compact graph symbol/node representation so symbol-index and code-graph structural evidence remain consistent. No second range artifact or source-location system is introduced.
+
+### Bounded source retrieval with known symbol boundaries
+
+`source --file <path> --symbol <name>` and symbol-node `source --node` must consume the same symbol boundary evidence.
+
+When a trustworthy symbol end line is available:
+
+- return the complete symbol on the initial request when it fits within `--max-lines`;
+- never apply the historical 20-line unknown-boundary preview solely because the target is a generic symbol;
+- when the symbol exceeds `--max-lines`, return only the allowed window and expose bounded continuation with `symbolBoundaryKnown: true`;
+- continuation must stop at the recorded symbol end and must not spill into the following declaration;
+- once the complete known symbol has been returned, no continuation cursor is required.
+
+When a trustworthy symbol end line is unavailable:
+
+- preserve the current conservative small initial preview;
+- preserve `symbolBoundaryKnown: false`;
+- preserve continuation reason `symbol-end-unknown`;
+- preserve explicit continuation and bounded line-range retrieval as the fallback.
+
+An old compatible index that does not contain `endLine` remains readable and follows the same unknown-boundary fallback rather than being rejected or assigned a fabricated boundary.
+
+### Artifact and compatibility boundaries
+
+- keep the current symbol-index and code-graph architecture;
+- add only optional range metadata; do not replace the existing `line` field;
+- do not require a public schema-major bump solely for the additive optional `endLine`;
+- do not create a second symbol index, range artifact, source engine, parser pipeline, search engine, or graph engine;
+- preserve current node and symbol identities;
+- preserve current source-root, exclusion, incremental-indexing, graph-diff, and managed-artifact behavior;
+- preserve `--max-lines` as an absolute output bound;
+- preserve source continuation as the fallback whenever an exact boundary is unavailable or a known symbol exceeds the requested bound;
+- preserve raw `search --query` behavior unless the ownership mode is explicitly selected;
+- preserve existing `context` roles and adequacy contracts; v1.12.6 may share conservative owner-policy helpers where appropriate but must not redesign the context pipeline.
+
+### Incremental-index compatibility
+
+Fresh and partial builds must preserve equivalent end-line evidence for the same final source tree.
+
+Unchanged symbols reused by a partial rebuild must retain any previously extracted `endLine`. Changed files must receive freshly extracted boundary evidence.
+
+Existing package-version cache compatibility already causes an index cache written by an older published my-dev-kit version to rebuild after an upgrade. Do not bump the internal cache schema solely to introduce the optional symbol `endLine`.
+
+### Retrieval-regression coverage
+
+Extend the existing my-dev-kit-owned retrieval regression suite with permanent scenarios covering both v1.12.6 corrections.
+
+Ownership regression:
+
+- a natural-language behavior/ownership query has strongly matching indexed test evidence and a grounded production owner;
+- raw relevance search remains backward-compatible;
+- ownership-oriented search retains the production owner within a small bounded top-K result set while preserving the relevant tests;
+- generated, docs-only, or test-only evidence does not become the primary production owner when a stronger grounded owner exists.
+
+Symbol-boundary regression:
+
+- a known multiline symbol whose trustworthy end is within `--max-lines` is returned completely without unnecessary continuation;
+- a known symbol larger than `--max-lines` is truncated only by the requested bound and continues only within its own exact range;
+- an unknown-boundary symbol retains `symbol-end-unknown` behavior;
+- old indexes without `endLine` retain the conservative fallback;
+- symbol-node and file-plus-symbol retrieval remain equivalent.
+
+### Dependencies and ordering
+
+1. define the additive ownership-search and optional symbol-boundary contracts;
+2. implement deterministic ownership-oriented ranking and bounded owner recovery;
+3. add trustworthy TypeScript/JavaScript and Python symbol end-line production;
+4. consume known boundaries in generic source and continuation handling;
+5. add permanent search and source retrieval regression coverage;
+6. validate backward compatibility, determinism, incremental behavior, old-index fallback, and documentation before release work.
+
+### Planned implementation batches
+
+1. ownership-oriented search contract and backward-compatible ranking mode;
+2. bounded graph-supported owner recovery and production-versus-test regression hardening;
+3. trustworthy generic symbol boundaries and symbol-aware source continuation;
+4. integrated retrieval hardening, compatibility validation, and documentation reconciliation.
+
+### Acceptance criteria
+
+- ordinary raw search ranking remains backward-compatible;
+- ownership-oriented search makes a grounded production owner discoverable within a small bounded result set for the reproduced production-versus-test query while retaining relevant test evidence;
+- ownership ranking remains deterministic and its adjustments are inspectable;
+- no LLM, embeddings, fuzzy semantic engine, or second retrieval system is introduced;
+- TypeScript/TSX/JavaScript/JSX generic symbols carry trustworthy parser-derived end lines where available;
+- Python generic symbols preserve trustworthy AST `end_lineno` evidence where available;
+- Kotlin, Java, old-index, malformed, and otherwise uncertain cases do not fabricate exact boundaries;
+- a known symbol that fits within `--max-lines` is returned completely on the initial source request;
+- a known symbol larger than `--max-lines` never causes source retrieval to spill into the next symbol;
+- unknown-boundary symbols retain the existing conservative 20-line preview and `symbol-end-unknown` continuation behavior;
+- `source --node` and `source --file --symbol` use one consistent boundary contract;
+- full and incremental builds converge on equivalent end-line and retrieval evidence for the same final source tree;
+- retrieval regression, focused source/search tests, the full test suite, typecheck, build, documentation checks, package validation, and cross-platform readiness pass before release preparation.
+
+### Explicit non-goals
+
+- no global production-first behavior for ordinary search;
+- no removal or down-ranking of test evidence outside the explicit ownership mode;
+- no embedding or LLM search;
+- no generic fuzzy-search redesign;
+- no general search/lookup/slice node-kind filtering from the older deferred v1.8.0 scope;
+- no Kotlin or Java parser/compiler replacement merely to obtain end lines;
+- no inference of a symbol end from the next declaration when the extractor cannot prove the boundary;
+- no change to unrelated exact source modes, React-region ranges, or Android artifact-backed source ranges that already carry their own boundary evidence;
+- no v1.13.0 Android benchmark/example/workflow scope;
+- no v1.14.0 framework/language expansion;
+- no KIT-API-01, KIT-OPS-01, or v2.0.0 plugin/schema redesign.
+
 ## Version 1.13.0
 
 **Status: planned.**
