@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -58,6 +58,26 @@ beforeAll(() => {
 afterAll(() => {
   rmSync(projectDir, { recursive: true, force: true })
 })
+
+type MutableSymbolIndex = { files: Array<{ path: string; symbols: Array<{ name: string; location: Record<string, unknown> }> }> }
+
+/** Copies an index inside the temp project and rewrites its symbol-index.json (the original is untouched). */
+function copyIndexWith(sourceIndex: string, label: string, mutate: (index: MutableSymbolIndex) => void): string {
+  const copy = join(projectDir, `.idx-${label}`)
+  cpSync(sourceIndex, copy, { recursive: true })
+  const file = join(copy, 'symbol-index.json')
+  const index = JSON.parse(readFileSync(file, 'utf8')) as MutableSymbolIndex
+  mutate(index)
+  writeFileSync(file, JSON.stringify(index, null, 2))
+  return copy
+}
+
+/** An index as written before v1.12.6: no symbol carries an endLine. */
+function copyIndexWithoutEndLine(sourceIndex: string, label: string): string {
+  return copyIndexWith(sourceIndex, label, (index) => {
+    for (const file of index.files) for (const symbol of file.symbols) delete symbol.location.endLine
+  })
+}
 
 // ---------- JSON structure tests ----------
 
@@ -128,11 +148,24 @@ describe('source bundle JSON structure', () => {
     }
   })
 
-  it('continuationCursors array is non-empty', () => {
+  it('continuationCursors is an array and is empty once a known symbol is returned completely', () => {
     const result = runCli([
       'source', '--index', indexDir,
       '--file', 'src/user.ts', '--symbol', 'createUser',
       '--include-local-types', '--json',
+    ])
+    const bundle = JSON.parse(result.stdout)
+    expect(Array.isArray(bundle.continuationCursors)).toBe(true)
+    // createUser has a trusted indexed end and fits the block cap: nothing of it remains to continue.
+    expect(bundle.continuationCursors).toHaveLength(0)
+  })
+
+  it('continuationCursors keeps its cursor shape when the symbol boundary is unknown (old index)', () => {
+    const oldIndex = copyIndexWithoutEndLine(indexDir, 'cursor-shape')
+    const result = runCli([
+      'source', '--index', oldIndex,
+      '--file', 'src/user.ts', '--symbol', 'createUser',
+      '--include-local-types', '--max-lines', '5', '--json',
     ])
     const bundle = JSON.parse(result.stdout)
     expect(bundle.continuationCursors.length).toBeGreaterThan(0)
@@ -140,6 +173,7 @@ describe('source bundle JSON structure', () => {
     expect(cursor).toHaveProperty('nextStartLine')
     expect(cursor).toHaveProperty('previousEndLine')
     expect(cursor).toHaveProperty('exhausted')
+    expect(cursor.reason).toBe('symbol-end-unknown')
   })
 })
 
@@ -328,13 +362,24 @@ describe('numbered output format', () => {
     expect(result.stdout).toMatch(/\d+\t/)
   })
 
-  it('numbered output includes continuation cursor footer', () => {
+  it('numbered output includes a continuation cursor footer while symbol content remains unknown', () => {
+    const oldIndex = copyIndexWithoutEndLine(indexDir, 'numbered-footer')
+    const result = runCli([
+      'source', '--index', oldIndex,
+      '--file', 'src/user.ts', '--symbol', 'createUser',
+      '--include-local-types', '--format', 'numbered',
+    ])
+    expect(result.stdout).toMatch(/\[CONTINUE:|EOF:/)
+  })
+
+  it('numbered output has no continuation footer for a completed known symbol', () => {
     const result = runCli([
       'source', '--index', indexDir,
       '--file', 'src/user.ts', '--symbol', 'createUser',
       '--include-local-types', '--format', 'numbered',
     ])
-    expect(result.stdout).toMatch(/\[CONTINUE:|EOF:/)
+    expect(result.status).toBe(0)
+    expect(result.stdout).not.toMatch(/\[CONTINUE:|EOF:/)
   })
 })
 
@@ -432,5 +477,238 @@ describe('bundle flag error handling', () => {
     ])
     expect(result.status).not.toBe(0)
     expect(result.stderr || result.stdout).toMatch(/cannot be combined|Bundle flags/)
+  })
+})
+
+// ---------- Known generic symbol boundaries (v1.12.6 correction) ----------
+
+describe('source bundle respects trusted generic symbol boundaries', () => {
+  // longSymbol occupies lines 1-27; the sentinel declaration is line 28.
+  const LONG_SYMBOL_SOURCE = (() => {
+    const lines = ['export function longSymbol(): number {']
+    for (let i = 1; i <= 23; i++) lines.push(`  const step${String(i).padStart(2, '0')} = ${i === 1 ? '1' : `step${String(i - 1).padStart(2, '0')} + 1`}`)
+    lines.push('  const total = step23 + step01')
+    lines.push('  return total')
+    lines.push('}')
+    lines.push("export const longSymbolSentinel = 'sentinel-after-long-symbol'")
+    return lines.join('\n') + '\n'
+  })()
+
+  // Statements that are not indexed symbols sit directly after each declaration, so the legacy
+  // next-symbol heuristic would include them while an exact boundary must not.
+  const DEPS_SOURCE = [
+    'export interface Config {', //                         1
+    '  name: string', //                                     2
+    '}', //                                                  3
+    "console.log('after-type-sentinel')", //                 4
+    'export const LIMITS = {', //                            5
+    '  max: 10,', //                                         6
+    '  min: 1,', //                                          7
+    '  step: 2,', //                                         8
+    '  extra: 3,', //                                        9
+    '  more: 4,', //                                        10
+    '  last: 5,', //                                        11
+    '}', //                                                 12
+    'export function helper(x: number): number {', //       13
+    '  const y = x + 1', //                                  14
+    '  return y', //                                         15
+    '}', //                                                 16
+    "console.log('after-helper-sentinel')", //              17
+    'export function main(c: Config): number {', //         18
+    '  return helper(c.name.length) + LIMITS.max', //       19
+    '}', //                                                 20
+    "console.log('after-main-sentinel')", //                21
+  ].join('\n') + '\n'
+
+  let boundaryDir = ''
+  let boundaryIndex = ''
+  const extraDirs: string[] = []
+
+  beforeAll(() => {
+    boundaryDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-bundle-boundary-'))
+    boundaryIndex = join(boundaryDir, '.idx')
+    mkdirSync(join(boundaryDir, 'src'), { recursive: true })
+    writeFileSync(join(boundaryDir, 'src', 'boundary.ts'), LONG_SYMBOL_SOURCE)
+    writeFileSync(join(boundaryDir, 'src', 'deps.ts'), DEPS_SOURCE)
+    const res = runCli(['index', '--root', boundaryDir, '--src', 'src', '--out', boundaryIndex])
+    if (res.status !== 0) throw new Error(`Index failed: ${res.stderr || res.stdout}`)
+  })
+
+  afterAll(() => {
+    rmSync(boundaryDir, { recursive: true, force: true })
+    while (extraDirs.length > 0) rmSync(extraDirs.pop()!, { recursive: true, force: true })
+  })
+
+  function bundleOf(args: string[], index = boundaryIndex) {
+    // Bundle mode is entered by an --include-* flag; default to the lightest one.
+    const flags = args.some((a) => a.startsWith('--include-')) ? args : [...args, '--include-local-types']
+    const result = runCli(['source', '--index', index, ...flags, '--json'])
+    expect(result.status, result.stderr).toBe(0)
+    return JSON.parse(result.stdout)
+  }
+
+  function mutatedBoundaryIndex(label: string, mutate: (index: MutableSymbolIndex) => void): string {
+    const copy = join(boundaryDir, `.idx-${label}`)
+    cpSync(boundaryIndex, copy, { recursive: true })
+    const file = join(copy, 'symbol-index.json')
+    const index = JSON.parse(readFileSync(file, 'utf8')) as MutableSymbolIndex
+    mutate(index)
+    writeFileSync(file, JSON.stringify(index, null, 2))
+    return copy
+  }
+
+  function longSymbolOf(index: MutableSymbolIndex) {
+    return index.files.find((f) => f.path === 'src/boundary.ts')!.symbols.find((s) => s.name === 'longSymbol')!
+  }
+
+  it('indexes a trusted endLine for the fixture symbol (precondition)', () => {
+    const index = JSON.parse(readFileSync(join(boundaryIndex, 'symbol-index.json'), 'utf8')) as MutableSymbolIndex
+    expect(longSymbolOf(index).location.endLine).toBe(27)
+  })
+
+  it('1/2: --file --symbol returns exactly lines 1-27 and excludes the line-28 sentinel', () => {
+    const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol'])
+    expect(bundle.primaryBlock.startLine).toBe(1)
+    expect(bundle.primaryBlock.endLine).toBe(27)
+    expect(bundle.primaryBlock.lineCount).toBe(27)
+    expect(bundle.primaryBlock.content).not.toContain('sentinel-after-long-symbol')
+    expect(bundle.primaryBlock.confidence).toBe('high')
+    expect(bundle.target.endLine).toBe(27)
+  })
+
+  it('3: a symbol-node bundle excludes line 28 and matches the file-plus-symbol bundle', () => {
+    const byNode = bundleOf(['--node', 'symbol:src/boundary.ts#longSymbol'])
+    const bySymbol = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol'])
+    expect(byNode.primaryBlock.endLine).toBe(27)
+    expect(byNode.primaryBlock.content).not.toContain('sentinel-after-long-symbol')
+    expect(byNode.primaryBlock.content).toBe(bySymbol.primaryBlock.content)
+  })
+
+  it('5: a completed known primary has no continuation cursor, no truncation and no start-line-only warning', () => {
+    const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol'])
+    expect(bundle.continuationCursors).toEqual([])
+    expect(bundle.primaryBlock.fallbackReason).toBeUndefined()
+    expect(bundle.warnings.join('\n')).not.toMatch(/start line only|end line is not available/)
+    expect(bundle.stats.primaryLineCount).toBe(27)
+    expect(bundle.stats.totalLineCount).toBe(27)
+  })
+
+  it('5: a symbol that exactly fits --max-lines is complete, not truncated', () => {
+    const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol', '--max-lines', '27'])
+    expect(bundle.primaryBlock.endLine).toBe(27)
+    expect(bundle.continuationCursors).toEqual([])
+    expect(bundle.primaryBlock.fallbackReason).toBeUndefined()
+  })
+
+  it('6: a known oversized primary is capped, truthfully truncated, and its cursor stays inside the symbol', () => {
+    const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol', '--max-lines', '10'])
+    expect(bundle.primaryBlock.startLine).toBe(1)
+    expect(bundle.primaryBlock.endLine).toBe(10)
+    expect(bundle.primaryBlock.fallbackReason).toBe('symbol-exceeds-block-cap')
+    expect(bundle.continuationCursors).toHaveLength(1)
+    const cursor = bundle.continuationCursors[0]
+    expect(cursor.nextStartLine).toBe(11)
+    expect(cursor.nextStartLine).toBeLessThanOrEqual(27)
+    expect(cursor.reason).toBe('window-capped')
+    expect(cursor.exhausted).toBe(false)
+    expect(bundle.warnings.join('\n')).toContain('spans lines 1-27')
+    expect(bundle.primaryBlock.content).not.toContain('sentinel-after-long-symbol')
+  })
+
+  it('7/8/12: local type, constant and helper expansions use trusted ends and keep order and statistics', () => {
+    const bundle = bundleOf(['--file', 'src/deps.ts', '--symbol', 'main', '--include-local-deps'])
+    expect(bundle.primaryBlock.startLine).toBe(18)
+    expect(bundle.primaryBlock.endLine).toBe(20)
+    expect(bundle.primaryBlock.content).not.toContain('after-main-sentinel')
+
+    const byKind = (kind: string) => bundle.expansionBlocks.filter((b: { kind: string }) => b.kind === kind)
+    // Config is also frontend-semantic prop-type evidence; same exact range, deduplicated into one block.
+    const type = bundle.expansionBlocks.find((b: { startLine: number }) => b.startLine === 1)
+    const [constant] = byKind('local-constant')
+    const [helper] = byKind('local-helper')
+    expect(['local-type', 'prop-type']).toContain(type.kind)
+    expect(type).toBeDefined()
+    expect([type.startLine, type.endLine]).toEqual([1, 3])
+    expect(type.content).not.toContain('after-type-sentinel')
+    expect(type.confidence).toBe('high')
+    // 8: the multiline constant uses its trusted end, not the legacy fixed 5-line preview (5-9).
+    expect(constant).toBeDefined()
+    expect([constant.startLine, constant.endLine]).toEqual([5, 12])
+    expect(constant.content).toContain('last: 5')
+    expect(constant.fallbackReason).toBeUndefined()
+    expect(helper).toBeDefined()
+    expect([helper.startLine, helper.endLine]).toEqual([13, 16])
+    expect(helper.content).not.toContain('after-helper-sentinel')
+
+    // 12: ordering by kind then line, and statistics agree with the returned content.
+    const kinds = bundle.expansionBlocks.map((b: { kind: string }) => b.kind)
+    expect(kinds.slice(-2)).toEqual(['local-constant', 'local-helper'])
+    expect(bundle.expansionBlocks.map((b: { startLine: number }) => b.startLine)).toEqual([1, 5, 13])
+    for (const block of [bundle.primaryBlock, ...bundle.expansionBlocks]) {
+      expect(block.lineCount).toBe(block.content.split('\n').length)
+    }
+    const total = [bundle.primaryBlock, ...bundle.expansionBlocks].reduce((n: number, b: { lineCount: number }) => n + b.lineCount, 0)
+    expect(bundle.stats.totalLineCount).toBe(total)
+    expect(bundle.continuationCursors).toEqual([])
+  })
+
+  it('7: an expanded known symbol larger than the block cap is capped and keeps truncation evidence', () => {
+    const bundle = bundleOf(['--file', 'src/deps.ts', '--symbol', 'main', '--include-local-deps', '--max-lines', '5'])
+    const constant = bundle.expansionBlocks.find((b: { kind: string }) => b.kind === 'local-constant')
+    expect(constant).toBeDefined()
+    expect([constant.startLine, constant.endLine]).toEqual([5, 9])
+    expect(constant.fallbackReason).toBe('symbol-exceeds-block-cap')
+    expect(constant.confidence).toBe('high')
+  })
+
+  it('9/14: an old index without endLine keeps the conservative preview, warning and unknown-boundary cursor', () => {
+    const oldIndex = mutatedBoundaryIndex('old', (index) => {
+      for (const file of index.files) for (const symbol of file.symbols) delete symbol.location.endLine
+    })
+    const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol', '--max-lines', '20'], oldIndex)
+    expect(bundle.primaryBlock.startLine).toBe(1)
+    expect(bundle.primaryBlock.endLine).toBe(20)
+    expect(bundle.primaryBlock.confidence).toBe('low')
+    expect(bundle.warnings.join('\n')).toContain('Symbol end line is not available in the current index')
+    expect(bundle.continuationCursors).toHaveLength(1)
+    expect(bundle.continuationCursors[0]).toMatchObject({ nextStartLine: 21, reason: 'symbol-end-unknown', exhausted: false })
+  })
+
+  it('10: a malformed endLine is not trusted', () => {
+    for (const [label, value] of [
+      ['inverted', 0],
+      ['fractional', 12.5],
+      ['text', 'x'],
+      ['beyond-file', 9999],
+    ] as const) {
+      const index = mutatedBoundaryIndex(`bad-${label}`, (idx) => {
+        longSymbolOf(idx).location.endLine = value
+      })
+      const bundle = bundleOf(['--file', 'src/boundary.ts', '--symbol', 'longSymbol', '--max-lines', '20'], index)
+      expect(bundle.primaryBlock.endLine, label).toBe(20)
+      expect(bundle.primaryBlock.confidence, label).toBe('low')
+      expect(bundle.continuationCursors[0]?.reason, label).toBe('symbol-end-unknown')
+    }
+  })
+
+  it('13: an indexed end beyond the physical file fails as a stale index instead of reporting a complete symbol', () => {
+    const staleDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-bundle-stale-'))
+    extraDirs.push(staleDir)
+    mkdirSync(join(staleDir, 'src'), { recursive: true })
+    writeFileSync(join(staleDir, 'src', 'boundary.ts'), LONG_SYMBOL_SOURCE)
+    const staleIndex = join(staleDir, '.idx')
+    expect(runCli(['index', '--root', staleDir, '--src', 'src', '--out', staleIndex]).status).toBe(0)
+    // The source shrinks after indexing: the recorded end (27) no longer exists.
+    writeFileSync(join(staleDir, 'src', 'boundary.ts'), LONG_SYMBOL_SOURCE.split('\n').slice(0, 10).join('\n') + '\n')
+    const result = runCli(['source', '--index', staleIndex, '--file', 'src/boundary.ts', '--symbol', 'longSymbol', '--json'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr + result.stdout).toMatch(/Stale index\/source mismatch/)
+  })
+
+  it('11: frontend-semantic component evidence still bounds a TSX primary block', () => {
+    const bundle = bundleOf(['--file', 'src/button.tsx', '--symbol', 'Button', '--include-props'], indexDir)
+    expect(bundle.primaryBlock.content).toContain('</button>')
+    expect(bundle.primaryBlock.confidence).toBe('high')
+    expect(bundle.primaryBlock.endLine).toBeLessThanOrEqual(10)
   })
 })

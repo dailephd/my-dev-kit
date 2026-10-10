@@ -1,6 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
+import { assertSymbolSpanPresent, ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
 import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
@@ -48,6 +48,8 @@ interface ResolvedPrimaryTarget {
   startLine: number
   endLine: number
   symbolBoundaryKnown: boolean
+  /** Trusted indexed generic symbol end (inclusive). Present only for an indexed generic symbol with a validated `endLine`. */
+  symbolEndLine?: number
   targetKind: string
   nodeId?: string
   warnings: string[]
@@ -104,13 +106,45 @@ function findFrontendSourceRef(
 
 // ---------- Symbol end-line estimation ----------
 
+/**
+ * Returns the validated generic symbol end for `sym`, or undefined when no trusted boundary exists.
+ * Validation is delegated to the shared source-target policy (`resolveSymbolTarget`), so this consumer
+ * trusts exactly the boundaries `source --file --symbol` trusts. The end must also lie inside the
+ * physical file; an indexed end past EOF is never treated as a known boundary here.
+ */
+function trustedGenericEnd(
+  symbolIndex: SymbolIndex,
+  filePath: string,
+  sym: SymbolDefinition,
+  physicalLineCount: number,
+): number | undefined {
+  try {
+    const target = resolveSymbolTarget(symbolIndex, filePath, sym.name, Number.MAX_SAFE_INTEGER)
+    const end = target.symbolEndLine
+    if (end === undefined || target.startLine !== sym.location.line) return undefined
+    return end <= physicalLineCount ? end : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function estimateSymbolEndLine(
   sym: SymbolDefinition,
   fileSummary: FileSummary,
   fileResult: FrontendFileResult | null,
   maxLines: number,
   fileLineCount: number,
+  symbolIndex: SymbolIndex,
 ): { endLine: number; confidence: 'high' | 'medium' | 'low'; fallbackReason?: string } {
+  // Trusted generic boundary first: exact end, never the next declaration, bounded by the block cap.
+  const trusted = trustedGenericEnd(symbolIndex, fileSummary.path, sym, fileLineCount)
+  if (trusted !== undefined) {
+    const capped = Math.min(trusted, sym.location.line + maxLines - 1)
+    return capped < trusted
+      ? { endLine: capped, confidence: 'high', fallbackReason: 'symbol-exceeds-block-cap' }
+      : { endLine: trusted, confidence: 'high' }
+  }
+
   // Try frontend-semantic first (exact end line)
   const feRef = findFrontendSourceRef(fileResult, sym.name)
   if (feRef) {
@@ -244,6 +278,14 @@ function resolvePrimaryTarget(options: SourceBundleOptions): ResolvedPrimaryTarg
   throw new Error('SourceBundle requires --file --symbol, --node, or --file --start --end.')
 }
 
+function resolveKnownSymbolEnd(symbolIndex: SymbolIndex, filePath: string, symbolName: string): number | undefined {
+  try {
+    return resolveSymbolTarget(symbolIndex, normalizeFilePath(filePath), symbolName, Number.MAX_SAFE_INTEGER).symbolEndLine
+  } catch {
+    return undefined
+  }
+}
+
 function resolveSymbolPrimary(
   filePath: string,
   symbolName: string,
@@ -262,18 +304,33 @@ function resolveSymbolPrimary(
   const normalizedFilePath = normalizeFilePath(filePath)
   const fileResult = findFileResult(options.frontendArtifact, normalizedFilePath)
 
-  // Try frontend-semantic for exact end line
+  // Precedence: validated generic symbol endLine, then frontend-semantic range, then the legacy bounded preview.
   const feRef = findFrontendSourceRef(fileResult, symbolName)
+  const knownEnd = resolveKnownSymbolEnd(options.symbolIndex, filePath, symbolName)
   let endLine: number
   let symbolBoundaryKnown: boolean
-  if (feRef) {
+  let symbolEndLine: number | undefined
+  if (knownEnd !== undefined) {
+    // An indexed end past the physical file means the index no longer matches the source: fail, never
+    // report a truncated symbol as complete.
+    assertSymbolSpanPresent(normalizedFilePath, knownEnd, fileLineCount)
+    symbolEndLine = knownEnd
+    endLine = Math.min(knownEnd, symbol.location.line + options.maxLinesPerBlock - 1)
+    symbolBoundaryKnown = true
+    if (endLine < knownEnd) {
+      warnings.push(
+        `Symbol ${symbolName} spans lines ${symbol.location.line}-${knownEnd}; returning lines ${symbol.location.line}-${endLine} ` +
+          `(maxLinesPerBlock ${options.maxLinesPerBlock}). Use --continue-from ${endLine + 1} to retrieve the remainder of the symbol.`
+      )
+    }
+  } else if (feRef) {
     endLine = Math.min(feRef.endLine, fileLineCount)
     symbolBoundaryKnown = true
   } else {
     endLine = Math.min(symbol.location.line + options.maxLinesPerBlock - 1, fileLineCount)
     symbolBoundaryKnown = false
     warnings.push(
-      `Symbol end line is not available in the current index (symbol-index.json stores start line only). ` +
+      `Symbol end line is not available in the current index (no trusted generic or frontend end line is recorded for this symbol). ` +
         `Returning a bounded preview from line ${symbol.location.line}. Use --continue-from ${endLine + 1} to retrieve more.`
     )
   }
@@ -285,6 +342,7 @@ function resolveSymbolPrimary(
     startLine: symbol.location.line,
     endLine,
     symbolBoundaryKnown,
+    symbolEndLine,
     targetKind,
     nodeId,
     warnings,
@@ -321,6 +379,7 @@ function resolveLocalTypeCandidates(
       fileResult,
       options.maxLinesPerBlock,
       fileLines.length,
+      options.symbolIndex,
     )
 
     blocks.push(
@@ -487,6 +546,7 @@ function resolveLocalHelperCandidates(
       fileResult,
       options.maxLinesPerBlock,
       fileLines.length,
+      options.symbolIndex,
     )
 
     blocks.push(
@@ -526,14 +586,24 @@ function resolveLocalConstantCandidates(
   for (const sym of constSymbols) {
     if (!new RegExp(`\\b${escapeRegex(sym.name)}\\b`).test(primaryContent)) continue
     const startLine = sym.location.line
-    // Constants are single-line or very short; use line + 2 max unless next symbol is closer
-    const sortedSymbols = [...fileSummary.symbols].sort((a, b) => a.location.line - b.location.line)
-    const idx = sortedSymbols.findIndex((s) => s.name === sym.name && s.location.line === startLine)
     let endLine: number
-    if (idx >= 0 && idx + 1 < sortedSymbols.length) {
-      endLine = Math.min(sortedSymbols[idx + 1].location.line - 1, startLine + 4, fileLines.length)
+    let confidence: 'high' | 'medium' = 'medium'
+    let fallbackReason: string | undefined
+    const trusted = trustedGenericEnd(options.symbolIndex, fileSummary.path, sym, fileLines.length)
+    if (trusted !== undefined) {
+      // Exact declaration end, bounded by the block cap.
+      endLine = Math.min(trusted, startLine + options.maxLinesPerBlock - 1)
+      confidence = 'high'
+      if (endLine < trusted) fallbackReason = 'symbol-exceeds-block-cap'
     } else {
-      endLine = Math.min(startLine + 4, fileLines.length)
+      // Unknown boundary: constants are single-line or very short; use line + 4 max unless next symbol is closer
+      const sortedSymbols = [...fileSummary.symbols].sort((a, b) => a.location.line - b.location.line)
+      const idx = sortedSymbols.findIndex((s) => s.name === sym.name && s.location.line === startLine)
+      if (idx >= 0 && idx + 1 < sortedSymbols.length) {
+        endLine = Math.min(sortedSymbols[idx + 1].location.line - 1, startLine + 4, fileLines.length)
+      } else {
+        endLine = Math.min(startLine + 4, fileLines.length)
+      }
     }
 
     blocks.push(
@@ -544,9 +614,11 @@ function resolveLocalConstantCandidates(
         endLine,
         'local-constant',
         ['local-constant'],
-        'medium',
+        confidence,
         fileLines,
         `constant ${sym.name} referenced in primary window`,
+        [],
+        fallbackReason,
       )
     )
   }
@@ -821,6 +893,8 @@ export function buildSourceBundle(options: SourceBundleOptions): SourceBundle {
     fileLines,
     'primary source target',
     primary.warnings,
+    // A known generic symbol larger than the block cap is truthfully truncated; a completed one is not.
+    primary.symbolEndLine !== undefined && primary.endLine < primary.symbolEndLine ? 'symbol-exceeds-block-cap' : undefined,
   )
 
   // 5. Get primary content for scanning
@@ -866,8 +940,10 @@ export function buildSourceBundle(options: SourceBundleOptions): SourceBundle {
     enforceExpansionLimits(allBlocks, skippedBlocks, options)
   bundleWarnings.push(...limitWarnings)
 
-  // 9. Always include a continuation cursor for the primary block
-  cursors.push(buildBundleCursor(primary, fileLineCount, options))
+  // 9. Include a continuation cursor for the primary block, except when a trusted generic symbol end
+  // has been fully returned (nothing of that symbol remains; the next line belongs to another declaration).
+  const symbolComplete = primary.symbolEndLine !== undefined && primary.endLine >= primary.symbolEndLine
+  if (!symbolComplete) cursors.push(buildBundleCursor(primary, fileLineCount, options))
 
   // 10. Compute stats
   const stats = computeStats(included, skipped)

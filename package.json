@@ -61,7 +61,7 @@
     "esbuild": "^0.28.1",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "^0.28.1"

@@ -355,3 +355,90 @@ describe('selectSourceSlices known symbol boundaries', () => {
     expect(result.skipped[0].reason).toMatch(/Stale index/)
   })
 })
+
+describe('selectSourceBundles known symbol boundaries', () => {
+  // Foo occupies lines 1..symbolEnd; a sentinel declaration sits on line symbolEnd + 1.
+  function sentinelRoot(symbolEnd: number, physicalLines = symbolEnd + 1): string {
+    const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-context-bundle-'))
+    tempDirs.push(root)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const lines: string[] = ['export function Foo() {']
+    for (let i = 2; i < symbolEnd; i++) lines.push(`  // foo ${i}`)
+    lines.push('}')
+    lines.push("export const sentinel = 'sentinel-after-foo'")
+    writeFileSync(join(root, 'src', 'a.ts'), lines.slice(0, physicalLines).join('\n') + '\n')
+    return root
+  }
+
+  function indexWithEnd(lineCount: number, endLine: unknown): SymbolIndex {
+    const index = symbolIndexFixture(lineCount)
+    const symbol = index.files[0].symbols[0]
+    symbol.location = (endLine === undefined ? { line: 1 } : { line: 1, endLine }) as unknown as typeof symbol.location
+    return index
+  }
+
+  const focus: ContextFocus = {
+    ...noFocus,
+    focusNodeId: 'symbol:src/a.ts#Foo',
+    focusFilePath: 'src/a.ts',
+    confidence: 'high',
+    selectionMode: 'single-best',
+  }
+
+  function select(root: string, index: SymbolIndex) {
+    return selectSourceBundles({
+      focus,
+      symbolIndex: index,
+      codeGraph: codeGraphFixture(),
+      resolved: resolvedManifest(root),
+      frontendArtifact: null,
+    })
+  }
+
+  it('4/5: a completed known primary stops at its end, is not truncated, and agrees with bundle statistics', () => {
+    const result = select(sentinelRoot(27), indexWithEnd(28, 27))
+    const bundle = result.bundles[0]
+    const primary = bundle.blocks[0]
+    expect(primary.kind).toBe('primary-target')
+    expect([primary.startLine, primary.endLine]).toEqual([1, 27])
+    expect(primary.truncated).toBe(false)
+    expect(primary.warnings).toEqual([])
+    expect(bundle.totalLines).toBe(27)
+    expect(result.totalSelectedLines).toBe(27)
+    expect(bundle.warnings.join('\n')).not.toMatch(/start line only|end line is not available/)
+  })
+
+  it('6: a known primary larger than the context block cap is truthfully truncated at the cap', () => {
+    const result = select(sentinelRoot(150), indexWithEnd(151, 150))
+    const primary = result.bundles[0].blocks[0]
+    expect([primary.startLine, primary.endLine]).toEqual([1, 60])
+    expect(primary.truncated).toBe(true)
+    expect(result.bundles[0].totalLines).toBe(60)
+    expect(result.bundles[0].warnings.join('\n')).toContain('spans lines 1-150')
+  })
+
+  it('14: an unknown boundary keeps the conservative bounded preview and its uncertainty warning', () => {
+    const result = select(sentinelRoot(150), indexWithEnd(151, undefined))
+    const primary = result.bundles[0].blocks[0]
+    expect([primary.startLine, primary.endLine]).toEqual([1, 60])
+    expect(result.bundles[0].warnings.join('\n')).toContain('Symbol end line is not available in the current index')
+  })
+
+  it('10: a malformed indexed end is not trusted and falls back to the preview', () => {
+    for (const bad of [0, -3, 2.5, 'x', 9999]) {
+      const result = select(sentinelRoot(27), indexWithEnd(28, bad))
+      const primary = result.bundles[0].blocks[0]
+      // The 28-line file is shorter than the 60-line cap, so the legacy preview reads to EOF.
+      expect(primary.endLine, String(bad)).toBe(28)
+      expect(result.bundles[0].warnings.join('\n'), String(bad)).toContain('Symbol end line is not available')
+    }
+  })
+
+  it('13: an indexed end beyond the physical file fails as a stale index and yields no bundle', () => {
+    // Indexed end 27, but the file on disk has only 10 lines.
+    const result = select(sentinelRoot(27, 10), indexWithEnd(28, 27))
+    expect(result.bundles).toHaveLength(0)
+    expect(result.omittedBundleCount).toBe(1)
+    expect(result.warnings.join('\n')).toMatch(/Stale index\/source mismatch/)
+  })
+})

@@ -25,6 +25,14 @@ Reported evidence (from the implementation batches; to be re-checked by the pre-
 - The retrieval-regression suite runs 14 tasks: the six original context tasks plus eight new command-result tasks (two search, six source), all passing.
 - Focused tests and `npm run verify` were reported passing; package version unchanged at 1.12.5.
 
+Post-readiness correction (bounded; on the feature branch, unreleased):
+
+- The first standardized pre-release readiness audit of candidate `e62929fa9d59e2cbd72b39b0fd41b8c3df9ba52f` returned **NEEDS_CORRECTION**. Its product findings were corrected in one follow-up commit on this branch, the commit immediately after `e62929f` (a document cannot embed its own hash; read the SHA from the branch history or the correction report).
+- **Source-bundle boundary containment:** `source` bundles (`src/source/sourceBundle.ts`) now consume the validated generic `endLine`, so a known symbol's primary block no longer spills into the next declaration, a completed known symbol emits no continuation cursor, and expanded local types, helpers, and constants prefer the exact end. Unknown, old-index, and malformed boundaries keep the conservative fallback.
+- **Development-dependency security refresh:** `vitest` raised to `^4.1.11` with a normal npm re-resolution of the lockfile (nanoid, source-map-js, @vitest/mocker and the vitest/vite toolchain); `npm audit` and `npm audit --omit=dev` report no vulnerabilities. No runtime dependency change.
+- A separate defect in the Lab package validator (my-dev-kit-lab v0.9.0 applies Lab's own required-file list to external Kit targets) belongs to the Lab repository and is not corrected here; the historical Lab failure is preserved.
+- The earlier readiness verdict is not superseded: a fresh standardized readiness audit on the corrected candidate is still required. v1.12.5 remains the published baseline.
+
 Remaining status:
 
 - Documentation reconciliation and implementation-completeness audit: performed on this branch; its verdict is pending planner acceptance.
