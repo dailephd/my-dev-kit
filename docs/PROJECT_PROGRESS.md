@@ -6,16 +6,32 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.5` is the current release.
 
-## Planned next: v1.12.6
+## Planned next: v1.12.6 (implementation complete on the feature branch; unreleased)
 
-Version 1.12.6 is the next planned Kit milestone. It is a bounded retrieval-precision patch and is **not yet implemented or published**.
+Version 1.12.6 is the next Kit milestone. It is a bounded retrieval-precision patch. Its implementation is **complete on the feature branch** `feature/v1.12.6-bounded-retrieval-precision`, but it is an **unreleased candidate: not published to npm, not tagged, and not shipped**. The published baseline remains `@dailephd/my-dev-kit@1.12.5`, and package metadata still reports `1.12.5`.
 
-Planned scope has two generic retrieval corrections:
+Implemented scope has two generic retrieval corrections:
 
-- **Ownership-oriented search:** preserve raw relevance-ranked `search --query` behavior while adding an explicit ownership-oriented mode that keeps grounded production owners discoverable within a bounded result set for natural-language implementation queries, without removing relevant test evidence.
-- **Trustworthy symbol boundaries:** add optional extractor-proven `endLine` evidence for supported generic symbols (initially TypeScript/TSX/JavaScript/JSX and Python where trustworthy), so `source --node` and `source --file --symbol` can return the complete known symbol within `--max-lines`; uncertain boundaries retain the existing conservative continuation fallback.
+- **Ownership-oriented search:** `search --query "<text>" --intent ownership` is an explicit, opt-in mode. Raw relevance-ranked `search --query` behavior is unchanged. Ownership mode keeps grounded production owners discoverable within a bounded result set for natural-language implementation queries through static tiers and bounded one-hop owner recovery, without removing relevant test evidence. Rankings are advisory evidence, not edit authorization.
+- **Trustworthy symbol boundaries:** optional extractor-proven `endLine` evidence for generic symbols (TypeScript/TSX/JavaScript/JSX from the compiler AST, Python from validated `ast` `end_lineno`), so `source --node` and `source --file --symbol` return the complete known symbol within `--max-lines` and continue only inside the symbol. Kotlin, Java, old-index, and uncertain boundaries retain the existing conservative `symbol-end-unknown` continuation fallback.
 
-Planned implementation order: ownership-search contract; bounded graph-supported owner recovery; trustworthy symbol-boundary/source-continuation support; integrated retrieval hardening and documentation reconciliation. The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
+Candidate SHA and batches (all on the feature branch):
+
+- Implementation candidate SHA: `b7e3e762372eaea1405195b16a7585007174afce`.
+- Four implementation batches completed: Batch 1 `b2863e0cf8fb6af39ddcb9c90f3225606a583f6a` (ownership-search contract and backward-compatible ranking mode); Batch 2 `c7106fbb9120a8077b096be6c8ef866857de69b2` (grounded owner recovery and production-versus-test hardening); Batch 3 `03e3552a4f8f640e5776779450e918d9287be423` (trustworthy generic symbol `endLine`); Batch 4 `b7e3e762372eaea1405195b16a7585007174afce` (source/continuation consumption of known boundaries and permanent search/source regression scenarios).
+
+Reported evidence (from the implementation batches; to be re-checked by the pre-release readiness workflow, not substitutes for it):
+
+- The retrieval-regression suite runs 14 tasks: the six original context tasks plus eight new command-result tasks (two search, six source), all passing.
+- Focused tests and `npm run verify` were reported passing; package version unchanged at 1.12.5.
+
+Remaining status:
+
+- Documentation reconciliation and implementation-completeness audit: performed on this branch; its verdict is pending planner acceptance.
+- Pre-release readiness: **pending**. A separate standardized pre-release readiness audit, cross-platform validation, security/package checks, version bump, tag, and npm publication have **not** been performed.
+- Publication: **not published**. There is no v1.12.6 tag, GitHub Release, or npm version.
+
+The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
 
 ## Shipped: v1.12.5
 

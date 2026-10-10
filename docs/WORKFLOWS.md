@@ -60,6 +60,14 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --node "<returned-source-nod
 
 Review match reasons, semantic/classification metadata, callers/dependencies, and exact source. Prefer a symbol node for a specific function/type question. Exact lookup is not fuzzy search. Expand only the unresolved relationship or source region.
 
+**Locating an implementation owner (v1.12.6 candidate, unreleased).** When the question is "where does this behavior live in production code" for a natural-language query and indexed tests are likely to outrank the production owner, run the initial search with ownership intent instead of, or in addition to, the raw search. This uses the development-branch repository CLI from a source checkout; it is not in the published v1.12.5 package:
+
+```powershell
+node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+```
+
+Ownership intent is optional. Ordinary relevance search remains the default and needs no `--intent`; do not add `--intent ownership` to every search. Read each result's `ownership.tier` and `ownership.evidence`: `direct-owner` and `production-candidate` results are static production-owner evidence, `supporting-evidence` results (tests, fixtures, generated, docs) remain visible, and a recovered file with `score: 0` was promoted only by a direct relationship from a matching seed file. The ranking is advisory. Continue with exact lookup, a bounded slice, and symbol source for the returned candidate, and inspect the closest tests and the actual implementation before editing. A `direct-owner` tier is never edit authorization.
+
 Record the selected owner, extension point, contract, relevant test, and uncertainty. A top-ranked result is not automatic authorization to edit it. When test roots are indexed, a matching test can outrank the production owner for a behavior-shaped query, because raw search ranks by relevance and not by production ownership. A missing relationship is a retrieval limitation until checked, not proof that no caller exists.
 
 Indexed test files use the same sequence. Use `lookup`/`slice --node file:<test-path>` for a test's imports and neighborhood. Use exact text such as a test title or assertion literal to get bounded test source:
@@ -100,7 +108,7 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --cont
 npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --include-local-deps --max-bundle-lines 300 --format json
 ```
 
-Use the returned continuation cursor rather than assume a complete symbol. Local imports, types, props, components, and dependency expansion are same-file static context, not cross-file closure. Follow cross-file dependencies with additional lookup/source calls.
+Use the returned continuation cursor rather than assume a complete symbol. In the v1.12.6 candidate (unreleased), a symbol whose parser-derived end line is known is returned completely on the first request when it fits `--max-lines`, and the result then has no continuation cursor, so the `--continue` step is unnecessary. A known symbol larger than `--max-lines` continues only inside its own end line, and an unknown-boundary symbol (Kotlin, Java, an older index, or an uncertain case) keeps the 20-line preview with `symbolBoundaryKnown: false` and the `symbol-end-unknown` cursor. `--node symbol:<path>#<name>` and `--file <path> --symbol <name>` return the same boundaries. Local imports, types, props, components, and dependency expansion are same-file static context, not cross-file closure. Follow cross-file dependencies with additional lookup/source calls.
 
 For connected local React components, use `--include-local-component-tree` and the appropriate prop/event slice flags. Do not invent standalone `trace-props`, `trace-events`, or general `refs` commands.
 

@@ -4,6 +4,8 @@ This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed pub
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
+**Unreleased v1.12.6 candidate.** The development feature branch additionally implements `search --query "<text>" --intent ownership` and known-symbol-boundary behavior for `source`. These are described below in sections labeled "(v1.12.6 candidate, unreleased)". They are not part of the published v1.12.5 package, and examples for them use the repository CLI from a source checkout (`node dist/cli.js` after `npm run build`), not an npm-installed `@dailephd/my-dev-kit`. No new command, no new public schema major, and no new artifact was added.
+
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
 Detailed artifact fields, node/edge kinds, classification metadata, and compatibility contracts remain in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md). Implementation ownership is in [ARCHITECTURE.md](ARCHITECTURE.md). Maintainer npm scripts belong in [DEVELOPMENT.md](DEVELOPMENT.md), and future commands remain in [ROADMAP.md](ROADMAP.md).
@@ -174,6 +176,7 @@ npx @dailephd/my-dev-kit search --index .my-dev-kit --query "UserService" --limi
 
 - `--index <dir>`: default `.my-dev-kit`.
 - `--query <text>`: ranked general search.
+- `--intent <relevance|ownership>` (v1.12.6 candidate, unreleased): generic `--query` ranking intent. See "Ownership-oriented search (v1.12.6 candidate, unreleased)" below.
 - Web selectors: `--route <path>`, `--storage-key <key>`, `--ui <value>`.
 - Android selectors: `--android-route <route>`, `--permission <name>`, `--resource <name>`, `--android-component <name>`, `--composable <name>`, `--test-tag <tag>`, `--android-ui <value>`.
 - `--android-role <role>`: one exact supported Android classification role.
@@ -198,6 +201,27 @@ Use the installed help's closed Android role vocabulary. `compose-ui-component` 
 General results expose IDs, kinds, scores/match reasons, paths, and supported semantic/classification/Android metadata. Ranking helps discovery. It does not grant edit authority or prove a unique owner.
 
 Raw `search` ranks available indexed evidence by its existing relevance logic. It does not prefer production files over tests. When test roots are indexed, test files, test-declared symbols, and `describe`/`it`/`test` titles are ordinary search evidence, so a strongly matching test can rank above a production candidate. Search rank alone does not establish production edit ownership. Confirm ownership with `lookup`/`slice` relationships, classification, and `context` role-specific owner selection.
+
+### Ownership-oriented search (v1.12.6 candidate, unreleased)
+
+This subsection documents the development-branch command surface. It is not in the published v1.12.5 package.
+
+```powershell
+node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent relevance --limit 10 --json
+```
+
+- `--intent relevance`: the existing relevance ranking. It is the default, so omitting `--intent` is equivalent. Output is unchanged: no `intent` field, no per-result `ownership` object.
+- `--intent ownership`: an explicit, opt-in ranking of the same candidate pool for implementation-ownership discovery. The result object carries `intent: "ownership"`, and every result carries an `ownership` object. Plain-text output prints an `Intent: ownership` line and an `ownership: <tier> (<evidence kinds>)` line per result.
+- Selector exclusivity: `--intent` is valid only with `--query`. It is rejected with `--route`, `--storage-key`, `--ui`, `--android-route`, `--permission`, `--resource`, `--android-component`, `--composable`, `--test-tag`, `--android-ui`, and `--android-role`. `--intent` without `--query` is rejected. An unknown value is rejected with the allowed values `relevance, ownership`. These are argument errors with exit code 2.
+- Ownership tiers, in rank order: `direct-owner`, `production-candidate`, `supporting-evidence`. A result is tier-eligible as a production owner only when it is a file or symbol outside test-scoped, fixture, generated, and docs-only paths and is not classified `test-only`, `docs-only`, or `generated-do-not-edit`. Ineligible results (tests, fixtures, generated files, docs) are kept and reported as `supporting-evidence`; ownership mode never removes them.
+- Provenance: each `ownership.evidence[]` entry has a `kind` and `sourceId`. Direct kinds are `direct-symbol-name`, `classified-primary-edit`, and `production-lexical-match`. Recovery kinds are `indexed-file-dependency`, `resolved-relative-import`, and `same-file-symbol`, which also carry `seedPath`, `targetPath`, and (for imports) the original `specifier`.
+- Lexical score and match reasons are preserved: `ownership.lexicalScore` always equals the result `score`, and `matchReasons` is not modified. Ownership adjustments are the tier and tie-breaking order only; no new lexical weights are introduced.
+- Grounded one-hop owner recovery: a lexically matching seed file (typically a strongly matching test or usage file) may promote a production file it directly depends on, using only the indexed file-dependency graph, `imports`/`depends-on` file edges, and the file's own relative import specifiers resolved against the indexed path inventory, including NodeNext `./x.js` to `./x.ts`/`./x.tsx` resolution. Recovery is exactly one hop. A recovered file that had no lexical match appears with `score: 0` and no match reasons. Recovered relationships are computed at query time and are not persisted as graph edges.
+- Deterministic caps and uncertainty: recovery examines at most 20 seed files, at most 16 recovered files per seed, and at most 128 recovered files overall. When a cap omits supported candidates, the result `warnings` carries an `Ownership recovery is bounded and not exhaustive: ...` message. `--limit` is applied after tiering, so recovery can use the complete relevant pool. When several production owners remain plausible, all stay in the results; ownership mode does not select a unique winner.
+- Rankings do not authorize editing. `direct-owner` is static, conservative evidence, not an edit decision. Inspect the exact source, relationships, and closest tests before editing.
+
+Ordinary relevance search is unchanged by this feature. Ownership mode uses no embeddings, no LLM, no network, and no second search engine.
 
 ## lookup
 
@@ -275,7 +299,23 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --cont
 npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symbol EditorShell --include-local-deps --max-bundle-lines 300 --max-blocks 20 --format json
 ```
 
-Inspect `continuationCursor` and its next line/exhaustion/reason rather than assume complete symbol coverage. Numbered output can report continuation/EOF markers. Symbol end bounds are not universally compiler-exact. An incomplete preview is not permission to infer missing code.
+Inspect `continuationCursor` and its next line/`eof`/`symbolBoundaryKnown`/`reason` rather than assume complete symbol coverage. Numbered output can report continuation/EOF markers. In the published v1.12.5 package, symbol end bounds are not universally compiler-exact. An incomplete preview is not permission to infer missing code.
+
+### Known and unknown symbol boundaries (v1.12.6 candidate, unreleased)
+
+This subsection documents the development-branch behavior. It is not in the published v1.12.5 package.
+
+`source --file <path> --symbol <name>` and the symbol-node form `source --node symbol:<path>#<name>` use one boundary contract.
+
+- Known boundary: the index symbol record carries a valid inclusive `endLine` (an integer at or after the declaration `line` and within the indexed file). The initial window is the whole symbol when it fits within `--max-lines`; the historical 20-line preview is not applied. The result reports `symbolBoundaryKnown: true` on any continuation cursor.
+- Oversized known symbol: only `--max-lines` lines are returned, with a cursor of `reason: "window-capped"`. `--continue`, and `--continue-from <n>` with `--file` plus `--symbol`, return further windows that stop at the recorded symbol end and never include the following declaration.
+- Completed known symbol: when the whole symbol has been returned, no `continuationCursor` is emitted. Asking to continue past a known end (`--continue` for a symbol whose first window already reached its end, or `--continue-from` beyond the end) returns an empty, terminal result with a warning that retrieval is complete, not content from the next declaration. `--continue` always resumes from the end of the first window; use `--continue-from <n>` to walk further windows of a symbol larger than two windows. A `--continue-from` before the symbol start is rejected.
+- Unknown boundary: Kotlin and Java generic symbols, symbols from an index written by an earlier version (no `endLine`), symbols in a file the parser reported errors for, and any malformed or out-of-range `endLine` keep the conservative initial preview of at most 20 lines, `symbolBoundaryKnown: false`, and continuation `reason: "symbol-end-unknown"`. Use `--continue`, `--continue-from`, or explicit `--start`/`--end` ranges as before.
+- Staleness: if the indexed `endLine` exceeds the current file's line count, the command fails with a stale index/source mismatch error and asks for a re-index rather than reporting a false complete symbol.
+- `--max-lines` remains an absolute bound on returned lines.
+- Unchanged: line-range retrieval, `--contains`, React-region, local-component-tree, local-dependency bundles, and Android artifact-backed source modes keep their own existing boundary evidence.
+
+There is no stateful cursor-token API. A continuation is expressed with the existing `--continue` and `--continue-from` options plus the cursor fields in the JSON result.
 
 Local expansion is direct, same-file evidence, not cross-file dependency closure or runtime tracing. Follow cross-file graph candidates with separate source calls. Bundle metadata and omission/cap warnings remain visible. Record a justified whole-file fallback when the bounded path cannot establish a required invariant.
 

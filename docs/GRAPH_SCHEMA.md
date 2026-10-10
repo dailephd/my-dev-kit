@@ -266,7 +266,8 @@ Each symbol record may include:
 
 - `name`
 - `kind`: `function`, `class`, `interface`, `type`, `enum`, `const`, `variable`, or `object` (`object` added in v1.9.0 Batch 2 for Kotlin `object`/`companion object` declarations). Java (v1.9.0 Batch 3) reuses this set with no additions: `record` declarations map to `class`, `@interface` annotation-type declarations map to `interface`.
-- `line`
+- `line`: inclusive 1-based declaration start line. Stored in the symbol's `location` object alongside `file`.
+- `endLine` (v1.12.6 candidate, unreleased, optional): inclusive 1-based declaration end line in the same `location` object. See "Symbol location `endLine`" below.
 - `exported`
 - `signature`
 - `semanticRoles`
@@ -329,9 +330,24 @@ Existing Android component-role facts (`android-components.json`) are reused ver
 
 Seven risk labels are advisory only, never a security verdict or runtime/build/test proof: `manifest-security-risk`, `generated-build-file-risk`, `resource-contract-risk`, `navigation-contract-risk`, `emulator-validation-required`, `instrumented-test-required`, and the existing `wrong-layer-risk` (assigned to usage/reference sites, test-only production-task focus, generated targets, and low-confidence naming-only evidence).
 
+### Symbol location `endLine` (v1.12.6 candidate, unreleased)
+
+**Status:** implemented on the feature branch; not in the published v1.12.5 package. `symbol-index.json` keeps its schema family; the field is additive and optional, so no schema-major bump was made.
+
+`SymbolLocation` (the `location` of a symbol record) is `{ file, line, endLine? }`:
+
+- `line`: inclusive 1-based declaration start line (unchanged).
+- `endLine`: inclusive 1-based line containing the declaration's last character. It is present only when the language extractor's parser establishes a trustworthy boundary and the value is an integer at or after `line` and within the file. It is otherwise absent; the field is never set to a guess.
+- Producers: TypeScript, TSX, JavaScript, and JSX symbols take `endLine` from the TypeScript compiler AST declaration end (`.jsx` is parsed as JSX). Python symbols take `endLine` from the `ast` `end_lineno` the embedded Python extraction already produces, accepted only when it is an in-file integer span. Kotlin and Java generic symbols carry no `endLine`, because their line/regex scanners do not provide exact boundaries.
+- Absence: a TypeScript-family file with parser syntax diagnostics receives no `endLine` for any of its symbols. A record written by a v1.12.5 or earlier index has no `endLine` and remains valid; consumers must treat absence as an unknown boundary and must not infer it from the next declaration.
+- Identity: symbol and node IDs (`symbol:<path>#<name>`) are unchanged. `code-graph.json` node structure is unchanged, `endLine` is not projected onto graph nodes, and no new graph or range artifact exists.
+- Incremental builds: unchanged files reuse their previous symbol records including `endLine`; changed files are freshly extracted. Full and partial rebuilds of the same final source tree converge.
+
+This field is distinct from unrelated, pre-existing range fields. `SemanticEvidenceRef.endLine` (see "SemanticEvidenceRef") and the Android and frontend artifacts' own range or span fields describe semantic evidence or artifact-backed ranges, not generic symbol-index declaration ends, and they are unchanged.
+
 ### Current limitation
 
-Symbol start lines are recorded. Complete symbol end-line bounds are not recorded.
+In the published v1.12.5 schema, symbol start lines are recorded and complete symbol end-line bounds are not. In the v1.12.6 candidate, the optional `endLine` above is recorded only where a parser-derived boundary is trustworthy; Kotlin, Java, older-index, and uncertain symbols have no end-line bound.
 
 ## code-graph.json
 
@@ -862,6 +878,8 @@ Main fields:
 
 Each result item may include `semanticRoles` and `artifactRefs` when present on the matched node or symbol.
 
+**v1.12.6 candidate (unreleased) additive fields.** When `search --query` is run with `--intent ownership`, the result also carries `intent: "ownership"` and each result item an `ownership` object: `{ tier, lexicalScore, evidence[] }`. `tier` is `direct-owner`, `production-candidate`, or `supporting-evidence`; `lexicalScore` equals the item's unchanged `score`; each `evidence[]` entry has `kind` (`direct-symbol-name`, `classified-primary-edit`, `production-lexical-match`, `indexed-file-dependency`, `resolved-relative-import`, or `same-file-symbol`), `sourceId`, and for recovery kinds `seedPath`, `targetPath`, and, for imports, `specifier`. A file recovered by one-hop owner recovery without its own lexical match has `score: 0` and empty `matchReasons`. `warnings` may carry a bounded-recovery message. Without `--intent ownership`, none of these fields is present and the artifact is unchanged. No artifact-kind or `version` change was made.
+
 ## context-capsule.json (v1.6.0)
 
 Written by the `context` command as a bounded, local, deterministic query-to-context artifact for downstream planning workflows. Schema version `"1.0.0"`.
@@ -1207,7 +1225,7 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## Schema limitations
 
-- Symbol end lines are not recorded in `symbol-index.json`.
+- Symbol end lines are not recorded in the published v1.12.5 `symbol-index.json`. The unreleased v1.12.6 candidate records an optional parser-derived `endLine` only for TypeScript-family and Python symbols; Kotlin, Java, older-index, and uncertain symbols have none.
 - `code-graph.json` remains the single structural/relationship graph: core file/symbol structure plus compact frontend/Android/Compose/test projections. Data-model and lineage edges are not added to it.
 - `data-model.json` and `data-model-graph.json` are separate downstream artifacts with their own ID space.
 - `model-view-lineage.json` is a static evidence artifact, not a runtime UI execution trace.

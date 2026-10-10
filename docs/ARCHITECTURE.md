@@ -289,6 +289,33 @@ This does not add a second index or graph engine: `buildPartialSymbolIndex()` st
 
 Status: released in v1.12.5 and covered by `tests/index/affectedNeighborhoodRefresh.spec.ts` (including `loadTrustedBaseline` and `selectAffectedNeighborhood` unit coverage), `tests/index/incrementalRefreshScope.spec.ts`, `tests/index/partialRebuild.spec.ts`, and `tests/index/cacheMetadata.spec.ts`. See [ROADMAP.md](ROADMAP.md#version-1125) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1125).
 
+### Ownership-oriented search and symbol end boundaries (v1.12.6 candidate, unreleased)
+
+**Status: implemented on the feature branch `feature/v1.12.6-bounded-retrieval-precision`; unreleased.** The published package remains v1.12.5. No new subsystem, artifact, command, or public schema major was introduced; each behavior extends an existing owner.
+
+Ownership and the components that do not own them:
+
+- **Generic ownership ranking and lexical scoring** — `src/search/searchIndex.ts` (`searchIndex`, owner recovery and tiering) over `src/search/rankSearchResults.ts` (unchanged lexical scoring). Result and option types, including `SearchIntent`, `SearchOwnershipTier`, and `SearchResultOwnership`, live in `src/search/searchTypes.ts`. `src/commands/searchCommand.ts` owns only `--intent` validation and registration. Lexical weights are unchanged; ownership mode adds a tier and ordering on top of the same scored pool. `src/context/` does not own generic search ownership and the Android owner policy (`androidContextOwnerPolicy.ts`) is not used by it.
+- **Query-time relationship recovery** — also in `src/search/searchIndex.ts` (`recoverOwnerCandidates`). It follows exactly one hop from lexically matching seed files over the already-indexed file-dependency graph, `imports`/`depends-on` file edges, and resolved relative import specifiers, with fixed bounds (20 seeds, 16 recovered files per seed, 128 overall). Recovered relationships exist only in the search result as `ownership.evidence`; they are not persisted as code-graph edges, not written to `code-graph.json`, and not a new graph engine.
+- **Pure NodeNext relative-import resolver** — `src/languages/typescript/resolveRelativeSpecifier.ts` (`resolveRelativeSpecifier`). It is pure and I/O-free, resolving a relative specifier against an indexed path inventory (`./x.js` to `./x.ts`/`./x.tsx`, `.jsx` to `.tsx`, literal `.js`/`.jsx` files first). It is shared by generic ownership search and `src/context/testInfrastructureDiscovery.ts`, which re-exports it. The language adapters do not call it for extraction.
+- **Pure generic classification helpers and context isolation** — `src/classification/classificationHelpers.ts` owns the canonical path predicates (`isTestLike`, `isTestScoped`, `isFixtureLike`, `isGeneratedLike`, and their patterns), relocated unchanged from `src/context/roleCandidates.ts` and `src/context/evidenceClassification.ts`, which re-export them. Generic search imports these helpers directly, so it does not import context role selection or Android owner policy.
+- **Symbol location extraction** — `src/symbol-index/symbolExtractor.ts` (`locationOf`) produces `endLine` for TypeScript, TSX, JavaScript, and JSX from the TypeScript compiler AST declaration end; it is omitted for every symbol of a file with parser diagnostics. `src/languages/python/adapter.ts` accepts the embedded Python script's `ast` `end_lineno` only when it is an in-file integer span at or after the declaration line. `src/symbol-index/types.ts` owns the optional `SymbolLocation.endLine` field. The Kotlin and Java adapters do not produce `endLine`; their line/regex scanners are not trusted for exact boundaries.
+- **Source-target and continuation consumers** — `src/lookup/resolveSourceTarget.ts` (`resolveSymbolTarget`) validates the indexed boundary and exposes `symbolEndLine`; `src/lookup/getSourceSlice.ts` bounds the window at the known end and suppresses the continuation cursor for a completed known symbol; `src/commands/sourceCommand.ts` consumes the same target for `--file`/`--symbol`, `--node`, `--continue`, and `--continue-from`. Source bundles, React regions, and Android source modes are not changed.
+- **Retrieval-regression runner (additive)** — `src/retrievalRegression/` remains the one regression runner. `configLoader.ts` validates, `taskExecutor.ts` executes, `assertions.ts` judges, and `metrics.ts`/`types.ts` carry additive support for `search` and `source` tasks. See "Retrieval-regression task schema" below.
+
+Compatibility: ordinary relevance search output is unchanged; `symbol-index.json` gains an optional field only; `code-graph.json` node structure and node IDs are unchanged (`endLine` is not projected into graph nodes); an old index without `endLine` stays readable and takes the unknown-boundary fallback; full and partial rebuilds converge because unchanged files reuse their prior symbol records and changed files are freshly extracted.
+
+Known consumer observation: `src/context/sourceSelection.ts` obtains its symbol window through the same `resolveSymbolTarget`, so the first context-capsule source slice for a symbol with a known boundary is the symbol up to the context default of 160 lines, rather than the 20-line preview. It does not pass `symbolEndLine` to `getSourceSlice`, so those slices do not use the known-boundary cursor suppression and keep their pre-existing cursor semantics. This implicit effect is covered only by the existing context tests and the six original context benchmark tasks (which pass); it has no dedicated v1.12.6 regression. Context roles, adequacy, and capsule/audit schemas are not redesigned.
+
+#### Retrieval-regression task schema (v1.12.6 candidate, additive)
+
+Existing context tasks are unchanged: a task with no `execution` runs the original context-capsule path. A task may add:
+
+- `execution` — `{ "kind": "context" }`; `{ "kind": "search", "intent"?: "relevance" | "ownership", "limit"?: 1..100 }`; or `{ "kind": "source", "file"?, "symbol"?, "node"?, "maxLines"?, "continue"?, "continueFrom"? }`. A source task uses exactly one selector (`node`, or `file` with `symbol`), and `continue` and `continueFrom` are mutually exclusive; `continueFrom` requires `file` plus `symbol`.
+- `expectations.commandResult` — valid only for `search` or `source` tasks. Search fields: `requiredResultIds`, `topK`. Source fields: `expectedMode`, `expectedStartLine`, `expectedEndLine`, `expectedLineCount`, `requiredContent`, `forbiddenContent`, `continuation` (`present` | `absent`), `symbolBoundaryKnown`, `nextStartLine`, `continuationReason`. `required` marks the assertion blocking.
+- Search and source tasks execute the real repository CLI (`src/cli.ts search` / `src/cli.ts source`) against a freshly built local index of the task fixture. Context-only expectations and `mode`/`caps`/`noSource` are rejected for them. The assertion kind is `commandResult`, with an additive `commandResultAssertionPassRate` metric.
+- The v1.12.6 candidate adds eight tasks (two search, six source) over `tests/fixtures/retrieval-v1126/`, configured in `benchmarks/retrieval/v1.7/core.json` beside the six original context tasks.
+
 ### Graph comparison layer (v1.8.0)
 
 Files:
@@ -456,7 +483,7 @@ For each indexed file, it records:
 - language
 - imports and exports
 - internal dependencies when resolvable
-- extracted symbols with names, kinds, start lines, and compact semantic roles when available
+- extracted symbols with names, kinds, start lines, an optional inclusive `endLine` when the language extractor can prove it (v1.12.6 candidate, unreleased), and compact semantic roles when available
 
 ## Code graph layer
 
@@ -486,7 +513,7 @@ These layers consume index artifacts.
 
 Responsibilities:
 
-- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present. Indexed test files are ordinary candidates, and rank reflects relevance rather than production edit ownership (see [COMMANDS.md](COMMANDS.md#search))
+- `search`: deterministic keyword ranking over indexed files, symbols, and edges, including semantic role and classification fields when present. Indexed test files are ordinary candidates, and rank reflects relevance rather than production edit ownership (see [COMMANDS.md](COMMANDS.md#search)). An explicit `--intent ownership` mode (v1.12.6 candidate, unreleased) adds static ownership tiers over the same candidate pool without changing the default ranking
 - `lookup`: exact node lookup with bounded neighbor expansion, semantic and classification metadata in the result, and an opt-in `--resolve-classification` flag to resolve the full `classification.json` entry
 - `source`: bounded read-only source retrieval with path containment, semantic and classification metadata propagated when present
 - `slice`: bounded graph-neighborhood extraction, semantic and classification metadata preserved on nodes

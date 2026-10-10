@@ -136,9 +136,26 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 `@dailephd/my-dev-kit@1.12.5` is the current release and adds affected-neighborhood incremental refresh to the existing indexing pipeline. Use `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains equivalent to `changed-files`. The affected-neighborhood scope freshly extracts unchanged files one graph hop from modified or removed baseline files, using a cryptographically trusted prior index and a truthful full rebuild when that baseline cannot be trusted. No-change runs remain no-ops. See [Incremental refresh scope](docs/COMMANDS.md#incremental-refresh-scope-v1125), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [ROADMAP.md](docs/ROADMAP.md#version-1125).
 
-### Planned next: v1.12.6
+### Planned next: v1.12.6 (implementation complete on the feature branch; unreleased)
 
-Version 1.12.6 is planned as a bounded retrieval-precision patch. It will add an explicit ownership-oriented search path for natural-language implementation queries while preserving ordinary relevance search, and it will add optional trustworthy generic-symbol end-line evidence so bounded source retrieval can return a complete known symbol when the extractor can prove its boundary. This is planned behavior only; the installed v1.12.5 command and artifact contracts are unchanged. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
+Version 1.12.6 is a bounded retrieval-precision patch. Its implementation is complete on the development feature branch (`feature/v1.12.6-bounded-retrieval-precision`), but it is an **unreleased candidate**: it is not published to npm, not tagged, and not installable as `@dailephd/my-dev-kit@1.12.6`. It remains subject to a separate pre-release readiness workflow. The installed v1.12.5 command and artifact contracts are unchanged. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
+
+The candidate adds two generic retrieval corrections to the existing graph-guided workflow:
+
+- **Explicit ownership-oriented search.** `search --query "<text>" --intent ownership` ranks the same candidate pool by static, inspectable ownership tiers (`direct-owner`, `production-candidate`, `supporting-evidence`) so a grounded production owner stays discoverable when a strongly matching test would otherwise outrank it. Tests, fixtures, generated files, and docs remain in the results as supporting evidence. Ownership ranking is advisory static evidence, not edit authorization.
+- **Preserved raw relevance search.** `search --query` without `--intent` (or with `--intent relevance`) keeps the existing relevance-ranked behavior and output unchanged.
+- **Parser-derived optional symbol end boundaries.** `symbol-index.json` symbol locations may carry an optional inclusive `endLine`, derived from the TypeScript compiler AST (TypeScript, TSX, JavaScript, JSX) or validated Python `ast` `end_lineno` evidence. Kotlin and Java generic symbols keep unknown boundaries.
+- **Complete known-symbol retrieval and bounded continuation.** `source --file <path> --symbol <name>` and symbol-node `source --node` return the complete symbol within `--max-lines` when its end is known, continue only inside the symbol when it is larger than `--max-lines`, and emit no continuation cursor once the complete known symbol has been returned.
+- **Old-index and unknown-boundary fallback.** An index without `endLine`, or a symbol whose boundary is not trustworthy, keeps the conservative 20-line preview with `symbolBoundaryKnown: false` and continuation reason `symbol-end-unknown`.
+
+Run the development-branch behavior from a source checkout with the repository CLI (`npm run build`, then `node dist/cli.js`), not an npm-installed package:
+
+```sh
+node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+node dist/cli.js source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
+```
+
+Publication status: unreleased and not published. Package metadata and the CLI still report `1.12.5`.
 
 Version 1.12.4 was the previous release. It added core indexing and retrieval of supported `.test.`/`.spec.` files beneath selected source roots, with the existing exclusion and cache-fingerprint boundaries. Search ranking remains relevance evidence, not edit ownership.
 
@@ -447,7 +464,7 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbo
 npx @dailephd/my-dev-kit source --index .my-dev-kit --node "symbol:src/editor.ts#EditorShell" --continue
 ```
 
-JSON output always includes a `continuationCursor` with `nextStartLine`, `previousEndLine`, `exhausted`, and `reason`. Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer.
+When a bounded result may be incomplete, JSON output includes a `continuationCursor` with `nextStartLine`, `previousEndLine`, `eof`, `symbolBoundaryKnown`, and `reason` (`symbol-end-unknown`, `window-capped`, `max-lines-reached`, or `eof`). Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer. In the unreleased v1.12.6 candidate, a symbol whose end line is known and that has been returned completely has no `continuationCursor`, and a known symbol larger than `--max-lines` continues only up to its own end line.
 
 ## Local dependency expansion (v1.4.0)
 
@@ -566,7 +583,7 @@ All React/TSX and frontend-test analysis is conservative static extraction from 
 
 ## Limitations
 
-- Symbol end lines are not stored in the symbol index. Symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
+- In the published v1.12.5 release, symbol end lines are not stored in the symbol index; the unreleased v1.12.6 candidate adds an optional parser-derived `endLine` for TypeScript-family and Python symbols, while Kotlin, Java, old indexes, and uncertain cases keep unknown boundaries. When a boundary is unknown, symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
 - Data-model extraction is conservative and currently focused on supported TypeScript patterns.
 - Frontend semantic extraction is conservative. Dynamic component registrations, runtime-composed JSX, and computed prop names may not be extracted or may be partially extracted with warnings.
@@ -594,7 +611,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.5 is the current release. Version 1.12.6 is the next planned bounded retrieval-precision patch. Later versions retain their separate planned scopes: v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.5 is the current release. Version 1.12.6 is the next bounded retrieval-precision patch: its implementation is complete on the feature branch but it is unreleased and pending pre-release readiness. Later versions retain their separate planned scopes: v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

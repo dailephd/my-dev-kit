@@ -171,6 +171,34 @@ Python `test_*.py` / `*_test.py` naming as related-test evidence. This is not
 implemented as of v1.12.3; broader Python language/framework classifier
 improvements remain v1.14.0 scope.
 
+## Retrieval-precision contracts (v1.12.6 candidate, unreleased)
+
+**Status:** implemented on the feature branch `feature/v1.12.6-bounded-retrieval-precision`; unreleased. The published package is v1.12.5. These contracts are backward-compatible and introduce no new schema major. Exact syntax is in [COMMANDS.md](COMMANDS.md); field detail is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md); ownership is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+### Search intent and ownership metadata
+
+- `search --query` gains an optional `--intent <relevance|ownership>`. Omitted intent and `relevance` produce exactly the existing result: the result carries no `intent` field and no result carries an `ownership` object.
+- `ownership` mode is opt-in and valid only with `--query`; it is mutually exclusive with every other search selector. A result then carries `intent: "ownership"` and each result an additive `ownership` object: `tier` (`direct-owner` | `production-candidate` | `supporting-evidence`), `lexicalScore` (always equal to the unchanged result `score`), and `evidence[]` provenance.
+- Ownership is static, deterministic, local evidence. It is not edit authorization, does not prove runtime behavior, and does not select a unique winner when several production owners are plausible.
+- Recovered owner relationships are computed at query time over existing index evidence (one hop, fixed bounds) and are not persisted code-graph edges. Applied bounds are reported through `warnings` when they omit supported candidates. Query validation failures fail the command with exit code 2 before any result is produced.
+
+### Optional symbol end line
+
+- `SymbolLocation` gains an optional inclusive 1-based `endLine`. `line` is unchanged. The field is present only when the language extractor's parser establishes a trustworthy boundary: TypeScript, TSX, JavaScript, and JSX from the compiler AST; Python from validated `ast` `end_lineno`. It is absent for Kotlin, Java, files with parser diagnostics, and records from older indexes.
+- Consumers must not fabricate `endLine` from the next declaration, parser recovery, or a brace scanner. An old index without the field remains readable and follows the unknown-boundary behavior.
+- No symbol or node identity changes, no `code-graph.json` node-structure change, no new artifact, and no schema-major bump. Existing source modes, graph identities, and incremental/managed-artifact behavior are preserved.
+
+### Source completion for known symbols
+
+- For a symbol with a validated `endLine`, `source --file --symbol` and symbol-node `source --node` return the whole symbol when it fits in `--max-lines`, with no continuation cursor. A known symbol larger than `--max-lines` is returned in windows that never cross the recorded end; its cursor has `symbolBoundaryKnown: true`.
+- For an unknown or untrusted boundary, the existing 20-line preview, `symbolBoundaryKnown: false`, and `symbol-end-unknown` continuation apply.
+- A stale index whose `endLine` is beyond the current file length fails closed with a re-index instruction rather than claiming a complete symbol.
+- The continuation contract remains the existing cursor fields (`nextStartLine`, `previousEndLine`, `eof`, `symbolBoundaryKnown`, `reason`) with `--continue` and `--continue-from`. No stateful cursor token exists.
+
+### Regression-runner contract
+
+The retrieval-regression runner gains additive `search` and `source` task execution and a `commandResult` expectation; tasks without `execution` behave as before. This is internal maintainer tooling, not a public command or published artifact schema.
+
 ## Static-evidence boundary
 
 All produced evidence is conservative static repository evidence. It does not

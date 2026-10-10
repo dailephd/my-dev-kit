@@ -1512,7 +1512,7 @@ Lab must record requested treatment and actual upstream execution/fallback. It m
 
 ## Version 1.12.6
 
-**Status: planned.**
+**Status: Implementation complete; unreleased; pending pre-release readiness.**
 
 Version 1.12.6 is a bounded retrieval precision patch over the published v1.12.5 baseline. It improves two generic stages of the existing graph-guided retrieval workflow without changing the scope of v1.13.0 or any later roadmap version:
 
