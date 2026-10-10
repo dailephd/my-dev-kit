@@ -33,8 +33,9 @@ Thumbs.db
 .idea/
 .claude/
 
-# Ignore all .txt files
+# Ignore all .txt files except the explicit tracked repository governance manifest
 *.txt
+!/manifest.txt
 
 # Ignore all folders starting with .my-dev-kit anywhere in the repo
 .my-dev-kit*/
