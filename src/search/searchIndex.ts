@@ -1,8 +1,18 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
+import { isFixtureLike, isGeneratedLike, isTestScoped } from '../context/evidenceClassification.js'
 import { normalizeSearchQuery, rankSearchResults } from './rankSearchResults.js'
-import type { SearchCandidate, SearchCandidateField, SearchIndexInput, SearchIndexResult } from './searchTypes.js'
+import type {
+  SearchCandidate,
+  SearchCandidateField,
+  SearchIndexInput,
+  SearchIndexResult,
+  SearchOwnershipEvidence,
+  SearchOwnershipTier,
+  SearchResultItem,
+  SearchResultOwnership,
+} from './searchTypes.js'
 
 const DEFAULT_LIMIT = 20
 
@@ -39,12 +49,15 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
 
   const limit = input.limit ?? DEFAULT_LIMIT
   const candidates = buildCandidates(input.symbolIndex, input.codeGraph, input.frontendArtifact ?? null)
-  const results = rankSearchResults({
+  const ownershipMode = input.intent === 'ownership'
+  // Ownership mode ranks the complete relevant pool (same scoring, no new weights) and applies `limit` only after tiering.
+  const rankedResults = rankSearchResults({
     candidates,
     query: input.query,
     normalizedTerms,
-    limit,
+    limit: ownershipMode ? Math.max(candidates.length, 1) : limit,
   })
+  const results = ownershipMode ? applyOwnershipTiers(rankedResults).slice(0, limit) : rankedResults
 
   const searchedFileIds = new Set<string>()
   const searchedSymbolIds = new Set<string>()
@@ -74,7 +87,62 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
       codeGraph: input.resolved.artifactPaths.codeGraph,
     },
     warnings: [],
+    ...(ownershipMode ? { intent: 'ownership' as const } : {}),
   }
+}
+
+const OWNERSHIP_TIER_RANK: Record<SearchOwnershipTier, number> = {
+  'direct-owner': 0,
+  'production-candidate': 1,
+  'supporting-evidence': 2,
+}
+
+/** Edit-guidance values that already assert a target is not a production owner. */
+const NON_OWNER_EDIT_GUIDANCE = new Set<string>(['test-only', 'docs-only', 'generated-do-not-edit'])
+
+const DOCS_ONLY_PATH_PATTERN = /(^|[\/])docs?[\/]|\.(md|mdx|markdown|rst|adoc|txt)$/i
+
+/**
+ * v1.12.6 Batch 1: attaches ownership tiers and stably reorders by tier only. The input is already in
+ * the existing (score desc, kind, path/id) order, so a stable tier sort preserves that order inside each tier.
+ * The lexical `score` and `matchReasons` are never modified.
+ */
+function applyOwnershipTiers(ranked: SearchResultItem[]): SearchResultItem[] {
+  return ranked
+    .map((item) => ({ ...item, ownership: classifyOwnership(item) }))
+    .sort((a, b) => OWNERSHIP_TIER_RANK[a.ownership.tier] - OWNERSHIP_TIER_RANK[b.ownership.tier])
+}
+
+function classifyOwnership(item: SearchResultItem): SearchResultOwnership {
+  const evidence: SearchOwnershipEvidence[] = []
+  let tier: SearchOwnershipTier = 'supporting-evidence'
+
+  if (isProductionOwnerEligible(item)) {
+    if (item.kind === 'symbol' && item.matchReasons.some((reason) => reason.field === 'symbolName')) {
+      evidence.push({ kind: 'direct-symbol-name', sourceId: item.id })
+    }
+    if ((item.classificationRoles ?? []).some((role) => role.editGuidance === 'safe-primary-edit-target')) {
+      evidence.push({ kind: 'classified-primary-edit', sourceId: item.id })
+    }
+    if (evidence.length > 0) {
+      tier = 'direct-owner'
+    } else {
+      tier = 'production-candidate'
+      evidence.push({ kind: 'production-lexical-match', sourceId: item.id })
+    }
+  }
+
+  return { tier, lexicalScore: item.score, evidence }
+}
+
+function isProductionOwnerEligible(item: SearchResultItem): boolean {
+  if (item.kind !== 'file' && item.kind !== 'symbol') return false
+  const filePath = item.path
+  if (filePath === undefined) return false
+  if (isTestScoped(filePath) || isFixtureLike(filePath) || isGeneratedLike(filePath) || DOCS_ONLY_PATH_PATTERN.test(filePath)) {
+    return false
+  }
+  return !(item.classificationRoles ?? []).some((role) => NON_OWNER_EDIT_GUIDANCE.has(role.editGuidance))
 }
 
 function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph, frontendArtifact: FrontendSemanticArtifact | null): SearchCandidate[] {

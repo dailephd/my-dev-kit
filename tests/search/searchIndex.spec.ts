@@ -3,6 +3,7 @@ import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { ResolvedIndexManifest } from '../../src/indexing/readIndexManifest.js'
 import { normalizeSearchQuery } from '../../src/search/rankSearchResults.js'
 import { searchIndex } from '../../src/search/searchIndex.js'
+import type { SearchIndexResult } from '../../src/search/searchTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
 
 describe('searchIndex', () => {
@@ -101,6 +102,166 @@ describe('searchIndex', () => {
     })
   })
 })
+
+describe('searchIndex ownership intent', () => {
+  const ownerId = 'symbol:src/widgetEngine.ts#renderWidget'
+
+  function ownership(query: string, limit = 50, intent: 'ownership' | 'relevance' | 'omitted' = 'ownership'): SearchIndexResult {
+    return searchIndex({
+      resolved: fixtureResolved(),
+      symbolIndex: ownershipSymbolIndex(),
+      codeGraph: { artifactKind: 'code-graph', schemaVersion: '1.0.0', createdAt: '2026-05-12T00:00:00.000Z', nodes: [], edges: [] } as unknown as CodeGraph,
+      query,
+      limit,
+      intent: intent === 'omitted' ? undefined : intent,
+      createdAt: '2026-05-12T00:00:00.000Z',
+    })
+  }
+
+  const tierOf = (result: SearchIndexResult, id: string) => result.results.find((item) => item.id === id)?.ownership?.tier
+
+  it('assigns direct-owner to a matching non-test symbol with symbolName evidence', () => {
+    const result = ownership('widget')
+    expect(result.intent).toBe('ownership')
+    const owner = result.results.find((item) => item.id === ownerId)
+    expect(owner?.ownership).toEqual({
+      tier: 'direct-owner',
+      lexicalScore: owner?.score,
+      evidence: [{ kind: 'direct-symbol-name', sourceId: ownerId }],
+    })
+  })
+
+  it('assigns direct-owner from established safe-primary-edit-target classification', () => {
+    const result = ownership('widget')
+    expect(result.results.find((item) => item.id === 'symbol:src/widgetPanel.ts#panel')?.ownership).toMatchObject({
+      tier: 'direct-owner',
+      evidence: [{ kind: 'classified-primary-edit', sourceId: 'symbol:src/widgetPanel.ts#panel' }],
+    })
+  })
+
+  it('keeps a filename-only match and uncertain classification as production-candidate', () => {
+    const result = ownership('widget')
+    expect(tierOf(result, 'file:src/widgetHelpers.ts')).toBe('production-candidate')
+    expect(tierOf(result, 'symbol:src/widgetHelpers.ts#helper')).toBe('production-candidate')
+    expect(tierOf(result, 'symbol:src/widgetUncertain.ts#thing')).toBe('production-candidate')
+    expect(result.results.find((item) => item.id === 'file:src/widgetHelpers.ts')?.ownership?.evidence).toEqual([
+      { kind: 'production-lexical-match', sourceId: 'file:src/widgetHelpers.ts' },
+    ])
+  })
+
+  it('keeps tests, fixtures, generated and docs results as supporting evidence only', () => {
+    const result = ownership('widget')
+    for (const id of [
+      'symbol:tests/widget.spec.ts#widget',
+      'file:tests/widget.spec.ts',
+      'symbol:tests/fixtures/widgetFixture.ts#widgetFixture',
+      'symbol:src/generated/widgetGen.ts#widgetGen',
+      'file:docs/widget.md',
+      'symbol:src/widgetDocsOnly.ts#docsOnly',
+    ]) {
+      expect(tierOf(result, id)).toBe('supporting-evidence')
+    }
+  })
+
+  it('orders direct-owner, production-candidate, then supporting evidence with lexical order inside tiers', () => {
+    const result = ownership('widget')
+    const rank = { 'direct-owner': 0, 'production-candidate': 1, 'supporting-evidence': 2 } as const
+    const tiers = result.results.map((item) => rank[item.ownership!.tier])
+    expect(tiers).toEqual([...tiers].sort((a, b) => a - b))
+    for (let i = 1; i < result.results.length; i += 1) {
+      const prev = result.results[i - 1]!
+      const next = result.results[i]!
+      if (prev.ownership!.tier === next.ownership!.tier) expect(prev.score).toBeGreaterThanOrEqual(next.score)
+    }
+  })
+
+  it('preserves lexical score and matchReasons exactly relative to relevance mode', () => {
+    const relevance = ownership('widget', 50, 'omitted')
+    const owned = ownership('widget')
+    expect(owned.results.length).toBe(relevance.results.length)
+    const byId = new Map(relevance.results.map((item) => [item.id, item]))
+    for (const item of owned.results) {
+      const original = byId.get(item.id)!
+      expect(item.score).toBe(original.score)
+      expect(item.matchReasons).toEqual(original.matchReasons)
+      expect(item.ownership?.lexicalScore).toBe(original.score)
+    }
+  })
+
+  it('applies the result limit only after ownership ranking', () => {
+    const relevance = ownership('widget', 1, 'omitted')
+    expect(relevance.results[0]?.id).toBe('symbol:tests/widget.spec.ts#widget')
+    const owned = ownership('widget', 1)
+    expect(owned.results).toHaveLength(1)
+    expect(owned.results[0]?.ownership?.tier).toBe('direct-owner')
+  })
+
+  it('does not alter relevance output and omits intent and ownership metadata', () => {
+    const omitted = ownership('widget', 20, 'omitted')
+    const explicit = ownership('widget', 20, 'relevance')
+    expect(JSON.stringify(explicit)).toBe(JSON.stringify(omitted))
+    expect('intent' in omitted).toBe(false)
+    expect(omitted.results.every((item) => !('ownership' in item))).toBe(true)
+  })
+
+  it('is deterministic for fixed inputs', () => {
+    expect(JSON.stringify(ownership('widget'))).toBe(JSON.stringify(ownership('widget')))
+  })
+
+  it('does not introduce zero-lexical candidates', () => {
+    expect(ownership('zzzznomatch').results).toEqual([])
+  })
+})
+
+function ownershipSymbolIndex(): SymbolIndex {
+  const sym = (file: string, name: string, extra: Record<string, unknown> = {}) => ({
+    name,
+    kind: 'function' as const,
+    location: { file, line: 1 },
+    exported: false,
+    ...extra,
+  })
+  const file = (path: string, symbols: ReturnType<typeof sym>[] = []) => ({
+    path,
+    language: 'typescript' as const,
+    lineCount: 5,
+    imports: [],
+    exports: [],
+    symbols,
+    hasCallGraphEntries: false,
+  })
+  const role = (editGuidance: string) => [
+    { role: 'command-handler', editGuidance, readiness: 'ready', uncertainty: 'certain' },
+  ]
+  const files = [
+    file('src/widgetEngine.ts', [sym('src/widgetEngine.ts', 'renderWidget')]),
+    file('src/widgetPanel.ts', [
+      sym('src/widgetPanel.ts', 'panel', { classificationRoles: role('safe-primary-edit-target') }),
+    ]),
+    file('src/widgetHelpers.ts', [sym('src/widgetHelpers.ts', 'helper')]),
+    file('src/widgetUncertain.ts', [
+      sym('src/widgetUncertain.ts', 'thing', { classificationRoles: role('uncertain') }),
+    ]),
+    file('src/widgetDocsOnly.ts', [
+      sym('src/widgetDocsOnly.ts', 'docsOnly', { classificationRoles: role('docs-only') }),
+    ]),
+    file('src/generated/widgetGen.ts', [sym('src/generated/widgetGen.ts', 'widgetGen')]),
+    file('tests/widget.spec.ts', [
+      sym('tests/widget.spec.ts', 'widget', { exported: true, signature: 'function widget(): widget' }),
+    ]),
+    file('tests/fixtures/widgetFixture.ts', [sym('tests/fixtures/widgetFixture.ts', 'widgetFixture')]),
+    file('docs/widget.md'),
+  ]
+  return {
+    schemaVersion: '2',
+    buildTime: '2026-05-12T00:00:00.000Z',
+    repoRoot: '/repo',
+    sourceRoots: ['src', 'tests'],
+    fileCount: files.length,
+    symbolCount: files.reduce((n, f) => n + f.symbols.length, 0),
+    files,
+  } as unknown as SymbolIndex
+}
 
 function runSearch(query: string, limit = 20) {
   return searchIndex({

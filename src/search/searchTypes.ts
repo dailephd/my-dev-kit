@@ -35,6 +35,27 @@ export interface SearchMatchReason {
   text: string
 }
 
+/** v1.12.6 Batch 1: public `search --query --intent` values. Omitted intent is `relevance`. */
+export type SearchIntent = 'relevance' | 'ownership'
+
+export const SEARCH_INTENT_VALUES: readonly SearchIntent[] = ['relevance', 'ownership']
+
+export type SearchOwnershipTier = 'direct-owner' | 'production-candidate' | 'supporting-evidence'
+
+export type SearchOwnershipEvidenceKind = 'direct-symbol-name' | 'classified-primary-edit' | 'production-lexical-match'
+
+export interface SearchOwnershipEvidence {
+  kind: SearchOwnershipEvidenceKind
+  sourceId: string
+}
+
+/** Ownership-mode only: static, inspectable tier evidence. `lexicalScore` always equals the result `score`. */
+export interface SearchResultOwnership {
+  tier: SearchOwnershipTier
+  lexicalScore: number
+  evidence: SearchOwnershipEvidence[]
+}
+
 export interface SearchResultItem {
   kind: SearchResultKind
   id: string
@@ -57,11 +78,15 @@ export interface SearchResultItem {
   /** Compact Batch 5 evidence for `android-*` node kinds only (v1.10.0 Batch 6) - never a full artifact record. */
   androidArtifactId?: string
   androidMetadata?: Record<string, string | number | boolean | null>
+  /** v1.12.6 Batch 1: present only when `intent: 'ownership'` was requested. */
+  ownership?: SearchResultOwnership
 }
 
 export interface SearchIndexOptions {
   query: string
   limit?: number
+  /** v1.12.6 Batch 1: `relevance` (default, unchanged output) or `ownership`. */
+  intent?: SearchIntent
   createdAt?: string
 }
 
@@ -100,6 +125,8 @@ export interface SearchIndexResult {
   warnings: string[]
   /** v1.12.0 Batch 5: present only for `search --android-role <role>` - the exact requested role. */
   androidRole?: string
+  /** v1.12.6 Batch 1: present only (as `ownership`) when ownership intent was requested. */
+  intent?: 'ownership'
 }
 
 export interface SearchCandidateField {

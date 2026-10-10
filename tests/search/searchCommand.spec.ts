@@ -72,6 +72,99 @@ describe('search command', () => {
   })
 })
 
+describe('search command --intent', () => {
+  const stripTimestamp = (stdout: string) => {
+    const parsed = JSON.parse(stdout)
+    delete parsed.createdAt
+    return parsed
+  }
+
+  it('explicit relevance intent matches omitted intent apart from the timestamp', () => {
+    const omitted = runCli(['search', '--index', outDir, '--query', 'user', '--json'])
+    const explicit = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'relevance', '--json'])
+    expect(omitted.status).toBe(0)
+    expect(explicit.status).toBe(0)
+    expect(stripTimestamp(explicit.stdout)).toEqual(stripTimestamp(omitted.stdout))
+    expect(stripTimestamp(omitted.stdout)).not.toHaveProperty('intent')
+    expect(JSON.parse(omitted.stdout).results.every((item: object) => !('ownership' in item))).toBe(true)
+
+    const omittedText = runCli(['search', '--index', outDir, '--query', 'user'])
+    const explicitText = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'relevance'])
+    expect(explicitText.stdout).toBe(omittedText.stdout)
+    expect(omittedText.stdout).not.toContain('Intent:')
+  })
+
+  it('ownership intent returns intent metadata and per-result ownership evidence', () => {
+    const relevance = JSON.parse(runCli(['search', '--index', outDir, '--query', 'user', '--limit', '100', '--json']).stdout)
+    const result = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'ownership', '--limit', '100', '--json'])
+    expect(result.status).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.artifactKind).toBe('my-dev-kit-v1-search-result')
+    expect(parsed.version).toBe('1.0.0')
+    expect(parsed.intent).toBe('ownership')
+    expect(parsed.results.length).toBe(relevance.results.length)
+    const scores = new Map<string, number>(relevance.results.map((item: { id: string; score: number }) => [item.id, item.score]))
+    for (const item of parsed.results) {
+      expect(['direct-owner', 'production-candidate', 'supporting-evidence']).toContain(item.ownership.tier)
+      expect(item.ownership.lexicalScore).toBe(item.score)
+      expect(item.score).toBe(scores.get(item.id))
+      expect(Array.isArray(item.ownership.evidence)).toBe(true)
+    }
+  })
+
+  it('ownership text output identifies the intent', () => {
+    const result = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'ownership'])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('Intent: ownership')
+    expect(result.stdout).toContain('   ownership: ')
+  })
+
+  it('ownership intent honors --limit validation', () => {
+    const ok = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'ownership', '--limit', '2', '--json'])
+    expect(ok.status).toBe(0)
+    expect(JSON.parse(ok.stdout).results.length).toBeLessThanOrEqual(2)
+    const bad = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'ownership', '--limit', '101'])
+    expect(bad.status).toBe(2)
+    expect(bad.stderr).toContain('--limit must be 100 or less')
+  })
+
+  it('rejects unknown and empty intent values', () => {
+    const unknown = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'owner'])
+    expect(unknown.status).toBe(2)
+    expect(unknown.stderr).toContain('Invalid --intent value "owner"')
+    const empty = runCli(['search', '--index', outDir, '--query', 'user', '--intent', ''])
+    expect(empty.status).toBe(2)
+    expect(empty.stderr).toContain('Invalid --intent value ""')
+  })
+
+  it('rejects intent without --query', () => {
+    const result = runCli(['search', '--index', outDir, '--intent', 'ownership'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('--intent requires --query')
+  })
+
+  it.each([
+    ['--route', '/home'],
+    ['--storage-key', 'draft.v1'],
+    ['--ui', 'save-button'],
+    ['--android-route', 'home'],
+    ['--permission', 'android.permission.INTERNET'],
+    ['--resource', 'string/app_name'],
+    ['--android-component', 'MainActivity'],
+    ['--composable', 'HomeScreen'],
+    ['--test-tag', 'login_button'],
+    ['--android-ui', 'Save'],
+    ['--android-role', 'view-model'],
+  ])('rejects intent combined with %s', (flag, value) => {
+    const withQuery = runCli(['search', '--index', outDir, '--query', 'user', '--intent', 'ownership', flag, value])
+    expect(withQuery.status).toBe(2)
+    expect(withQuery.stderr).toContain('--intent is valid only with --query')
+    const withoutQuery = runCli(['search', '--index', outDir, '--intent', 'ownership', flag, value])
+    expect(withoutQuery.status).toBe(2)
+    expect(withoutQuery.stderr).toContain('--intent is valid only with --query')
+  })
+})
+
 function runCliFrom(cwd: string, args: string[]) {
   return spawnSync(process.execPath, [tsxCliPath(), join(process.cwd(), 'src/cli.ts'), ...args], {
     cwd,
