@@ -501,6 +501,22 @@ A later explicit planning decision added Kit v1.12.5 between the published v1.12
 
 Kit v1.12.5 is the published prerequisite for Lab v0.6.3 to execute the planned affected-neighborhood-refresh treatment against a real upstream Kit capability. The dependency is capability-level rather than an npm dependency: Lab must record requested treatment and actual Kit execution/fallback and must not simulate the upstream refresh by editing index artifacts. Publishing Kit v1.12.5 makes the prerequisite available; it does not mark the separate Lab v0.6.3 implementation complete.
 
+#### 7.1.2 Post-ECO-00 Kit v1.12.6 additive patch decision — 2026-10-05
+
+A later explicit repository-local planning decision adds Kit v1.12.6 between the published v1.12.5 baseline and the already-reserved v1.13.0 milestone. This is an additive local patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation or downstream ecosystem dependency.
+
+- 1.12.6: bounded retrieval precision — planned ownership-oriented search for natural-language implementation queries plus trustworthy optional generic-symbol end-line evidence for bounded source retrieval.
+- 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged (planned).
+- 1.14.0 through 1.16.0 and 2.0.0 retain their adopted assignments unchanged.
+
+Kit v1.12.6 is not a new prerequisite for Lab v0.6.3 or ORC-EVIDENCE-01. Lab v0.6.3 continues to depend on the already-published v1.12.5 affected-neighborhood capability. The v1.12.6 patch is repository-local retrieval hardening that may proceed independently under the existing coordination rules.
+
+#### 7.1.3 Post-ECO-00 Kit v1.17.0 frontend retrieval completion reservation — 2026-10-10
+
+A later Kit-local planning decision reserves v1.17.0 after unchanged v1.13.0–v1.16.0 milestones and before the independent v2.0.0 program. It completes bounded test-title, React render/prop/event, scoped literal, storage operation and grounded route/guard retrieval within existing Kit architectures. The Kit ROADMAP owns the detailed scope and a nineteen-item disposition of the prior frontend improvement notes.
+
+This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or create a new prerequisite for ECO-01, Lab v0.6.3 or Orchestrator v1.7.0. Project/Orchestrator test execution and Observer browser-visible validation retain their existing ownership.
+
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.
@@ -570,7 +586,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
+    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126[1.12.6 planned: bounded retrieval precision] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]
@@ -1158,7 +1174,7 @@ ECO-00 adoption is a documentation/contract-only repository change. It changes n
 
 ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
-Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. A later explicit local planning decision adds Kit 1.12.5 as the next Kit patch without moving Kit 1.13.0 or later reservations. Kit 1.12.5 provides the real affected-neighborhood refresh capability required by Lab 0.6.3; Lab 0.6.3 must consume actual Kit execution/fallback evidence rather than simulate the upstream refresh. The remaining Lab 0.6.1-0.9.2 sequence and LAB-EVIDENCE-01 at 0.10.0 remain otherwise unchanged.
+Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.12.5 is published and provides the real affected-neighborhood refresh capability required by Lab 0.6.3; Lab 0.6.3 must consume actual Kit execution/fallback evidence rather than simulate the upstream refresh. A later explicit repository-local planning decision adds Kit 1.12.6 bounded retrieval precision before Kit 1.13.0 without moving any ECO-00 reservation or changing the Lab v0.6.3 dependency. The remaining Lab 0.6.1-0.9.2 sequence and LAB-EVIDENCE-01 at 0.10.0 remain otherwise unchanged.
 
 ECO-01 begins only when its producer and consumer milestones are available as exact candidates or releases. Prove one CLI and one full-stack end-to-end case before adding broader assurance adapters. The working rule remains: freeze the contract; build against exact evidence; test the exact combination; activate only a certified capability. Matching package version numbers are unnecessary.
 
@@ -1194,7 +1210,7 @@ A milestone is not complete merely because all repository-local implementations 
 
 ### 14.3 First implementation after this document
 
-Do **not** start the later assurance domains in parallel merely because their version reservations exist. ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer implementation is ORC-EVIDENCE-01 (Orchestrator 1.7.0), which can build against the frozen ECO-00 reference contracts. Repository-local work such as Kit 1.13.0 or Lab 0.6.1 may proceed independently. ECO-01 certification must still wait for LAB-EVIDENCE-01 at Lab 0.10.0 and an exact producer/consumer compatibility run.
+Do **not** start the later assurance domains in parallel merely because their version reservations exist. ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer implementation is ORC-EVIDENCE-01 (Orchestrator 1.7.0), which can build against the frozen ECO-00 reference contracts. Repository-local work such as Kit 1.12.6, Kit 1.13.0, or Lab 0.6.1 may proceed independently. ECO-01 certification must still wait for LAB-EVIDENCE-01 at Lab 0.10.0 and an exact producer/consumer compatibility run.
 
 ## 15. Source record
 

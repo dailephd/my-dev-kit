@@ -1510,6 +1510,165 @@ Lab must record requested treatment and actual upstream execution/fallback. It m
 - no v1.13.0 Android proof/example/documentation work
 - no v1.14.0 framework expansion, KIT-API-01, KIT-OPS-01, or v2.0.0 plugin work
 
+## Version 1.12.6
+
+**Status: planned.**
+
+Version 1.12.6 is a bounded retrieval precision patch over the published v1.12.5 baseline. It improves two generic stages of the existing graph-guided retrieval workflow without changing the scope of v1.13.0 or any later roadmap version:
+
+- ownership-oriented discovery for natural-language implementation queries; and
+- trustworthy generic symbol end-line evidence for more complete bounded source retrieval.
+
+The goal is to use static evidence that my-dev-kit already has, or can derive reliably from its existing language extractors, so coding agents are less likely to miss a production owner during search or require unnecessary source continuation after the correct symbol is known.
+
+The core workflow remains:
+
+```text
+index -> manifest -> artifacts -> search -> lookup -> slice -> source -> view
+```
+
+### Ownership-oriented search
+
+Raw `search --query` remains relevance-ranked and backward-compatible. Indexed tests remain ordinary searchable evidence and may continue to outrank production files under raw relevance search.
+
+Add an explicit ownership-oriented search mode for implementation-ownership discovery. The exact public option spelling is an implementation-plan decision; the semantic contract is fixed here.
+
+The ownership mode must:
+
+- reuse the existing search candidate pool, classification metadata, code graph, and deterministic ranking infrastructure rather than introduce a second search engine;
+- preserve the ordinary lexical relevance score and expose deterministic ownership adjustments separately;
+- prefer grounded production-owner evidence such as production symbols, producer relationships, and suitable classification/edit-guidance evidence;
+- avoid selecting test-only, test-fixture, generated, docs-only, or projection-only evidence as the primary production owner when a stronger grounded owner is available;
+- retain relevant tests and other supporting evidence rather than removing them from results;
+- permit bounded graph-supported promotion of a plausible production owner when a strongly matching test or usage candidate references that owner, so a weak direct lexical match does not make the owner disappear behind the result limit;
+- preserve ambiguity when multiple production owners remain plausible;
+- remain deterministic, inspectable, local, and static.
+
+The ownership mode must not use embeddings, semantic-similarity services, LLM ranking, network calls, or automatic edit authorization.
+
+### Trustworthy symbol end-line evidence
+
+Extend the existing generic symbol-location contract additively with an optional inclusive `endLine`.
+
+`line` remains the existing inclusive 1-based declaration start line. `endLine`, when present, means that the current language extractor can establish a trustworthy inclusive declaration end line. When it cannot, the field remains absent.
+
+Initial supported boundary producers:
+
+- TypeScript, TSX, JavaScript, and JSX: derive boundaries from the existing TypeScript compiler AST used by the current extractor;
+- Python: preserve `ast` `end_lineno` evidence already produced by the current Python extraction path when available and valid;
+- Kotlin and Java: retain unknown generic symbol boundaries under the current conservative line/brace scanners rather than claim exactness they cannot guarantee.
+
+Future language extractors may begin supplying `endLine` through the same optional contract when they gain trustworthy boundary evidence.
+
+The optional boundary may be projected into the existing compact graph symbol/node representation so symbol-index and code-graph structural evidence remain consistent. No second range artifact or source-location system is introduced.
+
+### Bounded source retrieval with known symbol boundaries
+
+`source --file <path> --symbol <name>` and symbol-node `source --node` must consume the same symbol boundary evidence.
+
+When a trustworthy symbol end line is available:
+
+- return the complete symbol on the initial request when it fits within `--max-lines`;
+- never apply the historical 20-line unknown-boundary preview solely because the target is a generic symbol;
+- when the symbol exceeds `--max-lines`, return only the allowed window and expose bounded continuation with `symbolBoundaryKnown: true`;
+- continuation must stop at the recorded symbol end and must not spill into the following declaration;
+- once the complete known symbol has been returned, no continuation cursor is required.
+
+When a trustworthy symbol end line is unavailable:
+
+- preserve the current conservative small initial preview;
+- preserve `symbolBoundaryKnown: false`;
+- preserve continuation reason `symbol-end-unknown`;
+- preserve explicit continuation and bounded line-range retrieval as the fallback.
+
+An old compatible index that does not contain `endLine` remains readable and follows the same unknown-boundary fallback rather than being rejected or assigned a fabricated boundary.
+
+### Artifact and compatibility boundaries
+
+- keep the current symbol-index and code-graph architecture;
+- add only optional range metadata; do not replace the existing `line` field;
+- do not require a public schema-major bump solely for the additive optional `endLine`;
+- do not create a second symbol index, range artifact, source engine, parser pipeline, search engine, or graph engine;
+- preserve current node and symbol identities;
+- preserve current source-root, exclusion, incremental-indexing, graph-diff, and managed-artifact behavior;
+- preserve `--max-lines` as an absolute output bound;
+- preserve source continuation as the fallback whenever an exact boundary is unavailable or a known symbol exceeds the requested bound;
+- preserve raw `search --query` behavior unless the ownership mode is explicitly selected;
+- preserve existing `context` roles and adequacy contracts; v1.12.6 may share conservative owner-policy helpers where appropriate but must not redesign the context pipeline.
+
+### Incremental-index compatibility
+
+Fresh and partial builds must preserve equivalent end-line evidence for the same final source tree.
+
+Unchanged symbols reused by a partial rebuild must retain any previously extracted `endLine`. Changed files must receive freshly extracted boundary evidence.
+
+Existing package-version cache compatibility already causes an index cache written by an older published my-dev-kit version to rebuild after an upgrade. Do not bump the internal cache schema solely to introduce the optional symbol `endLine`.
+
+### Retrieval-regression coverage
+
+Extend the existing my-dev-kit-owned retrieval regression suite with permanent scenarios covering both v1.12.6 corrections.
+
+Ownership regression:
+
+- a natural-language behavior/ownership query has strongly matching indexed test evidence and a grounded production owner;
+- raw relevance search remains backward-compatible;
+- ownership-oriented search retains the production owner within a small bounded top-K result set while preserving the relevant tests;
+- generated, docs-only, or test-only evidence does not become the primary production owner when a stronger grounded owner exists.
+
+Symbol-boundary regression:
+
+- a known multiline symbol whose trustworthy end is within `--max-lines` is returned completely without unnecessary continuation;
+- a known symbol larger than `--max-lines` is truncated only by the requested bound and continues only within its own exact range;
+- an unknown-boundary symbol retains `symbol-end-unknown` behavior;
+- old indexes without `endLine` retain the conservative fallback;
+- symbol-node and file-plus-symbol retrieval remain equivalent.
+
+### Dependencies and ordering
+
+1. define the additive ownership-search and optional symbol-boundary contracts;
+2. implement deterministic ownership-oriented ranking and bounded owner recovery;
+3. add trustworthy TypeScript/JavaScript and Python symbol end-line production;
+4. consume known boundaries in generic source and continuation handling;
+5. add permanent search and source retrieval regression coverage;
+6. validate backward compatibility, determinism, incremental behavior, old-index fallback, and documentation before release work.
+
+### Planned implementation batches
+
+1. ownership-oriented search contract and backward-compatible ranking mode;
+2. bounded graph-supported owner recovery and production-versus-test regression hardening;
+3. trustworthy generic symbol boundaries and symbol-aware source continuation;
+4. integrated retrieval hardening, compatibility validation, and documentation reconciliation.
+
+### Acceptance criteria
+
+- ordinary raw search ranking remains backward-compatible;
+- ownership-oriented search makes a grounded production owner discoverable within a small bounded result set for the reproduced production-versus-test query while retaining relevant test evidence;
+- ownership ranking remains deterministic and its adjustments are inspectable;
+- no LLM, embeddings, fuzzy semantic engine, or second retrieval system is introduced;
+- TypeScript/TSX/JavaScript/JSX generic symbols carry trustworthy parser-derived end lines where available;
+- Python generic symbols preserve trustworthy AST `end_lineno` evidence where available;
+- Kotlin, Java, old-index, malformed, and otherwise uncertain cases do not fabricate exact boundaries;
+- a known symbol that fits within `--max-lines` is returned completely on the initial source request;
+- a known symbol larger than `--max-lines` never causes source retrieval to spill into the next symbol;
+- unknown-boundary symbols retain the existing conservative 20-line preview and `symbol-end-unknown` continuation behavior;
+- `source --node` and `source --file --symbol` use one consistent boundary contract;
+- full and incremental builds converge on equivalent end-line and retrieval evidence for the same final source tree;
+- retrieval regression, focused source/search tests, the full test suite, typecheck, build, documentation checks, package validation, and cross-platform readiness pass before release preparation.
+
+### Explicit non-goals
+
+- no global production-first behavior for ordinary search;
+- no removal or down-ranking of test evidence outside the explicit ownership mode;
+- no embedding or LLM search;
+- no generic fuzzy-search redesign;
+- no general search/lookup/slice node-kind filtering from the older deferred v1.8.0 scope;
+- no Kotlin or Java parser/compiler replacement merely to obtain end lines;
+- no inference of a symbol end from the next declaration when the extractor cannot prove the boundary;
+- no change to unrelated exact source modes, React-region ranges, or Android artifact-backed source ranges that already carry their own boundary evidence;
+- no v1.13.0 Android benchmark/example/workflow scope;
+- no v1.14.0 framework/language expansion;
+- no KIT-API-01, KIT-OPS-01, or v2.0.0 plugin/schema redesign.
+
 ## Version 1.13.0
 
 **Status: planned.**
@@ -1647,6 +1806,62 @@ Planned boundaries:
 - implement only evidence families justified by concrete consumers and fixtures
 
 This milestone is optional for the first ECO-01 executable-evidence integration.
+
+
+## Version 1.17.0
+
+**Status: planned.**
+
+Version 1.17.0 completes bounded frontend-source retrieval gaps recorded in the four historical Area of Improvements notes. This repository-local milestone follows the existing v1.13.0–v1.16.0 reservations and precedes the separate v2.0.0 artifact/plugin redesign. It does not move or expand any existing milestone.
+
+The goal is to make indexed TypeScript/JavaScript/TSX and frontend-test evidence usable for targeted changes to long, interdependent UI files. Reuse existing symbol index, frontend semantic/reachability artifacts, local component-tree/source bundle, and search/lookup/slice/source owners. Preserve static-analysis uncertainty and avoid a second frontend index or retrieval engine.
+
+### Exact test-block retrieval
+
+- Add bounded source selection by an exact indexed describe/test/it title, with optional file/path scoping, stable existing test-block IDs, parent relationships and precise ranges. Report duplicate titles as ambiguous and unsupported/dynamic titles as unresolved; never choose one silently.
+- Retain supported setup/teardown, helper, locator and assertion context as bounded evidence when already available. Do not imply arbitrary locator-chain comprehension, test execution or passing coverage.
+- Preserve the existing exact-literal source search as a fallback instead of replacing it.
+
+### Large React component and render-region precision
+
+- Extend existing React-region retrieval to cover supported imports, state/derived-state blocks, handlers, render helpers, returned JSX, conditional branches and tab/panel regions where the frontend extractor can establish source ranges. Do not guess full-component boundaries.
+- Extend existing local component-tree bundles with statically grounded parent/child props, callback forwarding and invocation, relevant event handlers, local state-setter usage and directly referenced helpers.
+- Provide bounded occurrences of modified/removed props within the selected same-file component tree to help discover remaining edit sites. Missing static matches never prove absence of dynamic or external references.
+- Preserve caps, deterministic ordering, source locations, confidence, warnings and ambiguity. Broad trace-props/trace-events command families remain v2.0.0 candidates, not new v1.17.0 standalone commands.
+
+### Scoped literal and reference occurrence tracing
+
+- Extend existing exact source-text and frontend literal evidence to return a bounded, complete-within-selected-scope occurrence inventory for repeated exact literals and supported local enum/union values, optionally narrowed to one file or an explicit indexed source-path prefix.
+- Expose occurrence path, line/range, syntactic role and symbol reference only when established, plus available/returned/dropped counts and unresolved reference cases.
+- Distinguish textual co-occurrence from a resolved reference. General cross-project type-aware references and a standalone refs command remain v2.0.0 candidates.
+
+### Browser-state and route evidence refinement
+
+- For statically supported storage calls, distinguish read (getItem), write (setItem), remove (removeItem), and whole-store clear (clear). Never model a no-key clear call as a named-key usage.
+- Associate storage-key sites with grounded component/route and directly linked data/serialization type evidence where the source supports it; preserve ambiguous or missing links.
+- Extend v1.3.0 route/component/test/UI relationships with directly grounded route-to-handler and explicit guard/policy reference candidates when supported by the existing v1.15.0 API relationship contracts. A route-name match is not proof of authorization.
+- Add bounded UI-marker ownership evidence for supported local sub-components where indexed facts support it. Do not claim runtime visibility.
+
+### Workflow documentation and tests
+
+- Update the existing workflow documentation with patch-first retrieval/edit guidance: retrieve exact target and needed local imports/types/helpers; prefer minimal changes; record changed ranges and justified full-file fallbacks. Do not create another report engine or hard-code a universal file-length threshold.
+- Explain that application startup, database/test setup, targeted E2E execution, cleanup-on-failure and fresh-session visible-result verification are owned by project tests and coding-agent/Orchestrator workflows, with my-frontend-observer providing browser evidence. Kit does not execute those activities.
+- Extend existing frontend, source, search, reachability and retrieval-regression test owners. Cover exact duplicate/dynamic test titles, long render helpers, local prop/callback/event chains, removed-prop occurrence retrieval, repeated literal/enum references, storage operation kinds, route/policy uncertainty, caps, deterministic results, and compatibility.
+
+### Acceptance criteria
+
+- Supported exact test titles retrieve bounded source; duplicate or dynamic cases preserve ambiguity/uncertainty.
+- Supported long component regions and intra-file prop/event/state/helper relationships can be retrieved without default whole-file reads; all omissions and caps are explained.
+- Scoped literal and supported value occurrences are complete within the declared searched scope when not truncated; no unsupported reference identity is fabricated.
+- Storage read/write/remove/clear kinds and route/guard associations are faithful to explicit evidence, never runtime visibility or authentication proof.
+- Existing search, source exact-text, React-region, local-component-tree and artifact consumers remain backward-compatible.
+- Focused and full regression, deterministic retrieval benchmark, documentation, package and cross-platform readiness gates pass before release preparation.
+
+### Dependencies and exclusions
+
+- v1.17.0 follows, but does not change, the reserved v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 operational evidence work.
+- No automatic browser, server, database, test execution, deployment or real-user visibility proof in Kit. Those belong to project workflows, Orchestrator and Observer.
+- No broad cross-file dependency closure, universal authorization inference, general runtime control flow, second graph/index engine or v2.0.0 plugin/command redesign.
 
 ## Version 2.0.0
 
@@ -1790,3 +2005,42 @@ The core product direction is:
 - clear artifacts that can be inspected, versioned, and reused by humans or coding agents
 
 The product should continue to work as a standalone CLI. Any future UI, hosted service, or agent integration should build on the same artifact model rather than replacing it.
+## Historical frontend improvement coverage and disposition
+
+The four historical Area-of-improvements-1.txt through Area-of-improvements-4.txt notes were reconciled on 2026-10-10. The nineteen numbered entries below preserve the original requested problem/capability and identify implemented foundations, remaining planned scope, or the tool responsible for runtime/workflow behavior. Historical versions retain their original meaning; illustrative command names in the original notes are not considered shipped unless documented in COMMANDS.md.
+
+### Area of Improvements 1 (15 entries)
+
+1. **Fine-grained React/TSX components, hooks, props and JSX** — v1.2.0 introduced frontend semantic indexing/regions; v1.17.0 targets incomplete large-file regions and relationships; broader first-class nodes remain v2.0.0 candidates.
+2. **Vitest/Playwright describe/test/setup/helper blocks and direct test-title source** — v1.2.0 indexed test facts and v1.12.4 made supported test files core indexed; v1.17.0 plans bounded exact title-to-block retrieval with ambiguity reporting.
+3. **Exact UI text, routes, test IDs, ARIA/locator evidence** — v1.2.0 exact source-text search/frontend-test facts and v1.3.0 UI/route selectors cover literal lookup; v1.17.0 improves supported test-region/locator context.
+4. **Symbol source with imports, local types, props and helpers** — v1.4.0 supports continuation and local bundles; v1.12.6 plans trustworthy generic symbol-end evidence. Arbitrary cross-file closure is not claimed.
+5. **Search→lookup→slice→source execution visibility** — v1.0.x reporting and v1.6.0 capsules/audits cover product evidence; recording commands actually invoked, including slices and reasoned selections, belongs to the coding-agent/Orchestrator workflow.
+6. **Justified full-file reads, including large E2E specs** — v1.0.x and v1.6.0 require fallback reasons; root agent/manifest and bounded retrieval workflows control full-file access. No arbitrary 250-line hard limit is promised as Kit functionality.
+7. **Patch-first edits and exact changed ranges instead of whole-file rewrites** — coding-agent/Orchestrator execution responsibility; v1.17.0 adds the corresponding documented exact-range retrieval/edit procedure, not a source-mutating CLI.
+8. **Large Next.js page imports/state/handlers/tab panels/JSX regions** — v1.2.0 introduced named React regions; v1.17.0 addresses more complete large-file partitions; broader v2.0.0 render-region nodes remain candidates.
+9. **Route-to-page, navigation, E2E, API and access-policy links** — v1.3.0 provides route/component/test/UI evidence; v1.15.0 reserves API/data relationship facts; v1.17.0 plans exact grounded handler/guard references with unresolved cases rather than runtime authorization claims.
+10. **Session/local storage key reads/writes/clear and associated artifact shapes** — v1.3.0 records keys and components; v1.17.0 plans distinct operations, scoped usage locations and grounded type links.
+11. **UI conditional reachability and hidden-state visibility** — v1.3.0 provides static conditions and route links only. Real user-action reachability and what appeared in the browser require project tests and my-frontend-observer.
+12. **E2E service start, test/data preparation, selected tests and cleanup in prompts** — project-native test and coding-agent/Orchestrator workflow responsibility; covered by the ecosystem web vertical-slice workflow, not Kit indexing.
+13. **Original schema/type versus projection/view model/fixture/editable owner** — v1.5.0 classification and role-aware context provide conservative edit-layer guidance; not automatic edit authorization.
+14. **Actionable context readiness, safe/avoid files, assumptions, guest/auth differences** — v1.6.0 capsules and v1.10.1 role-specific context support static owner/readiness and risks. Runtime guest/auth conditions require application/Observer verification.
+15. **Visible frontend-change acceptance including fresh-session empty state** — application E2E/browser checks plus my-frontend-observer and coding-agent/Orchestrator verification, not static Kit assertions.
+
+### Area of Improvements 2 (1 entry)
+
+1. **Continue oversized symbols and include imports/types/props/local components/helpers** — v1.4.0 supplies source continuation, local dependencies and source bundles; v1.12.6 plans trustworthy optional end lines to avoid unnecessary unknown-boundary previews.
+
+### Area of Improvements 3 (2 entries)
+
+1. **All repeated exact literal and enum-value references in a file/subsystem** — v1.2.0 exact source search is the current bounded fallback; v1.17.0 plans scoped occurrence evidence; general type-aware refs remains a v2.0.0 candidate.
+2. **Interleaved React state/renderLeft/renderRight/handlers/JSX flow regions** — v1.2.0 regions and v1.4.0 local expansion provide foundations; v1.17.0 addresses large-file completeness; broader render-flow API remains v2.0.0 candidate.
+
+### Area of Improvements 4 (1 entry)
+
+1. **Intra-file nested React prop/callback/event/state-setter/helper and removed-prop tracing** — v1.2.0 local component-tree and prop/event-flow indexing provide a foundation; v1.17.0 plans bounded edit-oriented closure; general trace-props/trace-events remain v2.0.0 candidates.
+
+### Runtime and workflow ownership boundary
+
+Kit remains a local static index, graph and bounded-retrieval producer. Application startup, authenticated session/data setup, targeted E2E commands, cleanup and browser-visible acceptance belong to project-native tests and coding-agent/Orchestrator workflows; my-frontend-observer owns actual observed frontend state. The current ecosystem workflow guide describes their composition without moving browser execution into Kit.
+
