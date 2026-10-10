@@ -511,6 +511,12 @@ A later explicit repository-local planning decision adds Kit v1.12.6 between the
 
 Kit v1.12.6 is not a new prerequisite for Lab v0.6.3 or ORC-EVIDENCE-01. Lab v0.6.3 continues to depend on the already-published v1.12.5 affected-neighborhood capability. The v1.12.6 patch is repository-local retrieval hardening that may proceed independently under the existing coordination rules.
 
+#### 7.1.3 Post-ECO-00 Kit v1.17.0 frontend retrieval completion reservation — 2026-10-10
+
+A later Kit-local planning decision reserves v1.17.0 after unchanged v1.13.0–v1.16.0 milestones and before the independent v2.0.0 program. It completes bounded test-title, React render/prop/event, scoped literal, storage operation and grounded route/guard retrieval within existing Kit architectures. The Kit ROADMAP owns the detailed scope and a nineteen-item disposition of the prior frontend improvement notes.
+
+This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or create a new prerequisite for ECO-01, Lab v0.6.3 or Orchestrator v1.7.0. Project/Orchestrator test execution and Observer browser-visible validation retain their existing ownership.
+
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.
@@ -580,7 +586,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126[1.12.6 planned: bounded retrieval precision] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01]
+    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126[1.12.6 planned: bounded retrieval precision] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]

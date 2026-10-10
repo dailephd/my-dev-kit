@@ -1807,6 +1807,62 @@ Planned boundaries:
 
 This milestone is optional for the first ECO-01 executable-evidence integration.
 
+
+## Version 1.17.0
+
+**Status: planned.**
+
+Version 1.17.0 completes bounded frontend-source retrieval gaps recorded in the four historical Area of Improvements notes. This repository-local milestone follows the existing v1.13.0–v1.16.0 reservations and precedes the separate v2.0.0 artifact/plugin redesign. It does not move or expand any existing milestone.
+
+The goal is to make indexed TypeScript/JavaScript/TSX and frontend-test evidence usable for targeted changes to long, interdependent UI files. Reuse existing symbol index, frontend semantic/reachability artifacts, local component-tree/source bundle, and search/lookup/slice/source owners. Preserve static-analysis uncertainty and avoid a second frontend index or retrieval engine.
+
+### Exact test-block retrieval
+
+- Add bounded source selection by an exact indexed describe/test/it title, with optional file/path scoping, stable existing test-block IDs, parent relationships and precise ranges. Report duplicate titles as ambiguous and unsupported/dynamic titles as unresolved; never choose one silently.
+- Retain supported setup/teardown, helper, locator and assertion context as bounded evidence when already available. Do not imply arbitrary locator-chain comprehension, test execution or passing coverage.
+- Preserve the existing exact-literal source search as a fallback instead of replacing it.
+
+### Large React component and render-region precision
+
+- Extend existing React-region retrieval to cover supported imports, state/derived-state blocks, handlers, render helpers, returned JSX, conditional branches and tab/panel regions where the frontend extractor can establish source ranges. Do not guess full-component boundaries.
+- Extend existing local component-tree bundles with statically grounded parent/child props, callback forwarding and invocation, relevant event handlers, local state-setter usage and directly referenced helpers.
+- Provide bounded occurrences of modified/removed props within the selected same-file component tree to help discover remaining edit sites. Missing static matches never prove absence of dynamic or external references.
+- Preserve caps, deterministic ordering, source locations, confidence, warnings and ambiguity. Broad trace-props/trace-events command families remain v2.0.0 candidates, not new v1.17.0 standalone commands.
+
+### Scoped literal and reference occurrence tracing
+
+- Extend existing exact source-text and frontend literal evidence to return a bounded, complete-within-selected-scope occurrence inventory for repeated exact literals and supported local enum/union values, optionally narrowed to one file or an explicit indexed source-path prefix.
+- Expose occurrence path, line/range, syntactic role and symbol reference only when established, plus available/returned/dropped counts and unresolved reference cases.
+- Distinguish textual co-occurrence from a resolved reference. General cross-project type-aware references and a standalone refs command remain v2.0.0 candidates.
+
+### Browser-state and route evidence refinement
+
+- For statically supported storage calls, distinguish read (getItem), write (setItem), remove (removeItem), and whole-store clear (clear). Never model a no-key clear call as a named-key usage.
+- Associate storage-key sites with grounded component/route and directly linked data/serialization type evidence where the source supports it; preserve ambiguous or missing links.
+- Extend v1.3.0 route/component/test/UI relationships with directly grounded route-to-handler and explicit guard/policy reference candidates when supported by the existing v1.15.0 API relationship contracts. A route-name match is not proof of authorization.
+- Add bounded UI-marker ownership evidence for supported local sub-components where indexed facts support it. Do not claim runtime visibility.
+
+### Workflow documentation and tests
+
+- Update the existing workflow documentation with patch-first retrieval/edit guidance: retrieve exact target and needed local imports/types/helpers; prefer minimal changes; record changed ranges and justified full-file fallbacks. Do not create another report engine or hard-code a universal file-length threshold.
+- Explain that application startup, database/test setup, targeted E2E execution, cleanup-on-failure and fresh-session visible-result verification are owned by project tests and coding-agent/Orchestrator workflows, with my-frontend-observer providing browser evidence. Kit does not execute those activities.
+- Extend existing frontend, source, search, reachability and retrieval-regression test owners. Cover exact duplicate/dynamic test titles, long render helpers, local prop/callback/event chains, removed-prop occurrence retrieval, repeated literal/enum references, storage operation kinds, route/policy uncertainty, caps, deterministic results, and compatibility.
+
+### Acceptance criteria
+
+- Supported exact test titles retrieve bounded source; duplicate or dynamic cases preserve ambiguity/uncertainty.
+- Supported long component regions and intra-file prop/event/state/helper relationships can be retrieved without default whole-file reads; all omissions and caps are explained.
+- Scoped literal and supported value occurrences are complete within the declared searched scope when not truncated; no unsupported reference identity is fabricated.
+- Storage read/write/remove/clear kinds and route/guard associations are faithful to explicit evidence, never runtime visibility or authentication proof.
+- Existing search, source exact-text, React-region, local-component-tree and artifact consumers remain backward-compatible.
+- Focused and full regression, deterministic retrieval benchmark, documentation, package and cross-platform readiness gates pass before release preparation.
+
+### Dependencies and exclusions
+
+- v1.17.0 follows, but does not change, the reserved v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 operational evidence work.
+- No automatic browser, server, database, test execution, deployment or real-user visibility proof in Kit. Those belong to project workflows, Orchestrator and Observer.
+- No broad cross-file dependency closure, universal authorization inference, general runtime control flow, second graph/index engine or v2.0.0 plugin/command redesign.
+
 ## Version 2.0.0
 
 Version 2.0.0 focuses on a larger artifact and plugin model.
@@ -1949,3 +2005,42 @@ The core product direction is:
 - clear artifacts that can be inspected, versioned, and reused by humans or coding agents
 
 The product should continue to work as a standalone CLI. Any future UI, hosted service, or agent integration should build on the same artifact model rather than replacing it.
+## Historical frontend improvement coverage and disposition
+
+The four historical Area-of-improvements-1.txt through Area-of-improvements-4.txt notes were reconciled on 2026-10-10. The nineteen numbered entries below preserve the original requested problem/capability and identify implemented foundations, remaining planned scope, or the tool responsible for runtime/workflow behavior. Historical versions retain their original meaning; illustrative command names in the original notes are not considered shipped unless documented in COMMANDS.md.
+
+### Area of Improvements 1 (15 entries)
+
+1. **Fine-grained React/TSX components, hooks, props and JSX** — v1.2.0 introduced frontend semantic indexing/regions; v1.17.0 targets incomplete large-file regions and relationships; broader first-class nodes remain v2.0.0 candidates.
+2. **Vitest/Playwright describe/test/setup/helper blocks and direct test-title source** — v1.2.0 indexed test facts and v1.12.4 made supported test files core indexed; v1.17.0 plans bounded exact title-to-block retrieval with ambiguity reporting.
+3. **Exact UI text, routes, test IDs, ARIA/locator evidence** — v1.2.0 exact source-text search/frontend-test facts and v1.3.0 UI/route selectors cover literal lookup; v1.17.0 improves supported test-region/locator context.
+4. **Symbol source with imports, local types, props and helpers** — v1.4.0 supports continuation and local bundles; v1.12.6 plans trustworthy generic symbol-end evidence. Arbitrary cross-file closure is not claimed.
+5. **Search→lookup→slice→source execution visibility** — v1.0.x reporting and v1.6.0 capsules/audits cover product evidence; recording commands actually invoked, including slices and reasoned selections, belongs to the coding-agent/Orchestrator workflow.
+6. **Justified full-file reads, including large E2E specs** — v1.0.x and v1.6.0 require fallback reasons; root agent/manifest and bounded retrieval workflows control full-file access. No arbitrary 250-line hard limit is promised as Kit functionality.
+7. **Patch-first edits and exact changed ranges instead of whole-file rewrites** — coding-agent/Orchestrator execution responsibility; v1.17.0 adds the corresponding documented exact-range retrieval/edit procedure, not a source-mutating CLI.
+8. **Large Next.js page imports/state/handlers/tab panels/JSX regions** — v1.2.0 introduced named React regions; v1.17.0 addresses more complete large-file partitions; broader v2.0.0 render-region nodes remain candidates.
+9. **Route-to-page, navigation, E2E, API and access-policy links** — v1.3.0 provides route/component/test/UI evidence; v1.15.0 reserves API/data relationship facts; v1.17.0 plans exact grounded handler/guard references with unresolved cases rather than runtime authorization claims.
+10. **Session/local storage key reads/writes/clear and associated artifact shapes** — v1.3.0 records keys and components; v1.17.0 plans distinct operations, scoped usage locations and grounded type links.
+11. **UI conditional reachability and hidden-state visibility** — v1.3.0 provides static conditions and route links only. Real user-action reachability and what appeared in the browser require project tests and my-frontend-observer.
+12. **E2E service start, test/data preparation, selected tests and cleanup in prompts** — project-native test and coding-agent/Orchestrator workflow responsibility; covered by the ecosystem web vertical-slice workflow, not Kit indexing.
+13. **Original schema/type versus projection/view model/fixture/editable owner** — v1.5.0 classification and role-aware context provide conservative edit-layer guidance; not automatic edit authorization.
+14. **Actionable context readiness, safe/avoid files, assumptions, guest/auth differences** — v1.6.0 capsules and v1.10.1 role-specific context support static owner/readiness and risks. Runtime guest/auth conditions require application/Observer verification.
+15. **Visible frontend-change acceptance including fresh-session empty state** — application E2E/browser checks plus my-frontend-observer and coding-agent/Orchestrator verification, not static Kit assertions.
+
+### Area of Improvements 2 (1 entry)
+
+1. **Continue oversized symbols and include imports/types/props/local components/helpers** — v1.4.0 supplies source continuation, local dependencies and source bundles; v1.12.6 plans trustworthy optional end lines to avoid unnecessary unknown-boundary previews.
+
+### Area of Improvements 3 (2 entries)
+
+1. **All repeated exact literal and enum-value references in a file/subsystem** — v1.2.0 exact source search is the current bounded fallback; v1.17.0 plans scoped occurrence evidence; general type-aware refs remains a v2.0.0 candidate.
+2. **Interleaved React state/renderLeft/renderRight/handlers/JSX flow regions** — v1.2.0 regions and v1.4.0 local expansion provide foundations; v1.17.0 addresses large-file completeness; broader render-flow API remains v2.0.0 candidate.
+
+### Area of Improvements 4 (1 entry)
+
+1. **Intra-file nested React prop/callback/event/state-setter/helper and removed-prop tracing** — v1.2.0 local component-tree and prop/event-flow indexing provide a foundation; v1.17.0 plans bounded edit-oriented closure; general trace-props/trace-events remain v2.0.0 candidates.
+
+### Runtime and workflow ownership boundary
+
+Kit remains a local static index, graph and bounded-retrieval producer. Application startup, authenticated session/data setup, targeted E2E commands, cleanup and browser-visible acceptance belong to project-native tests and coding-agent/Orchestrator workflows; my-frontend-observer owns actual observed frontend state. The current ecosystem workflow guide describes their composition without moving browser execution into Kit.
+
