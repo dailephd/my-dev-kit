@@ -6,7 +6,7 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.12.5` is the current release.
 
-## Planned next: v1.12.6 (implementation complete on the feature branch; unreleased)
+## Implementation complete: v1.12.6 (unreleased)
 
 Version 1.12.6 is the next Kit milestone. It is a bounded retrieval-precision patch. Its implementation is **complete on the feature branch** `feature/v1.12.6-bounded-retrieval-precision`, but it is an **unreleased candidate: not published to npm, not tagged, and not shipped**. The published baseline remains `@dailephd/my-dev-kit@1.12.5`, and package metadata still reports `1.12.5`.
 

@@ -101,10 +101,16 @@ running remaining tasks once `n` blocked/regressed tasks have accumulated,
 recording the rest as `planned` with a clear reason and setting
 `options.maxFailuresReached` in the report.
 
-The maintained core suite now runs six deterministic tasks covering
-data-model feature-add, subsystem mode, no-source metadata retrieval,
-React/TSX component retrieval, no-false-conflict behavior, and an
-ambiguous service query. Coverage is representative rather than
+The maintained core suite now runs fourteen deterministic tasks: the six
+original context tasks (data-model feature-add, subsystem mode, no-source
+metadata retrieval, React/TSX component retrieval, no-false-conflict
+behavior, and an ambiguous service query) plus eight v1.12.6 search/source
+command tasks (two `search` tasks and six `source` tasks over
+`tests/fixtures/retrieval-v1126/`). A task may carry an additive optional
+`execution` block (`context`, `search`, or `source`) and, for search/source
+tasks, a `commandResult` expectation; tasks without `execution` run the
+original context path. Task and suite verdict behavior (`BLOCKED` >
+`REGRESSION` > `PASS`) is unchanged. Coverage is representative rather than
 exhaustive.
 
 `benchmark:retrieval` remains separate from `npm run verify`. Although the

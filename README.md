@@ -136,7 +136,7 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 `@dailephd/my-dev-kit@1.12.5` is the current release and adds affected-neighborhood incremental refresh to the existing indexing pipeline. Use `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains equivalent to `changed-files`. The affected-neighborhood scope freshly extracts unchanged files one graph hop from modified or removed baseline files, using a cryptographically trusted prior index and a truthful full rebuild when that baseline cannot be trusted. No-change runs remain no-ops. See [Incremental refresh scope](docs/COMMANDS.md#incremental-refresh-scope-v1125), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [ROADMAP.md](docs/ROADMAP.md#version-1125).
 
-### Planned next: v1.12.6 (implementation complete on the feature branch; unreleased)
+### Implementation complete: v1.12.6 (unreleased)
 
 Version 1.12.6 is a bounded retrieval-precision patch. Its implementation is complete on the development feature branch (`feature/v1.12.6-bounded-retrieval-precision`), but it is an **unreleased candidate**: it is not published to npm, not tagged, and not installable as `@dailephd/my-dev-kit@1.12.6`. It remains subject to a separate pre-release readiness workflow. The installed v1.12.5 command and artifact contracts are unchanged. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
 

@@ -106,7 +106,9 @@
       "1.12.4",
       "1.12.5"
     ],
-    "implementedUnreleasedVersions": [],
+    "implementedUnreleasedVersions": [
+      "1.12.6"
+    ],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",
@@ -324,13 +326,15 @@
         "Latest release: v1.12.5",
         "@dailephd/my-dev-kit@1.12.5",
         "planned scopes",
-        "Planned next: v1.12.6"
+        "Implementation complete: v1.12.6 (unreleased)",
+        "unreleased candidate"
       ],
       "docs/ROADMAP.md": [
         "## Version 1.12.5",
         "**Status: published.**",
         "## Version 1.12.6",
         "**Status: planned.**",
+        "**Status: Implementation complete; unreleased; pending pre-release readiness.**",
         "## Version 1.17.0",
         "## Historical frontend improvement coverage and disposition",
         "Area of Improvements 1 (15 entries)",
@@ -340,7 +344,8 @@
       ],
       "docs/PROJECT_OVERVIEW.md": [
         "Version 1.12.5 is the current release",
-        "Planned next: v1.12.6"
+        "Implementation complete: v1.12.6 (unreleased)",
+        "unreleased candidate"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -381,7 +386,8 @@
         "## Shipped: v1.12.0",
         "## Shipped: v1.10.3",
         "## Shipped: v1.10.4",
-        "## Planned next: v1.12.6"
+        "## Implementation complete: v1.12.6 (unreleased)",
+        "unreleased candidate"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",

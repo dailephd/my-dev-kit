@@ -505,7 +505,7 @@ Kit v1.12.5 is the published prerequisite for Lab v0.6.3 to execute the planned 
 
 A later explicit repository-local planning decision adds Kit v1.12.6 between the published v1.12.5 baseline and the already-reserved v1.13.0 milestone. This is an additive local patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation or downstream ecosystem dependency.
 
-- 1.12.6: bounded retrieval precision — planned ownership-oriented search for natural-language implementation queries plus trustworthy optional generic-symbol end-line evidence for bounded source retrieval.
+- 1.12.6: bounded retrieval precision — ownership-oriented search for natural-language implementation queries plus trustworthy optional generic-symbol end-line evidence for bounded source retrieval. Current status: implementation complete; unreleased.
 - 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged (planned).
 - 1.14.0 through 1.16.0 and 2.0.0 retain their adopted assignments unchanged.
 
@@ -586,7 +586,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126[1.12.6 planned: bounded retrieval precision] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126["1.12.6 implementation complete; unreleased: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]

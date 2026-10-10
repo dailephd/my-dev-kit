@@ -257,3 +257,101 @@ describe('selectSourceBundles', () => {
     expect(result.bundles).toHaveLength(0)
   })
 })
+
+describe('selectSourceSlices known symbol boundaries', () => {
+  // Foo occupies lines 1..symbolEnd; a following declaration begins at symbolEnd + 1.
+  function boundedRoot(fileLines: number, symbolEnd: number): string {
+    const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-context-bounded-'))
+    tempDirs.push(root)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const lines: string[] = ['export function Foo() {']
+    for (let i = 2; i < symbolEnd; i++) lines.push(`  // foo ${i}`)
+    lines.push('}')
+    lines.push('export function Next() {')
+    while (lines.length < fileLines - 1) lines.push(`  // next ${lines.length}`)
+    lines.push('}')
+    writeFileSync(join(root, 'src', 'a.ts'), lines.join('\n') + '\n')
+    return root
+  }
+
+  function boundedSymbolIndex(fileLines: number, endLine: number | undefined): SymbolIndex {
+    const index = symbolIndexFixture(fileLines)
+    const symbol = index.files[0].symbols[0]
+    symbol.location = (endLine === undefined ? { line: 1 } : { line: 1, endLine }) as typeof symbol.location
+    return index
+  }
+
+  function focusTarget(nodeId: string) {
+    return [{ nodeId, priority: 0 as const, reason: 'primary focus node' }]
+  }
+
+  function run(root: string, fileLines: number, endLine: number | undefined, nodeId = 'symbol:src/a.ts#Foo') {
+    return selectSourceSlices({
+      codeGraph: codeGraphFixture(),
+      symbolIndex: boundedSymbolIndex(fileLines, endLine),
+      resolved: resolvedManifest(root),
+      targets: focusTarget(nodeId),
+      maxSourceSlices: null,
+    })
+  }
+
+  it('A: a known short symbol stops at its end with no continuation and no later declaration', () => {
+    const result = run(boundedRoot(400, 40), 400, 40)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(40)
+    expect(slice.continuationUsed).toBe(false)
+    expect(slice.continuationAvailable ?? false).toBe(false)
+    expect(slice.truncated).toBe(false)
+    expect(result.totalSelectedLines).toBe(40)
+  })
+
+  it('B: a known 180-line symbol uses one continuation that ends at the symbol end, not 320', () => {
+    const result = run(boundedRoot(400, 180), 400, 180)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(180)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.continuationAvailable ?? false).toBe(false)
+    expect(slice.truncated).toBe(false)
+    expect(result.totalSelectedLines).toBe(180)
+  })
+
+  it('C: a known symbol longer than two windows gets at most one continuation and stays truncated', () => {
+    const result = run(boundedRoot(500, 400), 500, 400)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(320)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.continuationAvailable).toBe(true)
+    expect(slice.truncated).toBe(true)
+    expect(result.totalSelectedLines).toBe(320)
+  })
+
+  it('D: an unknown symbol boundary keeps the conservative continuation behavior', () => {
+    const result = run(boundedRoot(500, 40), 500, undefined)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(180)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.truncated).toBe(true)
+    expect(slice.continuationAvailable).toBe(true)
+  })
+
+  it('E: a file node keeps its existing single-continuation policy', () => {
+    const result = run(boundedRoot(500, 40), 500, 40, 'file:src/a.ts')
+    const slice = result.slices[0]
+    expect(slice.kind).not.toBe('symbol')
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(320)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.truncated).toBe(true)
+  })
+
+  it('F: a stale indexed end beyond the actual file is skipped rather than reported complete', () => {
+    const result = run(boundedRoot(30, 20), 400, 300)
+    expect(result.slices).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
+    expect(result.skipped[0].reason).toMatch(/Stale index/)
+  })
+})

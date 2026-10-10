@@ -36,7 +36,9 @@ added the execution core; Batch 3 adds assertion-based regression judgment.
 
 ## core.json
 
-`core.json` contains six executable tasks using the existing
+`core.json` contains fourteen executable tasks: six original context
+tasks and eight v1.12.6 search/source command tasks. The six original
+tasks use the existing
 `basic-data-model-ts`, `basic-react-tsx`, and `basic-ts` examples. Coverage
 includes data-model feature-add, subsystem mode, no-source behavior,
 React/TSX retrieval, no-false-conflict behavior, ambiguity, audit
@@ -48,6 +50,15 @@ does not mutate generated artifacts.
 Expectations use top-K/path presence, maximum caps, required audit steps,
 and allowed adequacy status sets rather than exact generated arrays,
 durations, timestamps, or machine paths.
+
+The eight v1.12.6 tasks add optional `execution` variants beside the
+original context path: `search` (relevance or ownership intent) and
+`source` (known-symbol, continuation, and unknown-boundary retrieval),
+evaluated through an optional `commandResult` expectation against the real
+repository `search` and `source` commands over a freshly built local index
+of `tests/fixtures/retrieval-v1126/`. They check retrieval command output
+only; the benchmark does not execute arbitrary application tests, and the
+suite identity, output paths, and failure verdicts are unchanged.
 
 ## Running it
 
