@@ -397,6 +397,22 @@
         "Status: ADOPTED",
         "LAB-EVIDENCE-01",
         "ORC-EVIDENCE-01"
+      ],
+      "manifest.txt": [
+        "MY-DEV-KIT REPOSITORY PLACEMENT AND AGENT SAFETY MANIFEST",
+        "READ THIS FIRST — REQUIRED INTAKE",
+        "GENERATED / IGNORED / LOCAL FILES AND OUTPUT PLACEMENT",
+        "PRE-EDIT CHECKLIST",
+        "AGENTS.md"
+      ],
+      "AGENTS.md": [
+        "Mandatory first action",
+        "manifest.txt",
+        "ignored outputs",
+        "Before any write"
+      ],
+      ".gitignore": [
+        "!/manifest.txt"
       ]
     },
     "requiredBoundaryKeywords": [
