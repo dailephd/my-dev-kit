@@ -33,7 +33,7 @@ DOCUMENT AUTHORITY AND PRIVATE/PUBLIC BOUNDARIES
 - Document preservation/removal: docs/DOCUMENTATION_PRESERVATION_POLICY.md and docs/documentation-preservation-manifest.json; these are separate from this placement manifest.
 - Cross-repository coordination: docs/ECOSYSTEM_COORDINATED_ROADMAP.md; it does not grant authority to move individual version scope.
 - Public/user-facing docs belong in established tracked Markdown paths. This root manifest.txt is a specifically authorized tracked governance exception to the repository's broad *.txt ignore; it must NOT enter the published npm package.
-- A root AGENTS.md is a tracked bootstrap for agent platforms. Any existing root agents.txt / claude.txt may be private and ignored; never overwrite, replace, or assume their contents. Read and preserve those local files when accessible. Update an ignored local agent file only from its actual contents, preserving all other instructions.
+- The root agent instruction files AGENTS.md, agents.txt, CLAUDE.md and claude.txt are expressly tracked companion bootstraps. They defer file-placement and safety policy to this manifest and must not enter the published npm package. Other local/nested agent files may still be ignored/private; never overwrite or disclose them.
 - The package.json "files" allowlist is the npm distribution boundary; there is no tracked .npmignore in this inspected tree. Verify pack output, not merely ignore rules. Do not add secrets, private instructions, local host paths, raw agent traces, or generated retrieval data to public docs, package, or tracked artifacts.
 
 VERIFIED DIRECTORY OWNER MAP — GIT TREE AT THE INSPECTED SHA
@@ -47,9 +47,10 @@ ROOT /
   README.md — public product/installation overview.
   CHANGELOG.md — append-preserved published history.
   LICENSE — legal file.
-  .gitignore, .gitattributes — SCM and text handling. The .gitignore *.txt rule must retain a root manifest.txt exception.
+  .gitignore, .gitattributes — SCM and text handling. The .gitignore *.txt rule must retain root exceptions for manifest.txt, agents.txt and claude.txt.
   manifest.txt — tracked repository-placement and agent safety rules; not a source or packaging artifact.
-  AGENTS.md — tracked first-entry coding-agent bootstrap; not a runtime or npm artifact.
+  AGENTS.md, agents.txt — tracked generic-agent bootstrap and companion instructions; not runtime or npm artifacts.
+  CLAUDE.md, claude.txt — tracked Claude bootstrap and companion instructions; not runtime or npm artifacts.
   NEW ROOT FILES/DIRECTORIES — prohibited without explicit scope and proof no established owner applies.
 
 .github/ — GitHub configuration and CI only.
@@ -107,7 +108,7 @@ GENERATED / IGNORED / LOCAL FILES AND OUTPUT PLACEMENT
 - reports/ — existing ignored generated report policy referenced by docs/DOCUMENTATION_PRESERVATION_POLICY.md; do not create a report file unless the user expressly requests a persisted artifact. Prefer returning bounded evidence directly to the caller when no file is requested. If a file is authorized, use a named report under an established approved output root and disclose its path.
 - dev/reports/ — NOT a tracked Kit report owner in the inspected tree. A prior local reconnaissance file may exist here as ignored content; preserve it as user data. Never create new dev/ or dev/reports/ directories as a default report location.
 - dist/, node_modules/, coverage/, tmp/, log/, logs/, artifacts/, test-results/, playwright-report/, .cache/, .vite/, .nyc_output/ — generated or ignored build/test/runtime content, not architecture/source owners. No cleanup without exact target approval.
-- *.txt (other than root manifest.txt) — broadly ignored; especially agents.txt and private instructions. Do not assume ignored means nonexistent or safe to replace. Do not force-add or print secret content.
+- *.txt other than root manifest.txt, agents.txt and claude.txt — broadly ignored. These three root governance/agent .txt files are expressly unignored and tracked. Other ignored/private instructions remain user data; do not assume ignored means nonexistent or safe to replace. Do not force-add or disclose secrets.
 - .env*, credentials, keys, service tokens, and local private assets — never commit, embed in reports, or expose.
 - Output contract BEFORE writing: WRITE_KIND | NECESSITY | EXISTING_OWNER | EXACT_PATH | OVERWRITE? | RETENTION/CLEANUP POLICY | PERMISSION BASIS. An analysis request alone does not permit a fresh index or report.
 - Outputs must remain inside the verified repository root, under explicitly approved ignored locations. No writing to external target repos, sibling projects, global directories or public tracked docs for scratch artifacts.

@@ -1,0 +1,63 @@
+MY-DEV-KIT GENERAL CODING-AGENT INSTRUCTIONS
+=======================================
+Repository: dailephd/my-dev-kit
+Role: tracked agent operating instructions. Root manifest.txt is the source of truth
+for file placement, ownership, generated outputs, safety and authorization.
+
+MANDATORY FIRST ACTION — READ MANIFEST.TXT
+------------------------------------------
+Before analysis, indexing, source inspection, coding, report generation, testing,
+documentation, refactoring or cleanup, READ THE COMPLETE repository-root
+manifest.txt. Do not assume the agent host loads any .txt instruction by default.
+Also read root AGENTS.md, CLAUDE.md, claude.txt and applicable local/nested
+instructions. Identify the manifest revision before any work.
+
+PREFLIGHT — NO WRITES BEFORE THIS GATE
+--------------------------------------
+1. Verify Git remote, branch, HEAD, tracked/untracked work, and ignored content
+   at any proposed write destination. Preserve user and existing generated files.
+2. Consult docs/ROADMAP.md for version scope, docs/PROJECT_PROGRESS.md for
+   current status, docs/ARCHITECTURE.md and docs/CONTRACTS.md for ownership,
+   and docs/DOCUMENTATION_PRESERVATION_POLICY.md for document safety.
+3. Name OWNER DIRECTORY, OWNER FILE/FUNCTION, CLOSEST TEST, EXACT ALLOWED EDIT
+   SET, OUTPUT KIND/PATH, OVERWRITE/RETENTION POLICY and public/private boundary.
+   If ownership is not grounded, inspect first. An agent cannot authorize its own
+   scope expansion or redesign; global planner decisions control implementation.
+4. An investigation is read-only by default: an index, report, cache, log,
+   temporary file and ignored directory still count as writes. Require express
+   authorization of their paths/lifecycle; never create dev/reports/ or a new
+   timestamped .my-dev-kit-context/indexes/ tree merely for convenience.
+
+MANDATORY SOURCE RETRIEVAL
+--------------------------
+Use the verified published my-dev-kit index/manifest and targeted retrieval:
+search -> exact lookup -> slice -> bounded source -> continuation/line range ->
+local dependency expansion as needed. Creating or refreshing an index requires
+separate write authorization. Do not invoke planned CLI flags as shipped.
+Before a full-file read, report the exact bounded commands, results and
+limitations requiring fallback.
+
+OWNER AND STRUCTURE PROTECTION
+------------------------------
+Reuse existing src/ and tests/ owners as mapped by manifest.txt. Do not
+create duplicate index/search/graph/context/source engines, a second CLI,
+new utility/shared folder, report writer, docs checker, test framework, or
+generic catch-all directory. Keep source in src/, tests in existing tests/,
+durable benchmark inputs in benchmarks/ and generated results under their
+approved ignored paths. Preserve fixtures and historical documents.
+Do not infer that "git status clean" means ignored files were untouched.
+
+EXECUTION AND COMPLETION
+------------------------
+Do not clean, reset, restore, stash, delete, relocate, overwrite, force-push,
+commit/push/merge, bump versions, publish or release without explicit approval.
+Do not write outside the verified project root or into sibling projects.
+On Windows execute silently using the existing headless process; no visible
+PowerShell/cmd/Terminal, Node console, browser, editor or Explorer.
+
+Final report MUST include: manifest and agent instructions read, Git identity,
+existing owners and tests, precise files added/modified/deleted, ignored/output
+files created or retained, checks and exit codes (or SKIPPED reasons),
+package/private boundaries, deviations and exact next action.
+If manifest.txt is missing, unreadable or inconsistent with the live tree,
+STOP WRITES, perform only read-only inventory and report the conflict.

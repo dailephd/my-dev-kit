@@ -1,0 +1,47 @@
+MY-DEV-KIT CLAUDE OPERATING INSTRUCTIONS
+========================================
+This file is a tracked companion to root CLAUDE.md. The binding repository
+placement and safety contract is the complete root manifest.txt.
+These Kit instructions are derived from the available my-dev-kit-lab
+manifest.txt, not copied from absent/untracked Lab agent files.
+
+MANIFEST-FIRST INTAKE — REQUIRED
+--------------------------------
+Before any project analysis, implementation, code inspection, indexing,
+documentation work, tests or report output:
+1. Read the COMPLETE root manifest.txt and note its revision.
+2. Read root CLAUDE.md, AGENTS.md, agents.txt, plus applicable nested/local
+   instructions. Never assume .txt instructions were loaded automatically.
+3. Verify Git remote, branch, HEAD, worktree, and pre-existing ignored output.
+4. Read docs/ROADMAP.md, docs/PROJECT_PROGRESS.md, docs/ARCHITECTURE.md,
+   docs/CONTRACTS.md and docs/DOCUMENTATION_PRESERVATION_POLICY.md as relevant.
+
+EDIT AND OUTPUT BOUNDARIES
+--------------------------
+- The global planner owns architecture, version/batch scope, public/private
+  contracts, file placement, validation and release gates. Do not choose
+  additional implementation scope or create files beyond the authorized set.
+- Map each proposed change to manifest.txt's existing owner/module and nearest
+  tests. Extend existing code; do not create duplicate infrastructure.
+- Indexes, reports, logs, caches, transcripts and ignored files are WRITES.
+  Investigation does not authorize them automatically. Require exact approved
+  path, non-overwrite plan and retention rule. Never default to dev/reports/ or
+  a new .my-dev-kit-context/indexes/ timestamp directory.
+- Use published my-dev-kit targeted search -> lookup -> slice -> bounded
+  source -> continuation/ranges before whole source/test reads. Record precise
+  command limitations justifying an exceptional full-file read.
+- Keep documented planned behavior separate from implemented CLI/contracts.
+  Preserve the roadmap, release history, tests, fixtures and user/ignored files.
+- No unapproved git clean/reset/restore/stash, deletion, source moves, new
+  directories, commit/push/merge, version bump, release or publication.
+- Windows execution remains headless: no visible shells, consoles, browsers,
+  editors or Explorer windows.
+
+HANDOFF
+-------
+Report manifest/agent paths read; Git identity; authorized edits and outputs;
+existing owner and closest tests; every created/modified/deleted path (including
+ignored/generated artifacts); validation commands and exact exit codes or
+skips; package/private boundary; risks/deviations; and exact next action.
+When source, agent files or task conflict with manifest.txt, stop unsafe
+writes and report rather than inventing new placement or a PASS verdict.
