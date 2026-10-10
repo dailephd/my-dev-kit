@@ -1,0 +1,174 @@
+MY-DEV-KIT REPOSITORY PLACEMENT AND AGENT SAFETY MANIFEST
+=====================================================
+Document role: tracked repository-structure and file-placement governance for coding agents
+Repository: https://github.com/dailephd/my-dev-kit
+Repository root: resolve from the current Git checkout; never assume a local absolute path.
+Inspected branch: GitHub main
+Inspected Git tree: 6f1635439211aecff17ec9799466ac2847b48d1c
+Inspected package: @dailephd/my-dev-kit 1.12.5
+Inspection date: 2026-10-10
+Verified Git tree coverage: 326 tracked directories, 723 tracked files (not local/ignored files)
+Status: operating placement contract; not authority to implement, migrate, delete, or release
+
+READ THIS FIRST — REQUIRED INTAKE
+---------------------------------
+1. Before ANY repository analysis, code implementation, documentation edit, test, index, report, or cleanup, read this complete manifest.txt and applicable AGENTS.md, agents.txt, CLAUDE.md, claude.txt, and nested agent instructions. A platform may not auto-load manifest.txt or agents.txt: the task bootstrap must explicitly require both.
+2. Verify Git remote/repository, current branch, HEAD, working-tree status (including untracked), requested version/stage, authorized output paths, and applicable docs/ROADMAP.md and docs/PROJECT_PROGRESS.md. Read docs/ARCHITECTURE.md, docs/CONTRACTS.md, docs/DOCUMENTATION_PRESERVATION_POLICY.md, and exact owner-specific docs as relevant. Before source/test full reads use published my-dev-kit targeted search -> lookup -> slice -> source -> continuation/ranges as appropriate.
+3. BEFORE creating or modifying anything, identify: OWNER DIRECTORY; OWNER FILE/FUNCTION; CLOSEST EXISTING TEST; REQUESTED OUTPUT LOCATION; EXACT ALLOWED FILE SET; GENERATED-OUTPUT NEED; and PUBLIC/PRIVATE boundary. If uncertain, inspect existing registrations, imports, callers, and tests; do not invent a new owner from a feature title.
+4. Extend existing ownership; do not create parallel CLI routers, parsers, graph/index/search engines, context/retrieval engines, test frameworks, report writers, or documentation checkers.
+5. Read-only investigation means NO file writes by default. Indexing, reports, temp output, caches, logs, and snapshots are writes too. Require specific user authorization for each generated output class and placement. Never create a per-run timestamp directory, dev/reports, or a new output root merely because the task is investigative.
+6. Preserve ALL pre-existing local, ignored, generated, and user files. Inspect before any write. Never clean, reset, restore, stash, force-push, broadly delete, or overwrite unknown artifacts. An ignored file is still user data.
+7. No new root directory, generic src/{utils,shared,helpers,common}, archive, duplicate file, or unrelated reorganization without explicit task scope and documented owner proof. No automatic commit/push, merge, version bump, tag, release, or package publication.
+8. On Windows, work silently: no visible Terminal, PowerShell, cmd, Explorer, browser, editor, Node console, or other GUI popup; use the existing headless agent process.
+9. Before completion verify the exact file diff and created/modified/deleted paths, ignored/generated outputs, owners/tests, docs checks, public package boundary, and any deviations. Do not claim a clean Git status proves there is no ignored-file pollution.
+10. If this manifest, a local agent file, actual code, or the explicit task conflicts, preserve safety and the explicit authorized scope; report the conflict before a destructive or structurally expanding action. The global planner, not a coding agent, owns architecture/scope and any change to this contract.
+
+DOCUMENT AUTHORITY AND PRIVATE/PUBLIC BOUNDARIES
+------------------------------------------------
+- This manifest governs where files and artifacts belong; it is NOT an implementation-state report, public CLI specification, or roadmap replacement.
+- Verified implementation: src/, CLI help, package metadata, tests, actual artifact schemas.
+- Published state: npm/Git tags/Releases, then docs/PROJECT_PROGRESS.md.
+- Planned future scope: docs/ROADMAP.md and explicit later user-approved decisions.
+- Current architecture and contracts: docs/ARCHITECTURE.md and docs/CONTRACTS.md, checked against code; exact command/schema contracts: docs/COMMANDS.md and docs/GRAPH_SCHEMA.md.
+- Document preservation/removal: docs/DOCUMENTATION_PRESERVATION_POLICY.md and docs/documentation-preservation-manifest.json; these are separate from this placement manifest.
+- Cross-repository coordination: docs/ECOSYSTEM_COORDINATED_ROADMAP.md; it does not grant authority to move individual version scope.
+- Public/user-facing docs belong in established tracked Markdown paths. This root manifest.txt is a specifically authorized tracked governance exception to the repository's broad *.txt ignore; it must NOT enter the published npm package.
+- A root AGENTS.md is a tracked bootstrap for agent platforms. Any existing root agents.txt / claude.txt may be private and ignored; never overwrite, replace, or assume their contents. Read and preserve those local files when accessible. Update an ignored local agent file only from its actual contents, preserving all other instructions.
+- The package.json "files" allowlist is the npm distribution boundary; there is no tracked .npmignore in this inspected tree. Verify pack output, not merely ignore rules. Do not add secrets, private instructions, local host paths, raw agent traces, or generated retrieval data to public docs, package, or tracked artifacts.
+
+VERIFIED DIRECTORY OWNER MAP — GIT TREE AT THE INSPECTED SHA
+------------------------------------------------------------
+Notation: /** inherits the named owner's responsibility unless an explicit child entry overrides it. This is a compact ownership map, not a listing of every fixture file. Confirm the live tree before a new path is added.
+
+ROOT /
+  package.json, package-lock.json — package identity, script/CLI exposure, dependencies and exact resolution; change only for authorized package work.
+  src/cli.ts — one installed CLI registration entrypoint; src/version.ts — runtime version constant.
+  tsconfig.json, tsup.config.ts, vitest.config.ts — compiler, bundling and test settings.
+  README.md — public product/installation overview.
+  CHANGELOG.md — append-preserved published history.
+  LICENSE — legal file.
+  .gitignore, .gitattributes — SCM and text handling. The .gitignore *.txt rule must retain a root manifest.txt exception.
+  manifest.txt — tracked repository-placement and agent safety rules; not a source or packaging artifact.
+  AGENTS.md — tracked first-entry coding-agent bootstrap; not a runtime or npm artifact.
+  NEW ROOT FILES/DIRECTORIES — prohibited without explicit scope and proof no established owner applies.
+
+.github/ — GitHub configuration and CI only.
+  .github/workflows/ — existing CI workflow; amend rather than duplicate.
+
+src/ — PRODUCTION implementation, never scratch, generated index, report, or temporary output.
+  src/commands/ — public command registration and option validation; no duplicate CLI entry.
+  src/indexing/ — source-root discovery, index pipeline, manifests, cache, full/partial/affected-neighborhood indexing and managed artifacts.
+  src/symbol-index/ — generic symbol extraction, symbol-index contract, builder, graph section, writer.
+  src/languages/ — language registry/adapters; typescript/, python/, kotlin/, java/ own language-specific extraction/resolution.
+  src/search/ — generic candidate construction, relevance ranking, result contracts.
+  src/context/ — bounded context capsules, candidate/role selection, responsibilities, evidence, adequacy, audit and budgets.
+  src/lookup/ — exact node/symbol target resolution, bounded source slices and continuation cursor contract.
+  src/source/ — source rendering, source bundles, exact source matches, React/local-component source extraction.
+  src/graph/ — code graph nodes/edges and structural graph operations.
+  src/graph-diff/ — deterministic old/new artifact comparisons.
+  src/classification/ — static classification and edit guidance; no automatic editing authority.
+  src/retrievalRegression/ — internal deterministic retrieval benchmark runner/assertions/reporting; do not invent parallel benchmark runtime.
+  src/semantics/ — compact roles and artifact references.
+  src/frontend/ and src/frontend-reachability/ — React/frontend semantic and route/storage/UI fact extraction.
+  src/data-model/ and src/lineage/ — data-model artifacts and conservative model-to-view lineage.
+  src/android/ — Android/Gradle/manifest/resources/navigation/Compose/test evidence and Android-specific owner policy.
+  src/io/ — established path/IO primitives.
+  src/docsCheck/ — existing docs preservation/structure checking implementation (invoked by scripts/docs/checkDocs.ts).
+  src/** — new modules only under the verified nearest existing subsystem; no generic "misc" bucket.
+
+tests/ — tracked regression/integration tests and fixtures; mirror existing owners, not arbitrary per-task folders.
+  tests/search/, tests/context/ — ranking, owner evidence, capsule/audit behavior.
+  tests/source/, tests/lookup/ — bounded source, continuation, output behavior.
+  tests/index/, tests/graph/, tests/graph-diff/ — extraction, incremental, graph and graph-diff.
+  tests/retrievalRegression/ — benchmark runner/assertions.
+  tests/classification/, tests/semantics/, tests/frontend/, tests/frontend-reachability/, tests/data-model/, tests/lineage/, tests/android/ — matching subsystem checks.
+  tests/cli/, tests/slice/, tests/view/, tests/security/, tests/integration/, tests/docs/, tests/scripts/, tests/helpers/ — existing tool-level/integration/test helper owners.
+  tests/fixtures/ — deliberate miniature source projects; the nested android/, kotlin/, java/, context/, data-model/, lineage/, compose-retrieval/, android-* trees are FIXTURES, not misplaced production.
+  tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
+
+benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.
+scripts/docs/checkDocs.ts — thin source-checkout entrypoint for the existing docs preservation checks. No second checker.
+examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/; not generated runtime workspaces.
+contracts/ecosystem/ — frozen coordinated ecosystem reference contracts and v1 fixtures; no modification for a local retrieval patch absent explicit dependency approval.
+docs/ — maintained tracked product/maintainer documents, NOT scratch or agent-run output.
+  docs/ROADMAP.md — version-by-version planned product scope (including proposed v1.12.6 once adopted).
+  docs/PROJECT_PROGRESS.md — verified implementation/publication status, not plans presented as shipped.
+  docs/ARCHITECTURE.md, docs/CONTRACTS.md, docs/GRAPH_SCHEMA.md — implemented ownership, interfaces, artifact schema.
+  docs/COMMANDS.md, docs/WORKFLOWS.md, docs/QUICKSTART.md — implemented CLI/workflows, not unshipped options.
+  docs/PROJECT_OVERVIEW.md, docs/DEVELOPMENT.md, docs/CI_CD.md, docs/SECURITY.md, docs/RELEASE.md — existing domain owners.
+  docs/DOCUMENTATION_PRESERVATION_POLICY.md, docs/documentation-preservation-manifest.json — protected document change policy and structural checker inputs.
+  docs/ECOSYSTEM_COORDINATED_ROADMAP.md, docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md, docs/ecosystem/ — cross-tool planning/workflows/contracts and frozen ECO references.
+  docs/** — no new feature-note/report folder without specific user authorization and preservation review.
+
+GENERATED / IGNORED / LOCAL FILES AND OUTPUT PLACEMENT
+-----------------------------------------------------
+- .my-dev-kit/ — established default index and retrieval-regression output root, ignored; create or refresh ONLY when indexing/benchmark generation is explicitly authorized and no existing user artifact would be overwritten. Preserve index identity and stale/current distinctions.
+- .my-dev-kit-context/ and .my-dev-kit*/ — ignored index/context folders may already exist; do not create new timestamped child trees, repurpose, delete, or reorganize existing data by convenience. Use only when the task explicitly approves the path and lifecycle. Existing indexes are NOT disposable.
+- reports/ — existing ignored generated report policy referenced by docs/DOCUMENTATION_PRESERVATION_POLICY.md; do not create a report file unless the user expressly requests a persisted artifact. Prefer returning bounded evidence directly to the caller when no file is requested. If a file is authorized, use a named report under an established approved output root and disclose its path.
+- dev/reports/ — NOT a tracked Kit report owner in the inspected tree. A prior local reconnaissance file may exist here as ignored content; preserve it as user data. Never create new dev/ or dev/reports/ directories as a default report location.
+- dist/, node_modules/, coverage/, tmp/, log/, logs/, artifacts/, test-results/, playwright-report/, .cache/, .vite/, .nyc_output/ — generated or ignored build/test/runtime content, not architecture/source owners. No cleanup without exact target approval.
+- *.txt (other than root manifest.txt) — broadly ignored; especially agents.txt and private instructions. Do not assume ignored means nonexistent or safe to replace. Do not force-add or print secret content.
+- .env*, credentials, keys, service tokens, and local private assets — never commit, embed in reports, or expose.
+- Output contract BEFORE writing: WRITE_KIND | NECESSITY | EXISTING_OWNER | EXACT_PATH | OVERWRITE? | RETENTION/CLEANUP POLICY | PERMISSION BASIS. An analysis request alone does not permit a fresh index or report.
+- Outputs must remain inside the verified repository root, under explicitly approved ignored locations. No writing to external target repos, sibling projects, global directories or public tracked docs for scratch artifacts.
+- Inspect the destination and ancestors before writing; if nonempty/unknown, preserve and select an expressly authorized alternate only. Do not silently clear or overwrite it.
+- At finalization, enumerate ignored/generated file changes independently of Git status; report retained artifacts and any unapproved output. Never quietly erase after the fact.
+
+MANDATORY FILE-PLACEMENT DECISION
+---------------------------------
+A. Source implementation or contract? Extend the existing src/<owner>/ file/module. Search before creating new source files.
+B. Command registration? src/commands/ and existing src/cli.ts; implementation logic stays in its specific subsystem.
+C. Indexed artifact or schema? Extend the existing symbol-index/graph/indexing owner; no parallel artifact or graph family.
+D. Retrieval quality/ranking? src/search/; share only safe generic predicates with src/context/ where justified, not Android policy wholesale.
+E. Source slices/cursors? src/lookup/; presentation/source bundle behavior belongs in src/source/.
+F. Regression test? Closest existing tests/<owner>/, with deliberate fixtures in tests/fixtures/ and durable benchmark configuration in benchmarks/retrieval/.
+G. Product or maintainer docs? Edit the established docs owner; never create a near-duplicate summary or delete historical sections.
+H. Generated index, benchmark run, analysis output? Use an explicitly approved ignored existing output owner, never src/, tests/, benchmarks/, docs/, dev/ or the root by convenience.
+I. New directory? Prove no owner exists, why an existing directory fails, what exact files it would hold, closest tests, public/private exposure, and explicit scope approval first.
+
+NON-NEGOTIABLE INVARIANTS
+-------------------------
+- ONE CLI entrypoint, ONE managed index/manifest/artifact pipeline, ONE generic search ranking pipeline, ONE source/cursor engine, ONE context capsule/audit owner, ONE retrieval regression runner, ONE documentation checker.
+- Never treat a test's relevance score as edit authority; classification and owner support are static, conservative evidence.
+- Never infer an exact generic symbol end from the next declaration, malformed parser recovery, or approximate Kotlin/Java brace scanners.
+- Current released behavior versus planned v1.12.6 must stay distinguishable until code and tests prove shipping.
+- Do not alter v1.13+ roadmap scope, freeze/compatibility contracts, or ECO reservations during local patch implementation.
+- Preserve README pillars, historical CHANGELOG, roadmap version headings, exact source/test fixtures, and documentation preservation requirements.
+- No ad hoc shared/utils/helpers/old/fixed/final/misc folders, duplicate code files, or unrequested generated reports.
+- No desktop popups, background jobs without authority, unauthorized network operation, or destructive cleanup.
+- A report with git status clean but extra ignored directories is INCOMPLETE; inspect ignored outputs separately.
+
+PRE-EDIT CHECKLIST
+------------------
+[ ] Root manifest.txt and tracked AGENTS.md plus accessible local/nested agent instructions read.
+[ ] Remote, HEAD, branch, dirty/untracked/ignored target paths inventoried.
+[ ] Requested version/batch, authorization, and frozen source/doc boundary verified.
+[ ] Existing file/function owner, contracts, nearest regression tests, and minimal edit set identified.
+[ ] Every planned output (including index/report) has approved purpose/path and overwrite policy.
+[ ] No unwanted new top-level/subsystem/output directory.
+[ ] No duplicate source/runner/checker or existing artifact migration.
+[ ] No unrequested package/version/public CLI change or doc compression.
+[ ] Tests, negative cases, package boundary and OS validation planned.
+[ ] No unauthorized commit, push, tag, release, destructive shell/GUI operation.
+
+FINAL REPORT — REQUIRED
+-----------------------
+VERDICT: PASS | NEEDS_CORRECTION | BLOCKED
+REPOSITORY / BRANCH / STARTING_SHA / FINAL_SHA:
+MANIFEST_PATH_AND_REVISION_READ:
+AGENT_INSTRUCTION_PATHS_READ:
+AUTHORIZED_SCOPE_AND_OUTPUT_PATHS:
+EXISTING_OWNER_MODULES_AND_TESTS:
+FILE_PLACEMENT_DECISIONS:
+NEW_DIRECTORIES_AND_PERMISSION (or NONE):
+FILES_CREATED / MODIFIED / MOVED / DELETED:
+GENERATED_AND_IGNORED_OUTPUTS_CREATED_OR_RETAINED:
+TESTS / DOCS_CHECK / PACKAGE_CHECKS WITH EXIT CODES (or SKIPPED reasons):
+GIT_DIFF_AND_WORKTREE:
+PUBLIC_PRIVATE_BOUNDARY:
+DEVIATIONS / OPEN_RISKS:
+NEXT_ACTION:
+
+MANIFEST MAINTENANCE
+--------------------
+This is a source-grounded ownership snapshot of the inspected tracked Git tree, not a claim about ignored local directories. Re-inventory the live tree when tasks change owner placement. Any approved new directory must be recorded here and in applicable architecture/docs checks in the same bounded change. This manifest does not authorize a source edit, structural migration, cleanup, release, or Git operation by itself.
