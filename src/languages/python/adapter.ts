@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import * as path from 'node:path'
 import type { LanguageAdapter, ExtractionResult, SourceFileInput } from '../types.js'
-import type { CallGraphEdge, SymbolDefinition } from '../../symbol-index/types.js'
+import type { CallGraphEdge, SymbolDefinition, SymbolLocation } from '../../symbol-index/types.js'
 
 // ---------------------------------------------------------------------------
 // Embedded Python scripts (avoids external file dependency in dist/)
@@ -512,10 +512,20 @@ export class PythonAdapter implements LanguageAdapter {
         for (const s of rawSymbols) {
           if (!s.name || !s.kind) continue
           if (s.exported) exports.push(s.name)
+          const location: SymbolLocation = { file: filePath, line: s.line }
+          // AST end_lineno is trusted only as an in-file integer span.
+          if (
+            typeof s.end_line === 'number' &&
+            Number.isInteger(s.end_line) &&
+            s.end_line >= s.line &&
+            s.end_line <= lineCount
+          ) {
+            location.endLine = s.end_line
+          }
           symbols.push({
             name: s.name,
             kind: mapPythonKind(s.kind),
-            location: { file: filePath, line: s.line },
+            location,
             exported: s.exported,
             signature: s.signature,
           })

@@ -154,3 +154,22 @@ describe('Java structural indexing', () => {
     expect(symbolIndex.files.some((f: { path: string }) => f.path.endsWith('MainActivity.kt'))).toBe(true)
   })
 })
+
+describe('Java generic symbol boundaries', () => {
+  it('omits location.endLine for every generic Java symbol', () => {
+    const root = copyFixture(JAVA_FIXTURE, 'end-lines')
+    const result = runCli(['index', '--root', root, '--src', 'src', '--out', 'out', '--json'])
+    expect(result.status).toBe(0)
+
+    const symbolIndex = JSON.parse(readFileSync(join(root, 'out', 'symbol-index.json'), 'utf8'))
+    const javaFiles = symbolIndex.files.filter((f: { language: string }) => f.language === 'java')
+    expect(javaFiles.length).toBeGreaterThan(0)
+    for (const file of javaFiles) {
+      expect(file.symbols.length).toBeGreaterThan(0)
+      for (const symbol of file.symbols) {
+        expect(symbol.location.line).toBeGreaterThan(0)
+        expect(symbol.location).not.toHaveProperty('endLine')
+      }
+    }
+  })
+})
