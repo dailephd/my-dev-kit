@@ -83,3 +83,28 @@ describe('retrieval regression types', () => {
     expect(report.schemaVersion).toBe('1.0.0')
   })
 })
+
+describe('additive execution contract', () => {
+  it('keeps execution optional so legacy context tasks are unchanged', () => {
+    const legacy: RetrievalRegressionTask = { id: 'legacy', title: 'Legacy', query: 'q', mode: 'general' }
+    expect(legacy.execution).toBeUndefined()
+  })
+
+  it('constructs search and source execution tasks with commandResult expectations', () => {
+    const search: RetrievalRegressionTask = {
+      id: 'search',
+      title: 'Search',
+      query: 'q',
+      execution: { kind: 'search', intent: 'ownership', limit: 10 },
+      expectations: { commandResult: { requiredResultIds: ['file:a.ts'], topK: 3 } },
+    }
+    const source: RetrievalRegressionTask = {
+      id: 'source',
+      title: 'Source',
+      execution: { kind: 'source', file: 'a.ts', symbol: 's', maxLines: 8, continueFrom: 17 },
+      expectations: { commandResult: { expectedStartLine: 17, continuation: 'absent' } },
+    }
+    expect(search.execution?.kind).toBe('search')
+    expect(source.execution?.kind).toBe('source')
+  })
+})

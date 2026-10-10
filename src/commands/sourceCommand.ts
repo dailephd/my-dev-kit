@@ -1,9 +1,9 @@
 import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import { loadSourceArtifacts } from '../indexing/loadIndexArtifacts.js'
-import { buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice } from '../lookup/getSourceSlice.js'
+import { assertSymbolSpanPresent, buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice } from '../lookup/getSourceSlice.js'
 import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
-import type { SourceSlice } from '../lookup/sourceSliceTypes.js'
+import type { SourceSlice, SourceSliceMode, SourceTarget } from '../lookup/sourceSliceTypes.js'
 import {
   parseSourceOutputFormat,
   renderSourceOutput,
@@ -163,7 +163,7 @@ export function registerSourceCommand(program: Command): void {
         loadCodeGraph: mode === 'node',
         loadSymbolIndex: mode === 'symbol' || mode === 'node',
       })
-      let target
+      let target: SourceTarget
       if (mode === 'line-range') {
         target = {
           mode,
@@ -190,6 +190,7 @@ export function registerSourceCommand(program: Command): void {
         maxLines: options.maxLines,
         mode,
         symbolName: target.symbolName,
+        symbolEndLine: target.symbolEndLine,
         semanticRoles: target.semanticRoles,
         artifactRefs: target.artifactRefs,
         evidenceRefs: target.evidenceRefs,
@@ -374,6 +375,40 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
   const fileLineCount = readFileLineCount(absolutePath)
   const normalizedFilePath = toForwardSlash(filePath)
 
+  let symTarget: SourceTarget | undefined
+  if (options.symbol && artifacts.symbolIndex) {
+    try {
+      symTarget = resolveSymbolTarget(artifacts.symbolIndex, filePath, options.symbol, options.maxLines)
+    } catch {
+      // symbol metadata is optional in continue-from mode
+    }
+  }
+  const knownEnd = symTarget?.symbolEndLine
+  if (symTarget && knownEnd !== undefined) {
+    assertSymbolSpanPresent(normalizedFilePath, knownEnd, fileLineCount)
+    if (continueFrom < symTarget.startLine!) {
+      throw new Error(
+        `--continue-from ${continueFrom} is before the start of symbol ${symTarget.symbolName} (line ${symTarget.startLine}).`
+      )
+    }
+    if (continueFrom > knownEnd) {
+      emitSourceResult(
+        buildCompletedSymbolResult({
+          indexDir: options.index,
+          filePath: normalizedFilePath,
+          absolutePath,
+          mode: 'line-range',
+          symbolName: symTarget.symbolName ?? null,
+          startLine: continueFrom,
+          symbolEndLine: knownEnd,
+        }),
+        format,
+        options
+      )
+      return
+    }
+  }
+
   const warnings: string[] = []
 
   if (continueFrom > fileLineCount) {
@@ -406,23 +441,7 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
     return
   }
 
-  let symbolName: string | null = null
-  let semanticRoles = undefined
-  let artifactRefs = undefined
-  let evidenceRefs = undefined
-  if (options.symbol && artifacts.symbolIndex) {
-    try {
-      const symTarget = resolveSymbolTarget(artifacts.symbolIndex, filePath, options.symbol, options.maxLines)
-      symbolName = symTarget.symbolName ?? null
-      semanticRoles = symTarget.semanticRoles
-      artifactRefs = symTarget.artifactRefs
-      evidenceRefs = symTarget.evidenceRefs
-    } catch {
-      // symbol metadata is optional in continue-from mode
-    }
-  }
-
-  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+  const endLine = Math.min(continueFrom + options.maxLines - 1, knownEnd ?? fileLineCount)
 
   const result = getSourceSlice({
     indexDir: options.index,
@@ -432,15 +451,41 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
     endLine,
     maxLines: options.maxLines,
     mode: 'line-range',
-    symbolName,
+    symbolName: symTarget?.symbolName ?? null,
     symbolBoundaryKnown: true,
-    semanticRoles,
-    artifactRefs,
-    evidenceRefs,
+    symbolEndLine: knownEnd,
+    semanticRoles: symTarget?.semanticRoles,
+    artifactRefs: symTarget?.artifactRefs,
+    evidenceRefs: symTarget?.evidenceRefs,
     warnings,
   })
 
   emitSourceResult(result, format, options)
+}
+
+/** Empty, terminal result for a known symbol whose exact end has already been returned. */
+function buildCompletedSymbolResult(args: {
+  indexDir: string
+  filePath: string
+  absolutePath: string
+  mode: SourceSliceMode
+  symbolName: string | null
+  startLine: number
+  symbolEndLine: number
+}): SourceSlice {
+  return {
+    status: 'ok',
+    mode: args.mode,
+    indexDir: args.indexDir,
+    filePath: args.filePath,
+    absolutePath: toForwardSlash(args.absolutePath),
+    symbolName: args.symbolName,
+    startLine: args.startLine,
+    endLine: args.symbolEndLine,
+    lineCount: 0,
+    content: '',
+    warnings: [`Symbol retrieval is complete: the symbol ends at line ${args.symbolEndLine}; no further content to continue.`],
+  }
 }
 
 function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
@@ -455,6 +500,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
   let filePath: string
   let symbolName: string | null = null
   let symStartLine: number | null = null
+  let symEndLine: number | undefined
   let semanticRoles = undefined
   let artifactRefs = undefined
   let evidenceRefs = undefined
@@ -464,6 +510,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
     filePath = symTarget.filePath
     symbolName = symTarget.symbolName ?? null
     symStartLine = symTarget.startLine!
+    symEndLine = symTarget.symbolEndLine
     semanticRoles = symTarget.semanticRoles
     artifactRefs = symTarget.artifactRefs
     evidenceRefs = symTarget.evidenceRefs
@@ -475,12 +522,36 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
   const fileLineCount = readFileLineCount(absolutePath)
   const normalizedFilePath = toForwardSlash(filePath)
 
-  // Symbol nodes: first window is startLine..startLine+min(maxLines,20)-1
+  if (symEndLine !== undefined) {
+    assertSymbolSpanPresent(normalizedFilePath, symEndLine, fileLineCount)
+  }
+
+  // Known symbol nodes: first window is startLine..min(symbolEnd, startLine+maxLines-1)
+  // Unknown symbol nodes: first window is startLine..startLine+min(maxLines,20)-1
   // File nodes: first window is 1..min(maxLines,fileLineCount)
   const continueFrom = symStartLine !== null
-    ? symStartLine + Math.min(options.maxLines, 20)
+    ? symEndLine !== undefined
+      ? Math.min(symEndLine, symStartLine + options.maxLines - 1) + 1
+      : symStartLine + Math.min(options.maxLines, 20)
     : Math.min(options.maxLines, fileLineCount) + 1
-  const symbolBoundaryKnown = symStartLine === null
+  const symbolBoundaryKnown = symStartLine === null || symEndLine !== undefined
+
+  if (symEndLine !== undefined && continueFrom > symEndLine) {
+    emitSourceResult(
+      buildCompletedSymbolResult({
+        indexDir: options.index,
+        filePath: normalizedFilePath,
+        absolutePath,
+        mode: 'node',
+        symbolName,
+        startLine: continueFrom,
+        symbolEndLine: symEndLine,
+      }),
+      format,
+      options
+    )
+    return
+  }
 
   const warnings: string[] = []
 
@@ -515,7 +586,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
     return
   }
 
-  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+  const endLine = Math.min(continueFrom + options.maxLines - 1, symEndLine ?? fileLineCount)
 
   const result = getSourceSlice({
     indexDir: options.index,
@@ -527,6 +598,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
     mode: 'node',
     symbolName,
     symbolBoundaryKnown,
+    symbolEndLine: symEndLine,
     targetId: options.node,
     semanticRoles,
     artifactRefs,
@@ -546,13 +618,37 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
 
   const symTarget = resolveSymbolTarget(artifacts.symbolIndex!, options.file!, options.symbol!, options.maxLines)
   const startLine = symTarget.startLine!
-  const previousEndLine = startLine + Math.min(options.maxLines, 20) - 1
+  const knownEnd = symTarget.symbolEndLine
+  const previousEndLine =
+    knownEnd !== undefined
+      ? Math.min(knownEnd, startLine + options.maxLines - 1)
+      : startLine + Math.min(options.maxLines, 20) - 1
   const continueFrom = previousEndLine + 1
 
   const projectRoot = artifacts.resolved.manifest.projectRoot
   const absolutePath = ensureInsideProjectRoot(projectRoot, options.file!)
   const fileLineCount = readFileLineCount(absolutePath)
   const normalizedFilePath = toForwardSlash(symTarget.filePath)
+
+  if (knownEnd !== undefined) {
+    assertSymbolSpanPresent(normalizedFilePath, knownEnd, fileLineCount)
+    if (continueFrom > knownEnd) {
+      emitSourceResult(
+        buildCompletedSymbolResult({
+          indexDir: options.index,
+          filePath: normalizedFilePath,
+          absolutePath,
+          mode: 'symbol',
+          symbolName: symTarget.symbolName ?? null,
+          startLine: continueFrom,
+          symbolEndLine: knownEnd,
+        }),
+        format,
+        options
+      )
+      return
+    }
+  }
 
   const warnings: string[] = []
 
@@ -586,7 +682,7 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
     return
   }
 
-  const endLine = Math.min(continueFrom + options.maxLines - 1, fileLineCount)
+  const endLine = Math.min(continueFrom + options.maxLines - 1, knownEnd ?? fileLineCount)
 
   const result = getSourceSlice({
     indexDir: options.index,
@@ -597,7 +693,8 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
     maxLines: options.maxLines,
     mode: 'symbol',
     symbolName: symTarget.symbolName,
-    symbolBoundaryKnown: false,
+    symbolBoundaryKnown: knownEnd !== undefined,
+    symbolEndLine: knownEnd,
     semanticRoles: symTarget.semanticRoles,
     artifactRefs: symTarget.artifactRefs,
     evidenceRefs: symTarget.evidenceRefs,

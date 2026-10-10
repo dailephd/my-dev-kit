@@ -487,3 +487,86 @@ describe('summarizeAssertions', () => {
     expect(summary.passed + summary.failed + summary.blocked + summary.skipped).toBe(2)
   })
 })
+
+describe('commandResult assertions', () => {
+  function commandEvidence(payload: unknown | string | null): AssertionEvidence {
+    const dir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-command-assertions-'))
+    tempDirs.push(dir)
+    const resultPath = join(dir, 'command-stdout.json')
+    if (payload !== null) writeFileSync(resultPath, typeof payload === 'string' ? payload : JSON.stringify(payload), 'utf8')
+    return loadAssertionEvidence({ commandResultPath: resultPath })
+  }
+
+  const searchResult = { results: [{ id: 'file:a.ts' }, { id: 'file:b.ts' }, { id: 'file:c.ts' }] }
+  const sourceResult = {
+    mode: 'symbol',
+    startLine: 1,
+    endLine: 8,
+    lineCount: 8,
+    content: 'export function longSymbol() {\n  return 1\n}',
+    continuationCursor: { nextStartLine: 9, symbolBoundaryKnown: true, reason: 'window-capped', eof: false },
+  }
+
+  it('passes required search ids within topK', () => {
+    const results = evaluateTaskAssertions('t', { commandResult: { requiredResultIds: ['file:b.ts'], topK: 2 } }, commandEvidence(searchResult))
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ kind: 'commandResult', status: 'pass', severity: 'required' })
+  })
+
+  it('fails (REGRESSION-grade) when a required id is outside topK', () => {
+    const results = evaluateTaskAssertions('t', { commandResult: { requiredResultIds: ['file:c.ts'], topK: 2 } }, commandEvidence(searchResult))
+    expect(results[0]).toMatchObject({ status: 'fail', severity: 'required' })
+    expect(results[0].message).toContain('file:c.ts')
+  })
+
+  it('passes a fully matching source result including cursor fields', () => {
+    const results = evaluateTaskAssertions(
+      't',
+      {
+        commandResult: {
+          expectedMode: 'symbol',
+          expectedStartLine: 1,
+          expectedEndLine: 8,
+          expectedLineCount: 8,
+          requiredContent: ['longSymbol'],
+          forbiddenContent: ['sentinel'],
+          continuation: 'present',
+          symbolBoundaryKnown: true,
+          nextStartLine: 9,
+          continuationReason: 'window-capped',
+        },
+      },
+      commandEvidence(sourceResult)
+    )
+    expect(results[0].status).toBe('pass')
+  })
+
+  it('fails on forbidden content, wrong lines and unexpected cursor', () => {
+    const results = evaluateTaskAssertions(
+      't',
+      { commandResult: { expectedEndLine: 9, forbiddenContent: ['longSymbol'], continuation: 'absent' } },
+      commandEvidence(sourceResult)
+    )
+    expect(results[0].status).toBe('fail')
+    expect(results[0].message).toContain('expected endLine 9')
+    expect(results[0].message).toContain('forbidden content')
+    expect(results[0].message).toContain('expected continuation absent')
+  })
+
+  it('fails cursor-field expectations when no cursor was returned', () => {
+    const { continuationCursor: _cursor, ...noCursor } = sourceResult
+    const results = evaluateTaskAssertions('t', { commandResult: { nextStartLine: 9 } }, commandEvidence(noCursor))
+    expect(results[0].status).toBe('fail')
+    expect(results[0].message).toContain('no continuation cursor')
+  })
+
+  it('is blocked for missing, malformed, or wrong-shape evidence', () => {
+    const expectation = { commandResult: { requiredResultIds: ['a'] } }
+    expect(evaluateTaskAssertions('t', expectation, commandEvidence(null))[0].status).toBe('blocked')
+    expect(evaluateTaskAssertions('t', expectation, commandEvidence('{not json'))[0].status).toBe('blocked')
+    expect(evaluateTaskAssertions('t', expectation, commandEvidence({ content: 'x' }))[0].status).toBe('blocked')
+    expect(
+      evaluateTaskAssertions('t', { commandResult: { expectedStartLine: 1 } }, commandEvidence({ results: [] }))[0].status
+    ).toBe('blocked')
+  })
+})

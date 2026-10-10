@@ -205,6 +205,276 @@
         "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 20, "maxSourceSlices": 8, "maxGraphNodes": 20, "maxGraphEdges": 20 },
         "adequacy": { "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions", "more context required before implementation"], "allowAssumptions": true, "allowConflict": false, "allowInsufficient": true, "required": true }
       }
+    },
+    {
+      "id": "v1126-ownership-search-production-owner",
+      "title": "Ownership search recovers the production owner",
+      "description": "Ownership intent returns the grounded production owner within the top three despite a higher-scoring natural-language test file.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "incremental affected-neighborhood refresh",
+      "tags": [
+        "search",
+        "ownership",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 10
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "file:src/affectedNeighborhood.ts"
+          ],
+          "topK": 3,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-relevance-search-raw-order",
+      "title": "Raw relevance search remains available",
+      "description": "Default relevance intent keeps the ordinary lexical ranking, where the natural-language test file scores highest.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "incremental affected-neighborhood refresh",
+      "tags": [
+        "search",
+        "relevance",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "search",
+        "intent": "relevance",
+        "limit": 10
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "file:tests/affectedNeighborhoodRefresh.spec.ts"
+          ],
+          "topK": 1,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-known-symbol-complete",
+      "title": "Known symbol within the cap is returned complete",
+      "description": "A symbol with a trusted end line that fits the cap returns exactly its lines with no continuation cursor.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "symbol-boundary",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/longSymbol.ts",
+        "symbol": "longSymbol",
+        "maxLines": 40
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 1,
+          "expectedEndLine": 27,
+          "expectedLineCount": 27,
+          "requiredContent": [
+            "export function longSymbol",
+            "return total"
+          ],
+          "forbiddenContent": [
+            "longSymbolSentinel"
+          ],
+          "continuation": "absent",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-known-symbol-first-window",
+      "title": "Known large symbol first window",
+      "description": "A 27-line symbol with maxLines 8 returns lines 1-8 and a known-boundary cursor to line 9.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "symbol-boundary",
+        "continuation",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/longSymbol.ts",
+        "symbol": "longSymbol",
+        "maxLines": 8
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 1,
+          "expectedEndLine": 8,
+          "expectedLineCount": 8,
+          "continuation": "present",
+          "symbolBoundaryKnown": true,
+          "nextStartLine": 9,
+          "continuationReason": "window-capped",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-known-symbol-continue",
+      "title": "Known symbol --continue second window",
+      "description": "Symbol continuation returns lines 9-16 and points at line 17.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "symbol-boundary",
+        "continuation",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/longSymbol.ts",
+        "symbol": "longSymbol",
+        "maxLines": 8,
+        "continue": true
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 9,
+          "expectedEndLine": 16,
+          "expectedLineCount": 8,
+          "continuation": "present",
+          "symbolBoundaryKnown": true,
+          "nextStartLine": 17,
+          "continuationReason": "window-capped",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-known-symbol-continue-from-17",
+      "title": "Known symbol --continue-from 17 third window",
+      "description": "Symbol-qualified continuation starting at 17 returns lines 17-24 and points at line 25.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "symbol-boundary",
+        "continuation",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/longSymbol.ts",
+        "symbol": "longSymbol",
+        "maxLines": 8,
+        "continueFrom": 17
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 17,
+          "expectedEndLine": 24,
+          "expectedLineCount": 8,
+          "continuation": "present",
+          "symbolBoundaryKnown": true,
+          "nextStartLine": 25,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-known-symbol-terminal-window",
+      "title": "Known symbol terminal window stops at the symbol end",
+      "description": "Continuation from line 25 returns lines 25-27, excludes the sentinel declaration at line 28, and has no cursor.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "symbol-boundary",
+        "continuation",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/longSymbol.ts",
+        "symbol": "longSymbol",
+        "maxLines": 8,
+        "continueFrom": 25
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 25,
+          "expectedEndLine": 27,
+          "expectedLineCount": 3,
+          "requiredContent": [
+            "return total"
+          ],
+          "forbiddenContent": [
+            "longSymbolSentinel",
+            "sentinel-after-long-symbol"
+          ],
+          "continuation": "absent",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "v1126-source-unknown-boundary-java",
+      "title": "Unknown-boundary Java symbol keeps the conservative fallback",
+      "description": "A generic Java symbol has no trusted end line, so the 20-line preview and symbol-end-unknown cursor are retained.",
+      "fixtureRoot": "../../../tests/fixtures/retrieval-v1126",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "tags": [
+        "source",
+        "unknown-boundary",
+        "v1.12.6"
+      ],
+      "execution": {
+        "kind": "source",
+        "file": "src/UnknownBoundary.java",
+        "symbol": "UnknownBoundary"
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedStartLine": 1,
+          "expectedEndLine": 20,
+          "continuation": "present",
+          "symbolBoundaryKnown": false,
+          "nextStartLine": 21,
+          "continuationReason": "symbol-end-unknown",
+          "required": true
+        }
+      }
     }
   ]
 }

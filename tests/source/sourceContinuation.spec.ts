@@ -1,12 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runCli } from '../lookup/testCli.js'
 
-// Fixture: 28-line TS file where longFunction starts at line 1.
-// resolveSymbolTarget caps the first preview at min(maxLines, 20) = 20 lines.
-// --continue / --symbol-continue should start from line 21.
+// Fixture: 28-line TS file where longFunction spans lines 1-27 and shortFunction is line 28.
+// Newly indexed TS symbols carry a trusted endLine, so retrieval is bounded by the exact symbol end.
+// Old indexes (no endLine) keep the conservative min(maxLines, 20) preview; those are exercised
+// against a copy of the index with endLine stripped.
 const FIXTURE_CONTENT = `export function longFunction(): string {
   const l02 = 'v02'
   const l03 = 'v03'
@@ -37,17 +38,59 @@ const FIXTURE_CONTENT = `export function longFunction(): string {
 export function shortFunction(): string { return 'short' }
 `
 
+const JAVA_FIXTURE = `public class UnknownBoundary {
+  public int a() { return 1; }
+  public int b() { return 2; }
+  public int c() { return 3; }
+  public int d() { return 4; }
+  public int e() { return 5; }
+  public int f() { return 6; }
+  public int g() { return 7; }
+  public int h() { return 8; }
+  public int i() { return 9; }
+  public int j() { return 10; }
+}
+`
+
 let projectDir = ''
 let indexDir = ''
+let oldIndexDir = ''
+let invalidIndexDir = ''
 
 beforeAll(() => {
   projectDir = mkdtempSync(join(tmpdir(), 'my-dev-kit-cont-'))
   indexDir = join(projectDir, '.idx')
   mkdirSync(join(projectDir, 'src'), { recursive: true })
   writeFileSync(join(projectDir, 'src', 'big-module.ts'), FIXTURE_CONTENT)
+  writeFileSync(join(projectDir, 'src', 'UnknownBoundary.java'), JAVA_FIXTURE)
   const res = runCli(['index', '--root', projectDir, '--src', 'src', '--out', indexDir])
   if (res.status !== 0) throw new Error(`Index failed: ${res.stderr || res.stdout}`)
+
+  // Old index: same artifacts with every generic symbol endLine removed.
+  oldIndexDir = join(projectDir, '.idx-old')
+  cpSync(indexDir, oldIndexDir, { recursive: true })
+  rewriteSymbolIndex(oldIndexDir, (loc) => { delete loc.endLine })
+  // Invalid metadata: endLine beyond the indexed file line count.
+  invalidIndexDir = join(projectDir, '.idx-invalid')
+  cpSync(indexDir, invalidIndexDir, { recursive: true })
+  rewriteSymbolIndex(invalidIndexDir, (loc) => { loc.endLine = 9999 })
 })
+
+function rewriteSymbolIndex(dir: string, mutate: (loc: { endLine?: number }) => void): void {
+  const file = join(dir, 'symbol-index.json')
+  const parsed = JSON.parse(readFileSync(file, 'utf8'))
+  for (const f of parsed.files) for (const sym of f.symbols) if (sym.location) mutate(sym.location)
+  writeFileSync(file, JSON.stringify(parsed))
+}
+
+function sourceJson(index: string, args: string[]) {
+  const result = runCli(['source', '--index', index, ...args, '--json'])
+  expect(result.status, result.stderr).toBe(0)
+  return JSON.parse(result.stdout)
+}
+
+const SYMBOL = ['--file', 'src/big-module.ts', '--symbol', 'longFunction']
+const NODE = ['--node', 'symbol:src/big-module.ts#longFunction']
 
 afterAll(() => {
   rmSync(projectDir, { recursive: true, force: true })
@@ -89,9 +132,9 @@ describe('continuation cursor on line-range result', () => {
   })
 })
 
-describe('symbol result includes continuation cursor', () => {
-  it('cursor reason is symbol-end-unknown for --symbol mode', () => {
-    const result = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--json'])
+describe('symbol result includes continuation cursor (unknown boundary / old index)', () => {
+  it('cursor reason is symbol-end-unknown for --symbol mode when the index has no endLine', () => {
+    const result = runCli(['source', '--index', oldIndexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--json'])
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
     expect(parsed.continuationCursor).toBeDefined()
@@ -161,8 +204,8 @@ describe('--continue-from (file line continuation)', () => {
 })
 
 describe('--file --symbol --continue (symbol continuation)', () => {
-  it('retrieves the next window after the symbol preview', () => {
-    const result = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--continue', '--json'])
+  it('retrieves the next window after the symbol preview (old index, unknown boundary)', () => {
+    const result = runCli(['source', '--index', oldIndexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--continue', '--json'])
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
     // Symbol preview is lines 1-20 (min(160,20)), continuation starts at 21
@@ -172,16 +215,16 @@ describe('--file --symbol --continue (symbol continuation)', () => {
     expect(parsed.symbolName).toBe('longFunction')
   })
 
-  it('continuation cursor is eof after reading the remainder', () => {
-    const result = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--continue', '--json'])
+  it('continuation cursor is eof after reading the remainder (old index, unknown boundary)', () => {
+    const result = runCli(['source', '--index', oldIndexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--continue', '--json'])
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
     expect(parsed.continuationCursor.eof).toBe(true)
     expect(parsed.continuationCursor.reason).toBe('eof')
   })
 
-  it('returns eof result when symbol preview already reached EOF', () => {
-    const result = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'shortFunction', '--continue', '--json'])
+  it('returns eof result when symbol preview already reached file end (old index, unknown boundary)', () => {
+    const result = runCli(['source', '--index', oldIndexDir, '--file', 'src/big-module.ts', '--symbol', 'shortFunction', '--continue', '--json'])
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
     expect(parsed.content).toBe('')
@@ -233,10 +276,157 @@ describe('regression: existing modes unaffected', () => {
     expect(parsed.content).toContain('longFunction')
   })
 
-  it('symbol mode still emits the start-line-only warning', () => {
-    const result = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--json'])
+  it('symbol mode still emits the start-line-only warning for unknown boundaries', () => {
+    const result = runCli(['source', '--index', oldIndexDir, '--file', 'src/big-module.ts', '--symbol', 'longFunction', '--json'])
     expect(result.status).toBe(0)
     const parsed = JSON.parse(result.stdout)
     expect(parsed.warnings[0]).toContain('start line only')
+  })
+})
+
+describe('known symbol boundary (trusted indexed endLine)', () => {
+  it('returns a complete symbol within the cap with no cursor and excludes the next declaration', () => {
+    const parsed = sourceJson(indexDir, SYMBOL)
+    expect(parsed.startLine).toBe(1)
+    expect(parsed.endLine).toBe(27)
+    expect(parsed.lineCount).toBe(27)
+    expect(parsed.content).toContain('return l02 + l25')
+    expect(parsed.content).not.toContain('shortFunction')
+    expect(parsed.continuationCursor).toBeUndefined()
+    expect(parsed.warnings).toEqual([])
+  })
+
+  it('--node and --file --symbol are equivalent', () => {
+    const byFile = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8'])
+    const byNode = sourceJson(indexDir, [...NODE, '--max-lines', '8'])
+    expect(byNode.startLine).toBe(byFile.startLine)
+    expect(byNode.endLine).toBe(byFile.endLine)
+    expect(byNode.content).toBe(byFile.content)
+    expect(byNode.continuationCursor.nextStartLine).toBe(byFile.continuationCursor.nextStartLine)
+    expect(byNode.continuationCursor.symbolBoundaryKnown).toBe(true)
+  })
+
+  it('caps the first window and emits a known-boundary cursor', () => {
+    const parsed = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8'])
+    expect(parsed.startLine).toBe(1)
+    expect(parsed.endLine).toBe(8)
+    expect(parsed.continuationCursor.symbolBoundaryKnown).toBe(true)
+    expect(parsed.continuationCursor.nextStartLine).toBe(9)
+    expect(parsed.continuationCursor.reason).toBe('window-capped')
+    expect(parsed.continuationCursor.eof).toBe(false)
+  })
+
+  it('walks the symbol with --continue and --continue-from without gaps, overlap, or spill', () => {
+    const first = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8'])
+    const second = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8', '--continue'])
+    expect([second.startLine, second.endLine]).toEqual([9, 16])
+    expect(second.continuationCursor.nextStartLine).toBe(17)
+    expect(second.continuationCursor.symbolBoundaryKnown).toBe(true)
+
+    const third = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8', '--continue-from', '17'])
+    expect([third.startLine, third.endLine]).toEqual([17, 24])
+    expect(third.continuationCursor.nextStartLine).toBe(25)
+
+    const fourth = sourceJson(indexDir, [...SYMBOL, '--max-lines', '8', '--continue-from', '25'])
+    expect([fourth.startLine, fourth.endLine]).toEqual([25, 27])
+    expect(fourth.lineCount).toBe(3)
+    expect(fourth.continuationCursor).toBeUndefined()
+    expect(fourth.content).not.toContain('shortFunction')
+
+    const joined = [first, second, third, fourth].map((w) => w.content).join('\n')
+    expect(joined.split('\n')).toHaveLength(27)
+    expect(joined.startsWith('export function longFunction')).toBe(true)
+    expect(joined.endsWith('}')).toBe(true)
+  })
+
+  it('node --continue follows the same known-boundary windows', () => {
+    const second = sourceJson(indexDir, [...NODE, '--max-lines', '8', '--continue'])
+    expect([second.startLine, second.endLine]).toEqual([9, 16])
+    expect(second.mode).toBe('node')
+    expect(second.continuationCursor.nextStartLine).toBe(17)
+  })
+
+  it('--continue after a complete known symbol returns an empty completed result', () => {
+    for (const target of [SYMBOL, NODE]) {
+      const parsed = sourceJson(indexDir, [...target, '--continue'])
+      expect(parsed.content).toBe('')
+      expect(parsed.lineCount).toBe(0)
+      expect(parsed.continuationCursor).toBeUndefined()
+      expect(parsed.warnings[0]).toContain('complete')
+      expect(JSON.stringify(parsed)).not.toContain('shortFunction')
+    }
+  })
+
+  it('--continue-from past the symbol end is empty and completed; before the start is rejected', () => {
+    const past = sourceJson(indexDir, [...SYMBOL, '--continue-from', '28'])
+    expect(past.content).toBe('')
+    expect(past.continuationCursor).toBeUndefined()
+
+    const before = runCli(['source', '--index', indexDir, '--file', 'src/big-module.ts', '--symbol', 'shortFunction', '--continue-from', '5'])
+    expect(before.status).toBe(2)
+    expect(before.stderr).toContain('before the start of symbol')
+  })
+
+  it('does not print a [CONTINUE:] footer for a completed known symbol', () => {
+    for (const format of ['numbered', 'plain']) {
+      const result = runCli(['source', '--index', indexDir, ...SYMBOL, '--format', format])
+      expect(result.status).toBe(0)
+      expect(result.stdout).not.toContain('[CONTINUE:')
+      expect(result.stdout).not.toContain('shortFunction')
+    }
+    const capped = runCli(['source', '--index', indexDir, ...SYMBOL, '--max-lines', '8', '--format', 'numbered'])
+    expect(capped.stdout).toContain('[CONTINUE:')
+    expect(capped.stdout).toContain('from line 9')
+  })
+})
+
+describe('unknown symbol boundary', () => {
+  it('old index without endLine keeps the 20-line preview and symbol-end-unknown cursor', () => {
+    const parsed = sourceJson(oldIndexDir, SYMBOL)
+    expect(parsed.endLine).toBe(20)
+    expect(parsed.continuationCursor.reason).toBe('symbol-end-unknown')
+    expect(parsed.continuationCursor.symbolBoundaryKnown).toBe(false)
+  })
+
+  it('invalid indexed endLine (beyond the file) is treated as unknown', () => {
+    const parsed = sourceJson(invalidIndexDir, SYMBOL)
+    expect(parsed.endLine).toBe(20)
+    expect(parsed.continuationCursor.reason).toBe('symbol-end-unknown')
+    expect(parsed.warnings[0]).toContain('start line only')
+  })
+
+  it('generic Java symbols keep the conservative fallback', () => {
+    const parsed = sourceJson(indexDir, ['--file', 'src/UnknownBoundary.java', '--symbol', 'UnknownBoundary'])
+    expect(parsed.continuationCursor.symbolBoundaryKnown).toBe(false)
+    expect(parsed.warnings[0]).toContain('start line only')
+  })
+
+  it('unknown-boundary --node --continue keeps start-line-only continuation', () => {
+    const parsed = sourceJson(oldIndexDir, [...NODE, '--continue'])
+    expect(parsed.startLine).toBe(21)
+    expect(parsed.continuationCursor.eof).toBe(true)
+  })
+})
+
+describe('stale index versus source', () => {
+  it('fails clearly instead of returning a false complete symbol', () => {
+    const staleRoot = mkdtempSync(join(tmpdir(), 'my-dev-kit-cont-stale-'))
+    try {
+      mkdirSync(join(staleRoot, 'src'), { recursive: true })
+      writeFileSync(join(staleRoot, 'src', 'big-module.ts'), FIXTURE_CONTENT)
+      const staleIndex = join(staleRoot, '.idx')
+      const res = runCli(['index', '--root', staleRoot, '--src', 'src', '--out', staleIndex])
+      expect(res.status).toBe(0)
+      // Truncate the source after indexing: the recorded exact end (27) is no longer present.
+      writeFileSync(join(staleRoot, 'src', 'big-module.ts'), FIXTURE_CONTENT.split('\n').slice(0, 10).join('\n') + '\n')
+
+      for (const args of [SYMBOL, NODE, [...SYMBOL, '--continue'], [...SYMBOL, '--continue-from', '5']]) {
+        const result = runCli(['source', '--index', staleIndex, ...args, '--json'])
+        expect(result.status).toBe(2)
+        expect(result.stderr).toContain('Stale index/source mismatch')
+      }
+    } finally {
+      rmSync(staleRoot, { recursive: true, force: true })
+    }
   })
 })

@@ -25,6 +25,7 @@ const CATEGORY_KINDS: Record<keyof Pick<
   | 'noRawContentAssertionPassRate'
   | 'capComplianceAssertionPassRate'
   | 'adequacyAssertionPassRate'
+  | 'commandResultAssertionPassRate'
 >, AssertionKind[]> = {
   candidateFileAssertionPassRate: ['candidateFile'],
   candidateNodeAssertionPassRate: ['candidateNode'],
@@ -40,6 +41,7 @@ const CATEGORY_KINDS: Record<keyof Pick<
   noRawContentAssertionPassRate: ['noRawContent'],
   capComplianceAssertionPassRate: ['capCompliance'],
   adequacyAssertionPassRate: ['adequacy'],
+  commandResultAssertionPassRate: ['commandResult'],
 }
 
 function passRateFor(results: AssertionResult[], kinds: AssertionKind[]): number | null {

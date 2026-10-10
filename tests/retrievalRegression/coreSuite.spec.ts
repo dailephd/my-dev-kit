@@ -6,17 +6,22 @@ import { loadRetrievalRegressionConfig } from '../../src/retrievalRegression/con
 const configPath = resolve('benchmarks/retrieval/v1.7/core.json')
 const config = loadRetrievalRegressionConfig(configPath)
 const executableTasks = config.tasks.filter((task) => !task.skip)
+// Original v1.7 context tasks keep their strict metadata/safety contract; v1.12.6 search/source
+// tasks use the additive `execution` contract and assert on machine-readable command results.
+const contextTasks = executableTasks.filter((task) => task.execution === undefined || task.execution.kind === 'context')
+const commandTasks = executableTasks.filter((task) => task.execution !== undefined && task.execution.kind !== 'context')
 
 describe('v1.7 representative retrieval regression suite', () => {
   it('defines a compact representative suite with unique safe task IDs', () => {
-    expect(executableTasks.length).toBeGreaterThanOrEqual(4)
-    expect(executableTasks.length).toBeLessThanOrEqual(10)
+    expect(contextTasks.length).toBeGreaterThanOrEqual(4)
+    expect(contextTasks.length).toBeLessThanOrEqual(10)
+    expect(contextTasks).toHaveLength(6)
     expect(new Set(config.tasks.map((task) => task.id)).size).toBe(config.tasks.length)
     expect(config.tasks.every((task) => /^[a-zA-Z0-9_-]+$/.test(task.id))).toBe(true)
   })
 
   it('gives every executable task required metadata and safety expectations', () => {
-    for (const task of executableTasks) {
+    for (const task of contextTasks) {
       expect(task.title).toBeTruthy()
       expect(task.description).toBeTruthy()
       expect(task.fixtureRoot).toBeTruthy()
@@ -29,6 +34,27 @@ describe('v1.7 representative retrieval regression suite', () => {
       expect(task.expectations?.auditSteps).toBeTruthy()
       expect(task.expectations?.caps).toBeTruthy()
       expect(task.expectations?.adequacy).toBeTruthy()
+    }
+  })
+
+  it('defines the v1.12.6 search/source command tasks with command-result expectations', () => {
+    expect(commandTasks.map((task) => task.id)).toEqual([
+      'v1126-ownership-search-production-owner',
+      'v1126-relevance-search-raw-order',
+      'v1126-source-known-symbol-complete',
+      'v1126-source-known-symbol-first-window',
+      'v1126-source-known-symbol-continue',
+      'v1126-source-known-symbol-continue-from-17',
+      'v1126-source-known-symbol-terminal-window',
+      'v1126-source-unknown-boundary-java',
+    ])
+    for (const task of commandTasks) {
+      expect(task.title).toBeTruthy()
+      expect(task.description).toBeTruthy()
+      expect(task.fixtureRoot).toContain('tests/fixtures/retrieval-v1126')
+      expect(task.sourceRoots).toEqual(['src', 'tests'])
+      expect(task.expectations?.commandResult).toBeTruthy()
+      expect(task.mode).toBeUndefined()
     }
   })
 

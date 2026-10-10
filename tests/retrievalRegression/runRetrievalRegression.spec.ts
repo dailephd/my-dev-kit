@@ -43,20 +43,29 @@ describe('runRetrievalRegression CLI', () => {
 
     const report = JSON.parse(readFileSync(jsonPath, 'utf8'))
     expect(report.verdict).toBe('PASS')
-    expect(report.summary.taskCount).toBe(6)
-    expect(report.summary.executedTaskCount).toBe(6)
+    // 6 original context tasks + 8 v1.12.6 search/source command tasks.
+    expect(report.summary.taskCount).toBe(14)
+    expect(report.summary.executedTaskCount).toBe(14)
     expect(report.summary.notEvaluatedTaskCount).toBe(0)
     expect(report.summary.skippedTaskCount).toBe(0)
+
+    const commandTaskIds = new Set<string>(report.tasks.filter((task: { id: string }) => task.id.startsWith('v1126-')).map((task: { id: string }) => task.id))
+    expect(commandTaskIds.size).toBe(8)
 
     for (const task of report.tasks) {
       expect(task.status).toBe('executed')
       expect(task.verdict).toBe('PASS')
       expect(task.assertionResults.length).toBeGreaterThan(0)
+      expect(existsSync(task.artifactPaths.taskExecutionPath)).toBe(true)
+      if (commandTaskIds.has(task.id)) {
+        expect(task.assertionResults.every((result: { kind: string }) => result.kind === 'commandResult')).toBe(true)
+        expect(existsSync(task.artifactPaths.stdoutPath)).toBe(true)
+        continue
+      }
       expect(task.assertionResults.some((result: { kind: string }) => result.kind === 'noRawContent')).toBe(true)
       expect(task.assertionResults.some((result: { kind: string }) => result.kind === 'auditSteps')).toBe(true)
       expect(existsSync(task.artifactPaths.capsulePath)).toBe(true)
       expect(existsSync(task.artifactPaths.auditPath)).toBe(true)
-      expect(existsSync(task.artifactPaths.taskExecutionPath)).toBe(true)
     }
     expect(report.tasks.find((task: { id: string }) => task.id === 'data-model-user-feature-add').assertionSummary.total).toBe(14)
   }, 60000)

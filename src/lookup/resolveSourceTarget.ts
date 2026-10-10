@@ -89,6 +89,37 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
     throw new Error('Symbol was found, but source location is not available in the current symbol index.')
   }
 
+  const startLine = symbol.location.line
+  const indexedEnd = symbol.location.endLine
+  // A boundary is trusted only when it is a valid integer span inside the indexed file; anything else
+  // (absent, malformed, inverted, beyond the file, invalid start) keeps the conservative preview.
+  const boundaryKnown =
+    Number.isInteger(startLine) &&
+    startLine >= 1 &&
+    typeof indexedEnd === 'number' &&
+    Number.isInteger(indexedEnd) &&
+    indexedEnd >= startLine &&
+    indexedEnd <= file.lineCount
+
+  if (boundaryKnown) {
+    return {
+      mode: 'symbol',
+      filePath: file.path,
+      symbolName: symbol.name,
+      startLine,
+      endLine: Math.min(indexedEnd, startLine + maxLines - 1),
+      symbolEndLine: indexedEnd,
+      semanticRoles: symbol.semanticRoles,
+      artifactRefs: symbol.artifactRefs,
+      evidenceRefs: collectEvidenceRefs(symbol.semanticRoles),
+      classificationRoles: symbol.classificationRoles,
+      classificationRefs: symbol.classificationRefs,
+      androidComponentRoles: symbol.androidComponentRoles,
+      androidComponentRefs: symbol.androidComponentRefs,
+      warnings: [],
+    }
+  }
+
   const endLine = Math.min(file.lineCount, symbol.location.line + Math.min(maxLines, 20) - 1)
   return {
     mode: 'symbol',

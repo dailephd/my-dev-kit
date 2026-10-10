@@ -23,6 +23,8 @@ export function getSourceSlice(options: {
   mode: SourceSliceMode
   symbolName?: string | null
   symbolBoundaryKnown?: boolean
+  /** Validated indexed symbol end line; bounds the window and suppresses cursors into later declarations. */
+  symbolEndLine?: number
   targetId?: string
   semanticRoles?: SourceSlice['semanticRoles']
   artifactRefs?: SourceSlice['artifactRefs']
@@ -43,24 +45,30 @@ export function getSourceSlice(options: {
   const rawLines = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
   // Standard text files end with \n, which produces a trailing empty string — don't count it as a line.
   const lines = rawLines.length > 0 && rawLines[rawLines.length - 1] === '' ? rawLines.slice(0, -1) : rawLines
+  if (options.symbolEndLine !== undefined) assertSymbolSpanPresent(options.filePath, options.symbolEndLine, lines.length)
   if (options.startLine > lines.length) {
     throw new Error(`Start line ${options.startLine} is beyond the end of file ${options.filePath}.`)
   }
-  const endLine = Math.min(options.endLine, lines.length)
+  const symbolEndLine = options.symbolEndLine
+  const endLine = Math.min(options.endLine, lines.length, symbolEndLine ?? Number.POSITIVE_INFINITY)
   const content = lines.slice(options.startLine - 1, endLine).join('\n')
 
   const filePath = toForwardSlash(options.filePath)
-  const symbolBoundaryKnown = options.symbolBoundaryKnown ?? (options.mode === 'line-range')
-  const cursor = buildContinuationCursor({
-    filePath,
-    endLine,
-    fileLineCount: lines.length,
-    targetKind: options.mode,
-    targetId: options.targetId,
-    symbolName: options.symbolName,
-    maxLines: options.maxLines,
-    symbolBoundaryKnown,
-  })
+  const symbolBoundaryKnown = symbolEndLine !== undefined ? true : (options.symbolBoundaryKnown ?? (options.mode === 'line-range'))
+  // A known symbol that is fully returned has no continuation: the rest of the file is a different declaration.
+  const cursor =
+    symbolEndLine !== undefined && endLine >= symbolEndLine
+      ? undefined
+      : buildContinuationCursor({
+          filePath,
+          endLine,
+          fileLineCount: lines.length,
+          targetKind: options.mode,
+          targetId: options.targetId,
+          symbolName: options.symbolName,
+          maxLines: options.maxLines,
+          symbolBoundaryKnown,
+        })
 
   return {
     status: 'ok',
@@ -82,7 +90,19 @@ export function getSourceSlice(options: {
     androidComponentRoles: emptyToUndefined(options.androidComponentRoles),
     androidComponentRefs: emptyToUndefined(options.androidComponentRefs),
     warnings: options.warnings ?? [],
-    continuationCursor: cursor,
+    ...(cursor ? { continuationCursor: cursor } : {}),
+  }
+}
+
+/**
+ * A parser-derived symbol end describes the indexed snapshot. If the current file is shorter than that
+ * span, the index no longer matches the source and a "complete symbol" claim would be false.
+ */
+export function assertSymbolSpanPresent(filePath: string, symbolEndLine: number, fileLineCount: number): void {
+  if (fileLineCount < symbolEndLine) {
+    throw new Error(
+      `Stale index/source mismatch: ${filePath} has ${fileLineCount} lines but the indexed symbol ends at line ${symbolEndLine}. Re-run the index.`
+    )
   }
 }
 
