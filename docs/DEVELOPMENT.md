@@ -10,7 +10,7 @@ For CI behavior, see CI_CD.md.
 
 Required:
 
-- Node.js 18 or later
+- Node.js 24.x for the maintained development and validation workflow (the version tested by the current cross-platform CI). Vitest 4 requires Node.js 22.12.0 or newer, so Node.js 18 is insufficient for the full test suite.
 - npm
 
 Required only for Python indexing tests or manual Python indexing:
@@ -55,7 +55,7 @@ The development command runs src/cli.ts directly.
 
 ## v1.7.0 retrieval regression suite
 
-v1.7.0 is adding a maintainer-facing retrieval regression suite for
+v1.7.0 introduced a maintainer-facing retrieval regression suite for
 `my-dev-kit`'s own retrieval behavior. It is local, deterministic, and
 fixture-config-based.
 
@@ -78,7 +78,7 @@ against that index as a subprocess, and captures the resulting
 task's status, assertion results, metrics, and verdict (never raw
 capsule/audit/graph/source content).
 
-As of Batch 3, each executed task's generated capsule and audit record are
+Each executed task's generated capsule and audit record are
 evaluated against that task's configured `expectations` (candidate
 files/nodes, focus, selected graph, source evidence, semantic/
 classification summaries, artifact references, conflicts, mode effects,
