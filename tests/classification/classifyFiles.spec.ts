@@ -118,3 +118,43 @@ describe('classifyFile', () => {
     expect(entry.warnings).toEqual([expect.objectContaining({ kind: 'no-static-evidence' })])
   })
 })
+
+describe('generic path predicates (v1.12.6 Batch 2 relocation)', () => {
+  it('keeps the previously exported context helper names identical to the canonical pure owner', async () => {
+    const helpers = await import('../../src/classification/classificationHelpers.js')
+    const evidence = await import('../../src/context/evidenceClassification.js')
+    const roles = await import('../../src/context/roleCandidates.js')
+    for (const name of [
+      'basename',
+      'stripExt',
+      'isTestLike',
+      'isTestScoped',
+      'isFixtureLike',
+      'isGeneratedLike',
+      'TEST_LIKE_PATTERN',
+      'TEST_SCOPE_DIR_PATTERN',
+      'FIXTURE_PATH_PATTERN',
+      'GENERATED_PATH_PATTERN',
+      'GENERATED_NAME_PATTERN',
+    ] as const) {
+      expect(evidence[name]).toBe(helpers[name])
+    }
+    for (const name of ['basename', 'stripExt', 'isTestLike', 'TEST_LIKE_PATTERN'] as const) {
+      expect(roles[name]).toBe(helpers[name])
+    }
+  })
+
+  it('preserves positive and negative generic path classification', async () => {
+    const { isFixtureLike, isGeneratedLike, isTestLike, isTestScoped } = await import('../../src/classification/classificationHelpers.js')
+    expect(isTestLike('tests/a/b.spec.ts')).toBe(true)
+    expect(isTestLike('src/b.ts')).toBe(false)
+    expect(isTestScoped('tests/helpers/util.ts')).toBe(true)
+    expect(isTestScoped('src/util.ts')).toBe(false)
+    expect(isTestScoped(undefined)).toBe(false)
+    expect(isFixtureLike('tests/fixtures/x.ts')).toBe(true)
+    expect(isFixtureLike('src/x.ts')).toBe(false)
+    expect(isGeneratedLike('src/generated/api.ts')).toBe(true)
+    expect(isGeneratedLike('src/schema.generated.ts')).toBe(true)
+    expect(isGeneratedLike('src/api.ts')).toBe(false)
+  })
+})

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { resolveRelativeSpecifier } from '../../src/context/testInfrastructureDiscovery.js'
+import { resolveRelativeSpecifier as canonicalResolveRelativeSpecifier } from '../../src/languages/typescript/resolveRelativeSpecifier.js'
 
 describe('resolveRelativeSpecifier (NodeNext regression)', () => {
+  it('is the same pure canonical resolver exposed by the TypeScript language module', () => {
+    expect(resolveRelativeSpecifier).toBe(canonicalResolveRelativeSpecifier)
+  })
+
   it('maps a NodeNext .js specifier to .ts source when only .ts exists', () => {
     const knownPaths = new Set(['src/domain/completion.ts'])
     const resolved = resolveRelativeSpecifier('tests/unit/completion.test.ts', '../../src/domain/completion.js', knownPaths)

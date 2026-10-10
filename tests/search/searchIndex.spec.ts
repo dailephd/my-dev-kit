@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { ResolvedIndexManifest } from '../../src/indexing/readIndexManifest.js'
@@ -210,6 +211,397 @@ describe('searchIndex ownership intent', () => {
 
   it('does not introduce zero-lexical candidates', () => {
     expect(ownership('zzzznomatch').results).toEqual([])
+  })
+})
+
+describe('searchIndex ownership recovery (v1.12.6 Batch 2)', () => {
+  interface RecoveryFile {
+    path: string
+    imports?: string[]
+    symbols?: string[]
+  }
+
+  function recoveryIndex(files: RecoveryFile[], fileDeps: Array<{ from: string; to: string }> = []): SymbolIndex {
+    const summaries = files.map((file) => ({
+      path: file.path,
+      language: 'typescript' as const,
+      lineCount: 5,
+      imports: file.imports ?? [],
+      exports: [],
+      symbols: (file.symbols ?? []).map((name) => ({
+        name,
+        kind: 'function' as const,
+        location: { file: file.path, line: 1 },
+        exported: false,
+      })),
+      hasCallGraphEntries: false,
+    }))
+    return {
+      schemaVersion: '2',
+      buildTime: '2026-05-12T00:00:00.000Z',
+      repoRoot: '/repo',
+      sourceRoots: ['src', 'tests'],
+      fileCount: summaries.length,
+      symbolCount: 0,
+      files: summaries,
+      graph: { fileDeps: fileDeps.map((dep) => ({ ...dep, kind: 'import' })), symbols: [] },
+    } as unknown as SymbolIndex
+  }
+
+  function run(
+    files: RecoveryFile[],
+    options: { fileDeps?: Array<{ from: string; to: string }>; edges?: Array<{ source: string; target: string; kind: string }>; limit?: number; intent?: 'ownership' | 'relevance' } = {},
+  ): SearchIndexResult {
+    return searchIndex({
+      resolved: fixtureResolved(),
+      symbolIndex: recoveryIndex(files, options.fileDeps),
+      codeGraph: {
+        artifactKind: 'code-graph',
+        schemaVersion: '1.0.0',
+        createdAt: '2026-05-12T00:00:00.000Z',
+        nodes: [],
+        edges: (options.edges ?? []).map((edge, index) => ({ id: `e${index}`, ...edge })),
+      } as unknown as CodeGraph,
+      query: 'gizmo',
+      limit: options.limit ?? 100,
+      intent: options.intent ?? 'ownership',
+      createdAt: '2026-05-12T00:00:00.000Z',
+    })
+  }
+
+  const find = (result: SearchIndexResult, id: string) => result.results.find((item) => item.id === id)
+  const spec = (name: string, imports: string[]): RecoveryFile => ({ path: `tests/${name}.gizmo.spec.ts`, imports })
+
+  it('recovers a lexically silent production file through a NodeNext .js import with inspectable evidence', () => {
+    const result = run([spec('a', ['../src/engine.js']), { path: 'src/engine.ts' }])
+    const owner = find(result, 'file:src/engine.ts')
+    expect(owner?.score).toBe(0)
+    expect(owner?.matchReasons).toEqual([])
+    expect(owner?.ownership?.tier).toBe('production-candidate')
+    expect(owner?.ownership?.lexicalScore).toBe(0)
+    expect(owner?.ownership?.evidence).toEqual([
+      {
+        kind: 'resolved-relative-import',
+        sourceId: 'file:tests/a.gizmo.spec.ts',
+        seedPath: 'tests/a.gizmo.spec.ts',
+        targetPath: 'src/engine.ts',
+        specifier: '../src/engine.js',
+      },
+    ])
+    expect(find(run([spec('a', ['../src/engine.js']), { path: 'src/engine.ts' }], { intent: 'relevance' }), 'file:src/engine.ts')).toBeUndefined()
+  })
+
+  it('recovers .js -> .tsx and .jsx -> .tsx sources', () => {
+    const result = run([spec('a', ['../src/Panel.js', '../src/Card.jsx']), { path: 'src/Panel.tsx' }, { path: 'src/Card.tsx' }])
+    expect(find(result, 'file:src/Panel.tsx')).toBeDefined()
+    expect(find(result, 'file:src/Card.tsx')).toBeDefined()
+  })
+
+  it('keeps an exact indexed .js target ahead of its .ts correspondence, and supports extensionless and index imports', () => {
+    const result = run([
+      spec('a', ['../src/exact.js', '../src/bare', '../src/pkg']),
+      { path: 'src/exact.js' },
+      { path: 'src/exact.ts' },
+      { path: 'src/bare.ts' },
+      { path: 'src/pkg/index.ts' },
+    ])
+    expect(find(result, 'file:src/exact.js')).toBeDefined()
+    expect(find(result, 'file:src/exact.ts')).toBeUndefined()
+    expect(find(result, 'file:src/bare.ts')).toBeDefined()
+    expect(find(result, 'file:src/pkg/index.ts')).toBeDefined()
+  })
+
+  it('recovers through indexed file dependencies and file-to-file import edges without double counting', () => {
+    const result = run(
+      [spec('a', ['../src/engine.js']), { path: 'src/engine.ts' }, { path: 'src/viaDep.ts' }, { path: 'src/viaEdge.ts' }],
+      {
+        fileDeps: [
+          { from: 'tests/a.gizmo.spec.ts', to: 'src/engine.ts' },
+          { from: 'tests/a.gizmo.spec.ts', to: 'src/engine.ts' },
+          { from: 'tests/a.gizmo.spec.ts', to: 'src/viaDep.ts' },
+        ],
+        edges: [
+          { source: 'file:tests/a.gizmo.spec.ts', target: 'file:src/viaEdge.ts', kind: 'depends-on' },
+          { source: 'file:tests/a.gizmo.spec.ts', target: 'file:src/viaEdge.ts', kind: 'imports' },
+          { source: 'file:tests/a.gizmo.spec.ts', target: 'file:src/viaDep.ts', kind: 'calls' },
+        ],
+      },
+    )
+    expect(result.results.filter((item) => item.id === 'file:src/engine.ts')).toHaveLength(1)
+    expect(find(result, 'file:src/engine.ts')?.ownership?.evidence.map((e) => e.kind)).toEqual([
+      'indexed-file-dependency',
+      'resolved-relative-import',
+    ])
+    expect(find(result, 'file:src/viaDep.ts')?.ownership?.evidence.map((e) => e.kind)).toEqual(['indexed-file-dependency'])
+    expect(find(result, 'file:src/viaEdge.ts')?.ownership?.evidence.map((e) => e.kind)).toEqual(['indexed-file-dependency'])
+  })
+
+  it('promotes only with own lexical relevance or two distinct seeds, retaining original lexical score', () => {
+    const files: RecoveryFile[] = [
+      spec('a', ['../src/solo.js', '../src/shared.js', '../src/gizmoCore.js']),
+      spec('b', ['../src/shared.js']),
+      { path: 'src/solo.ts' },
+      { path: 'src/shared.ts' },
+      { path: 'src/gizmoCore.ts' },
+    ]
+    const result = run(files)
+    expect(find(result, 'file:src/solo.ts')?.ownership?.tier).toBe('production-candidate')
+    expect(find(result, 'file:src/shared.ts')?.ownership?.tier).toBe('direct-owner')
+    const lexical = find(result, 'file:src/gizmoCore.ts')
+    expect(lexical?.ownership?.tier).toBe('direct-owner')
+    const relevance = find(run(files, { intent: 'relevance' }), 'file:src/gizmoCore.ts')
+    expect(lexical?.score).toBe(relevance?.score)
+    expect(lexical?.matchReasons).toEqual(relevance?.matchReasons)
+  })
+
+  it('does not recover test, fixture, generated, doc, external, missing, or unsupported-extension targets', () => {
+    const result = run([
+      spec('a', [
+        './other.spec.js',
+        '../tests/fixtures/data.js',
+        '../src/generated/api.js',
+        '../docs/guide.js',
+        'vitest',
+        '@scope/pkg',
+        '../src/missing.js',
+        '../src/esm.mjs',
+      ]),
+      { path: 'tests/other.spec.ts' },
+      { path: 'tests/fixtures/data.ts' },
+      { path: 'src/generated/api.ts' },
+      { path: 'docs/guide.ts' },
+      { path: 'src/esm.mts' },
+    ])
+    const recoveredIds = result.results.filter((item) => item.score === 0).map((item) => item.id)
+    expect(recoveredIds).toEqual([])
+  })
+
+  it('does not recover in the wrong direction, nor beyond one file hop', () => {
+    const result = run([
+      spec('a', ['../src/first.js']),
+      { path: 'src/first.ts', imports: ['./second.js'] },
+      { path: 'src/second.ts' },
+      { path: 'src/importsSeed.ts', imports: ['../tests/a.gizmo.spec.js'] },
+    ])
+    expect(find(result, 'file:src/first.ts')).toBeDefined()
+    expect(find(result, 'file:src/second.ts')).toBeUndefined()
+    // It only appears through its own lexical import text; the seed -> owner direction is not inverted.
+    expect(find(result, 'file:src/importsSeed.ts')?.ownership?.evidence.map((e) => e.kind)).toEqual(['production-lexical-match'])
+  })
+
+  it('does not expand cyclic relationships recursively', () => {
+    const result = run([
+      { path: 'src/gizmoA.ts', imports: ['./gizmoB.js'] },
+      { path: 'src/gizmoB.ts', imports: ['./gizmoA.js', './quiet.js'] },
+      { path: 'src/quiet.ts' },
+    ])
+    expect(find(result, 'file:src/gizmoA.ts')).toBeDefined()
+    expect(find(result, 'file:src/quiet.ts')).toBeDefined() // direct import of seed gizmoB
+    const quiet = find(result, 'file:src/quiet.ts')
+    expect(quiet?.ownership?.evidence.map((e) => e.seedPath)).toEqual(['src/gizmoB.ts'])
+  })
+
+  it('associates only lexically relevant same-file symbols and never invents references', () => {
+    const result = run([
+      spec('a', ['../src/engine.js']),
+      { path: 'src/engine.ts', symbols: ['quietHelper', 'gizmoRunner'] },
+    ])
+    expect(find(result, 'symbol:src/engine.ts#quietHelper')).toBeUndefined()
+    const symbol = find(result, 'symbol:src/engine.ts#gizmoRunner')
+    expect(symbol?.ownership?.evidence.map((e) => e.kind)).toEqual(['direct-symbol-name', 'same-file-symbol'])
+    expect(symbol?.score).toBe(find(run([spec('a', ['../src/engine.js']), { path: 'src/engine.ts', symbols: ['quietHelper', 'gizmoRunner'] }], { intent: 'relevance' }), 'symbol:src/engine.ts#gizmoRunner')?.score)
+  })
+
+  it('surfaces a recovered owner within a small limit ahead of weak lexical production matches', () => {
+    const result = run(
+      [
+        spec('a', ['../src/engine.js']),
+        spec('b', ['../src/engine.js']),
+        { path: 'src/engine.ts' },
+        { path: 'src/gizmoNote.ts' },
+      ],
+      { limit: 3 },
+    )
+    expect(result.results.map((item) => item.id)).toContain('file:src/engine.ts')
+    expect(result.results).toHaveLength(3)
+  })
+
+  it('does not count a seed file twice and reports its candidates once', () => {
+    const files: RecoveryFile[] = [
+      { path: 'tests/multi.gizmo.spec.ts', imports: ['../src/engine.js'], symbols: ['gizmoOne', 'gizmoTwo', 'gizmoThree'] },
+      { path: 'src/engine.ts' },
+    ]
+    const engine = find(run(files), 'file:src/engine.ts')
+    expect(engine?.ownership?.evidence).toHaveLength(1)
+    expect(engine?.ownership?.tier).toBe('production-candidate')
+  })
+
+  it('bounds per-seed recovery at 16 files and reports the truncated count', () => {
+    const targets = Array.from({ length: 20 }, (_, i) => `src/t${String(i).padStart(2, '0')}.ts`)
+    const files: RecoveryFile[] = [
+      spec('a', targets.map((t) => `../${t.replace(/\.ts$/, '.js')}`)),
+      ...targets.map((path) => ({ path })),
+    ]
+    const result = run(files)
+    expect(result.results.filter((item) => item.score === 0)).toHaveLength(16)
+    expect(find(result, 'file:src/t15.ts')).toBeDefined()
+    expect(find(result, 'file:src/t16.ts')).toBeUndefined()
+    expect(result.warnings).toEqual([expect.stringContaining('4 supported candidate file(s) omitted')])
+  })
+
+  it('bounds distinct recovered files at 128 overall and the seed set at 20', () => {
+    const seeds = Array.from({ length: 22 }, (_, s) =>
+      spec(`s${String(s).padStart(2, '0')}`, Array.from({ length: 8 }, (_, t) => `../src/m${String(s).padStart(2, '0')}x${t}.js`)),
+    )
+    const targets = Array.from({ length: 22 * 8 }, (_, i) => ({ path: `src/m${String(Math.floor(i / 8)).padStart(2, '0')}x${i % 8}.ts` }))
+    const result = run([...seeds, ...targets], { limit: 500 })
+    // 20 expanded seeds * 8 distinct targets = 160 supported files; only 128 are kept.
+    expect(result.results.filter((item) => item.score === 0)).toHaveLength(128)
+    expect(result.warnings[0]).toContain('32 supported candidate file(s) omitted')
+    expect(result.warnings[0]).toContain('2 lexically matching seed file(s) beyond the 20-seed bound')
+  })
+
+  it('consumes pure generic predicates without loading context role-candidate or Android policy code', () => {
+    const source = readFileSync(new URL('../../src/search/searchIndex.ts', import.meta.url), 'utf8')
+    expect(source).toContain("from '../classification/classificationHelpers.js'")
+    expect(source).toContain("from '../languages/typescript/resolveRelativeSpecifier.js'")
+    expect(source).not.toContain("from '../context/")
+    const helpers = readFileSync(new URL('../../src/classification/classificationHelpers.ts', import.meta.url), 'utf8')
+    expect(helpers).not.toContain("from '../context/")
+    const resolver = readFileSync(new URL('../../src/languages/typescript/resolveRelativeSpecifier.ts', import.meta.url), 'utf8')
+    expect(resolver).not.toContain('node:fs')
+    expect(resolver).not.toContain("from '../../context/")
+  })
+
+  it('is deterministic and leaves relevance output free of recovery data', () => {
+    const files: RecoveryFile[] = [spec('a', ['../src/engine.js']), spec('b', ['../src/engine.js']), { path: 'src/engine.ts' }]
+    expect(JSON.stringify(run(files))).toBe(JSON.stringify(run(files)))
+    const relevance = run(files, { intent: 'relevance' })
+    expect(relevance.warnings).toEqual([])
+    expect(relevance.results.every((item) => !('ownership' in item))).toBe(true)
+  })
+})
+
+describe('searchIndex ownership ranking: own lexical relevance before seed breadth (v1.12.6 Batch 2)', () => {
+  const query = 'affected neighborhood refresh cache'
+  const owner = 'file:src/indexing/affectedNeighborhood.ts'
+  const specId = 'file:tests/index/affectedNeighborhoodRefresh.spec.ts'
+
+  function fixture(): SymbolIndex {
+    const file = (path: string, imports: string[] = [], exports: string[] = []) => ({
+      path,
+      language: 'typescript' as const,
+      lineCount: 5,
+      imports,
+      exports,
+      symbols: [],
+      hasCallGraphEntries: false,
+    })
+    // The strongest seed imports every production module, so all candidates tie on strongest seed score.
+    const files = [
+      file('tests/index/affectedNeighborhoodRefresh.spec.ts', [
+        '../../src/indexing/cacheMetadata.js',
+        '../../src/indexing/affectedNeighborhood.js',
+        '../../src/indexing/trustedBaseline.js',
+        '../../src/symbol-index/types.js',
+        '../../src/indexing/aaaHelper.js',
+        '../../src/indexing/zzzHelper.js',
+      ]),
+      file('tests/index/cacheRefresh.spec.ts', [
+        '../../src/indexing/cacheMetadata.js',
+        '../../src/indexing/trustedBaseline.js',
+        '../../src/symbol-index/types.js',
+      ]),
+      file('tests/index/partialRefresh.spec.ts', [
+        '../../src/indexing/cacheMetadata.js',
+        '../../src/indexing/trustedBaseline.js',
+        '../../src/symbol-index/types.js',
+      ]),
+      file('tests/index/refreshTypes.spec.ts', ['../../src/symbol-index/types.js']),
+      file('src/indexing/cacheMetadata.ts', [], ['CacheMetadata']),
+      file('src/indexing/affectedNeighborhood.ts'),
+      file('src/indexing/trustedBaseline.ts', [], ['CacheBaseline']),
+      file('src/symbol-index/types.ts', [], ['CacheEntry']),
+      file('src/indexing/aaaHelper.ts', [], ['CacheAaa']),
+      file('src/indexing/zzzHelper.ts', [], ['CacheZzz']),
+    ]
+    return {
+      schemaVersion: '2',
+      buildTime: '2026-05-12T00:00:00.000Z',
+      repoRoot: '/repo',
+      sourceRoots: ['src', 'tests'],
+      fileCount: files.length,
+      symbolCount: 0,
+      files,
+    } as unknown as SymbolIndex
+  }
+
+  function run(intent: 'ownership' | 'relevance', limit = 50): SearchIndexResult {
+    return searchIndex({
+      resolved: fixtureResolved(),
+      symbolIndex: fixture(),
+      codeGraph: { artifactKind: 'code-graph', schemaVersion: '1.0.0', createdAt: '2026-05-12T00:00:00.000Z', nodes: [], edges: [] } as unknown as CodeGraph,
+      query,
+      limit,
+      intent,
+      createdAt: '2026-05-12T00:00:00.000Z',
+    })
+  }
+
+  const seedCount = (item: SearchIndexResult['results'][number]) =>
+    new Set(item.ownership!.evidence.filter((e) => e.seedPath).map((e) => e.seedPath)).size
+
+  it('keeps the directly relevant owner within the top three despite broadly imported weak helpers', () => {
+    const result = run('ownership', 3)
+    expect(result.results).toHaveLength(3)
+    expect(result.results.map((item) => item.id)).toContain(owner)
+  })
+
+  it('orders by own lexical score before supporting-seed count, then seed count, then path', () => {
+    const result = run('ownership')
+    const recovered = result.results.filter((item) => item.id.startsWith('file:src/'))
+    expect(recovered.map((item) => item.id)).toEqual([
+      'file:src/indexing/cacheMetadata.ts',
+      owner,
+      'file:src/symbol-index/types.ts',
+      'file:src/indexing/trustedBaseline.ts',
+      'file:src/indexing/aaaHelper.ts',
+      'file:src/indexing/zzzHelper.ts',
+    ])
+    const byId = new Map(recovered.map((item) => [item.id, item]))
+    const owned = byId.get(owner)!
+    const helper = byId.get('file:src/symbol-index/types.ts')!
+    // Genuinely lower own relevance but broader seed support: ordered after the owner.
+    expect(helper.score).toBeLessThan(owned.score)
+    expect(seedCount(helper)).toBeGreaterThan(seedCount(owned))
+    // Equal own score and seed score: higher seed breadth wins.
+    const baseline = byId.get('file:src/indexing/trustedBaseline.ts')!
+    expect(baseline.score).toBe(helper.score)
+    expect(seedCount(helper)).toBeGreaterThan(seedCount(baseline))
+  })
+
+  it('retains lexical score, match reasons, provenance and the relevant test evidence unchanged', () => {
+    const owned = run('ownership')
+    const relevance = new Map(run('relevance').results.map((item) => [item.id, item]))
+    for (const item of owned.results) {
+      expect(item.score).toBe(relevance.get(item.id)!.score)
+      expect(item.matchReasons).toEqual(relevance.get(item.id)!.matchReasons)
+    }
+    expect(owned.results.find((item) => item.id === owner)?.ownership?.evidence).toEqual([
+      { kind: 'production-lexical-match', sourceId: owner },
+      {
+        kind: 'resolved-relative-import',
+        sourceId: specId,
+        seedPath: 'tests/index/affectedNeighborhoodRefresh.spec.ts',
+        targetPath: 'src/indexing/affectedNeighborhood.ts',
+        specifier: '../../src/indexing/affectedNeighborhood.js',
+      },
+    ])
+    expect(owned.results.find((item) => item.id === specId)?.ownership?.tier).toBe('supporting-evidence')
+  })
+
+  it('is deterministic across repeated queries', () => {
+    expect(JSON.stringify(run('ownership', 3))).toBe(JSON.stringify(run('ownership', 3)))
   })
 })
 

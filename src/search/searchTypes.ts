@@ -42,11 +42,27 @@ export const SEARCH_INTENT_VALUES: readonly SearchIntent[] = ['relevance', 'owne
 
 export type SearchOwnershipTier = 'direct-owner' | 'production-candidate' | 'supporting-evidence'
 
-export type SearchOwnershipEvidenceKind = 'direct-symbol-name' | 'classified-primary-edit' | 'production-lexical-match'
+export type SearchOwnershipEvidenceKind =
+  | 'direct-symbol-name'
+  | 'classified-primary-edit'
+  | 'production-lexical-match'
+  /** v1.12.6 Batch 2: a lexically matching seed file directly depends on the target per the indexed file-dependency graph. */
+  | 'indexed-file-dependency'
+  /** v1.12.6 Batch 2: a seed file's relative import specifier resolves to the indexed target at query time. */
+  | 'resolved-relative-import'
+  /** v1.12.6 Batch 2: the result is a symbol that belongs to a file recovered through a direct seed relationship. */
+  | 'same-file-symbol'
 
 export interface SearchOwnershipEvidence {
   kind: SearchOwnershipEvidenceKind
+  /** Direct-lexical kinds: the result's own id. Recovery kinds: the contributing seed result id. */
   sourceId: string
+  /** Recovery kinds only: indexed path of the contributing lexically matching seed file. */
+  seedPath?: string
+  /** Recovery kinds only: indexed path of the resolved/dependency target file. */
+  targetPath?: string
+  /** `resolved-relative-import` only: the original relative import specifier. */
+  specifier?: string
 }
 
 /** Ownership-mode only: static, inspectable tier evidence. `lexicalScore` always equals the result `score`. */

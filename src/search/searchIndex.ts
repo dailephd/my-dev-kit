@@ -1,7 +1,8 @@
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
-import { isFixtureLike, isGeneratedLike, isTestScoped } from '../context/evidenceClassification.js'
+import { isFixtureLike, isGeneratedLike, isTestScoped } from '../classification/classificationHelpers.js'
+import { resolveRelativeSpecifier } from '../languages/typescript/resolveRelativeSpecifier.js'
 import { normalizeSearchQuery, rankSearchResults } from './rankSearchResults.js'
 import type {
   SearchCandidate,
@@ -57,7 +58,8 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
     normalizedTerms,
     limit: ownershipMode ? Math.max(candidates.length, 1) : limit,
   })
-  const results = ownershipMode ? applyOwnershipTiers(rankedResults).slice(0, limit) : rankedResults
+  const recovery = ownershipMode ? recoverOwnerCandidates(rankedResults, candidates, input.symbolIndex, input.codeGraph) : null
+  const results = recovery ? applyOwnershipTiers(recovery).slice(0, limit) : rankedResults
 
   const searchedFileIds = new Set<string>()
   const searchedSymbolIds = new Set<string>()
@@ -86,7 +88,7 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
       symbolIndex: input.resolved.artifactPaths.symbolIndex,
       codeGraph: input.resolved.artifactPaths.codeGraph,
     },
-    warnings: [],
+    warnings: recovery?.warnings ?? [],
     ...(ownershipMode ? { intent: 'ownership' as const } : {}),
   }
 }
@@ -102,18 +104,212 @@ const NON_OWNER_EDIT_GUIDANCE = new Set<string>(['test-only', 'docs-only', 'gene
 
 const DOCS_ONLY_PATH_PATTERN = /(^|[\/])docs?[\/]|\.(md|mdx|markdown|rst|adoc|txt)$/i
 
-/**
- * v1.12.6 Batch 1: attaches ownership tiers and stably reorders by tier only. The input is already in
- * the existing (score desc, kind, path/id) order, so a stable tier sort preserves that order inside each tier.
- * The lexical `score` and `matchReasons` are never modified.
- */
-function applyOwnershipTiers(ranked: SearchResultItem[]): SearchResultItem[] {
-  return ranked
-    .map((item) => ({ ...item, ownership: classifyOwnership(item) }))
-    .sort((a, b) => OWNERSHIP_TIER_RANK[a.ownership.tier] - OWNERSHIP_TIER_RANK[b.ownership.tier])
+/** v1.12.6 Batch 2 fixed recovery bounds. */
+const MAX_OWNER_SEED_FILES = 20
+const MAX_RECOVERED_FILES_PER_SEED = 16
+const MAX_RECOVERED_FILES_OVERALL = 128
+
+/** Directed, one-hop relationship support for one result id (never persisted, never lexical). */
+interface OwnerSupport {
+  seedPaths: Set<string>
+  maxSeedScore: number
+  evidence: SearchOwnershipEvidence[]
+  /** File targets are ordered and promoted by support; same-file symbols carry provenance evidence only. */
+  affectsRanking: boolean
 }
 
-function classifyOwnership(item: SearchResultItem): SearchResultOwnership {
+interface OwnerRecovery {
+  items: SearchResultItem[]
+  support: Map<string, OwnerSupport>
+  /** Indexed files that contain at least one symbol with its own non-path lexical evidence. */
+  relevantSymbolFiles: Set<string>
+  warnings: string[]
+}
+
+interface OwnerSeed {
+  path: string
+  id: string
+  score: number
+}
+
+/**
+ * v1.12.6 Batch 2: bounded, evidence-backed owner recovery over the already-ranked lexical pool.
+ * Path: lexically matching seed file -> directly depended-on indexed file -> same-file symbols.
+ * Sources are limited to indexed file dependencies, `imports`/`depends-on` file edges and
+ * `FileSummary.imports` specifiers resolved against the indexed path inventory; there is no
+ * transitive hop. Lexical `score`/`matchReasons` are never modified.
+ */
+function recoverOwnerCandidates(
+  ranked: SearchResultItem[],
+  candidates: SearchCandidate[],
+  symbolIndex: SymbolIndex,
+  codeGraph: CodeGraph,
+): OwnerRecovery {
+  const filesByPath = new Map(symbolIndex.files.map((file) => [file.path, file]))
+  const knownPaths = new Set(filesByPath.keys())
+  const candidateById = new Map(candidates.map((candidate) => [candidate.item.id, candidate]))
+  const rankedById = new Map(ranked.map((item) => [item.id, item]))
+
+  const relevantSymbolFiles = new Set<string>()
+  const rankedSymbolsByPath = new Map<string, SearchResultItem[]>()
+  for (const item of ranked) {
+    if (item.kind !== 'symbol' || item.path === undefined) continue
+    const list = rankedSymbolsByPath.get(item.path) ?? []
+    list.push(item)
+    rankedSymbolsByPath.set(item.path, list)
+    if (hasIndependentSymbolEvidence(item)) relevantSymbolFiles.add(item.path)
+  }
+
+  // Seeds: distinct lexically matching indexed files, strongest result first.
+  const seeds: OwnerSeed[] = []
+  const seenSeedPaths = new Set<string>()
+  let omittedSeedCount = 0
+  for (const item of ranked) {
+    if ((item.kind !== 'file' && item.kind !== 'symbol') || item.path === undefined) continue
+    if (!knownPaths.has(item.path) || seenSeedPaths.has(item.path)) continue
+    seenSeedPaths.add(item.path)
+    if (seeds.length < MAX_OWNER_SEED_FILES) seeds.push({ path: item.path, id: item.id, score: item.score })
+    else omittedSeedCount += 1
+  }
+
+  const dependencies = buildDirectDependencies(symbolIndex, codeGraph, knownPaths)
+  const eligibleFileCache = new Map<string, boolean>()
+  const isEligibleFile = (filePath: string): boolean => {
+    const cached = eligibleFileCache.get(filePath)
+    if (cached !== undefined) return cached
+    const candidate = candidateById.get(fileNodeId(filePath))
+    const eligible = candidate !== undefined && isProductionOwnerEligible({ ...candidate.item, score: 0, matchReasons: [] })
+    eligibleFileCache.set(filePath, eligible)
+    return eligible
+  }
+
+  const support = new Map<string, OwnerSupport>()
+  const recoveredPaths = new Set<string>()
+  const suppressedPaths = new Set<string>()
+  const addSupport = (id: string, seed: OwnerSeed, evidence: SearchOwnershipEvidence[], affectsRanking: boolean): void => {
+    const entry = support.get(id) ?? { seedPaths: new Set<string>(), maxSeedScore: 0, evidence: [], affectsRanking }
+    entry.seedPaths.add(seed.path)
+    entry.maxSeedScore = Math.max(entry.maxSeedScore, seed.score)
+    entry.evidence.push(...evidence)
+    support.set(id, entry)
+  }
+
+  for (const seed of seeds) {
+    const targets = new Map<string, { dependency: boolean; specifier?: string }>()
+    for (const to of dependencies.get(seed.path) ?? []) targets.set(to, { dependency: true })
+    for (const specifier of filesByPath.get(seed.path)?.imports ?? []) {
+      const resolved = resolveRelativeSpecifier(seed.path, specifier, knownPaths)
+      if (resolved === null || resolved === seed.path) continue
+      const existing = targets.get(resolved)
+      if (existing === undefined) targets.set(resolved, { dependency: false, specifier })
+      else if (existing.specifier === undefined) existing.specifier = specifier
+    }
+
+    const eligibleTargets = [...targets.keys()].filter(isEligibleFile).sort((a, b) => a.localeCompare(b))
+    for (const dropped of eligibleTargets.slice(MAX_RECOVERED_FILES_PER_SEED)) suppressedPaths.add(dropped)
+    for (const target of eligibleTargets.slice(0, MAX_RECOVERED_FILES_PER_SEED)) {
+      if (!recoveredPaths.has(target)) {
+        if (recoveredPaths.size >= MAX_RECOVERED_FILES_OVERALL) {
+          suppressedPaths.add(target)
+          continue
+        }
+        recoveredPaths.add(target)
+      }
+      const how = targets.get(target)!
+      const evidence: SearchOwnershipEvidence[] = []
+      if (how.dependency) evidence.push({ kind: 'indexed-file-dependency', sourceId: seed.id, seedPath: seed.path, targetPath: target })
+      if (how.specifier !== undefined) {
+        evidence.push({ kind: 'resolved-relative-import', sourceId: seed.id, seedPath: seed.path, targetPath: target, specifier: how.specifier })
+      }
+      addSupport(fileNodeId(target), seed, evidence, true)
+      // Same-file association only: symbols with their own non-path lexical evidence; no invented references.
+      for (const symbol of rankedSymbolsByPath.get(target) ?? []) {
+        if (!hasIndependentSymbolEvidence(symbol)) continue
+        addSupport(symbol.id, seed, [{ kind: 'same-file-symbol', sourceId: seed.id, seedPath: seed.path, targetPath: target }], false)
+      }
+    }
+  }
+
+  const items = [...ranked]
+  for (const target of [...recoveredPaths].sort((a, b) => a.localeCompare(b))) {
+    const id = fileNodeId(target)
+    if (rankedById.has(id)) continue
+    const candidate = candidateById.get(id)
+    if (candidate === undefined) continue
+    items.push({ ...candidate.item, score: 0, matchReasons: [] })
+  }
+
+  const warnings: string[] = []
+  const stillSuppressed = [...suppressedPaths].filter((filePath) => !recoveredPaths.has(filePath))
+  if (stillSuppressed.length > 0 || omittedSeedCount > 0) {
+    const parts: string[] = []
+    if (stillSuppressed.length > 0) {
+      parts.push(
+        `${stillSuppressed.length} supported candidate file(s) omitted by recovery bounds (${MAX_RECOVERED_FILES_PER_SEED} per seed, ${MAX_RECOVERED_FILES_OVERALL} overall)`,
+      )
+    }
+    if (omittedSeedCount > 0) {
+      parts.push(`${omittedSeedCount} lexically matching seed file(s) beyond the ${MAX_OWNER_SEED_FILES}-seed bound were not expanded`)
+    }
+    warnings.push(`Ownership recovery is bounded and not exhaustive: ${parts.join('; ')}.`)
+  }
+
+  return { items, support, relevantSymbolFiles, warnings }
+}
+
+/** Direct, directed file dependencies between indexed files only: `fileDeps` plus file-to-file `imports`/`depends-on` edges. */
+function buildDirectDependencies(symbolIndex: SymbolIndex, codeGraph: CodeGraph, knownPaths: Set<string>): Map<string, Set<string>> {
+  const dependencies = new Map<string, Set<string>>()
+  const add = (from: string, to: string): void => {
+    if (from === to || !knownPaths.has(from) || !knownPaths.has(to)) return
+    const set = dependencies.get(from) ?? new Set<string>()
+    set.add(to)
+    dependencies.set(from, set)
+  }
+  for (const dep of symbolIndex.graph?.fileDeps ?? []) add(dep.from, dep.to)
+  const prefix = 'file:'
+  for (const edge of codeGraph.edges) {
+    if (edge.kind !== 'imports' && edge.kind !== 'depends-on') continue
+    if (!edge.source.startsWith(prefix) || !edge.target.startsWith(prefix)) continue
+    add(edge.source.slice(prefix.length), edge.target.slice(prefix.length))
+  }
+  return dependencies
+}
+
+/** A symbol's own relevance beyond the shared file path or its node id (both merely restate the file). */
+function hasIndependentSymbolEvidence(item: SearchResultItem): boolean {
+  return item.matchReasons.some((reason) => reason.field !== 'path' && reason.field !== 'nodeId')
+}
+
+/**
+ * Attaches ownership tiers and orders by tier, then highest contributing seed score, then the candidate's own
+ * lexical score, then distinct supporting seed count (so broadly imported helpers never outrank a more directly
+ * relevant file on seed breadth alone), then kind/path/id. Items without support have zero seed score and count,
+ * so their relative order is exactly the Batch 1 order. `score` and `matchReasons` are never modified.
+ */
+function applyOwnershipTiers(recovery: OwnerRecovery): SearchResultItem[] {
+  return recovery.items
+    .map((item) => ({ ...item, ownership: classifyOwnership(item, recovery.support.get(item.id), recovery.relevantSymbolFiles) }))
+    .sort((a, b) => {
+      const supportA = rankingSupport(recovery.support.get(a.id))
+      const supportB = rankingSupport(recovery.support.get(b.id))
+      return (
+        OWNERSHIP_TIER_RANK[a.ownership.tier] - OWNERSHIP_TIER_RANK[b.ownership.tier] ||
+        (supportB?.maxSeedScore ?? 0) - (supportA?.maxSeedScore ?? 0) ||
+        b.score - a.score ||
+        (supportB?.seedPaths.size ?? 0) - (supportA?.seedPaths.size ?? 0) ||
+        a.kind.localeCompare(b.kind) ||
+        (a.path ?? a.id).localeCompare(b.path ?? b.id) ||
+        a.id.localeCompare(b.id)
+      )
+    })
+}
+
+function rankingSupport(support: OwnerSupport | undefined): OwnerSupport | undefined {
+  return support?.affectsRanking === true ? support : undefined
+}
+
+function classifyOwnership(item: SearchResultItem, support?: OwnerSupport, relevantSymbolFiles?: Set<string>): SearchResultOwnership {
   const evidence: SearchOwnershipEvidence[] = []
   let tier: SearchOwnershipTier = 'supporting-evidence'
 
@@ -128,7 +324,19 @@ function classifyOwnership(item: SearchResultItem): SearchResultOwnership {
       tier = 'direct-owner'
     } else {
       tier = 'production-candidate'
-      evidence.push({ kind: 'production-lexical-match', sourceId: item.id })
+      // A zero-score recovered file has no lexical match to report.
+      if (item.matchReasons.length > 0) evidence.push({ kind: 'production-lexical-match', sourceId: item.id })
+    }
+
+    if (support !== undefined) {
+      evidence.push(...support.evidence)
+      // Promotion applies to recovered file targets only: a direct seed link plus the file's own lexical
+      // relevance (or one of its symbols'), or independent support from two distinct seeds. Same-file symbols
+      // keep their own tier so one imported file never promotes all of its symbols equally.
+      if (support.affectsRanking) {
+        const ownRelevance = item.score > 0 || (item.path !== undefined && relevantSymbolFiles?.has(item.path) === true)
+        if (ownRelevance || support.seedPaths.size >= 2) tier = 'direct-owner'
+      }
     }
   }
 

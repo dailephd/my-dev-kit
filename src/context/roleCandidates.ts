@@ -1,4 +1,5 @@
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
+import { basename, isTestLike, stripExt, TEST_LIKE_PATTERN } from '../classification/classificationHelpers.js'
 import { getRoleDefinition } from './contextRoles.js'
 import type { AndroidIntent } from './androidContextIntent.js'
 import {
@@ -28,19 +29,10 @@ const LATER_BATCH_EVIDENCE_KINDS: readonly RequestedEvidenceKind[] = []
 
 export const OWNER_LIKE_PATTERN = /(command|registry|dispatcher|adapter|analyzer|builder|producer|manager)/i
 export const CONTRACT_LIKE_PATTERN = /(types?|schema|valid|constant|error)/i
-export const TEST_LIKE_PATTERN = /(^|[\\/])(__tests__[\\/].*|.*\.(spec|test))\.[jt]sx?$/i
 const REQUESTED_KIND_BOOST = 8
 
-/** Shared basename helper: single owner reused by `evidenceClassification.ts` (Batch 3). */
-export function basename(filePath: string | undefined): string {
-  if (!filePath) return ''
-  const parts = filePath.split(/[\\/]/)
-  return parts[parts.length - 1] ?? filePath
-}
-
-export function stripExt(name: string): string {
-  return name.replace(/\.[jt]sx?$/i, '')
-}
+/** v1.12.6 Batch 2: these pure generic helpers now live in `classification/classificationHelpers.ts`; the names stay exported here for existing consumers. */
+export { basename, isTestLike, stripExt, TEST_LIKE_PATTERN }
 
 interface AdjustmentResult {
   adjustment: number
@@ -218,10 +210,6 @@ export function isOwnerLike(node: { filePath?: string; label: string }): boolean
 
 export function isContractLike(node: { filePath?: string; label: string }): boolean {
   return CONTRACT_LIKE_PATTERN.test(basename(node.filePath) || node.label)
-}
-
-export function isTestLike(filePath: string | undefined): boolean {
-  return filePath !== undefined && TEST_LIKE_PATTERN.test(filePath)
 }
 
 function hasExactQueryMatch(matchedTerms: string[], filePath: string | undefined, label: string): boolean {
