@@ -301,11 +301,11 @@ The steps above cover the core `index` -> `search`/`lookup`/`slice`/`source` -> 
 
 - **Data-model and lineage** (`data-model --entity`/`--field`/`--trace-view`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-7-data-model-and-model-to-view-lineage-inspection)
 - **Classification** (`classification.json`, surfaced through `search`/`lookup`/`slice`/`source`) — see [COMMANDS.md](COMMANDS.md)
-- **Context capsules and retrieval audits** (`context --mode ... --out ... --audit-out ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-8-context-capsule-and-retrieval-audit-v160)
-- **Role-aware context** (`context --role architecture|implementation|test-implementation` or `context --request <path>`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-11-stage-role-context-refresh-v1101)
-- **Read-only comparison of two index snapshots** (`graph-diff --before ... --after ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-9-compare-two-index-snapshots-with-graph-diff-v180)
-- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v1100)
-- **Source continuation and local dependency expansion** (`--continue`, `--include-local-deps`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-6-source-continuation-and-local-dependency-expansion-v140)
+- **Context capsules and retrieval audits** (`context --mode ... --out ... --audit-out ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-8-context-capsule-and-retrieval-audit)
+- **Role-aware context** (`context --role architecture|implementation|test-implementation` or `context --request <path>`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-11-stage-role-context-refresh)
+- **Read-only comparison of two index snapshots** (`graph-diff --before ... --after ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-9-compare-two-index-snapshots-with-graph-diff)
+- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects)
+- **Source continuation and local dependency expansion** (`--continue`, `--include-local-deps`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-6-source-continuation-and-local-dependency-expansion)
 
 ## Next steps
 
