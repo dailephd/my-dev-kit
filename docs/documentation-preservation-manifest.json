@@ -417,16 +417,41 @@
         "READ THIS FIRST — REQUIRED INTAKE",
         "GENERATED / IGNORED / LOCAL FILES AND OUTPUT PLACEMENT",
         "PRE-EDIT CHECKLIST",
-        "AGENTS.md"
+        "AGENTS.md",
+        "AGENTS.md, agents.txt, CLAUDE.md and claude.txt",
+        "unignored and tracked"
       ],
       "AGENTS.md": [
         "Mandatory first action",
         "manifest.txt",
         "ignored outputs",
-        "Before any write"
+        "Before any write",
+        "agents.txt",
+        "claude.txt",
+        "CLAUDE.md"
       ],
       ".gitignore": [
-        "!/manifest.txt"
+        "!/manifest.txt",
+        "!/agents.txt",
+        "!/claude.txt"
+      ],
+      "agents.txt": [
+        "MY-DEV-KIT GENERAL CODING-AGENT INSTRUCTIONS",
+        "MANDATORY FIRST ACTION — READ MANIFEST.TXT",
+        "manifest.txt",
+        "MANDATORY SOURCE RETRIEVAL"
+      ],
+      "claude.txt": [
+        "MY-DEV-KIT CLAUDE OPERATING INSTRUCTIONS",
+        "MANIFEST-FIRST INTAKE — REQUIRED",
+        "manifest.txt",
+        "HANDOFF"
+      ],
+      "CLAUDE.md": [
+        "# Claude instructions — my-dev-kit",
+        "Mandatory first action",
+        "manifest.txt",
+        "ignored/generated outputs"
       ]
     },
     "requiredBoundaryKeywords": [
