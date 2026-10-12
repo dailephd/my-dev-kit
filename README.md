@@ -616,3 +616,7 @@ Open an issue in the project repository with a description of the finding and a 
 MIT. Copyright (c) 2026 dailephd LLC.
 
 See [LICENSE](LICENSE) for the full license text.
+
+## Node validation policy
+
+Local development validates with latest stable Node.js using `npm run validate:local`; GitHub Actions tests Node 24 on Ubuntu, macOS, and Windows. See [Node validation and CI policy](docs/CI_NODE_POLICY.md) for the version preflight, full-suite ownership, and avoidance of duplicate builds.

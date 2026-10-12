@@ -4,10 +4,9 @@ on:
   push:
     branches:
       - main
-      - 'release/**'
-      - 'fix/**'
-      - 'audit/**'
   pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -39,7 +38,7 @@ jobs:
         run: npm run test
 
       - name: Package dry run
-        run: npm pack --dry-run --json
+        run: npm pack --dry-run --ignore-scripts --json
 
       - name: CLI help
         run: node dist/cli.js --help

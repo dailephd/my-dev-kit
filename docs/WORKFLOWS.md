@@ -308,3 +308,7 @@ The output in these examples is under the example project root, not a doubly nes
 Missing manifest: build the correct index or fix `--index`. Missing/partial analyzer output: inspect source roots, applicability, interpreter requirements and warnings. Unknown identity: search current evidence. Source truncation: continue or expand narrowly. Graphviz failure: use DOT or inspect fallback. Stale context: regenerate the matching capsule/audit pair after index refresh.
 
 For a real workflow gap, retain the exact command, version, root/commit/index identity, expected versus observed result, safe fallback and cost. Use the [ecosystem failure record](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#16-failure-feedback-and-improvement-planning). A successful feature workaround must not erase an ecosystem limitation.
+
+## Node validation and CI responsibility
+
+Local full validation uses `npm run validate:local` on the latest stable Node.js (official release-index check). During corrections, run focused tests. GitHub Actions validates Node 24 on Ubuntu, macOS, and Windows and owns the cross-platform full-suite evidence. The existing `verify` script builds once; the package dry-run uses `--ignore-scripts` to avoid triggering `prepack` a second time. See [CI_NODE_POLICY.md](CI_NODE_POLICY.md).

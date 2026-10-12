@@ -44,7 +44,8 @@
     "verify": "npm run typecheck && npm run build && npm run docs:check",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepack": "npm run build -- --silent",
-    "benchmark:retrieval": "tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit/retrieval-regression --fail-on-regression"
+    "benchmark:retrieval": "tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit/retrieval-regression --fail-on-regression",
+    "validate:local": "node scripts/check-local-node-latest.mjs && npm run verify && npm run test && npm pack --dry-run --ignore-scripts --json"
   },
   "license": "MIT",
   "author": "dailephd LLC",
