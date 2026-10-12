@@ -11,7 +11,7 @@ try {
   console.error(`Cannot verify latest stable Node.js from ${endpoint}: ${String(error)}`);
   process.exit(1);
 }
-const stable = releases.filter(({ version }) => /^v\\d+\\.\\d+\\.\\d+$/.test(version));
+const stable = releases.filter(({ version }) => /^v[0-9]+[.][0-9]+[.][0-9]+$/.test(version));
 const latest = stable[0]?.version;
 if (!latest) { console.error("Node.js release index contains no stable versions"); process.exit(1); }
 if (process.version !== latest) {
