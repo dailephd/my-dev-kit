@@ -8,7 +8,7 @@ import { buildContextCapsule, computeContextAdequacy, writeContextCapsule } from
 import { buildRetrievalAuditRecord, writeRetrievalAuditRecord } from '../context/retrievalAuditRecord.js'
 import { buildRawEvidenceIndexIdentity } from '../context/rawEvidenceIdentity.js'
 import { assertRawEvidenceParity } from '../context/rawEvidenceParity.js'
-import { buildQueryPlan } from '../context/queryPlan.js'
+import { buildEffectiveSearchQuery, buildQueryPlan } from '../context/queryPlan.js'
 import { buildModeEffects, rankCandidateFiles, rankCandidateNodes, type RankingInput } from '../context/candidateRanking.js'
 import { selectPrimaryFocus } from '../context/graphFocus.js'
 import { selectGraphNeighborhood } from '../context/graphSelection.js'
@@ -174,12 +174,16 @@ export function registerContextCommand(program: Command): void {
       // detection - never a new CLI option or ContextRequest field (section 40).
       const androidIntents = detectAndroidIntents(queryPlan.normalizedQuery, queryPlan.terms.raw)
 
-      const rankingInput = runSearch({ resolved, symbolIndex, codeGraph, normalizedQuery: queryPlan.normalizedQuery, hasTerms: queryPlan.terms.raw.length > 0 })
+      // v1.13.0 Batch 1C: lexical discovery uses the effective query (low-information
+      // connector words removed from multiword requests); the original is preserved.
+      const effectiveSearchQuery = queryPlan.searchQueries[0] ?? queryPlan.normalizedQuery
+      const suppressedConnectorTerms = buildEffectiveSearchQuery(normalized.query).suppressedTerms
+      const rankingInput = runSearch({ resolved, symbolIndex, codeGraph, normalizedQuery: effectiveSearchQuery, hasTerms: queryPlan.terms.raw.length > 0 })
       steps.push({
         id: 'step-run-search',
         kind: 'run-search',
         description: 'Ran the existing search engine to gather ranked candidates.',
-        inputs: { query: queryPlan.normalizedQuery },
+        inputs: suppressedConnectorTerms.length > 0 ? { query: effectiveSearchQuery, suppressedConnectorTerms: suppressedConnectorTerms.join(' ') } : { query: effectiveSearchQuery },
         outputs: { status: rankingInput.status, resultCount: rankingInput.results.length },
         status: rankingInput.status === 'ok' ? 'ok' : 'skipped',
         warnings: rankingInput.warnings,

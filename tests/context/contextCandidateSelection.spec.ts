@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildQueryPlan } from '../../src/context/queryPlan.js'
+import { buildEffectiveSearchQuery, buildQueryPlan } from '../../src/context/queryPlan.js'
 import { buildModeEffects, rankCandidateFiles, rankCandidateNodes, type RankingInput } from '../../src/context/candidateRanking.js'
 import { selectPrimaryFocus } from '../../src/context/graphFocus.js'
 import { selectGraphNeighborhood } from '../../src/context/graphSelection.js'
@@ -333,5 +333,51 @@ describe('computeContextAdequacy', () => {
     })
     expect(adequacy.status).toBe('context conflict found and user or upstream stage decision required')
     expect(adequacy.gaps[0]).toContain('Choose the canonical owner')
+  })
+})
+
+describe('buildEffectiveSearchQuery (v1.13.0 Batch 1C connector-term correction)', () => {
+  it('drops bare lowercase connectors from a multiword request and records them', () => {
+    expect(buildEffectiveSearchQuery('add a new Compose screen next to UserHomeScreen')).toEqual({
+      query: 'add new Compose screen next UserHomeScreen',
+      suppressedTerms: ['a', 'to'],
+    })
+    expect(buildEffectiveSearchQuery('put a sibling in the module, to UserHomeScreen.').suppressedTerms).toEqual(['a', 'in', 'the', 'to'])
+  })
+
+  it('leaves the user-visible query plan fields intact and records the effective query in searchQueries', () => {
+    const plan = buildQueryPlan({ originalQuery: 'add a new Compose screen next to UserHomeScreen', mode: 'feature-add' })
+    expect(plan.originalQuery).toBe('add a new Compose screen next to UserHomeScreen')
+    expect(plan.normalizedQuery).toBe('add a new Compose screen next to UserHomeScreen')
+    expect(plan.terms.raw).toEqual(['add', 'a', 'new', 'compose', 'screen', 'next', 'to', 'userhomescreen'])
+    expect(plan.searchQueries).toEqual(['add new Compose screen next UserHomeScreen'])
+  })
+
+  it('is the identity for queries without connector terms (ranking input unchanged)', () => {
+    for (const query of ['add new Compose screen next UserHomeScreen', 'createUser service', 'src/service.ts', 'refresh_users_button']) {
+      const plan = buildQueryPlan({ originalQuery: query, mode: 'general' })
+      expect(plan.searchQueries).toEqual([plan.normalizedQuery])
+      expect(buildEffectiveSearchQuery(query).suppressedTerms).toEqual([])
+    }
+  })
+
+  it('protects single-term queries that are connectors or identifiers', () => {
+    for (const query of ['a', 'to', 'in', 'the', 'A', '"the"', 'src/a.ts', '/in', 'UserHomeScreen', 'refresh_users_button']) {
+      expect(buildEffectiveSearchQuery(query)).toEqual({ query, suppressedTerms: [] })
+    }
+  })
+
+  it('protects quoted terms, paths, routes, capitalized words, and all-connector queries inside multiword requests', () => {
+    expect(buildEffectiveSearchQuery('find "the" in index').query).toBe('find "the" index')
+    expect(buildEffectiveSearchQuery('open src/a.ts in editor').query).toBe('open src/a.ts editor')
+    expect(buildEffectiveSearchQuery('route /in to handler').query).toBe('route /in handler')
+    expect(buildEffectiveSearchQuery('A new screen').suppressedTerms).toEqual([])
+    expect(buildEffectiveSearchQuery('the a in to')).toEqual({ query: 'the a in to', suppressedTerms: [] })
+    expect(buildEffectiveSearchQuery('in a').suppressedTerms).toEqual([])
+  })
+
+  it('is deterministic', () => {
+    const query = 'add a new Compose screen in the module'
+    expect(buildEffectiveSearchQuery(query)).toEqual(buildEffectiveSearchQuery(query))
   })
 })

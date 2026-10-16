@@ -52,6 +52,42 @@ const SYMBOL_LIKE_PATTERN = /^[a-z]+[A-Z]/
 const PASCAL_CASE_PATTERN = /^[A-Z][a-zA-Z0-9]*$/
 const TRAILING_PUNCTUATION = /[.,;:!?)('"]+$/
 
+/**
+ * v1.13.0 Batch 1C: fixed, reproduced low-information connector terms. Only the
+ * exact lowercase bare word is ever suppressed, and only when the query has
+ * other meaningful terms. Not a general stop-word list.
+ */
+const CONNECTOR_TERMS: ReadonlySet<string> = new Set(['a', 'to', 'in', 'the'])
+const QUERY_TOKEN_PATTERN = /"[^"]*"|\S+/g
+
+export interface EffectiveSearchQuery {
+  query: string
+  suppressedTerms: string[]
+}
+
+/**
+ * Builds the internal lexical query used for context candidate discovery. Bare
+ * lowercase connector words are dropped from multiword queries so that
+ * substring matching in the search engine cannot let them dominate owner
+ * selection. Protected and kept verbatim: quoted phrases, any token that is not
+ * exactly a connector (paths, routes, qualified names, identifiers, capitalized
+ * words), single-token queries, and queries that would otherwise be empty.
+ */
+export function buildEffectiveSearchQuery(originalQuery: string): EffectiveSearchQuery {
+  const normalized = normalizeQuery(originalQuery)
+  const tokens = normalized.match(QUERY_TOKEN_PATTERN) ?? []
+  if (tokens.length < 2) return { query: normalized, suppressedTerms: [] }
+  const kept: string[] = []
+  const suppressedTerms: string[] = []
+  for (const token of tokens) {
+    const bare = token.startsWith('"') ? null : token.replace(TRAILING_PUNCTUATION, '')
+    if (bare !== null && CONNECTOR_TERMS.has(bare)) suppressedTerms.push(bare)
+    else kept.push(token)
+  }
+  if (suppressedTerms.length === 0 || kept.length === 0) return { query: normalized, suppressedTerms: [] }
+  return { query: kept.join(' '), suppressedTerms }
+}
+
 export function buildQueryPlan(options: { originalQuery: string; mode: ContextCapsuleMode }): QueryPlan {
   const { originalQuery, mode } = options
   const normalizedQuery = normalizeQuery(originalQuery)
@@ -99,7 +135,7 @@ export function buildQueryPlan(options: { originalQuery: string; mode: ContextCa
     originalQuery,
     normalizedQuery,
     mode,
-    searchQueries: [normalizedQuery],
+    searchQueries: [buildEffectiveSearchQuery(originalQuery).query],
     terms,
   }
 }

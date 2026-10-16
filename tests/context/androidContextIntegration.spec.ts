@@ -117,3 +117,55 @@ describe('v1.12.0 Batch 6: Android-aware context owner selection', () => {
     expect(audit.roleAdequacy.status).toBe(capsule.roleAdequacy.status)
   })
 })
+
+describe('v1.13.0 Batch 1C: connector terms do not dominate Android owner selection (D1)', () => {
+  function runWithAudit(query: string): { capsule: any; audit: any } {
+    const root = createTempRoot()
+    const capsuleOut = join(root, 'capsule.json')
+    const auditOut = join(root, 'audit.json')
+    const result = runCli(['context', '--index', outDir, '--query', query, '--mode', 'feature-add', '--out', capsuleOut, '--audit-out', auditOut, '--json'])
+    expect(result.status).toBe(0)
+    return { capsule: JSON.parse(readFileSync(capsuleOut, 'utf8')), audit: JSON.parse(readFileSync(auditOut, 'utf8')) }
+  }
+  const HOME = 'android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen'
+
+  it('the exact D1 query selects the same owner, candidates and scores as the connector-free control, without a conflict', () => {
+    const natural = runWithAudit('add a new Compose screen next to UserHomeScreen')
+    const control = runWithAudit('add new Compose screen next UserHomeScreen')
+    expect(natural.capsule.focus.focusNodeId).toBe(HOME)
+    expect(natural.capsule.conflicts.status).toBe('none')
+    expect(natural.capsule.contextAdequacy.status).toBe(control.capsule.contextAdequacy.status)
+    const brief = (c: any) => c.candidateFiles.map((f: any) => [f.path, f.score])
+    expect(brief(natural.capsule)).toEqual(brief(control.capsule))
+    expect(natural.capsule.candidateNodes.map((n: any) => [n.nodeId, n.score])).toEqual(control.capsule.candidateNodes.map((n: any) => [n.nodeId, n.score]))
+    // unrelated owners are not retained file candidates
+    expect(natural.capsule.candidateFiles.some((f: any) => f.retained && f.path.includes('other/MainActivity'))).toBe(false)
+    // match reasons reflect the effective terms only
+    const reasons = JSON.stringify(natural.capsule.focus.reasons)
+    expect(reasons).toContain('userhomescreen')
+    expect(reasons).not.toMatch(/matched term \\"(a|to)\\"/)
+    // audit and query plan record what was actually searched
+    const searchStep = natural.audit.steps.find((step: any) => step.kind === 'run-search')
+    expect(searchStep.inputs).toEqual({ query: 'add new Compose screen next UserHomeScreen', suppressedConnectorTerms: 'a to' })
+    expect(natural.capsule.queryPlan.originalQuery).toBe('add a new Compose screen next to UserHomeScreen')
+  })
+
+  it('a long natural request naming both screens focuses a Compose screen (not an unrelated Activity) and keeps the genuine screen tie', () => {
+    const long = runWithAudit('add a new Compose screen UserProfileScreen in the UserSettingsScreen style, a sibling of UserHomeScreen and UserSettingsScreen').capsule
+    expect(long.focus.focusNodeId).toMatch(/UserHomeScreen|UserSettingsScreen/)
+    expect(long.focus.focusNodeId).not.toContain('MainActivity')
+    const candidateIds = long.candidateNodes.map((n: any) => n.nodeId).join(' ')
+    expect(candidateIds).toContain('UserHomeScreen')
+    expect(candidateIds).toContain('UserSettingsScreen')
+    // two named, equally plausible screens remain a conservative conflict
+    expect(JSON.stringify(long.conflicts)).toContain('compose-ui-component')
+  })
+
+  it('identical input and index produce identical results', () => {
+    const a = runWithAudit('add a new Compose screen next to UserHomeScreen').capsule
+    const b = runWithAudit('add a new Compose screen next to UserHomeScreen').capsule
+    expect(b.candidateFiles).toEqual(a.candidateFiles)
+    expect(b.focus).toEqual(a.focus)
+    expect(b.conflicts).toEqual(a.conflicts)
+  })
+})

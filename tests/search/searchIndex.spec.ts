@@ -890,3 +890,19 @@ function fixtureCodeGraph(): CodeGraph {
     },
   }
 }
+
+describe('public search is unchanged by the context connector-term correction (v1.13.0 Batch 1C)', () => {
+  it('still tokenizes and matches short connector terms exactly as before', () => {
+    expect(normalizeSearchQuery('add a field to the User')).toEqual(['add', 'a', 'field', 'to', 'the', 'user'])
+    const short = runSearch('a')
+    expect(short.results.length).toBeGreaterThan(0)
+    expect(short.results.every((item) => item.matchReasons.some((reason) => reason.term === 'a'))).toBe(true)
+    const sentence = runSearch('add a field to the user')
+    expect(sentence.results.length).toBeGreaterThan(0)
+    expect(runSearch('add a field to the user').results).toEqual(sentence.results)
+  })
+
+  it('is deterministic for a short-term-only query', () => {
+    expect(runSearch('a').results).toEqual(runSearch('a').results)
+  })
+})

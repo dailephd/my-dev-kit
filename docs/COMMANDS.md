@@ -496,6 +496,8 @@ npx @dailephd/my-dev-kit context --request context-request.json --json
 - `--no-source`: suppress source-slice/bundle selection, not graph/metadata evidence.
 - `--json`: structured command output.
 
+Query interpretation: for lexical candidate discovery, `context` may drop the bare lowercase low-information connector words `a`, `to`, `in`, and `the` from a multiword natural-language query, so that incidental substring matches on those words cannot dominate owner selection. The original query is preserved in the capsule, and the query actually searched is recorded in `queryPlan.searchQueries` and in the audit `run-search` step. Quoted phrases, paths, routes, identifiers, capitalized words, single-term queries, and queries made only of connector words are never altered. This applies only to `context`; the public `search` command keeps its existing tokenizer and ranking.
+
 ### Structured requests and role boundaries
 
 Use schema `1.0.0` and the exact current fields defined in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md). A small architecture request is:

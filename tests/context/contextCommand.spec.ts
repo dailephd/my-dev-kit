@@ -618,3 +618,51 @@ describe('context command', () => {
     }
   })
 })
+
+describe('context connector-term correction on a non-Android project (v1.13.0 Batch 1C)', () => {
+  function run(name: string, query: string): { capsule: any; audit: any } {
+    const capsulePath = join(outDir, name + '-capsule.json')
+    const auditPath = join(outDir, name + '-audit.json')
+    const result = runCli(['context', '--index', outDir, '--query', query, '--out', capsulePath, '--audit-out', auditPath, '--json'])
+    expect(result.status).toBe(0)
+    return { capsule: JSON.parse(readFileSync(capsulePath, 'utf8')), audit: JSON.parse(readFileSync(auditPath, 'utf8')) }
+  }
+  const searchStep = (audit: any) => audit.steps.find((step: any) => step.kind === 'run-search')
+
+  it('searches the effective query, records suppressed terms, and preserves the original query', () => {
+    const { capsule, audit } = run('natural', 'add a field to the user')
+    expect(capsule.queryPlan.originalQuery).toBe('add a field to the user')
+    expect(capsule.queryPlan.terms.raw).toEqual(['add', 'a', 'field', 'to', 'the', 'user'])
+    expect(capsule.queryPlan.searchQueries).toEqual(['add field user'])
+    expect(searchStep(audit).inputs).toEqual({ query: 'add field user', suppressedConnectorTerms: 'a to the' })
+  })
+
+  it('produces the same candidates and scores as the connector-free query', () => {
+    const natural = run('natural2', 'add a field to the user').capsule
+    const control = run('control2', 'add field user').capsule
+    const brief = (c: any) => c.candidateFiles.map((f: any) => [f.path, f.score, f.retained])
+    expect(brief(natural)).toEqual(brief(control))
+    expect(natural.focus.focusNodeId).toBe(control.focus.focusNodeId)
+    for (const candidate of natural.candidateFiles) {
+      expect(JSON.stringify(candidate.reasons)).not.toMatch(/matched term \\"(a|to|the)\\"/)
+    }
+  })
+
+  it('keeps a protected short single-term query searchable with an unchanged search input', () => {
+    const { audit } = run('short', 'a')
+    expect(searchStep(audit).inputs).toEqual({ query: 'a' })
+    expect(searchStep(audit).outputs.status).toBe('ok')
+  })
+
+  it('keeps quoted exact connector terms in the search input', () => {
+    const { audit } = run('quoted', 'find "the" user')
+    expect(searchStep(audit).inputs).toEqual({ query: 'find "the" user' })
+  })
+
+  it('is deterministic for identical input and index state', () => {
+    const first = run('det1', 'add a field to the user').capsule
+    const second = run('det2', 'add a field to the user').capsule
+    expect(second.candidateFiles).toEqual(first.candidateFiles)
+    expect(second.focus).toEqual(first.focus)
+  })
+})
