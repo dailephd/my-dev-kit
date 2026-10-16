@@ -85,3 +85,20 @@ describe('computeMetrics', () => {
     expect(metrics.candidateFileCount).toBeNull()
   })
 })
+
+describe('computeMetrics commandResult category', () => {
+  it('computes a commandResult pass rate and leaves it null when none were evaluated', () => {
+    const withCommand = computeMetrics([
+      taskResult({
+        assertionResults: [
+          assertion({ kind: 'commandResult', status: 'pass' }),
+          assertion({ kind: 'commandResult', status: 'fail' }),
+        ],
+      }),
+    ])
+    expect(withCommand.commandResultAssertionPassRate).toBe(0.5)
+
+    const without = computeMetrics([taskResult({ assertionResults: [assertion({ kind: 'candidateFile' })] })])
+    expect(without.commandResultAssertionPassRate).toBeNull()
+  })
+})

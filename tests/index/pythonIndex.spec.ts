@@ -1,8 +1,28 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
+import { PythonAdapter } from '../../src/languages/python/adapter.js'
+
+// Pass-through spawnSync wrapper; a test may rewrite only the symbol-extraction
+// script's result to simulate AST output the real interpreter cannot produce.
+const symbolScriptOverride = vi.hoisted(() => ({
+  transform: null as null | ((result: Record<string, unknown>) => Record<string, unknown>),
+}))
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return {
+    ...actual,
+    spawnSync: ((...args: Parameters<typeof actual.spawnSync>) => {
+      const result = actual.spawnSync(...args) as unknown as Record<string, unknown>
+      const argv = args[1] as string[] | undefined
+      const isSymbolScript =
+        argv?.[0] === '-c' && typeof argv[1] === 'string' && argv[1].includes('json.dumps({"symbols": symbols})')
+      return symbolScriptOverride.transform && isSymbolScript ? symbolScriptOverride.transform(result) : result
+    }) as unknown as typeof actual.spawnSync,
+  }
+})
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { CallGraph, SymbolIndex } from '../../src/symbol-index/types.js'
 
@@ -326,5 +346,106 @@ describe('Python indexing', () => {
 
     expect(callGraph.edges.some((edge) => edge.caller.name === 'tsCaller' && edge.callee.name === 'tsCallee')).toBe(true)
     expect(callGraph.edges.some((edge) => edge.caller.name === 'py_caller' && edge.callee.name === 'py_callee')).toBe(true)
+  })
+})
+
+describe('Python symbol end lines', () => {
+  const adapter = new PythonAdapter()
+  const spans = (source: string) =>
+    adapter.extractFromSource('src/sample.py', source).symbols.map((s) => [s.name, s.kind, s.location.line, s.location.endLine])
+
+  afterEach(() => {
+    symbolScriptOverride.transform = null
+  })
+
+  it('preserves AST end_lineno for functions, async functions, classes and constants', () => {
+    const source = [
+      'import os', // 1
+      '', // 2
+      '@dec', // 3
+      'def decorated():', // 4
+      '    return 1', // 5
+      '', // 6
+      'async def fetch():', // 7
+      '    await x()', // 8
+      '', // 9
+      '@dec(', // 10
+      '    1,', // 11
+      ')', // 12
+      'class Service:', // 13
+      '    value = 1', // 14
+      '', // 15
+      '    def run(self):', // 16
+      '        return self.value', // 17
+      '', // 18
+      'MAX_RETRIES = (1 +', // 19
+      '    2)', // 20
+      'LIMIT: int = 3', // 21
+    ].join('\n')
+
+    expect(spans(source)).toEqual([
+      ['decorated', 'function', 4, 5],
+      ['fetch', 'function', 7, 8],
+      ['Service', 'class', 13, 17],
+      ['MAX_RETRIES', 'const', 19, 20],
+      ['LIMIT', 'const', 21, 21],
+    ])
+  })
+
+  it('keeps the existing symbol fields next to endLine', () => {
+    const [fn] = adapter.extractFromSource('src/sample.py', 'def helper():\n    return 1\n').symbols
+    expect(fn).toMatchObject({
+      name: 'helper',
+      kind: 'function',
+      location: { file: 'src/sample.py', line: 1, endLine: 2 },
+      exported: true,
+    })
+  })
+
+  it('does not add unsupported symbol kinds or fabricate a boundary for malformed source', () => {
+    expect(spans('lowercase = 1\nfor i in range(3):\n    pass\n')).toEqual([])
+    expect(spans('def broken(:\n    pass\nVALUE = 1\n')).toEqual([])
+  })
+
+  it('writes end lines into symbol-index.json through the index pipeline', async () => {
+    const root = makeTemp()
+    createPythonFixture(root)
+    const result = await runIndexCommand({ root, src: ['src'], language: 'python', out: '.mdk-out' })
+    const idx = readJson<SymbolIndex>(result.outputDir, 'symbol-index.json')
+    const mainFile = idx.files.find((f) => f.path.endsWith('main.py'))!
+    const byName = Object.fromEntries(mainFile.symbols.map((s) => [s.name, [s.location.line, s.location.endLine]]))
+    expect(byName.APP_NAME).toEqual([8, 8])
+    expect(byName.greet).toEqual([10, 12])
+    expect(byName.fetch_user).toEqual([14, 16])
+    expect(byName.UserService).toEqual([22, 31])
+  })
+
+  const injectEndLine = (endLine: unknown) => {
+    symbolScriptOverride.transform = (result) => ({
+      ...result,
+      stdout: JSON.stringify({
+        symbols: [{ name: 'greet', kind: 'function', line: 3, end_line: endLine, exported: true, signature: 'def greet():' }],
+      }),
+    })
+    return adapter.extractFromSource('src/sample.py', 'x = 1\n\ndef greet():\n    pass\n').symbols
+  }
+
+  it('keeps a valid end_line and omits null, missing, malformed or out-of-range ones', () => {
+    expect(injectEndLine(4)[0].location).toEqual({ file: 'src/sample.py', line: 3, endLine: 4 })
+    // 'x = 1\n\ndef greet():\n    pass\n' splits into 5 lines.
+    expect(injectEndLine(5)[0].location).toEqual({ file: 'src/sample.py', line: 3, endLine: 5 })
+    for (const bad of [null, undefined, 2, 6, 4.5, '4', Number.NaN, -1]) {
+      const [symbol] = injectEndLine(bad)
+      expect(symbol.name).toBe('greet')
+      expect(symbol.location).toEqual({ file: 'src/sample.py', line: 3 })
+    }
+  })
+
+  it('does not report successful symbols when the interpreter call fails or returns garbage', () => {
+    symbolScriptOverride.transform = (result) => ({ ...result, error: new Error('spawn failed') })
+    expect(adapter.extractFromSource('src/sample.py', 'MAX = 1\n').symbols).toEqual([])
+
+    symbolScriptOverride.transform = (result) => ({ ...result, stdout: 'not json' })
+    expect(adapter.extractFromSource('src/sample.py', 'MAX = 1\n').symbols).toEqual([])
   })
 })

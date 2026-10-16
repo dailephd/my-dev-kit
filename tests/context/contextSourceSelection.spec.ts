@@ -257,3 +257,188 @@ describe('selectSourceBundles', () => {
     expect(result.bundles).toHaveLength(0)
   })
 })
+
+describe('selectSourceSlices known symbol boundaries', () => {
+  // Foo occupies lines 1..symbolEnd; a following declaration begins at symbolEnd + 1.
+  function boundedRoot(fileLines: number, symbolEnd: number): string {
+    const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-context-bounded-'))
+    tempDirs.push(root)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const lines: string[] = ['export function Foo() {']
+    for (let i = 2; i < symbolEnd; i++) lines.push(`  // foo ${i}`)
+    lines.push('}')
+    lines.push('export function Next() {')
+    while (lines.length < fileLines - 1) lines.push(`  // next ${lines.length}`)
+    lines.push('}')
+    writeFileSync(join(root, 'src', 'a.ts'), lines.join('\n') + '\n')
+    return root
+  }
+
+  function boundedSymbolIndex(fileLines: number, endLine: number | undefined): SymbolIndex {
+    const index = symbolIndexFixture(fileLines)
+    const symbol = index.files[0].symbols[0]
+    symbol.location = (endLine === undefined ? { line: 1 } : { line: 1, endLine }) as typeof symbol.location
+    return index
+  }
+
+  function focusTarget(nodeId: string) {
+    return [{ nodeId, priority: 0 as const, reason: 'primary focus node' }]
+  }
+
+  function run(root: string, fileLines: number, endLine: number | undefined, nodeId = 'symbol:src/a.ts#Foo') {
+    return selectSourceSlices({
+      codeGraph: codeGraphFixture(),
+      symbolIndex: boundedSymbolIndex(fileLines, endLine),
+      resolved: resolvedManifest(root),
+      targets: focusTarget(nodeId),
+      maxSourceSlices: null,
+    })
+  }
+
+  it('A: a known short symbol stops at its end with no continuation and no later declaration', () => {
+    const result = run(boundedRoot(400, 40), 400, 40)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(40)
+    expect(slice.continuationUsed).toBe(false)
+    expect(slice.continuationAvailable ?? false).toBe(false)
+    expect(slice.truncated).toBe(false)
+    expect(result.totalSelectedLines).toBe(40)
+  })
+
+  it('B: a known 180-line symbol uses one continuation that ends at the symbol end, not 320', () => {
+    const result = run(boundedRoot(400, 180), 400, 180)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(180)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.continuationAvailable ?? false).toBe(false)
+    expect(slice.truncated).toBe(false)
+    expect(result.totalSelectedLines).toBe(180)
+  })
+
+  it('C: a known symbol longer than two windows gets at most one continuation and stays truncated', () => {
+    const result = run(boundedRoot(500, 400), 500, 400)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(320)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.continuationAvailable).toBe(true)
+    expect(slice.truncated).toBe(true)
+    expect(result.totalSelectedLines).toBe(320)
+  })
+
+  it('D: an unknown symbol boundary keeps the conservative continuation behavior', () => {
+    const result = run(boundedRoot(500, 40), 500, undefined)
+    const slice = result.slices[0]
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(180)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.truncated).toBe(true)
+    expect(slice.continuationAvailable).toBe(true)
+  })
+
+  it('E: a file node keeps its existing single-continuation policy', () => {
+    const result = run(boundedRoot(500, 40), 500, 40, 'file:src/a.ts')
+    const slice = result.slices[0]
+    expect(slice.kind).not.toBe('symbol')
+    expect(slice.startLine).toBe(1)
+    expect(slice.endLine).toBe(320)
+    expect(slice.continuationUsed).toBe(true)
+    expect(slice.truncated).toBe(true)
+  })
+
+  it('F: a stale indexed end beyond the actual file is skipped rather than reported complete', () => {
+    const result = run(boundedRoot(30, 20), 400, 300)
+    expect(result.slices).toHaveLength(0)
+    expect(result.skipped).toHaveLength(1)
+    expect(result.skipped[0].reason).toMatch(/Stale index/)
+  })
+})
+
+describe('selectSourceBundles known symbol boundaries', () => {
+  // Foo occupies lines 1..symbolEnd; a sentinel declaration sits on line symbolEnd + 1.
+  function sentinelRoot(symbolEnd: number, physicalLines = symbolEnd + 1): string {
+    const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-context-bundle-'))
+    tempDirs.push(root)
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const lines: string[] = ['export function Foo() {']
+    for (let i = 2; i < symbolEnd; i++) lines.push(`  // foo ${i}`)
+    lines.push('}')
+    lines.push("export const sentinel = 'sentinel-after-foo'")
+    writeFileSync(join(root, 'src', 'a.ts'), lines.slice(0, physicalLines).join('\n') + '\n')
+    return root
+  }
+
+  function indexWithEnd(lineCount: number, endLine: unknown): SymbolIndex {
+    const index = symbolIndexFixture(lineCount)
+    const symbol = index.files[0].symbols[0]
+    symbol.location = (endLine === undefined ? { line: 1 } : { line: 1, endLine }) as unknown as typeof symbol.location
+    return index
+  }
+
+  const focus: ContextFocus = {
+    ...noFocus,
+    focusNodeId: 'symbol:src/a.ts#Foo',
+    focusFilePath: 'src/a.ts',
+    confidence: 'high',
+    selectionMode: 'single-best',
+  }
+
+  function select(root: string, index: SymbolIndex) {
+    return selectSourceBundles({
+      focus,
+      symbolIndex: index,
+      codeGraph: codeGraphFixture(),
+      resolved: resolvedManifest(root),
+      frontendArtifact: null,
+    })
+  }
+
+  it('4/5: a completed known primary stops at its end, is not truncated, and agrees with bundle statistics', () => {
+    const result = select(sentinelRoot(27), indexWithEnd(28, 27))
+    const bundle = result.bundles[0]
+    const primary = bundle.blocks[0]
+    expect(primary.kind).toBe('primary-target')
+    expect([primary.startLine, primary.endLine]).toEqual([1, 27])
+    expect(primary.truncated).toBe(false)
+    expect(primary.warnings).toEqual([])
+    expect(bundle.totalLines).toBe(27)
+    expect(result.totalSelectedLines).toBe(27)
+    expect(bundle.warnings.join('\n')).not.toMatch(/start line only|end line is not available/)
+  })
+
+  it('6: a known primary larger than the context block cap is truthfully truncated at the cap', () => {
+    const result = select(sentinelRoot(150), indexWithEnd(151, 150))
+    const primary = result.bundles[0].blocks[0]
+    expect([primary.startLine, primary.endLine]).toEqual([1, 60])
+    expect(primary.truncated).toBe(true)
+    expect(result.bundles[0].totalLines).toBe(60)
+    expect(result.bundles[0].warnings.join('\n')).toContain('spans lines 1-150')
+  })
+
+  it('14: an unknown boundary keeps the conservative bounded preview and its uncertainty warning', () => {
+    const result = select(sentinelRoot(150), indexWithEnd(151, undefined))
+    const primary = result.bundles[0].blocks[0]
+    expect([primary.startLine, primary.endLine]).toEqual([1, 60])
+    expect(result.bundles[0].warnings.join('\n')).toContain('Symbol end line is not available in the current index')
+  })
+
+  it('10: a malformed indexed end is not trusted and falls back to the preview', () => {
+    for (const bad of [0, -3, 2.5, 'x', 9999]) {
+      const result = select(sentinelRoot(27), indexWithEnd(28, bad))
+      const primary = result.bundles[0].blocks[0]
+      // The 28-line file is shorter than the 60-line cap, so the legacy preview reads to EOF.
+      expect(primary.endLine, String(bad)).toBe(28)
+      expect(result.bundles[0].warnings.join('\n'), String(bad)).toContain('Symbol end line is not available')
+    }
+  })
+
+  it('13: an indexed end beyond the physical file fails as a stale index and yields no bundle', () => {
+    // Indexed end 27, but the file on disk has only 10 lines.
+    const result = select(sentinelRoot(27, 10), indexWithEnd(28, 27))
+    expect(result.bundles).toHaveLength(0)
+    expect(result.omittedBundleCount).toBe(1)
+    expect(result.warnings.join('\n')).toMatch(/Stale index\/source mismatch/)
+  })
+})

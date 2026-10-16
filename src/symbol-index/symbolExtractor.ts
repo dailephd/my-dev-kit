@@ -59,7 +59,9 @@ export function extractFromSource(
       ? filePath.endsWith('.tsx')
         ? ts.ScriptKind.TSX
         : ts.ScriptKind.TS
-      : ts.ScriptKind.JS
+      : filePath.endsWith('.jsx')
+        ? ts.ScriptKind.JSX
+        : ts.ScriptKind.JS
 
   const sourceFile = ts.createSourceFile(
     filePath,
@@ -70,6 +72,9 @@ export function extractFromSource(
   )
 
   const lineCount = sourceText.split('\n').length
+  // Parser recovery cannot prove an exact declaration end, so a file with
+  // syntax diagnostics receives no generic end-line metadata.
+  const endLineLimit = hasParseErrors(sourceFile) ? null : lineCount
   const imports: string[] = []
   const exports: string[] = []
   const symbols: SymbolDefinition[] = []
@@ -85,7 +90,8 @@ export function extractFromSource(
       exports,
       symbols,
       reExportSpecifiers,
-      exportAllSpecifiers
+      exportAllSpecifiers,
+      endLineLimit
     )
   })
 
@@ -112,7 +118,8 @@ function visitTopLevel(
   exports: string[],
   symbols: SymbolDefinition[],
   reExportSpecifiers: string[],
-  exportAllSpecifiers: string[]
+  exportAllSpecifiers: string[],
+  endLineLimit: number | null
 ): void {
   // Import declarations
   if (ts.isImportDeclaration(node)) {
@@ -150,7 +157,7 @@ function visitTopLevel(
     symbols.push({
       name,
       kind: 'function',
-      location: locationOf(node, sourceFile, filePath),
+      location: locationOf(node, sourceFile, filePath, endLineLimit),
       exported: exp,
       signature: briefSignature(node, sourceFile),
     })
@@ -165,7 +172,7 @@ function visitTopLevel(
     symbols.push({
       name,
       kind: 'class',
-      location: locationOf(node, sourceFile, filePath),
+      location: locationOf(node, sourceFile, filePath, endLineLimit),
       exported: exp,
       signature: briefSignature(node, sourceFile),
     })
@@ -180,7 +187,7 @@ function visitTopLevel(
     symbols.push({
       name,
       kind: 'interface',
-      location: locationOf(node, sourceFile, filePath),
+      location: locationOf(node, sourceFile, filePath, endLineLimit),
       exported: exp,
       signature: briefSignature(node, sourceFile),
     })
@@ -195,7 +202,7 @@ function visitTopLevel(
     symbols.push({
       name,
       kind: 'type',
-      location: locationOf(node, sourceFile, filePath),
+      location: locationOf(node, sourceFile, filePath, endLineLimit),
       exported: exp,
       signature: briefSignature(node, sourceFile),
     })
@@ -210,7 +217,7 @@ function visitTopLevel(
     symbols.push({
       name,
       kind: 'enum',
-      location: locationOf(node, sourceFile, filePath),
+      location: locationOf(node, sourceFile, filePath, endLineLimit),
       exported: exp,
       signature: briefSignature(node, sourceFile),
     })
@@ -230,7 +237,7 @@ function visitTopLevel(
         symbols.push({
           name,
           kind,
-          location: locationOf(decl, sourceFile, filePath),
+          location: locationOf(decl, sourceFile, filePath, endLineLimit),
           exported: exp,
           signature: briefSignature(node, sourceFile),
         })
@@ -256,16 +263,46 @@ function hasExportKeyword(node: ts.Node): boolean {
 /**
  * Returns a SymbolLocation for the given node.
  * Line is 1-based; file is the provided filePath.
+ *
+ * `endLine` is the 1-based inclusive line of the node's last character, taken
+ * from the parser's declaration end offset (exclusive, so `end - 1` is the last
+ * character). It is omitted when `endLineLimit` is null (the file has parse
+ * diagnostics) or the range is not a valid span within `endLineLimit` lines.
  */
 function locationOf(
   node: ts.Node,
   sourceFile: ts.SourceFile,
-  filePath: string
+  filePath: string,
+  endLineLimit: number | null
 ): SymbolLocation {
-  const { line } = sourceFile.getLineAndCharacterOfPosition(
-    node.getStart(sourceFile)
-  )
-  return { file: filePath, line: line + 1 }
+  const start = node.getStart(sourceFile)
+  const { line } = sourceFile.getLineAndCharacterOfPosition(start)
+  const location: SymbolLocation = { file: filePath, line: line + 1 }
+
+  const end = node.getEnd()
+  if (endLineLimit !== null && end > start) {
+    const { line: lastLine } = sourceFile.getLineAndCharacterOfPosition(end - 1)
+    const endLine = lastLine + 1
+    if (
+      Number.isInteger(endLine) &&
+      endLine >= location.line &&
+      endLine <= endLineLimit
+    ) {
+      location.endLine = endLine
+    }
+  }
+  return location
+}
+
+/**
+ * True when the parser reported syntax diagnostics for the file.
+ * `parseDiagnostics` is not part of the public `ts.SourceFile` typings, so it
+ * is read defensively; an unreadable value counts as untrusted.
+ */
+function hasParseErrors(sourceFile: ts.SourceFile): boolean {
+  const diagnostics = (sourceFile as { parseDiagnostics?: readonly unknown[] })
+    .parseDiagnostics
+  return !Array.isArray(diagnostics) || diagnostics.length > 0
 }
 
 /**

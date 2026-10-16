@@ -188,3 +188,60 @@ export function deriveReadiness(overallUncertainty: UncertaintyTier, hasConflict
 export function dedupeRisks(risks: readonly RiskLabel[]): RiskLabel[] {
   return [...new Set(risks)]
 }
+
+/**
+ * v1.12.6 Batch 2: canonical pure generic path predicates, relocated unchanged from
+ * `context/roleCandidates.ts` and `context/evidenceClassification.ts` (both still re-export them).
+ * Kept free of context role-selection and Android owner-policy imports so generic search can
+ * evaluate test/fixture/generated eligibility without loading that code.
+ */
+
+/** Shared basename helper. */
+export function basename(filePath: string | undefined): string {
+  if (!filePath) return ''
+  const parts = filePath.split(/[\/]/)
+  return parts[parts.length - 1] ?? filePath
+}
+
+export function stripExt(name: string): string {
+  return name.replace(/\.[jt]sx?$/i, '')
+}
+
+export const TEST_LIKE_PATTERN = /(^|[\/])(__tests__[\/].*|.*\.(spec|test))\.[jt]sx?$/i
+
+export function isTestLike(filePath: string | undefined): boolean {
+  return filePath !== undefined && TEST_LIKE_PATTERN.test(filePath)
+}
+
+/** Directories conventionally reserved for test-scoped code: test files themselves,
+ * `__tests__`, `tests/`, fixture/mock directories, and common test-utility directory names. */
+export const TEST_SCOPE_DIR_PATTERN =
+  /(^|[\/])(tests?|__tests__|test-utils|testutils|test-helpers|testhelpers|fixtures|__fixtures__|mocks|__mocks__)([\/])/i
+
+/** Paths under a fixture/sample/snapshot-shaped directory. */
+export const FIXTURE_PATH_PATTERN = /(^|[\/])(__fixtures__|fixtures|test-data|testdata|samples|snapshots)([\/]|$)/i
+
+/** Paths under a generated-output directory, or a `.generated.` infix, or a
+ * `generated`-prefixed/suffixed basename. v1.10.3 Batch 1: used only to keep
+ * codegen output out of implementation-owner eligibility (F-002); never a
+ * ranking signal. */
+export const GENERATED_PATH_PATTERN = /(^|[\/])(generated|__generated__|codegen)([\/]|$)|\.generated\.[jt]sx?$/i
+export const GENERATED_NAME_PATTERN = /(^|[^a-z])generated([^a-z]|$)/i
+
+export function isFixtureLike(filePath: string | undefined): boolean {
+  return filePath !== undefined && FIXTURE_PATH_PATTERN.test(filePath)
+}
+
+export function isGeneratedLike(filePath: string | undefined): boolean {
+  if (filePath === undefined) return false
+  return GENERATED_PATH_PATTERN.test(filePath) || GENERATED_NAME_PATTERN.test(stripExt(basename(filePath)))
+}
+
+/** True when a file lives inside a test-scoped area of the tree: itself a `*.spec`/`*.test`
+ * file, or under `tests/`, `__tests__/`, a fixture/mock directory, or a test-utility directory.
+ * This is the boundary that keeps `isFactoryLike`/`isSetupLike` from ever matching a
+ * production file purely by name (TST-B3-013). */
+export function isTestScoped(filePath: string | undefined): boolean {
+  if (filePath === undefined) return false
+  return isTestLike(filePath) || TEST_SCOPE_DIR_PATTERN.test(filePath)
+}

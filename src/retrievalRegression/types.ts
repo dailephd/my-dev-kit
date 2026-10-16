@@ -144,7 +144,28 @@ export interface AdequacyExpectation {
   required?: boolean
 }
 
+/**
+ * Machine-readable command-result expectations for `search` and `source` execution tasks.
+ * Search fields: requiredResultIds, topK. Source fields: everything else except those two.
+ */
+export interface CommandResultExpectation {
+  requiredResultIds?: string[]
+  topK?: number
+  expectedMode?: string
+  expectedStartLine?: number
+  expectedEndLine?: number
+  expectedLineCount?: number
+  requiredContent?: string[]
+  forbiddenContent?: string[]
+  continuation?: 'present' | 'absent'
+  symbolBoundaryKnown?: boolean
+  nextStartLine?: number
+  continuationReason?: 'symbol-end-unknown' | 'max-lines-reached' | 'window-capped' | 'eof'
+  required?: boolean
+}
+
 export interface RetrievalRegressionExpectation {
+  commandResult?: CommandResultExpectation
   candidateFiles?: CandidateFileExpectation[]
   candidateNodes?: CandidateNodeExpectation[]
   focus?: FocusExpectation
@@ -161,6 +182,34 @@ export interface RetrievalRegressionExpectation {
   adequacy?: AdequacyExpectation
 }
 
+export type RetrievalRegressionExecutionKind = 'context' | 'search' | 'source'
+
+export interface RetrievalRegressionContextExecution {
+  kind: 'context'
+}
+
+export interface RetrievalRegressionSearchExecution {
+  kind: 'search'
+  intent?: 'relevance' | 'ownership'
+  limit?: number
+}
+
+export interface RetrievalRegressionSourceExecution {
+  kind: 'source'
+  file?: string
+  symbol?: string
+  node?: string
+  maxLines?: number
+  continue?: boolean
+  continueFrom?: number
+}
+
+/** Omitted `execution` means the original context-capsule execution. */
+export type RetrievalRegressionExecution =
+  | RetrievalRegressionContextExecution
+  | RetrievalRegressionSearchExecution
+  | RetrievalRegressionSourceExecution
+
 export interface RetrievalRegressionTask {
   id: string
   title: string
@@ -171,6 +220,7 @@ export interface RetrievalRegressionTask {
   mode?: RetrievalRegressionMode
   caps?: RetrievalRegressionCaps
   noSource?: boolean
+  execution?: RetrievalRegressionExecution
   expectations?: RetrievalRegressionExpectation
   tags?: string[]
   skip?: boolean
@@ -232,6 +282,7 @@ export type AssertionKind =
   | 'noRawContent'
   | 'capCompliance'
   | 'adequacy'
+  | 'commandResult'
 
 export interface AssertionResult {
   assertionId: string
@@ -328,6 +379,8 @@ export interface RetrievalRegressionMetrics {
   noRawContentAssertionPassRate: number | null
   capComplianceAssertionPassRate: number | null
   adequacyAssertionPassRate: number | null
+  /** Additive: pass rate of search/source command-result assertions (null when none were evaluated). */
+  commandResultAssertionPassRate?: number | null
   candidateFileCount: number | null
   candidateNodeCount: number | null
   selectedGraphNodeCount: number | null

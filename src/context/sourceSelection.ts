@@ -70,6 +70,7 @@ export function selectSourceSlices(options: {
         maxLines: DEFAULT_MAX_LINES,
         mode: resolvedTarget.mode,
         symbolName: resolvedTarget.symbolName,
+        symbolEndLine: resolvedTarget.symbolEndLine,
         semanticRoles: resolvedTarget.semanticRoles,
         artifactRefs: resolvedTarget.artifactRefs,
         evidenceRefs: resolvedTarget.evidenceRefs,
@@ -81,7 +82,9 @@ export function selectSourceSlices(options: {
       let continuationUsed = false
       if (target.priority === 0 && !continuationUsedOnce && slice.continuationCursor && !slice.continuationCursor.eof) {
         const cursor = slice.continuationCursor
-        const nextEnd = cursor.nextStartLine + DEFAULT_MAX_LINES - 1
+        const windowEnd = cursor.nextStartLine + DEFAULT_MAX_LINES - 1
+        // A known symbol end bounds the continuation so it never reaches into the next declaration.
+        const nextEnd = Math.min(windowEnd, resolvedTarget.symbolEndLine ?? windowEnd)
         try {
           const continued = getSourceSlice({
             indexDir: resolved.indexDir,
@@ -92,6 +95,7 @@ export function selectSourceSlices(options: {
             maxLines: DEFAULT_MAX_LINES,
             mode: resolvedTarget.mode,
             symbolName: resolvedTarget.symbolName,
+            symbolEndLine: resolvedTarget.symbolEndLine,
           })
           slice = {
             ...slice,

@@ -104,7 +104,8 @@
       "1.12.2",
       "1.12.3",
       "1.12.4",
-      "1.12.5"
+      "1.12.5",
+      "1.12.6"
     ],
     "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
@@ -321,16 +322,16 @@
   "statusBoundaries": {
     "documentKeywords": {
       "README.md": [
-        "Latest release: v1.12.5",
-        "@dailephd/my-dev-kit@1.12.5",
+        "Latest release: v1.12.6",
+        "@dailephd/my-dev-kit@1.12.6",
         "planned scopes",
-        "Planned next: v1.12.6"
+        "v1.12.6 bounded retrieval precision"
       ],
       "docs/ROADMAP.md": [
         "## Version 1.12.5",
         "**Status: published.**",
         "## Version 1.12.6",
-        "**Status: planned.**",
+        "**Status: published.**",
         "## Version 1.17.0",
         "## Historical frontend improvement coverage and disposition",
         "Area of Improvements 1 (15 entries)",
@@ -339,8 +340,8 @@
         "Area of Improvements 4 (1 entry)"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.12.5 is the current release",
-        "Planned next: v1.12.6"
+        "Version 1.12.6 is the current release",
+        "### v1.12.6 bounded retrieval precision"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -374,6 +375,7 @@
       ],
       "docs/PROJECT_PROGRESS.md": [
         "current release",
+        "## Shipped: v1.12.6",
         "## Shipped: v1.12.5",
         "## Shipped: v1.12.4",
         "## Shipped: v1.12.3",
@@ -381,7 +383,8 @@
         "## Shipped: v1.12.0",
         "## Shipped: v1.10.3",
         "## Shipped: v1.10.4",
-        "## Planned next: v1.12.6"
+        "### Readiness history",
+        "INCONCLUSIVE_SUPPLEMENTAL"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",
@@ -525,7 +528,8 @@
       "## 1.12.1",
       "## 1.12.2",
       "## 1.12.3",
-      "## 1.12.4"
+      "## 1.12.4",
+      "## 1.12.6"
     ],
     "requiredUnreleasedVersionHeadings": [
       "## Unreleased"

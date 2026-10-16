@@ -443,3 +443,54 @@ describe('buildPartialSymbolIndex forced re-extraction (v1.12.5 affected-neighbo
     expect(normalized(partial.index)).toEqual(normalized(full.index))
   })
 })
+
+describe('symbol endLine retention across full and partial rebuilds', () => {
+  const locationsOf = (index: ReturnType<typeof readSymbolIndex>) =>
+    Object.fromEntries(
+      index.files.flatMap((file: { path: string; symbols: Array<{ name: string; location: { line: number; endLine?: number } }> }) =>
+        file.symbols.map((symbol) => [`${file.path}#${symbol.name}`, [symbol.location.line, symbol.location.endLine]])
+      )
+    )
+
+  it('retains unchanged end lines, re-extracts changed and added files, and matches a clean full index', () => {
+    const root = createFixture()
+    const src = join(root, 'src')
+    writeFileSync(join(src, 'keep.ts'), ['export function keep(a: number): number {', '  const b = a + 1', '  return b', '}'].join('\n') + '\n')
+    writeFileSync(join(src, 'grow.ts'), ['export function grow(): number {', '  return 1', '}'].join('\n') + '\n')
+    writeFileSync(join(src, 'gone.ts'), ['export const gone = {', '  a: 1,', '}'].join('\n') + '\n')
+
+    runIncremental(root, 'cache-out')
+    const before = locationsOf(readSymbolIndex(root, 'cache-out'))
+    expect(before['src/keep.ts#keep']).toEqual([1, 4])
+    expect(before['src/grow.ts#grow']).toEqual([1, 3])
+    expect(before['src/gone.ts#gone']).toEqual([1, 3])
+
+    writeFileSync(
+      join(src, 'grow.ts'),
+      ['export function grow(): number {', '  const a = 1', '  const b = 2', '  const c = 3', '  return a + b + c', '}'].join('\n') + '\n'
+    )
+    writeFileSync(join(src, 'added.ts'), ['export class Added {', '  value = 1', '}'].join('\n') + '\n')
+    rmSync(join(src, 'gone.ts'))
+
+    const partial = runIncremental(root, 'cache-out')
+    expect(partial.cache.mode).toBe('incremental-partial')
+    runFull(root, 'full-out')
+
+    const after = locationsOf(readSymbolIndex(root, 'cache-out'))
+    expect(after['src/keep.ts#keep']).toEqual(before['src/keep.ts#keep'])
+    expect(after['src/grow.ts#grow']).toEqual([1, 6])
+    expect(after['src/added.ts#Added']).toEqual([1, 3])
+    expect(after).not.toHaveProperty('src/gone.ts#gone')
+
+    expect(normalizeSymbolIndex(readSymbolIndex(root, 'cache-out'))).toEqual(normalizeSymbolIndex(readSymbolIndex(root, 'full-out')))
+    expect(locationsOf(readSymbolIndex(root, 'full-out'))).toEqual(after)
+
+    const partialGraph = readCodeGraph(root, 'cache-out')
+    const fullGraph = readCodeGraph(root, 'full-out')
+    expect(normalizeCodeGraph(partialGraph)).toEqual(normalizeCodeGraph(fullGraph))
+    // Symbol nodes keep their start-line-only shape; endLine lives only in symbol-index locations.
+    const symbolNodes = partialGraph.nodes.filter((n: { kind: string }) => n.kind === 'symbol')
+    expect(symbolNodes.map((n: { id: string }) => n.id)).toContain('symbol:src/grow.ts#grow')
+    for (const node of symbolNodes) expect(node).not.toHaveProperty('endLine')
+  })
+})

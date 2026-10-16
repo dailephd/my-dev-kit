@@ -132,15 +132,31 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.12.5
+## Latest release: v1.12.6
 
-`@dailephd/my-dev-kit@1.12.5` is the current release and adds affected-neighborhood incremental refresh to the existing indexing pipeline. Use `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains equivalent to `changed-files`. The affected-neighborhood scope freshly extracts unchanged files one graph hop from modified or removed baseline files, using a cryptographically trusted prior index and a truthful full rebuild when that baseline cannot be trusted. No-change runs remain no-ops. See [Incremental refresh scope](docs/COMMANDS.md#incremental-refresh-scope-v1125), [ARCHITECTURE.md](docs/ARCHITECTURE.md), and [ROADMAP.md](docs/ROADMAP.md#version-1125).
+`@dailephd/my-dev-kit@1.12.6` is the current release. It adds ownership-oriented search and trustworthy symbol boundaries for bounded source retrieval while retaining ordinary relevance search and conservative fallback for unknown boundaries. It also includes affected-neighborhood incremental refresh from v1.12.5. Install with `npm install -g @dailephd/my-dev-kit`; see the [v1.12.6 release notes](CHANGELOG.md#1126---2026-10-16), [commands](docs/COMMANDS.md), and [roadmap](docs/ROADMAP.md#version-1126).
 
-### Planned next: v1.12.6
+### v1.12.6 bounded retrieval precision
 
-Version 1.12.6 is planned as a bounded retrieval-precision patch. It will add an explicit ownership-oriented search path for natural-language implementation queries while preserving ordinary relevance search, and it will add optional trustworthy generic-symbol end-line evidence so bounded source retrieval can return a complete known symbol when the extractor can prove its boundary. This is planned behavior only; the installed v1.12.5 command and artifact contracts are unchanged. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
+Version 1.12.6 is a bounded retrieval-precision patch over the existing graph-guided workflow. Ownership search helps surface grounded production owners while retaining relevant tests and supporting evidence. Optional parser-derived `endLine` values let source retrieval and local source bundles return complete known symbols and keep continuation within their boundaries. Raw relevance search and conservative behavior for unknown or older-index boundaries remain supported. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
 
-Version 1.12.4 was the previous release. It added core indexing and retrieval of supported `.test.`/`.spec.` files beneath selected source roots, with the existing exclusion and cache-fingerprint boundaries. Search ranking remains relevance evidence, not edit ownership.
+The candidate adds two generic retrieval corrections to the existing graph-guided workflow:
+
+- **Explicit ownership-oriented search.** `search --query "<text>" --intent ownership` ranks the same candidate pool by static, inspectable ownership tiers (`direct-owner`, `production-candidate`, `supporting-evidence`) so a grounded production owner stays discoverable when a strongly matching test would otherwise outrank it. Tests, fixtures, generated files, and docs remain in the results as supporting evidence. Ownership ranking is advisory static evidence, not edit authorization.
+- **Preserved raw relevance search.** `search --query` without `--intent` (or with `--intent relevance`) keeps the existing relevance-ranked behavior and output unchanged.
+- **Parser-derived optional symbol end boundaries.** `symbol-index.json` symbol locations may carry an optional inclusive `endLine`, derived from the TypeScript compiler AST (TypeScript, TSX, JavaScript, JSX) or validated Python `ast` `end_lineno` evidence. Kotlin and Java generic symbols keep unknown boundaries.
+- **Complete known-symbol retrieval and bounded continuation.** `source --file <path> --symbol <name>` and symbol-node `source --node` return the complete symbol within `--max-lines` when its end is known, continue only inside the symbol when it is larger than `--max-lines`, and emit no continuation cursor once the complete known symbol has been returned.
+- **Contained source bundles.** Local type, prop, component, and dependency bundles use the same trusted boundaries, so primary and expanded blocks stay within their declarations while preserving bounded continuation and unknown-boundary fallback.
+- **Old-index and unknown-boundary fallback.** An index without `endLine`, or a symbol whose boundary is not trustworthy, keeps the conservative 20-line preview with `symbolBoundaryKnown: false` and continuation reason `symbol-end-unknown`.
+
+Use ownership-oriented search and bounded symbol retrieval with the installed CLI:
+
+```sh
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+npx @dailephd/my-dev-kit source --index .my-dev-kit --file "<path>" --symbol "<symbol-name>" --format numbered
+```
+
+Version 1.12.5 was the previous release. It added affected-neighborhood incremental refresh to the existing indexing pipeline. Search ranking remains advisory evidence, not edit authorization.
 
 Version 1.12.3 was a bounded corrective patch for the role-aware `context` command's readiness semantics: final role adequacy (`architecture`/`implementation`/`test-implementation`) now recovers from an early, non-material base-retrieval or helper-classification failure whenever independently retained evidence still satisfies the role's actual required conditions, while genuinely missing required evidence, unresolved material conflict, and required-witness truncation remain blocking as before. Implementation-contract discovery recognizes legitimate neutral-named Python contract owners (for example `result.py`, `cases.py`) from grounded structural evidence rather than relying on filename hints alone. Test-responsibility mapping distinguishes core evidence (production, contract/validator/error, related-test, and oracle/assertion) from supplemental test-command evidence: a core-complete responsibility with no discovered test command remains sufficiently mapped with an explicit warning, unless the request explicitly asks for `test-commands` evidence, in which case grounded command evidence is required. Test-command discovery also now checks a repository `Makefile` `test` target alongside the existing `package.json` script discovery. This is a backward-compatible defect correction; no new public command, flag, role, or artifact schema major. The command syntax and artifact schema major remain unchanged.
 
@@ -447,7 +463,7 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.ts --symbo
 npx @dailephd/my-dev-kit source --index .my-dev-kit --node "symbol:src/editor.ts#EditorShell" --continue
 ```
 
-JSON output always includes a `continuationCursor` with `nextStartLine`, `previousEndLine`, `exhausted`, and `reason`. Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer.
+When a bounded result may be incomplete, JSON output includes a `continuationCursor` with `nextStartLine`, `previousEndLine`, `eof`, `symbolBoundaryKnown`, and `reason` (`symbol-end-unknown`, `window-capped`, `max-lines-reached`, or `eof`). Numbered output prints a `[CONTINUE: ...]` or `[EOF: ...]` footer. In v1.12.6, a symbol whose end line is known and that has been returned completely has no `continuationCursor`, and a known symbol larger than `--max-lines` continues only up to its own end line.
 
 ## Local dependency expansion (v1.4.0)
 
@@ -566,7 +582,7 @@ All React/TSX and frontend-test analysis is conservative static extraction from 
 
 ## Limitations
 
-- Symbol end lines are not stored in the symbol index. Symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
+- v1.12.6 stores an optional parser-derived `endLine` for TypeScript-family and Python symbols; Kotlin, Java, old indexes, and uncertain cases keep unknown boundaries. When a boundary is unknown, symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
 - Data-model extraction is conservative and currently focused on supported TypeScript patterns.
 - Frontend semantic extraction is conservative. Dynamic component registrations, runtime-composed JSX, and computed prop names may not be extracted or may be partially extracted with warnings.
@@ -594,7 +610,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.5 is the current release. Version 1.12.6 is the next planned bounded retrieval-precision patch. Later versions retain their separate planned scopes: v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.12.6 is the current release. Later versions retain their separate planned scopes: v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and the longer-term v1.14.0 through v2.0.0 plans remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

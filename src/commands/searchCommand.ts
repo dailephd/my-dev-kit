@@ -5,7 +5,7 @@ import type { FrontendSemanticArtifact } from '../frontend/frontendTypes.js'
 import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
 import { searchIndex } from '../search/searchIndex.js'
-import type { SearchIndexResult } from '../search/searchTypes.js'
+import { SEARCH_INTENT_VALUES, type SearchIndexResult } from '../search/searchTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import {
   loadFrontendReachabilityArtifact,
@@ -46,6 +46,7 @@ export function registerSearchCommand(program: Command): void {
       '--android-role <role>',
       `search for an exact Android classification role (exact match; one of: ${ANDROID_ROLE_SEARCH_VALUES.join(', ')})`
     )
+    .option('--intent <intent>', `generic --query ranking intent: ${SEARCH_INTENT_VALUES.join(' or ')} (default: relevance)`)
     .option('--limit <n>', `result limit, 1 through ${MAX_LIMIT}`, parseLimit, DEFAULT_LIMIT)
     .option('--json', 'print JSON output')
     .action((options: SearchCommandOptions) => {
@@ -61,6 +62,20 @@ export function registerSearchCommand(program: Command): void {
         options.testTag,
         options.androidUi,
       ]
+      if (options.intent !== undefined) {
+        if (!(SEARCH_INTENT_VALUES as readonly string[]).includes(options.intent)) {
+          throw new Error(`Invalid --intent value "${options.intent}". Allowed values: ${SEARCH_INTENT_VALUES.join(', ')}.`)
+        }
+        if (options.androidRole !== undefined || otherSelectorFlags.some((v) => v !== undefined)) {
+          throw new Error(
+            '--intent is valid only with --query and cannot be combined with --route, --storage-key, --ui, --android-route, --permission, --resource, --android-component, --composable, --test-tag, --android-ui, or --android-role.'
+          )
+        }
+        if (!options.query) {
+          throw new Error('--intent requires --query <text>.')
+        }
+      }
+
       if (options.androidRole !== undefined) {
         if (options.query !== undefined || otherSelectorFlags.some((v) => v !== undefined)) {
           throw new Error(
@@ -134,6 +149,7 @@ export function registerSearchCommand(program: Command): void {
         frontendArtifact: loadOptionalFrontendArtifact(resolved),
         query: options.query,
         limit: options.limit,
+        ...(options.intent === 'ownership' ? { intent: 'ownership' as const } : {}),
       })
 
       if (options.json) {
@@ -158,6 +174,7 @@ interface SearchCommandOptions {
   testTag?: string
   androidUi?: string
   androidRole?: string
+  intent?: string
   limit: number
   json?: boolean
 }
@@ -205,6 +222,7 @@ function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): Frontend
 
 function printTextResult(result: SearchIndexResult): void {
   console.log(`Search query: ${result.query}`)
+  if (result.intent) console.log(`Intent: ${result.intent}`)
   console.log(`Index dir: ${result.indexDir}`)
   console.log(`Results: ${result.results.length}`)
 
@@ -216,5 +234,9 @@ function printTextResult(result: SearchIndexResult): void {
       .map((reason) => `${reason.field}:${reason.term}`)
       .join(', ')
     if (reasons) console.log(`   matches: ${reasons}`)
+    if (item.ownership) {
+      const evidence = item.ownership.evidence.map((entry) => entry.kind).join(', ')
+      console.log(`   ownership: ${item.ownership.tier}${evidence ? ` (${evidence})` : ''}`)
+    }
   }
 }

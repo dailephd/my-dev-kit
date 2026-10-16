@@ -51,6 +51,12 @@ export type SymbolKind =
 export interface SymbolLocation {
   file: string
   line: number
+  /**
+   * 1-based inclusive declaration end line. Present only when the language
+   * extractor's parser establishes a trustworthy boundary (an integer >= `line`
+   * and within the file); absent when the boundary is unknown.
+   */
+  endLine?: number
 }
 
 /**

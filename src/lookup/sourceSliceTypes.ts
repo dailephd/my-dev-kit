@@ -54,6 +54,11 @@ export interface SourceTarget {
   symbolName?: string
   startLine?: number
   endLine?: number
+  /**
+   * Validated, inclusive 1-based end line of the symbol's declaration. Present only for generic
+   * symbol targets whose indexed `endLine` passed boundary validation; absent means the end is unknown.
+   */
+  symbolEndLine?: number
   semanticRoles?: SemanticRole[]
   artifactRefs?: SemanticArtifactRef[]
   evidenceRefs?: SemanticEvidenceRef[]

@@ -11,6 +11,7 @@ import type {
   CandidateNodeExpectation,
   CapComplianceExpectation,
   ClassificationSummaryExpectation,
+  CommandResultExpectation,
   ConflictExpectation,
   FocusExpectation,
   ModeEffectExpectation,
@@ -45,12 +46,28 @@ export interface AssertionEvidence {
   audit: RetrievalAuditRecord | null
   auditPath?: string
   auditReadError?: string
+  /** Parsed machine-readable stdout of a `search`/`source` execution task. */
+  commandResult?: unknown | null
+  commandResultPath?: string
+  commandResultReadError?: string
 }
 
-export function loadAssertionEvidence(options: { capsulePath?: string; auditPath?: string }): AssertionEvidence {
+export function loadAssertionEvidence(options: {
+  capsulePath?: string
+  auditPath?: string
+  commandResultPath?: string
+}): AssertionEvidence {
   const capsuleRead = readJsonFile<ContextCapsule>(options.capsulePath)
   const auditRead = readJsonFile<RetrievalAuditRecord>(options.auditPath)
+  const commandRead = options.commandResultPath ? readJsonFile<unknown>(options.commandResultPath) : undefined
   return {
+    ...(commandRead
+      ? {
+          commandResult: commandRead.value,
+          commandResultPath: options.commandResultPath,
+          commandResultReadError: commandRead.error,
+        }
+      : {}),
     capsule: capsuleRead.value,
     capsulePath: options.capsulePath,
     capsuleReadError: capsuleRead.error,
@@ -853,6 +870,153 @@ function evaluateAdequacy(taskId: string, expectation: AdequacyExpectation, evid
   ]
 }
 
+// --- Command result (search / source execution tasks) ------------------------------
+
+function evaluateCommandResult(taskId: string, expectation: CommandResultExpectation, evidence: AssertionEvidence): AssertionResult[] {
+  const kind: AssertionKind = 'commandResult'
+  const severity: AssertionSeverity = (expectation.required ?? true) ? 'required' : 'warning'
+  const expectedSummary = describeExpectation(expectation, [
+    'requiredResultIds',
+    'topK',
+    'expectedMode',
+    'expectedStartLine',
+    'expectedEndLine',
+    'expectedLineCount',
+    'requiredContent',
+    'forbiddenContent',
+    'continuation',
+    'symbolBoundaryKnown',
+    'nextStartLine',
+    'continuationReason',
+  ])
+
+  const result = evidence.commandResult
+  if (result === undefined || result === null || typeof result !== 'object' || Array.isArray(result)) {
+    return [
+      makeResult({
+        taskId,
+        kind,
+        index: 0,
+        status: 'blocked',
+        severity: 'required',
+        message: 'Cannot evaluate commandResult assertion: command JSON result is missing or unreadable.',
+        expectedSummary: 'a readable command JSON result',
+        actualSummary: evidence.commandResultReadError ?? 'command result unavailable',
+        evidencePath: evidence.commandResultPath,
+      }),
+    ]
+  }
+
+  const json = result as Record<string, unknown>
+  const problems: string[] = []
+  const blocked: string[] = []
+  const observed: string[] = []
+
+  if (expectation.requiredResultIds !== undefined) {
+    if (!Array.isArray(json.results)) {
+      blocked.push('search result JSON has no "results" array')
+    } else {
+      const ids = (json.results as Array<{ id?: unknown }>).map((entry) => (typeof entry?.id === 'string' ? entry.id : ''))
+      const window = expectation.topK !== undefined ? ids.slice(0, expectation.topK) : ids
+      observed.push(`resultIds=${JSON.stringify(window)}`)
+      for (const id of expectation.requiredResultIds) {
+        if (!window.includes(id)) {
+          problems.push(`required result id "${id}" not found${expectation.topK !== undefined ? ` in top ${expectation.topK}` : ''}`)
+        }
+      }
+    }
+  }
+
+  const sourceFieldsRequested =
+    expectation.expectedMode !== undefined ||
+    expectation.expectedStartLine !== undefined ||
+    expectation.expectedEndLine !== undefined ||
+    expectation.expectedLineCount !== undefined ||
+    expectation.requiredContent !== undefined ||
+    expectation.forbiddenContent !== undefined ||
+    expectation.continuation !== undefined ||
+    expectation.symbolBoundaryKnown !== undefined ||
+    expectation.nextStartLine !== undefined ||
+    expectation.continuationReason !== undefined
+
+  if (sourceFieldsRequested) {
+    if (typeof json.content !== 'string') {
+      blocked.push('source result JSON has no string "content"')
+    } else {
+      const compare = (label: string, expected: unknown, actual: unknown): void => {
+        if (expected === undefined) return
+        observed.push(`${label}=${JSON.stringify(actual)}`)
+        if (actual !== expected) problems.push(`expected ${label} ${JSON.stringify(expected)} but observed ${JSON.stringify(actual)}`)
+      }
+      compare('mode', expectation.expectedMode, json.mode)
+      compare('startLine', expectation.expectedStartLine, json.startLine)
+      compare('endLine', expectation.expectedEndLine, json.endLine)
+      compare('lineCount', expectation.expectedLineCount, json.lineCount)
+
+      for (const needle of expectation.requiredContent ?? []) {
+        if (!json.content.includes(needle)) problems.push(`required content ${JSON.stringify(needle)} not found`)
+      }
+      for (const needle of expectation.forbiddenContent ?? []) {
+        if (json.content.includes(needle)) problems.push(`forbidden content ${JSON.stringify(needle)} was returned`)
+      }
+
+      const cursor =
+        json.continuationCursor && typeof json.continuationCursor === 'object'
+          ? (json.continuationCursor as Record<string, unknown>)
+          : null
+      observed.push(`continuation=${cursor ? 'present' : 'absent'}`)
+      if (expectation.continuation !== undefined && expectation.continuation !== (cursor ? 'present' : 'absent')) {
+        problems.push(`expected continuation ${expectation.continuation} but cursor was ${cursor ? 'present' : 'absent'}`)
+      }
+      const cursorFields: Array<[string, unknown, unknown]> = [
+        ['symbolBoundaryKnown', expectation.symbolBoundaryKnown, cursor?.symbolBoundaryKnown],
+        ['nextStartLine', expectation.nextStartLine, cursor?.nextStartLine],
+        ['continuationReason', expectation.continuationReason, cursor?.reason],
+      ]
+      for (const [label, expected, actual] of cursorFields) {
+        if (expected === undefined) continue
+        if (!cursor) {
+          problems.push(`expected ${label} ${JSON.stringify(expected)} but no continuation cursor was returned`)
+        } else if (actual !== expected) {
+          problems.push(`expected ${label} ${JSON.stringify(expected)} but observed ${JSON.stringify(actual)}`)
+        } else {
+          observed.push(`${label}=${JSON.stringify(actual)}`)
+        }
+      }
+    }
+  }
+
+  if (blocked.length > 0) {
+    return [
+      makeResult({
+        taskId,
+        kind,
+        index: 0,
+        status: 'blocked',
+        severity: 'required',
+        message: `Cannot evaluate commandResult assertion: ${blocked.join('; ')}.`,
+        expectedSummary,
+        actualSummary: 'result shape unavailable for the requested fields',
+        evidencePath: evidence.commandResultPath,
+      }),
+    ]
+  }
+
+  return [
+    makeResult({
+      taskId,
+      kind,
+      index: 0,
+      status: problems.length === 0 ? 'pass' : 'fail',
+      severity,
+      message: problems.length === 0 ? 'Command result satisfied expectations.' : problems.join('; '),
+      expectedSummary,
+      actualSummary: observed.length > 0 ? observed.join(', ') : 'no observable fields',
+      evidencePath: evidence.commandResultPath,
+    }),
+  ]
+}
+
 // --- shared helpers --------------------------------------------------------------
 
 function describeExpectation<T extends object>(expectation: T, keys: (keyof T)[]): string {
@@ -886,6 +1050,7 @@ export function evaluateTaskAssertions(
   if (expectations.noRawContent) results.push(...evaluateNoRawContent(taskId, expectations.noRawContent, evidence))
   if (expectations.caps) results.push(...evaluateCapCompliance(taskId, expectations.caps, evidence))
   if (expectations.adequacy) results.push(...evaluateAdequacy(taskId, expectations.adequacy, evidence))
+  if (expectations.commandResult) results.push(...evaluateCommandResult(taskId, expectations.commandResult, evidence))
 
   return results
 }

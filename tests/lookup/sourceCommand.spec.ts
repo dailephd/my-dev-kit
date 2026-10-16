@@ -66,6 +66,22 @@ describe('source command', () => {
     expect(parsed.content).toContain('describeUser')
   })
 
+  it('returns the complete known symbol without a cursor, identically for --node and --file --symbol', () => {
+    const byFile = runCli(['source', '--index', outDir, '--file', 'src/index.ts', '--symbol', 'describeUser', '--json'])
+    const byNode = runCli(['source', '--index', outDir, '--node', 'symbol:src/index.ts#describeUser', '--json'])
+    expect(byFile.status).toBe(0)
+    expect(byNode.status).toBe(0)
+    const a = JSON.parse(byFile.stdout)
+    const b = JSON.parse(byNode.stdout)
+    expect(a.startLine).toBe(4)
+    expect(a.endLine).toBe(6)
+    expect(a.content.trimEnd().endsWith('}')).toBe(true)
+    expect(a.continuationCursor).toBeUndefined()
+    expect(b.content).toBe(a.content)
+    expect([b.startLine, b.endLine]).toEqual([a.startLine, a.endLine])
+    expect(b.continuationCursor).toBeUndefined()
+  })
+
   it('fails clearly for unresolved symbol', () => {
     const result = runCli(['source', '--index', outDir, '--file', 'src/index.ts', '--symbol', 'missingSymbol'])
     expect(result.status).toBe(2)

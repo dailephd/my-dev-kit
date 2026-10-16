@@ -4,18 +4,48 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.5` is the current release.
+`@dailephd/my-dev-kit@1.12.6` is the current release. Version 1.12.5 remains the previous published release.
 
-## Planned next: v1.12.6
+## Shipped: v1.12.6
 
-Version 1.12.6 is the next planned Kit milestone. It is a bounded retrieval-precision patch and is **not yet implemented or published**.
+Version 1.12.6 is a bounded retrieval-precision patch over the existing graph-guided workflow:
 
-Planned scope has two generic retrieval corrections:
+- **Ownership-oriented search:** `search --query "<text>" --intent ownership` is an explicit, opt-in mode. Raw relevance-ranked `search --query` behavior is unchanged. Ownership mode keeps grounded production owners discoverable within a bounded result set for natural-language implementation queries through static tiers and bounded one-hop owner recovery, without removing relevant test evidence. Rankings are advisory evidence, not edit authorization.
+- **Trustworthy symbol boundaries:** optional extractor-proven `endLine` evidence for generic symbols (TypeScript/TSX/JavaScript/JSX from the compiler AST, Python from validated `ast` `end_lineno`), so `source --node` and `source --file --symbol` return the complete known symbol within `--max-lines` and continue only inside the symbol. Kotlin, Java, old-index, and uncertain boundaries retain the existing conservative `symbol-end-unknown` continuation fallback.
+- Source bundles consume the same validated boundary and keep primary and expanded source blocks within their declaration limits.
+- The maintained retrieval-regression suite contains fourteen tasks covering context, search, and source behavior. The development-only dependency refresh updated vulnerable resolutions without changing runtime dependencies.
 
-- **Ownership-oriented search:** preserve raw relevance-ranked `search --query` behavior while adding an explicit ownership-oriented mode that keeps grounded production owners discoverable within a bounded result set for natural-language implementation queries, without removing relevant test evidence.
-- **Trustworthy symbol boundaries:** add optional extractor-proven `endLine` evidence for supported generic symbols (initially TypeScript/TSX/JavaScript/JSX and Python where trustworthy), so `source --node` and `source --file --symbol` can return the complete known symbol within `--max-lines`; uncertain boundaries retain the existing conservative continuation fallback.
+### Readiness history
 
-Planned implementation order: ownership-search contract; bounded graph-supported owner recovery; trustworthy symbol-boundary/source-continuation support; integrated retrieval hardening and documentation reconciliation. The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
+#### Implementation history (historical)
+
+The following records describe work completed before publication; candidate SHAs and earlier readiness verdicts are historical evidence, not current release state.
+
+Candidate SHA and batches (all on the feature branch):
+
+- Implementation candidate SHA: `b7e3e762372eaea1405195b16a7585007174afce`.
+- Four implementation batches completed: Batch 1 `b2863e0cf8fb6af39ddcb9c90f3225606a583f6a` (ownership-search contract and backward-compatible ranking mode); Batch 2 `c7106fbb9120a8077b096be6c8ef866857de69b2` (grounded owner recovery and production-versus-test hardening); Batch 3 `03e3552a4f8f640e5776779450e918d9287be423` (trustworthy generic symbol `endLine`); Batch 4 `b7e3e762372eaea1405195b16a7585007174afce` (source/continuation consumption of known boundaries and permanent search/source regression scenarios).
+
+Reported evidence from the implementation batches (superseded by final R2 readiness and release-branch validation):
+
+- The retrieval-regression suite runs 14 tasks: the six original context tasks plus eight new command-result tasks (two search, six source), all passing.
+- Focused tests and `npm run verify` were reported passing; package version was unchanged at 1.12.5 at that stage.
+
+Historical readiness correction:
+
+- The first standardized pre-release readiness audit of candidate `e62929fa9d59e2cbd72b39b0fd41b8c3df9ba52f` returned **NEEDS_CORRECTION**. Its product findings were corrected in a follow-up commit on the implementation branch.
+- **Source-bundle boundary containment:** `source` bundles (`src/source/sourceBundle.ts`) consume the validated generic `endLine`, so a known symbol's primary block does not spill into the next declaration, a completed known symbol emits no continuation cursor, and expanded local types, helpers, and constants prefer the exact end. Unknown, old-index, and malformed boundaries keep the conservative fallback.
+- **Development-dependency security refresh:** `vitest` was raised to `^4.1.11` with a normal npm re-resolution of the lockfile (nanoid, source-map-js, @vitest/mocker and the vitest/vite toolchain); current npm audit and `npm audit --omit=dev` report no vulnerabilities. No runtime dependency changed.
+- A separate defect in the Lab package validator (my-dev-kit-lab v0.9.0 applied Lab's own required-file list to external Kit targets) belongs to the Lab repository and was not corrected here; that historical Lab failure remains documented in readiness evidence.
+- The historical readiness verdict on the earlier candidate was superseded by the final R2 readiness audit on the corrected candidate.
+
+Final readiness and publication state:
+
+- The final R2 readiness report for `40844dec398b2fb07dc581118c18ea9f5a6ee762` returned **PASS_READY_FOR_RELEASE_PREP**.
+- The supplemental Lab experiments remain classified `INCONCLUSIVE_SUPPLEMENTAL`; they were not represented as passes.
+- Version 1.12.6 is now published. The earlier implementation and readiness stages are complete historical records.
+
+The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
 
 ## Shipped: v1.12.5
 
