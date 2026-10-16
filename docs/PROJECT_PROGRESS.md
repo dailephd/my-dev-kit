@@ -51,7 +51,7 @@ The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and 
 
 Version 1.12.5 ships affected-neighborhood incremental refresh in the existing indexing pipeline. The installed CLI supports `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains compatible with `changed-files`. The affected-neighborhood scope freshly extracts unchanged files exactly one graph hop from modified or removed baseline files, verified against the trusted prior index. Missing, incompatible, unreadable, or mismatched baseline evidence fails closed to a truthful full rebuild. No-change invocations remain no-ops, and call-graph regeneration remains separately reported.
 
-This release provides the published Kit capability required for Lab's planned v0.6.3 affected-neighborhood treatment. Lab v0.6.3 remains its own planned milestone. Version 1.12.6 (bounded retrieval precision) is now the next planned Kit milestone; v1.13.0 remains the following Android retrieval benchmark/example/workflow milestone, and later roadmap scope is unchanged.
+This release provides the affected-neighborhood incremental refresh capability required by Lab v0.6.3. Lab v0.6.3 and Kit v1.12.6 were separate subsequent milestones and have since been published. Kit v1.13.0 remains the next planned Android retrieval benchmark/example/workflow milestone; later roadmap scope is unchanged.
 
 ### v1.12.5 release validation
 
@@ -79,7 +79,7 @@ Version 1.12.4 was published with package metadata and the CLI both reporting `1
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap. Version 1.12.5 (affected-neighborhood incremental refresh) is the current Kit release. Version 1.12.6 is the next planned local retrieval-precision patch; v1.13.0 remains the unchanged Android retrieval benchmark/example/workflow milestone after it. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the additive v1.12.5 and v1.12.6 local decisions do not move the existing 1.13.0-1.16.0 assignments.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the historical corrective patch details and preserved roadmap. Kit v1.12.5 (affected-neighborhood incremental refresh) and Kit v1.12.6 (bounded retrieval precision) are published releases; v1.13.0 remains the next planned Android retrieval benchmark/example/workflow milestone. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the additive v1.12.5 and v1.12.6 local decisions did not move the existing 1.13.0–1.16.0 assignments.
 
 ## Shipped: v1.12.3
 
