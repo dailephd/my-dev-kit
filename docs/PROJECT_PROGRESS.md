@@ -31,7 +31,7 @@ This release provides the published Kit capability required for Lab's planned v0
 
 ## Shipped: v1.12.4
 
-Version 1.12.4 is published. Package metadata and the CLI report `1.12.4`. It is a bounded corrective patch for core test-file indexing and retrieval.
+Version 1.12.4 was published with package metadata and the CLI both reporting `1.12.4` at that release. It is a bounded corrective patch for core test-file indexing and retrieval.
 
 - Supported `.test.` / `.spec.` files beneath explicitly selected `--src` roots are core-indexed. They get ordinary `file:<path>` nodes and symbols and work with `search`, `lookup`, `slice`, and exact `source --contains --path`. Only `.d.ts` files remain excluded by default filename pattern. User `--exclude` values and default ignored directories remain authoritative.
 - The incremental configuration fingerprint includes the default file-exclusion policy, so a cache written under the earlier policy is fully rebuilt once.
@@ -67,7 +67,7 @@ See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the correct
 
 ## Shipped: v1.12.2
 
-Version 1.12.2 is published. Package metadata and the CLI report `1.12.2`. It is a bounded corrective patch for NodeNext/Node16-style related-test resolution: literal relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production sources (`.jsx` → `.tsx`); real `.js`/`.jsx` files retain precedence; unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare/scoped package import behavior is unchanged. This is a backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability. See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap.
+Version 1.12.2 was published with package metadata and the CLI both reporting `1.12.2` at that release. It is a bounded corrective patch for NodeNext/Node16-style related-test resolution: literal relative `.js` test imports now resolve to corresponding `.ts` / `.tsx` production sources (`.jsx` → `.tsx`); real `.js`/`.jsx` files retain precedence; unsupported `.mjs`/`.cjs` families remain unmapped. Extensionless, index, and bare/scoped package import behavior is unchanged. This is a backward-compatible defect correction to existing related-test discovery; no new public command, artifact schema major, or v1.13.0 capability. See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the corrective patch details and preserved roadmap.
 
 ## Shipped: v1.12.1
 

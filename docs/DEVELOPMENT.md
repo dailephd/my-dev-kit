@@ -271,6 +271,8 @@ Trusted-baseline identity (`src/indexing/trustedBaseline.ts`, cache schema `1.2.
 
 ## Local CLI smoke test
 
+**Output safety:** Use the sample index directories only if they do not already exist. The cleanup commands below are authorized only for outputs created by these smoke tests and verified disposable; preserve pre-existing ignored/generated data.
+
 After building, run a basic TypeScript smoke test:
 
     node dist/cli.js index --root examples/basic-ts --src src --out .my-dev-kit-dev --call-graph --json
@@ -289,6 +291,8 @@ Clean up local smoke-test artifacts:
     node -e "require('fs').rmSync('examples/basic-python/.my-dev-kit-dev', { recursive: true, force: true })"
 
 ## Local tarball testing
+
+**Output safety:** Verify that the sample index directories and isolated install prefix do not already exist before using these commands. Remove only outputs created by this test run, after checking their contents; never overwrite or clean pre-existing ignored files.
 
 Use local tarball testing to verify installed-package behavior before publishing.
 
