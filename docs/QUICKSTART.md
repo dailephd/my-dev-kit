@@ -273,6 +273,8 @@ npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --gra
 
 ## Clean up generated artifacts
 
+**Deletion safety:** These optional commands permanently remove local indexes. Run them only for directories that you created for this walkthrough, after confirming they contain no pre-existing or shared data. Do not remove an existing index simply because it is Git-ignored.
+
 Inside your own project:
 
 ```sh

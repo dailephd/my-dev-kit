@@ -146,6 +146,8 @@ The package should include enough documentation and examples for users to run th
 
 ## Test the packed tarball
 
+**Output safety:** Before running these commands, verify that each example index directory and the isolated package-install prefix is absent. The cleanup commands below may be run only for paths created by this exact test run and confirmed disposable. Preserve pre-existing ignored/generated data; do not delete it to make a test pass.
+
 Create the tarball.
 
     npm pack
@@ -283,6 +285,8 @@ Publish the package publicly.
 Do not publish until local validation, package inspection, and tarball smoke tests have passed, AND a human reviewer has confirmed the readiness checklist above and explicitly authorized the publish step. Do not treat a coding agent's validation pass as that authorization.
 
 ## Run the published-package baseline check as a compatibility reference
+
+**Output safety:** Use the baseline installation prefix only if it is absent. The removal command below is allowed only if this check created that prefix and its contents are confirmed disposable; otherwise preserve the existing directory.
 
 Before publishing a new version, optionally confirm the previously published
 baseline still installs and runs cleanly in an isolated prefix. Do not use raw

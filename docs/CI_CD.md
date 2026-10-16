@@ -97,6 +97,8 @@ For a more explicit local CI-style run:
 
 ## Local CLI smoke test
 
+**Output safety:** Check that the example output directories below are absent before starting. The cleanup commands apply only to output produced by this local smoke test after verifying no pre-existing data is present; never delete unrelated or previously generated user indexes.
+
 After building, run the same CLI smoke checks locally:
 
     node dist/cli.js --help
