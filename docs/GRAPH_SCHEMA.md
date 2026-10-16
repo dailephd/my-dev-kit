@@ -267,7 +267,7 @@ Each symbol record may include:
 - `name`
 - `kind`: `function`, `class`, `interface`, `type`, `enum`, `const`, `variable`, or `object` (`object` added in v1.9.0 Batch 2 for Kotlin `object`/`companion object` declarations). Java (v1.9.0 Batch 3) reuses this set with no additions: `record` declarations map to `class`, `@interface` annotation-type declarations map to `interface`.
 - `line`: inclusive 1-based declaration start line. Stored in the symbol's `location` object alongside `file`.
-- `endLine` (v1.12.6 candidate, unreleased, optional): inclusive 1-based declaration end line in the same `location` object. See "Symbol location `endLine`" below.
+- `endLine` (v1.12.6, optional): inclusive 1-based declaration end line in the same `location` object. See "Symbol location `endLine`" below.
 - `exported`
 - `signature`
 - `semanticRoles`
@@ -330,9 +330,9 @@ Existing Android component-role facts (`android-components.json`) are reused ver
 
 Seven risk labels are advisory only, never a security verdict or runtime/build/test proof: `manifest-security-risk`, `generated-build-file-risk`, `resource-contract-risk`, `navigation-contract-risk`, `emulator-validation-required`, `instrumented-test-required`, and the existing `wrong-layer-risk` (assigned to usage/reference sites, test-only production-task focus, generated targets, and low-confidence naming-only evidence).
 
-### Symbol location `endLine` (v1.12.6 candidate, unreleased)
+### Symbol location `endLine` (v1.12.6)
 
-**Status:** implemented on the feature branch; not in the published v1.12.5 package. `symbol-index.json` keeps its schema family; the field is additive and optional, so no schema-major bump was made.
+**Status:** shipped in v1.12.6. `symbol-index.json` keeps its schema family; the field is additive and optional, so no schema-major bump was made.
 
 `SymbolLocation` (the `location` of a symbol record) is `{ file, line, endLine? }`:
 
@@ -347,7 +347,7 @@ This field is distinct from unrelated, pre-existing range fields. `SemanticEvide
 
 ### Current limitation
 
-In the published v1.12.5 schema, symbol start lines are recorded and complete symbol end-line bounds are not. In the v1.12.6 candidate, the optional `endLine` above is recorded only where a parser-derived boundary is trustworthy; Kotlin, Java, older-index, and uncertain symbols have no end-line bound.
+The published v1.12.5 schema records symbol start lines without complete generic end-line bounds. In v1.12.6, the optional `endLine` above is recorded only where a parser-derived boundary is trustworthy; Kotlin, Java, older-index, and uncertain symbols have no end-line bound.
 
 ## code-graph.json
 
@@ -878,7 +878,7 @@ Main fields:
 
 Each result item may include `semanticRoles` and `artifactRefs` when present on the matched node or symbol.
 
-**v1.12.6 candidate (unreleased) additive fields.** When `search --query` is run with `--intent ownership`, the result also carries `intent: "ownership"` and each result item an `ownership` object: `{ tier, lexicalScore, evidence[] }`. `tier` is `direct-owner`, `production-candidate`, or `supporting-evidence`; `lexicalScore` equals the item's unchanged `score`; each `evidence[]` entry has `kind` (`direct-symbol-name`, `classified-primary-edit`, `production-lexical-match`, `indexed-file-dependency`, `resolved-relative-import`, or `same-file-symbol`), `sourceId`, and for recovery kinds `seedPath`, `targetPath`, and, for imports, `specifier`. A file recovered by one-hop owner recovery without its own lexical match has `score: 0` and empty `matchReasons`. `warnings` may carry a bounded-recovery message. Without `--intent ownership`, none of these fields is present and the artifact is unchanged. No artifact-kind or `version` change was made.
+**v1.12.6 additive fields.** When `search --query` is run with `--intent ownership`, the result also carries `intent: "ownership"` and each result item an `ownership` object: `{ tier, lexicalScore, evidence[] }`. `tier` is `direct-owner`, `production-candidate`, or `supporting-evidence`; `lexicalScore` equals the item's unchanged `score`; each `evidence[]` entry has `kind` (`direct-symbol-name`, `classified-primary-edit`, `production-lexical-match`, `indexed-file-dependency`, `resolved-relative-import`, or `same-file-symbol`), `sourceId`, and for recovery kinds `seedPath`, `targetPath`, and, for imports, `specifier`. A file recovered by one-hop owner recovery without its own lexical match has `score: 0` and empty `matchReasons`. `warnings` may carry a bounded-recovery message. Without `--intent ownership`, none of these fields is present and the artifact is unchanged. No artifact-kind or `version` change was made.
 
 ## context-capsule.json (v1.6.0)
 
@@ -1225,7 +1225,7 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## Schema limitations
 
-- Symbol end lines are not recorded in the published v1.12.5 `symbol-index.json`. The unreleased v1.12.6 candidate records an optional parser-derived `endLine` only for TypeScript-family and Python symbols; Kotlin, Java, older-index, and uncertain symbols have none.
+- Symbol end lines are not recorded in the v1.12.5 `symbol-index.json`. v1.12.6 records an optional parser-derived `endLine` only for TypeScript-family and Python symbols; Kotlin, Java, older-index, and uncertain symbols have none.
 - `code-graph.json` remains the single structural/relationship graph: core file/symbol structure plus compact frontend/Android/Compose/test projections. Data-model and lineage edges are not added to it.
 - `data-model.json` and `data-model-graph.json` are separate downstream artifacts with their own ID space.
 - `model-view-lineage.json` is a static evidence artifact, not a runtime UI execution trace.

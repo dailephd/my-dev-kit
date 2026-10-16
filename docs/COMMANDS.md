@@ -4,7 +4,7 @@ This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed pub
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
-**Unreleased v1.12.6 candidate.** The development feature branch additionally implements `search --query "<text>" --intent ownership` and known-symbol-boundary behavior for `source`. These are described below in sections labeled "(v1.12.6 candidate, unreleased)". They are not part of the published v1.12.5 package, and examples for them use the repository CLI from a source checkout (`node dist/cli.js` after `npm run build`), not an npm-installed `@dailephd/my-dev-kit`. No new command, no new public schema major, and no new artifact was added.
+**v1.12.6 release additions.** `search --query "<text>" --intent ownership` and known-symbol-boundary behavior for `source` are available in the published package. No new command, public schema major, or artifact was added.
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
@@ -176,7 +176,7 @@ npx @dailephd/my-dev-kit search --index .my-dev-kit --query "UserService" --limi
 
 - `--index <dir>`: default `.my-dev-kit`.
 - `--query <text>`: ranked general search.
-- `--intent <relevance|ownership>` (v1.12.6 candidate, unreleased): generic `--query` ranking intent. See "Ownership-oriented search (v1.12.6 candidate, unreleased)" below.
+- `--intent <relevance|ownership>` (v1.12.6): generic `--query` ranking intent. See "Ownership-oriented search (v1.12.6)" below.
 - Web selectors: `--route <path>`, `--storage-key <key>`, `--ui <value>`.
 - Android selectors: `--android-route <route>`, `--permission <name>`, `--resource <name>`, `--android-component <name>`, `--composable <name>`, `--test-tag <tag>`, `--android-ui <value>`.
 - `--android-role <role>`: one exact supported Android classification role.
@@ -202,13 +202,13 @@ General results expose IDs, kinds, scores/match reasons, paths, and supported se
 
 Raw `search` ranks available indexed evidence by its existing relevance logic. It does not prefer production files over tests. When test roots are indexed, test files, test-declared symbols, and `describe`/`it`/`test` titles are ordinary search evidence, so a strongly matching test can rank above a production candidate. Search rank alone does not establish production edit ownership. Confirm ownership with `lookup`/`slice` relationships, classification, and `context` role-specific owner selection.
 
-### Ownership-oriented search (v1.12.6 candidate, unreleased)
+### Ownership-oriented search (v1.12.6)
 
-This subsection documents the development-branch command surface. It is not in the published v1.12.5 package.
+This subsection documents the published v1.12.6 command surface.
 
 ```powershell
-node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
-node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent relevance --limit 10 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol>" --intent relevance --limit 10 --json
 ```
 
 - `--intent relevance`: the existing relevance ranking. It is the default, so omitting `--intent` is equivalent. Output is unchanged: no `intent` field, no per-result `ownership` object.
@@ -301,9 +301,9 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --file src/editor.tsx --symb
 
 Inspect `continuationCursor` and its next line/`eof`/`symbolBoundaryKnown`/`reason` rather than assume complete symbol coverage. Numbered output can report continuation/EOF markers. In the published v1.12.5 package, symbol end bounds are not universally compiler-exact. An incomplete preview is not permission to infer missing code.
 
-### Known and unknown symbol boundaries (v1.12.6 candidate, unreleased)
+### Known and unknown symbol boundaries (v1.12.6)
 
-This subsection documents the development-branch behavior. It is not in the published v1.12.5 package.
+This subsection documents the published v1.12.6 behavior.
 
 `source --file <path> --symbol <name>` and the symbol-node form `source --node symbol:<path>#<name>` use one boundary contract.
 

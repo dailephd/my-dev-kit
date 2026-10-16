@@ -505,11 +505,13 @@ Kit v1.12.5 is the published prerequisite for Lab v0.6.3 to execute the planned 
 
 A later explicit repository-local planning decision adds Kit v1.12.6 between the published v1.12.5 baseline and the already-reserved v1.13.0 milestone. This is an additive local patch reservation; it does not move, rename, compress, or redefine any ECO-00 reservation or downstream ecosystem dependency.
 
-- 1.12.6: bounded retrieval precision — ownership-oriented search for natural-language implementation queries plus trustworthy optional generic-symbol end-line evidence for bounded source retrieval. Current status: implementation complete; unreleased.
+- 1.12.6: bounded retrieval precision — ownership-oriented search for natural-language implementation queries plus trustworthy optional generic-symbol end-line evidence for bounded source retrieval. Status at this planning decision: implementation complete; unreleased.
 - 1.13.0: Android retrieval benchmarks, examples, and workflow documentation remains unchanged (planned).
 - 1.14.0 through 1.16.0 and 2.0.0 retain their adopted assignments unchanged.
 
 Kit v1.12.6 is not a new prerequisite for Lab v0.6.3 or ORC-EVIDENCE-01. Lab v0.6.3 continues to depend on the already-published v1.12.5 affected-neighborhood capability. The v1.12.6 patch is repository-local retrieval hardening that may proceed independently under the existing coordination rules.
+
+**Status update: Kit v1.12.6 is published.** Ownership-oriented search and bounded retrieval with trustworthy generic symbol boundaries are available in the current package. This does not change the existing Lab v0.6.3 dependency on Kit v1.12.5 or any later milestone assignment.
 
 #### 7.1.3 Post-ECO-00 Kit v1.17.0 frontend retrieval completion reservation — 2026-10-10
 
@@ -586,7 +588,7 @@ The release train reflects the ECO-00 baseline and adopted reservations.
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5 current: affected-neighborhood refresh] --> K126["1.12.6 implementation complete; unreleased: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6 current: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]
@@ -1174,7 +1176,7 @@ ECO-00 adoption is a documentation/contract-only repository change. It changes n
 
 ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
-Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is now published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.12.5 is published and provides the real affected-neighborhood refresh capability required by Lab 0.6.3; Lab 0.6.3 must consume actual Kit execution/fallback evidence rather than simulate the upstream refresh. A later explicit repository-local planning decision adds Kit 1.12.6 bounded retrieval precision before Kit 1.13.0 without moving any ECO-00 reservation or changing the Lab v0.6.3 dependency. The remaining Lab 0.6.1-0.9.2 sequence and LAB-EVIDENCE-01 at 0.10.0 remain otherwise unchanged.
+Orchestrator 1.6.0 Workflow Economics and Deterministic Run Telemetry is published. The next ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.12.6 bounded retrieval precision is published before Kit 1.13.0; its predecessor, Kit 1.12.5, provides the affected-neighborhood refresh capability required by Lab 0.6.3. Lab 0.6.3 must consume actual Kit execution/fallback evidence rather than simulate the upstream refresh. The remaining Lab 0.6.1-0.9.2 sequence and LAB-EVIDENCE-01 at 0.10.0 remain otherwise unchanged.
 
 ECO-01 begins only when its producer and consumer milestones are available as exact candidates or releases. Prove one CLI and one full-stack end-to-end case before adding broader assurance adapters. The working rule remains: freeze the contract; build against exact evidence; test the exact combination; activate only a certified capability. Matching package version numbers are unnecessary.
 

@@ -171,9 +171,9 @@ Python `test_*.py` / `*_test.py` naming as related-test evidence. This is not
 implemented as of v1.12.3; broader Python language/framework classifier
 improvements remain v1.14.0 scope.
 
-## Retrieval-precision contracts (v1.12.6 candidate, unreleased)
+## Retrieval-precision contracts (v1.12.6)
 
-**Status:** implemented on the feature branch `feature/v1.12.6-bounded-retrieval-precision`; unreleased. The published package is v1.12.5. These contracts are backward-compatible and introduce no new schema major. Exact syntax is in [COMMANDS.md](COMMANDS.md); field detail is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md); ownership is in [ARCHITECTURE.md](ARCHITECTURE.md).
+**Status:** shipped in v1.12.6. These contracts are backward-compatible and introduce no new schema major. Exact syntax is in [COMMANDS.md](COMMANDS.md); field detail is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md); ownership is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### Search intent and ownership metadata
 

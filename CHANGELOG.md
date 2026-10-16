@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-v1.12.6 candidate (bounded retrieval precision). Implemented on the development branch and not yet released: no version bump, tag, or npm publication, and package metadata still reports 1.12.5.
+## 1.12.6 - 2026-10-16
 
 - Added explicit ownership-oriented generic search: `search --query "<text>" --intent <relevance|ownership>`. Omitted intent and `relevance` keep the existing relevance ranking and output unchanged. `--intent` is valid only with `--query` and is rejected with every other search selector. `ownership` ranks the same candidate pool into static `direct-owner`, `production-candidate`, and `supporting-evidence` tiers with inspectable provenance, preserves each result's lexical `score` and match reasons, keeps tests, fixtures, generated files, and docs as supporting evidence, and recovers a grounded production owner one hop from a strongly matching seed file (indexed file dependencies, `imports`/`depends-on` edges, and resolved relative imports including NodeNext `.js` to `.ts`/`.tsx`) within fixed bounds, reporting bounds through `warnings`. Rankings are advisory evidence, not edit authorization, and recovered relationships are not persisted graph edges.
 - Added an optional inclusive `endLine` to generic symbol locations in `symbol-index.json`, derived from the TypeScript compiler AST for TypeScript, TSX, JavaScript, and JSX and from validated `ast` `end_lineno` for Python. It is absent for Kotlin, Java, files with parser diagnostics, malformed or out-of-range values, and indexes written by earlier versions, which remain readable. Symbol and node identities, `code-graph.json` node structure, and artifact schema majors are unchanged.
