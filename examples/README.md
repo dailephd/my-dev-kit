@@ -69,6 +69,8 @@ Generated `.my-dev-kit` directories are local output only and are not tracked in
 
 ## Clean up
 
+**Deletion safety:** The command below permanently removes example indexes. Run it only for directories created during your current example session, after confirming no earlier or shared data would be lost. Leave pre-existing indexes intact.
+
 Remove all generated example indexes with this shell-neutral Node.js command:
 
 ```sh

@@ -4,10 +4,10 @@ Document role: tracked repository-structure and file-placement governance for co
 Repository: https://github.com/dailephd/my-dev-kit
 Repository root: resolve from the current Git checkout; never assume a local absolute path.
 Inspected branch: GitHub main
-Inspected Git tree: 6f1635439211aecff17ec9799466ac2847b48d1c
+Inspected Git tree: 65c3c91c3ef1b917404ca38a312b9805fd3c16fa
 Inspected package: @dailephd/my-dev-kit 1.12.5
-Inspection date: 2026-10-10
-Verified Git tree coverage: 326 tracked directories, 723 tracked files (not local/ignored files)
+Inspection date: 2026-10-16
+Verified Git tree coverage: 326 tracked directories, 728 tracked files (not local/ignored files)
 Status: operating placement contract; not authority to implement, migrate, delete, or release
 
 READ THIS FIRST — REQUIRED INTAKE
