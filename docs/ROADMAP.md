@@ -2014,7 +2014,7 @@ The four historical Area-of-improvements-1.txt through Area-of-improvements-4.tx
 1. **Fine-grained React/TSX components, hooks, props and JSX** — v1.2.0 introduced frontend semantic indexing/regions; v1.17.0 targets incomplete large-file regions and relationships; broader first-class nodes remain v2.0.0 candidates.
 2. **Vitest/Playwright describe/test/setup/helper blocks and direct test-title source** — v1.2.0 indexed test facts and v1.12.4 made supported test files core indexed; v1.17.0 plans bounded exact title-to-block retrieval with ambiguity reporting.
 3. **Exact UI text, routes, test IDs, ARIA/locator evidence** — v1.2.0 exact source-text search/frontend-test facts and v1.3.0 UI/route selectors cover literal lookup; v1.17.0 improves supported test-region/locator context.
-4. **Symbol source with imports, local types, props and helpers** — v1.4.0 supports continuation and local bundles; v1.12.6 plans trustworthy generic symbol-end evidence. Arbitrary cross-file closure is not claimed.
+4. **Symbol source with imports, local types, props and helpers** — v1.4.0 supports continuation and local bundles; v1.12.6 supplies trustworthy generic symbol-end evidence. Arbitrary cross-file closure is not claimed.
 5. **Search→lookup→slice→source execution visibility** — v1.0.x reporting and v1.6.0 capsules/audits cover product evidence; recording commands actually invoked, including slices and reasoned selections, belongs to the coding-agent/Orchestrator workflow.
 6. **Justified full-file reads, including large E2E specs** — v1.0.x and v1.6.0 require fallback reasons; root agent/manifest and bounded retrieval workflows control full-file access. No arbitrary 250-line hard limit is promised as Kit functionality.
 7. **Patch-first edits and exact changed ranges instead of whole-file rewrites** — coding-agent/Orchestrator execution responsibility; v1.17.0 adds the corresponding documented exact-range retrieval/edit procedure, not a source-mutating CLI.
@@ -2029,7 +2029,7 @@ The four historical Area-of-improvements-1.txt through Area-of-improvements-4.tx
 
 ### Area of Improvements 2 (1 entry)
 
-1. **Continue oversized symbols and include imports/types/props/local components/helpers** — v1.4.0 supplies source continuation, local dependencies and source bundles; v1.12.6 plans trustworthy optional end lines to avoid unnecessary unknown-boundary previews.
+1. **Continue oversized symbols and include imports/types/props/local components/helpers** — v1.4.0 supplies source continuation, local dependencies and source bundles; v1.12.6 supplies trustworthy optional end lines to avoid unnecessary unknown-boundary previews.
 
 ### Area of Improvements 3 (2 entries)
 
