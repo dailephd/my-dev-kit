@@ -144,7 +144,7 @@ This documentation-only corrective patch fixes the release-state documentation s
 - Replaced temporary v1.10.1 release-preparation language with stable shipped-feature wording while preserving v1.10.1 as the version that introduced stage-specific bounded context retrieval.
 - Hardened the maintainer release guide with final-document-state checks across the release branch, merged `main`, annotated tag, and actual npm tarball.
 
-## 1.10.1 - 2026-07-16
+## 1.10.1 - 2026-07-17
 
 Version 1.10.1 extends the existing `context` command with deterministic, stage-role-specific repository-evidence retrieval and honest bounded evidence reporting. Everything below is additive to the pre-1.10.1 `context` pipeline: no second search engine, ranking pipeline, graph engine, index artifact, capsule, or audit was introduced, and every pre-1.10.1 `context` invocation continues to behave identically when no role or structured request is supplied.
 
@@ -264,7 +264,7 @@ Workflow catalog semantics, prompt assembly, stage progression, and `WorkflowIns
 - Full test suite: 1645/1645 passing; `npm run verify` and `npm run benchmark:retrieval` both pass with no regression from Batch 6's context candidate-eligibility change.
 - Does not implement: any new Android artifact, selector, graph view, or relationship family; Batch 8 documentation reconciliation and implementation-completeness audit remain.
 
-## 1.9.0 - 2026-07-06
+## 1.9.0 - 2026-07-07
 
 Android project detection foundation (v1.9.0 Batch 1): static Android/Gradle project, module, and source-set detection during `index`. **Detection only** — Kotlin/Java structural symbol indexing is explicitly deferred to a later `v1.9.0` batch.
 
@@ -428,7 +428,7 @@ Added conservative static schema/layer classification of files and symbols, surf
 - Classification is static and conservative only: no runtime execution, no browser, no database connection, no LLM or network calls; low-confidence classifications are marked `possible`/`unknown` with an explanatory warning rather than rounded up
 - An index without `classification.json` (an older index, or an analyzer that has not run) is fully compatible — existing command output is unaffected
 
-## 1.4.0 - 2026-06-25
+## 1.4.0 - 2026-07-02
 
 Added source continuation and bounded local dependency expansion.
 
@@ -485,7 +485,7 @@ Added React/TSX and frontend-test indexing, exact source string retrieval and re
 - Added `basic-react-tsx` bundled example with `WorkspaceEditorShell` TSX component and pre-built `.my-dev-kit-index` artifacts
 - Known limitation: the base indexer excludes `.test.` and `.spec.` files from default file discovery; `view --graph frontend-test` produces output only when test files reach the frontend analyzer through a custom indexing path
 
-## 1.1.0 - 2026-05-01
+## 1.1.0 - 2026-06-16
 
 Added index-first semantic integration, manifest as authoritative artifact registry, semantic role metadata on index artifacts, data-model artifacts linked from the index, and semantic-aware search, lookup, slice, and source commands.
 
