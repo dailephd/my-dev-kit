@@ -3,12 +3,13 @@ MY-DEV-KIT REPOSITORY PLACEMENT AND AGENT SAFETY MANIFEST
 Document role: tracked repository-structure and file-placement governance for coding agents
 Repository: https://github.com/dailephd/my-dev-kit
 Repository root: resolve from the current Git checkout; never assume a local absolute path.
-Inspected branch: GitHub main
-Inspected Git tree: 65c3c91c3ef1b917404ca38a312b9805fd3c16fa
-Inspected package: @dailephd/my-dev-kit 1.12.5
-Inspection date: 2026-10-16
-Verified Git tree coverage: 326 tracked directories, 728 tracked files (not local/ignored files)
+Historical inspection branch: GitHub main
+Historical inspection Git tree: 65c3c91c3ef1b917404ca38a312b9805fd3c16fa
+Historical inspection package: @dailephd/my-dev-kit 1.12.5
+Historical inspection date: 2026-10-16
+Historical snapshot tree coverage: 326 tracked directories, 728 tracked files (not local/ignored files)
 Status: operating placement contract; not authority to implement, migrate, delete, or release
+The inspection fields above describe a historical Git tree, not the current branch HEAD or package/release version. Reverify the live tree, package metadata, and published release before each task.
 
 READ THIS FIRST — REQUIRED INTAKE
 ---------------------------------
@@ -92,7 +93,7 @@ scripts/docs/checkDocs.ts — thin source-checkout entrypoint for the existing d
 examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/; not generated runtime workspaces.
 contracts/ecosystem/ — frozen coordinated ecosystem reference contracts and v1 fixtures; no modification for a local retrieval patch absent explicit dependency approval.
 docs/ — maintained tracked product/maintainer documents, NOT scratch or agent-run output.
-  docs/ROADMAP.md — version-by-version planned product scope (including proposed v1.12.6 once adopted).
+  docs/ROADMAP.md — version-by-version product scope, including shipped milestones, planned versions, and explicit deferrals.
   docs/PROJECT_PROGRESS.md — verified implementation/publication status, not plans presented as shipped.
   docs/ARCHITECTURE.md, docs/CONTRACTS.md, docs/GRAPH_SCHEMA.md — implemented ownership, interfaces, artifact schema.
   docs/COMMANDS.md, docs/WORKFLOWS.md, docs/QUICKSTART.md — implemented CLI/workflows, not unshipped options.
@@ -132,7 +133,7 @@ NON-NEGOTIABLE INVARIANTS
 - ONE CLI entrypoint, ONE managed index/manifest/artifact pipeline, ONE generic search ranking pipeline, ONE source/cursor engine, ONE context capsule/audit owner, ONE retrieval regression runner, ONE documentation checker.
 - Never treat a test's relevance score as edit authority; classification and owner support are static, conservative evidence.
 - Never infer an exact generic symbol end from the next declaration, malformed parser recovery, or approximate Kotlin/Java brace scanners.
-- Current released behavior versus planned v1.12.6 must stay distinguishable until code and tests prove shipping.
+- Current released behavior must be verified against package, implementation, and publication evidence; unshipped planned scope remains explicitly separate.
 - Do not alter v1.13+ roadmap scope, freeze/compatibility contracts, or ECO reservations during local patch implementation.
 - Preserve README pillars, historical CHANGELOG, roadmap version headings, exact source/test fixtures, and documentation preservation requirements.
 - No ad hoc shared/utils/helpers/old/fixed/final/misc folders, duplicate code files, or unrequested generated reports.
