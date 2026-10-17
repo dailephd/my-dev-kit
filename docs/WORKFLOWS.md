@@ -366,7 +366,7 @@ node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --file
 - Wrong-layer choice: selecting `UserHomeScreen.kt` or `UserViewModel.kt` because the symptom is visible there, or editing only `UserApiService.kt` or `UserDao.kt`. Those interfaces define signatures; the behavior that combines them lives in the repository. The `repository-uses-dao` and `repository-uses-service` edges show the dependencies, not which one is wrong.
 - Still uncertain: the example has no repository test, Room queries and network calls are never executed, and the DAO and Retrofit test doubles are not linked to their interfaces.
 
-**Do not assume natural-language `context` picks these owners.** In the example, "Locate the owner for changing the UserHomeScreen layout" selected `UserHomeScreen.kt`. But "Change the layout of the UserHomeScreen without changing the ViewModel" selected `UserViewModel` as the focus, and "Change how UserRepository refreshes users from the DAO and Retrofit service" selected `UserApiService` as the focus, with `UserRepository.kt` only among the retained owners. Treat this as the unresolved D2 investigation recorded in Workflow 18, not as solved by choosing exact selectors yourself.
+**Natural-language `context` is still query-sensitive.** In the example, "Change the layout of the UserHomeScreen without changing the ViewModel" and "Change how UserRepository refreshes users from the DAO and Retrofit service" now select `UserHomeScreen.kt` and `UserRepository.kt` as the focus (see the D2 section in Workflow 18). A request that names a screen and a ViewModel as the thing to change, or that is phrased without a layer term, can still select a different layer, and several of these requests still report an ambiguous-owner conflict. Check the focus and the conflict before using the result, rather than assuming the first owner is the edit target.
 
 ## Workflow 17: Choose an incremental refresh strategy (v1.12.5)
 
@@ -417,7 +417,7 @@ node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --quer
 ```
 
    The exact selector returns one `android-composable` node. The raw query returns the `UserHomeScreenTest` symbol and the `UserHomeScreen` symbol with the same score, test first. That is ordinary relevance ranking, not a defect by itself, and it is not edit authority.
-3. **Inspect production and test candidates.** Check each candidate's path and its `classificationRoles[].editGuidance`. `UserHomeScreen` is `compose-ui-component` with `safe-primary-edit-target`; `UserHomeScreenTest` is `instrumented-test` with `test-only`. `search --query UserHomeScreen --intent ownership` is optional here: it also labeled the `androidTest` symbol `direct-owner`, because the test-scope path rules do not cover `androidTest` directories. Read the path and classification, not only `ownership.tier`.
+3. **Inspect production and test candidates.** Check each candidate's path and its `classificationRoles[].editGuidance`. `UserHomeScreen` is `compose-ui-component` with `safe-primary-edit-target`; `UserHomeScreenTest` is `instrumented-test` with `test-only`. `search --query UserHomeScreen --intent ownership` is optional here: it labels the production symbol `direct-owner` and keeps `UserHomeScreenTest` visible as `supporting-evidence`, because `src/test` and `src/androidTest` paths are test-scoped. (Before the v1.13.0 D2 correction the `androidTest` symbol was also labeled `direct-owner`.) Still read the path and classification, not only `ownership.tier`.
 4. **Resolve the exact owner.** Pick the production candidate for the UI half and `UserViewModel` for the state half. If two production candidates remain plausible, keep both and decide from source, not from rank.
 5. **Lookup the owner.** `lookup --node "android-compose-declaration:app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt#UserHomeScreen" --depth 1 --resolve-classification --json`, and the same for `symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel`.
 6. **Slice the relevant dependencies.** Keep it bounded:
@@ -436,21 +436,31 @@ node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --node 
 node dist/cli.js context --index examples/basic-android-kotlin/.my-dev-kit --role implementation --query "Show a progress indicator on UserHomeScreen while UserViewModel is refreshing" --out examples/basic-android-kotlin/.my-dev-kit/progress-context.json --audit-out examples/basic-android-kotlin/.my-dev-kit/progress-audit.json --json
 ```
 
-   Read `focus`, `selectedOwners`, `contextAdequacy`, `roleAdequacy`, and any conflict. For this single-sentence request that mentions both layers, the capsule selected the `isRefreshing` symbol in `UserViewModel.kt` as focus and reported a conflict ("a usage/projection candidate is likely to be selected while an exact stronger Android owner is connected"). Report that conflict. Do not delete one half of the request to make it go away.
+   Read `focus`, `selectedOwners`, `contextAdequacy`, `roleAdequacy`, and any conflict. For this single-sentence request that mentions both layers, the capsule selects `UserViewModel` as focus, keeps `UserHomeScreen` among the owners, and reports a conflict and an unresolved adequacy status instead of a single certain owner. Report that conflict. Do not delete one half of the request to make it go away.
 10. **Decide whether the context is sufficient before editing.** Proceed only when, for each edit, you have: the exact production owner and its source, its immediate dependencies from a bounded slice, the closest test (or a stated test gap), and no unreported conflict. Otherwise retrieve more or ask. Success of every command above is not sufficient; a `context` capsule with a conflict, or a related-test slice that is empty, still requires a decision.
 
 A search rank never authorizes an edit, and an instrumented test is never the production screen merely because it ranks first. Present ambiguous results and missing graph edges to whoever approves the change.
 
-### D2: context owner selection is unresolved
+<a id="d2-context-owner-selection-is-unresolved"></a>
 
-The `context` command and role-aware owner selection choose their focus lexically from the request wording. In the public example the following were observed with the v1.13.0 candidate build:
+### D2: context owner selection (partly corrected)
 
-- "Locate the owner for changing the UserHomeScreen layout" (architecture role) selected `UserHomeScreen.kt`.
-- "Change the layout of the UserHomeScreen without changing the ViewModel" (implementation role) selected `UserViewModel` because the request names it.
-- "Change how UserRepository refreshes users from the DAO and Retrofit service" selected `UserApiService` as focus, with `UserRepository.kt` retained but not first.
-- The benchmark fixture (`combined-app`) also showed "change the UserHomeScreen layout" selecting the instrumented test with low confidence; see the context phrasing note in `benchmarks/retrieval/v1.13/README.md`.
+`context` chooses its focus from request wording plus a fixed Android task-intent model. The v1.13.0 D2 correction changed three things, all deterministic and bounded:
 
-Whether this is a defect in ownership selection or only in request phrasing has not been determined. It is recorded as **D2, an open correction investigation that must be separate from this documentation and finished before v1.13.0 release readiness**. Until then: verify the production owner with the exact selectors above, treat an uncertain `context` focus as unresolved, and confirm the actual edit target from source before changing it. Using exact selectors is a safe way to gather evidence; it does not fix the underlying `context` behavior.
+- Terms inside an exclusion clause (`without changing the ViewModel`, `while preserving ...`, `do not touch ...`) or a dependency clause (`from the DAO and Retrofit service`, `using ...`, `via ...`) no longer count as the layer being changed. They stay in the lexical query, the candidate list, graph neighborhoods, and dependency evidence; they just no longer earn the task-intent ranking boost.
+- Bare `layout` and `presentation` count as UI terms. When no intent term matches at all, a CamelCase identifier ending in `Screen`, `ViewModel`, `Repository`, `Dao`, or `Entity` implies that layer.
+- `src/androidTest` is test-scoped for `search --intent ownership`, so an instrumented test is `supporting-evidence`, never `direct-owner`. The test stays discoverable with its score and match reasons unchanged.
+
+In the public example the corrected results are: "Change the UserHomeScreen layout without changing the ViewModel" and "Update UserHomeScreen presentation while preserving UserViewModel behavior" select `UserHomeScreen`; "Change UserRepository data-loading behavior without modifying UserApiService" and "Change how UserRepository refreshes users from the DAO and Retrofit service" select `UserRepository`; "Update UserViewModel state handling" selects `UserViewModel`; "Change the UserApiService Retrofit contract" selects `UserApiService`; "Update the UserHomeScreenTest assertion" stays a test-oriented request, and under the `implementation` role it still reports the test-primary-target conflict.
+
+What is **not** solved, and stays a verification duty:
+
+- Query sensitivity remains. The intent model is lexical: a request that genuinely names two layers (for example a screen and its ViewModel state) keeps both as candidates and reports an ambiguous-owner conflict by design. The clause lists are fixed, so an unusual way of excluding or depending on a component is not recognized.
+- Several corrected requests still report `context conflict found ...` because other near-tied candidates remain at the best tier (for example `AppNavigation` beside the screen, or `MainActivity` beside the ViewModel). Part of that comes from the over-broad `view-model` role that `android-components` assigns to every class in a file that imports `androidx.lifecycle.ViewModel`; it is recorded as a separate follow-up correction (see `search --android-role view-model`, which also returns `MainActivity` and `UserUiState`).
+- `slice --include-tests` from a ViewModel or repository does not reach a unit test that only constructs the real class. That is a static-analysis limit, not a missing index: test-to-ViewModel edges exist only for a mock, fake, or stub whose referenced type resolves to an indexed class.
+- The benchmark fixture phrasing noted in `benchmarks/retrieval/v1.13/README.md` (a "change the UserHomeScreen layout" request on `combined-app`) was not re-evaluated here.
+
+Keep verifying the production owner with the exact selectors above, confirm the actual edit target from source, and treat a conflict or unresolved adequacy status as a decision for the person approving the change.
 
 ## Bundled examples
 
