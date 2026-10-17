@@ -8,6 +8,7 @@ Run the commands from the repository root with Node.js and npm available. Python
 - `basic-python` — a small Python project for code-graph indexing and search behavior.
 - `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, conservative static `trace-view` behavior, and (v1.5.0) conservative static classification of its `User` interface.
 - `basic-react-tsx` — a small React/TSX project for frontend semantic indexing, exact string retrieval, React region retrieval, local component-tree retrieval, frontend graph views, and v1.3.0 frontend-reachability retrieval (route, browser-storage, UI markers).
+- `basic-android-kotlin` — a small Kotlin, Compose, Room, and Retrofit Android project for static Android retrieval (Compose screens, ViewModel, repository, manifest, navigation, resources, unit and instrumented tests). It is a static retrieval sample; Gradle, the Android SDK, and an emulator are not required and it has not been compiled or run.
 
 Normal users should run `npx @dailephd/my-dev-kit` inside their own project:
 
@@ -26,6 +27,10 @@ npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "s
 # Python graph example
 npx @dailephd/my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --json
 npx @dailephd/my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
+
+# Android Kotlin/Compose example (static retrieval sample; see its README)
+npx @dailephd/my-dev-kit index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --json
 
 # Data-model example
 npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json

@@ -32,7 +32,12 @@
     "examples/basic-python/src",
     "examples/basic-python/README.md",
     "examples/basic-react-tsx/src",
-    "examples/basic-react-tsx/README.md"
+    "examples/basic-react-tsx/README.md",
+    "examples/basic-android-kotlin/README.md",
+    "examples/basic-android-kotlin/settings.gradle.kts",
+    "examples/basic-android-kotlin/build.gradle.kts",
+    "examples/basic-android-kotlin/app/build.gradle.kts",
+    "examples/basic-android-kotlin/app/src"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",

@@ -91,7 +91,8 @@ tests/ — tracked regression/integration tests and fixtures; mirror existing ow
 benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.
 benchmarks/retrieval/v1.13/ — TRACKED internal Android retrieval benchmark CONFIGURATION (android.json) and its maintainer README.md; NEVER generated benchmark runs. Reuses the existing src/retrievalRegression/ runner and existing tests/fixtures/ Android fixtures; not part of the npm package.
 scripts/docs/checkDocs.ts — thin source-checkout entrypoint for the existing docs preservation checks. No second checker.
-examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/; not generated runtime workspaces.
+examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/, basic-android-kotlin/; not generated runtime workspaces.
+  examples/basic-android-kotlin/ — public Android/Kotlin/Compose sample project and documentation for v1.13.0 retrieval workflows. Tracked public example included in the npm package by explicit package.json "files" allowlist entries (README.md, the three Gradle .kts files, app/src); not an internal fixture and not a build workspace.
 contracts/ecosystem/ — frozen coordinated ecosystem reference contracts and v1 fixtures; no modification for a local retrieval patch absent explicit dependency approval.
 docs/ — maintained tracked product/maintainer documents, NOT scratch or agent-run output.
   docs/ROADMAP.md — version-by-version product scope, including shipped milestones, planned versions, and explicit deferrals.
