@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Completed the unreleased v1.13.0 Android retrieval benchmark, public Android/Kotlin example, and coding-agent workflow documentation scope. Added twelve deterministic Android retrieval scenarios with typed assertions while preserving the fourteen-task core suite, and corrected bounded context ranking, Android production-owner eligibility for `androidTest`, and declaration-level standard Android component-role evidence. These candidate changes are not included in the published v1.12.6 package; Android benchmarks and static indexing do not run Gradle, an application, or Android tests.
+- Completed the unreleased v1.13.0 Android retrieval benchmark, public Android/Kotlin example, and coding-agent workflow documentation scope. Added twelve deterministic Android retrieval scenarios with typed assertions while preserving the fourteen-task core suite, and corrected bounded context ranking, Android production-owner eligibility for `androidTest`, declaration-level standard Android component-role evidence, and false single-layer owner conflicts while preserving genuine multi-owner ambiguity. These candidate changes are not included in the published v1.12.6 package; Android benchmarks and static indexing do not run Gradle, an application, or Android tests.
 
 ## 1.12.6 - 2026-10-16
 
