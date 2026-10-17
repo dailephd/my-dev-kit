@@ -214,9 +214,12 @@ export function isTestLike(filePath: string | undefined): boolean {
 }
 
 /** Directories conventionally reserved for test-scoped code: test files themselves,
- * `__tests__`, `tests/`, fixture/mock directories, and common test-utility directory names. */
+ * `__tests__`, `tests/`, fixture/mock directories, and common test-utility directory names.
+ * `src/androidTest` is the Android instrumented-test source-set directory (the JVM unit-test
+ * source set `src/test` is already covered by `test`); it is matched only as a whole
+ * `src/androidTest` path-segment pair, never by a basename or symbol that merely contains it. */
 export const TEST_SCOPE_DIR_PATTERN =
-  /(^|[\/])(tests?|__tests__|test-utils|testutils|test-helpers|testhelpers|fixtures|__fixtures__|mocks|__mocks__)([\/])/i
+  /(^|[\/])(tests?|__tests__|test-utils|testutils|test-helpers|testhelpers|fixtures|__fixtures__|mocks|__mocks__|src[\/]androidTest)([\/])/i
 
 /** Paths under a fixture/sample/snapshot-shaped directory. */
 export const FIXTURE_PATH_PATTERN = /(^|[\/])(__fixtures__|fixtures|test-data|testdata|samples|snapshots)([\/]|$)/i
