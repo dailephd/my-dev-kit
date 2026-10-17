@@ -68,6 +68,20 @@ npx @dailephd/my-dev-kit source --index examples/basic-data-model-ts/.my-dev-kit
 
 Classification is conservative and static: categories, edit guidance, readiness, and risk labels are derived only from file paths, naming conventions, and existing index/semantic evidence, never from runtime or browser behavior. An index built without the classification analyzer (or an older index) is still fully usable — `search`/`lookup`/`slice`/`source` simply omit the classification fields.
 
+### Android example categories
+
+[`basic-android-kotlin`](basic-android-kotlin/README.md) covers seven categories of Android evidence, all retrieved statically from source:
+
+- A minimal Kotlin Android app (`MainActivity`, manifest entry).
+- A minimal Compose screen (`UserHomeScreen`, `UserSettingsScreen`).
+- Compose + ViewModel + Repository (`UserViewModel`, `UserRepository`).
+- A Room entity and DAO (`UserEntity`, `UserDao`, `AppDatabase`).
+- A Retrofit service (`UserApiService`).
+- Manifest and deep-link evidence (`AndroidManifest.xml`, routes, `strings.xml`).
+- Compose UI test and unit test source (`app/src/androidTest`, `app/src/test`).
+
+Index it with all three source roots (`app/src/main`, `app/src/test`, `app/src/androidTest`) as shown above; `--out .my-dev-kit` is relative to `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`. It is a public example, not one of the internal Android fixtures under `tests/fixtures/` that the test suite and benchmarks use. It has not been compiled with Gradle, built with the Android SDK, or run on a device or emulator, and its tests have not been executed. It is part of the unreleased v1.13.0 candidate: until a release containing it is published, run it from a built source checkout (`node dist/cli.js` instead of `npx @dailephd/my-dev-kit`). The Android coding-agent workflow using it is Workflow 18 in [WORKFLOWS.md](../docs/WORKFLOWS.md).
+
 See each example's `README.md` for its focused workflow.
 
 Generated `.my-dev-kit` directories are local output only and are not tracked in the repository.
@@ -79,5 +93,5 @@ Generated `.my-dev-kit` directories are local output only and are not tracked in
 Remove all generated example indexes with this shell-neutral Node.js command:
 
 ```sh
-node -e "for (const path of ['examples/basic-ts/.my-dev-kit','examples/basic-python/.my-dev-kit','examples/basic-data-model-ts/.my-dev-kit','examples/basic-react-tsx/.my-dev-kit']) require('fs').rmSync(path,{recursive:true,force:true})"
+node -e "for (const path of ['examples/basic-ts/.my-dev-kit','examples/basic-python/.my-dev-kit','examples/basic-data-model-ts/.my-dev-kit','examples/basic-react-tsx/.my-dev-kit','examples/basic-android-kotlin/.my-dev-kit']) require('fs').rmSync(path,{recursive:true,force:true})"
 ```

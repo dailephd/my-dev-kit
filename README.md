@@ -562,6 +562,8 @@ npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --c
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
+Android example: `examples/basic-android-kotlin` is a static Kotlin, Compose, Room, and Retrofit retrieval sample in the unreleased v1.13.0 candidate (see its [README](examples/basic-android-kotlin/README.md); it is not compiled or run).
+
 See [examples/README.md](examples/README.md) for more detail.
 
 ## Design boundaries

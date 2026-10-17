@@ -46,13 +46,15 @@ The app is one module with manual construction in `MainActivity`. It deliberatel
 
 Android project, Gradle, manifest, resource, navigation, Compose, and test evidence is detected under `--root` automatically.
 
+This example is part of the unreleased v1.13.0 candidate. The commands below are written with `npx @dailephd/my-dev-kit`; from a built source checkout use `node dist/cli.js` in its place (the command surface is the same). See the [quickstart](../../docs/QUICKSTART.md) and the [Android coding-agent workflow](../../docs/WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130-candidate).
+
 ## 5. Index the example
 
 ```sh
 npx @dailephd/my-dev-kit index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
 ```
 
-`--out` is resolved against `--root`, so the index is written to `examples/basic-android-kotlin/.my-dev-kit`. The `android-gradle` analyzer reports partial status with warnings for BOM-managed dependencies that carry no version (for example `androidx.compose.ui:ui`). That is expected and does not affect retrieval. The commands below assume this index location.
+`--out` is resolved against `--root`, so the index is written to `examples/basic-android-kotlin/.my-dev-kit`. The `android-gradle` analyzer reports partial status with warnings for BOM-managed dependencies that carry no version (for example `androidx.compose.ui:ui`). That is expected and does not affect retrieval. The `classification` analyzer also reports `partial` (per-entry warnings where no static classification evidence matched). The commands below assume this index location.
 
 ## 6. Search
 
@@ -126,7 +128,7 @@ npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-ki
 npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-kit --android-role compose-ui-test --json
 ```
 
-The unit-test and instrumented-test roles return different files under `app/src/test` and `app/src/androidTest`. The test files are indexed, not executed; nothing here shows that they compile or pass. The `FakeUserDao` and `FakeUserApiService` doubles are implemented from interfaces, and their linkage to the real interfaces is not claimed.
+The unit-test and instrumented-test roles return different files under `app/src/test` and `app/src/androidTest`. A `slice ... --include-tests` from the ViewModel or repository reaches only the instrumented Compose test; `UserViewModelTest` is found through the role search or `--query UserViewModelTest`, and it is linked to its two in-test fakes but not to `UserViewModel`. The test files are indexed, not executed; nothing here shows that they compile or pass. The `FakeUserDao` and `FakeUserApiService` doubles are implemented from interfaces, and their linkage to the real interfaces is not claimed.
 
 ## 14. Wrong-layer edit examples
 
@@ -142,7 +144,9 @@ npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-ki
 npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-kit --android-role generated-file --json
 ```
 
-The second command returns no results here because the example contains no generated or build output and none of it is indexed.
+The first command also returns `UserUiState` and `MainActivity` (the latter with `likely` confidence), so pick the owner by reading the candidates, not the first row. The second command returns no results here because the example contains no generated or build output and none of it is indexed.
+
+Natural-language `context` requests do not reliably select these owners; a request that names the ViewModel or the repository can move the focus away from the screen you meant. See D2 in [WORKFLOWS.md](../../docs/WORKFLOWS.md#d2-context-owner-selection-is-unresolved) and verify the edit target from source.
 
 ## 15. Static-analysis limitations
 

@@ -164,6 +164,23 @@ Static project/module/source-set, plugin/dependency declarations, manifest permi
 
 For complete artifact schemas, stable identities, supported fact categories, and analyzer-specific limitations, use [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) and [ARCHITECTURE.md](ARCHITECTURE.md). These are artifact contracts, not additional CLI commands.
 
+### Android static-analysis boundaries (v1.13.0 candidate)
+
+The following was verified against the public example (`examples/basic-android-kotlin`) with the v1.13.0 candidate build. The CLI surface it uses is the published v1.12.6 command set.
+
+Observed graph edge kinds in the example (reproduced by the commands in "Android command examples (public example)" below): `activity-hosts-composable`, `composable-references-viewmodel`, `compose-state-reads-viewmodel`, `viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`, and `compose-route-resolves-to-screen`. Which edge appears depends on the selector and `--depth`: a default-depth `--composable` slice reaches `viewmodel-uses-repository`, and `dao-uses-entity` and `room-database-exposes-dao` appear only at `--depth 3` from the ViewModel.
+
+Relationships not established:
+
+- No complete click-handler-to-state-mutation edge: the click fact and the ViewModel reference are separate, and `refreshUsers()` is not linked from the handler. `uiState` is not indexed as a class-member node.
+- No database-to-entity edge from `@Database(entities = [...])`; the entity is reached through the DAO (`dao-uses-entity`).
+- No link from a unit test that constructs `UserViewModel` to that class, and no resolution of an interface test double to its interface (`android-test-uses-double` links a test to its doubles only).
+- Related-test expansion (`--include-tests`) is bounded and may return only some tests; use `--android-role` or `search --query` to find the rest.
+
+Not performed: Gradle execution or dependency resolution, Android compilation or application launch, Compose rendering, runtime string-resource resolution, manifest merging or effective resource-overlay selection, runtime ViewModel dependency injection, network requests, Room query execution, instrumented or unit test execution, indexing of every Kotlin member independently, and slice traversal of arbitrary depth (`--depth` is bounded and `--include-data-flow` is a fixed edge family).
+
+Analyzer status: `partial` for `android-gradle` (version-less BOM-managed coordinates such as `androidx.compose.ui:ui` produce warnings) and for `classification` (per-entry warnings where no static classification evidence matched) means the artifact was produced with documented gaps. It is not by itself a correctness defect. A zero-result exact selector, or an accepted `--android-role` with no matches, is a valid `status: ok` result and does not show that the application lacks the corresponding runtime behavior.
+
 ## search
 
 Discover files, symbols, graph evidence, and specialized static facts.
@@ -395,6 +412,42 @@ The Android data-flow allowlist covers existing Activity/Compose/ViewModel/Repos
 
 This remains static analysis. No dependency injection, database query, Retrofit request, test execution, or complete coverage is established.
 
+### Android command examples (public example)
+
+These commands span `index`, `search`, `lookup`, `slice`, `source`, `context`, and `view`; each was run against `examples/basic-android-kotlin` with a source-checkout build (`node dist/cli.js`, the same surface as the published package). Run them from the repository root. `IDX` stands for `examples/basic-android-kotlin/.my-dev-kit`.
+
+```powershell
+node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+node dist/cli.js search --index IDX --composable UserHomeScreen --json
+node dist/cli.js search --index IDX --test-tag refresh_users_button --json
+node dist/cli.js search --index IDX --android-component MainActivity --json
+node dist/cli.js lookup --index IDX --android-component MainActivity --json
+node dist/cli.js source --index IDX --android-route settings --format numbered
+node dist/cli.js source --index IDX --resource string/user_screen_title --format numbered
+node dist/cli.js slice --index IDX --android-route settings --json
+node dist/cli.js slice --index IDX --composable UserHomeScreen --include-data-flow --json
+node dist/cli.js slice --index IDX --node "symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel" --include-data-flow --depth 3 --json
+node dist/cli.js slice --index IDX --node "symbol:app/src/main/kotlin/com/example/kitdemo/data/UserRepository.kt#UserRepository" --depth 1 --json
+node dist/cli.js slice --index IDX --composable UserHomeScreen --include-tests --json
+node dist/cli.js search --index IDX --android-role android-unit-test --json
+node dist/cli.js source --index IDX --file app/src/main/kotlin/com/example/kitdemo/data/UserDao.kt --start 1 --end 12 --format numbered
+node dist/cli.js source --index IDX --file app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt --continue-from 10 --max-lines 10 --format numbered
+node dist/cli.js context --index IDX --role architecture --query "Locate the owner for changing the UserHomeScreen layout" --out IDX/home-architecture.json --json
+node dist/cli.js view --index IDX --graph compose-navigation --format dot --out IDX/compose-navigation.dot --json
+```
+
+Expected results for the example:
+
+- `--composable UserHomeScreen` returns one `android-composable` result with `matchKind: composable-name`. `--test-tag refresh_users_button` returns one `android-compose-fact` (`resolved-test-tag`) in `UserHomeScreen.kt`. `--android-component MainActivity` returns the manifest component with `sourceClassCandidates` pointing to the `MainActivity` symbol.
+- Route and resource retrieval return `AppNavigation.kt` (`composable("settings")`) and `strings.xml` (the `user_screen_title` definition). The route slice has a `compose-navigation-targets-route` edge and a `compose-route-resolves-to-screen` edge.
+- `--include-data-flow` is limited by `--depth` and reports `androidDataFlow` with `truncated: false` for these inputs; the ViewModel depth-3 slice reaches the DAO, entity, and Room database edges.
+- The repository slice at depth 1 returns `repository-uses-dao` and `repository-uses-service`.
+- `--include-tests` adds `androidTests` and the instrumented test's methods; `--android-role android-unit-test` returns the five `UserViewModelTest` nodes under `app/src/test`.
+- A `source` window ends with a `[CONTINUE: ... from line N (reason: ...)]` marker when capped; pass N to `--continue-from`.
+- Selector behavior with no match: `search --composable NoSuchScreen` and `search --android-role generated-file` return an empty result list (`status: ok`) and exit 0, `lookup --android-component NoSuchActivity` returns `status: not-found`, and `source --android-route nosuchroute` prints `Status: not-found`. In this example every exact selector above resolves to one candidate, so no exact-selector ambiguity occurs; the free-text `search --query UserViewModel` returns the production class and its test with the same score, which is the ambiguity to resolve by path and classification.
+
+Take node IDs from `search` output. Identity forms such as `symbol:<path>#<Name>`, `android-compose-declaration:<path>#<Name>`, and `android-test-method:<path>#<Class>.<method>` are name-based. IDs that embed a position (`::testtag#0@L23`, the `#1` route ordinal, `strings.xml#value:1`, the manifest `:0` ordinal) can change when the source changes, so do not copy them into long-lived notes. There is no `trace-state` command, no arbitrary Kotlin-member selector, no `compose-screen` role, no manifest-merging option, and no unlimited slice traversal.
+
 ## view
 
 Render a selected graph artifact as DOT, SVG, or PNG.
@@ -585,7 +638,7 @@ Companion syntax and limitations are linked from the ecosystem guide. There is n
 
 `npm run build`, `npm test`, `npm run typecheck`, `npm run docs:check`, `npm run verify`, and `npm run benchmark:retrieval` are source-checkout maintainer commands. They are not extra installed CLI commands. In the reviewed package, `verify` runs typecheck/build/docs checks and does not replace `npm test`.
 
-The v1.7 retrieval-regression suite is maintainer tooling. Local unreleased v1.13 work must not be documented as published command surface before release. Do not invent `benchmark:retrieval:android` in the reviewed published baseline.
+The v1.7 retrieval-regression suite is maintainer tooling. Local unreleased v1.13 work must not be documented as published command surface before release. Do not invent `benchmark:retrieval:android` in the reviewed published baseline. On the unreleased v1.13.0 candidate branch it exists as a source-checkout maintainer script; see [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite-unreleased-candidate). It is not an installed CLI command.
 
 There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-stack execution, watch, deployment, browser-observation, security, or automatic workflow command in my-dev-kit. Use supported `source --contains`, local component-tree/flow options, and companion tools where appropriate. Future plugin/retrieval API work remains roadmap scope, not installed behavior.
 
