@@ -89,6 +89,7 @@ tests/ — tracked regression/integration tests and fixtures; mirror existing ow
   tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
 
 benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.
+benchmarks/retrieval/v1.13/ — TRACKED internal Android retrieval benchmark CONFIGURATION (android.json) and its maintainer README.md; NEVER generated benchmark runs. Reuses the existing src/retrievalRegression/ runner and existing tests/fixtures/ Android fixtures; not part of the npm package.
 scripts/docs/checkDocs.ts — thin source-checkout entrypoint for the existing docs preservation checks. No second checker.
 examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/; not generated runtime workspaces.
 contracts/ecosystem/ — frozen coordinated ecosystem reference contracts and v1 fixtures; no modification for a local retrieval patch absent explicit dependency approval.
