@@ -105,12 +105,22 @@ function classificationGuidances(candidate: { classificationRoles?: readonly { e
 /** Every Android category matched by at least one detected intent, split into
  * primary/supporting tiers (a category can be primary for one intent and
  * supporting for another; both tiers are checked independently). */
-function matchedTier(roles: ClassificationRoleName[], intents: ReadonlySet<AndroidIntent>): 'primary' | 'supporting' | 'none' {
+export function androidRoleIntentTier(role: ClassificationRoleName, intents: ReadonlySet<AndroidIntent>): 'primary' | 'supporting' | 'none' {
   let sawSupporting = false
   for (const intent of intents) {
     const preference = ANDROID_INTENT_CATEGORY_PREFERENCES[intent]
-    if (roles.some((role) => preference.primary.includes(role))) return 'primary'
-    if (roles.some((role) => preference.supporting.includes(role))) sawSupporting = true
+    if (preference.primary.includes(role)) return 'primary'
+    if (preference.supporting.includes(role)) sawSupporting = true
+  }
+  return sawSupporting ? 'supporting' : 'none'
+}
+
+function matchedTier(roles: ClassificationRoleName[], intents: ReadonlySet<AndroidIntent>): 'primary' | 'supporting' | 'none' {
+  let sawSupporting = false
+  for (const role of roles) {
+    const tier = androidRoleIntentTier(role, intents)
+    if (tier === 'primary') return 'primary'
+    if (tier === 'supporting') sawSupporting = true
   }
   return sawSupporting ? 'supporting' : 'none'
 }

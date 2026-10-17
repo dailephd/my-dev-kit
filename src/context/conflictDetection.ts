@@ -10,6 +10,7 @@ import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { AndroidIntent } from './androidContextIntent.js'
 import {
   androidOwnerEligible,
+  androidRoleIntentTier,
   candidateNodeToPolicyInput,
   findUsageOwnerPairs,
   hasAndroidProvenance,
@@ -54,6 +55,14 @@ function toConflictCandidate(candidate: CandidateNode) {
     score: candidate.score,
     editGuidance: guidance(candidate),
   }
+}
+
+/** A graph-injected support candidate may receive an Android intent boost, but
+ * that boost alone does not make it request-relevant evidence for an ownership
+ * conflict. Explicit focus/changed-surface synthesis is independently grounded. */
+function hasIndependentAndroidOwnerRelevance(candidate: CandidateNode): boolean {
+  if (candidate.synthesized) return candidate.focusMatch === true || candidate.changedSurfaceMatch === true
+  return candidate.baseScore === undefined || candidate.baseScore > 0
 }
 
 export function detectContextConflicts(options: {
@@ -222,9 +231,27 @@ function detectAndroidWrongLayerConflicts(
     const eligible = candidateNodes.filter(
       (n) => n.retained && hasAndroidProvenance(candidateNodeToPolicyInput(n)) && androidOwnerEligible(candidateNodeToPolicyInput(n), androidIntents, isTestImplementationRole)
     )
+    const conflictEligible = eligible.filter(hasIndependentAndroidOwnerRelevance)
+    const eligibleById = new Map(conflictEligible.map((candidate) => [candidate.nodeId, candidate]))
+    const composableProjectionAliases = new Set<string>()
+    for (const edge of codeGraph?.edges ?? []) {
+      if (edge.kind !== 'defines-composable') continue
+      const source = eligibleById.get(edge.source)
+      const target = eligibleById.get(edge.target)
+      if (source?.kind !== 'symbol' || target?.kind !== 'android-composable') continue
+      if (source.classificationRoles?.some((sourceRole) => target.classificationRoles?.some((targetRole) => targetRole.role === sourceRole.role))) {
+        composableProjectionAliases.add(source.nodeId)
+      }
+    }
+
+    // Same-responsibility ambiguity is limited to categories that are primary
+    // for an active task intent. Supporting candidates remain in the capsule
+    // and evidence groups, but do not become rival edit owners by presence alone.
     const byRole = new Map<string, CandidateNode[]>()
-    for (const candidate of eligible) {
+    for (const candidate of conflictEligible) {
       for (const roleRef of candidate.classificationRoles ?? []) {
+        if (androidRoleIntentTier(roleRef.role, androidIntents) !== 'primary') continue
+        if (composableProjectionAliases.has(candidate.nodeId)) continue
         const list = byRole.get(roleRef.role) ?? []
         list.push(candidate)
         byRole.set(roleRef.role, list)
@@ -232,7 +259,7 @@ function detectAndroidWrongLayerConflicts(
     }
     for (const [roleName, group] of byRole) {
       if (group.length < 2) continue
-      const sorted = [...group].sort((a, b) => b.score - a.score)
+      const sorted = [...group].sort((a, b) => b.score - a.score || a.nodeId.localeCompare(b.nodeId))
       const topScore = sorted[0]!.score
       const tied = sorted.filter((c) => Math.abs(c.score - topScore) <= NEAR_TIE_SCORE_MARGIN)
       if (tied.length < 2) continue
@@ -240,12 +267,43 @@ function detectAndroidWrongLayerConflicts(
         id: nextId('android-ambiguous-owner'),
         kind: 'android-ambiguous-owner',
         status: 'conflict',
-        reason: `Multiple materially plausible Android "${roleName}" owner candidates remain at the best eligible tier; no deterministic structural rule distinguishes them.`,
+        reason: `Multiple distinct Android "${roleName}" candidates classified as primary for an active task intent remain within the near-tie margin; no deterministic structural rule distinguishes them.`,
         evidenceRefs: [...new Set(tied.flatMap((c) => c.classificationRefs?.map((ref) => ref.id) ?? []))].sort(),
         affectedFiles: [...new Set(tied.map((c) => c.filePath).filter((v): v is string => Boolean(v)))].sort(),
         affectedNodes: tied.map((c) => c.nodeId).sort(),
         candidates: tied.map(toConflictCandidate),
         recommendedNextAction: 'Preserve every candidate; do not guess a single owner without additional disambiguating evidence.',
+      })
+    }
+
+    // A request with multiple active intents can intentionally span layers
+    // whose owners have different classification roles, so same-role grouping
+    // alone cannot preserve that ambiguity. Include the grounded primary
+    // candidates for each active responsibility without selecting a winner by
+    // score. Intent detection is clause-scoped and bounded upstream.
+    const candidatesByIntent = [...androidIntents].sort().map((intent) => ({
+      intent,
+      candidates: conflictEligible.filter((candidate) =>
+        candidate.classificationRoles?.some((roleRef) => androidRoleIntentTier(roleRef.role, new Set([intent])) === 'primary')
+      ).filter((candidate) => !composableProjectionAliases.has(candidate.nodeId)),
+    })).filter((entry) => entry.candidates.length > 0)
+    const crossIntentCandidateIds = new Set(candidatesByIntent.flatMap((entry) => entry.candidates.map((candidate) => candidate.nodeId)))
+    if (candidatesByIntent.length > 1 && crossIntentCandidateIds.size > 1) {
+      const crossIntentCandidates = [...crossIntentCandidateIds]
+        .map((id) => eligibleById.get(id))
+        .filter((candidate): candidate is CandidateNode => candidate !== undefined)
+        .sort((a, b) => a.nodeId.localeCompare(b.nodeId))
+      const intentNames = candidatesByIntent.map((entry) => entry.intent).sort()
+      conflicts.push({
+        id: nextId('android-ambiguous-owner'),
+        kind: 'android-ambiguous-owner',
+        status: 'conflict',
+        reason: `The active Android request spans multiple primary responsibilities (${intentNames.join(', ')}) with distinct retained production candidates; review each requested layer without selecting a single owner.`,
+        evidenceRefs: [...new Set(crossIntentCandidates.flatMap((candidate) => candidate.classificationRefs?.map((ref) => ref.id) ?? []))].sort(),
+        affectedFiles: [...new Set(crossIntentCandidates.map((candidate) => candidate.filePath).filter((value): value is string => Boolean(value)))].sort(),
+        affectedNodes: crossIntentCandidates.map((candidate) => candidate.nodeId),
+        candidates: crossIntentCandidates.map(toConflictCandidate),
+        recommendedNextAction: 'Keep the requested responsibilities distinct and review the production candidates for each layer before editing.',
       })
     }
   }

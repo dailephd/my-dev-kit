@@ -84,8 +84,11 @@ describe('D2-A: edit-target selection with exclusion and dependency clauses', ()
       expect(capsule.focus.focusFilePath).toBe(SCREEN)
       expect(ownerIds(capsule)[0]).toContain('UserHomeScreen')
       expect(ownerIds(capsule).some((id) => id.includes('UserViewModel#UserViewModel') || id.endsWith('UserViewModel.kt#UserViewModel'))).toBe(false)
+      expect(capsule.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(false)
       // excluded dependency stays visible, but not as the leading candidate
       expect(candidateIds(capsule).some((id) => id.includes('UserViewModel.kt'))).toBe(true)
+      expect(candidateIds(capsule).some((id) => id.includes('UserHomeScreenTest'))).toBe(true)
+      expect(capsule.selectedGraph.nodes.some((item: any) => item.nodeId.includes('UserHomeScreenTest'))).toBe(true)
       const first = capsule.candidateNodes[0]
       expect(first.nodeId).toContain('UserHomeScreen')
       expect(first.score).toBeGreaterThan(capsule.candidateNodes.find((n: any) => n.nodeId.includes('UserViewModel.kt')).score)
@@ -101,15 +104,32 @@ describe('D2-A: edit-target selection with exclusion and dependency clauses', ()
       expect(capsule.focus.focusFilePath).toBe(REPO)
       expect(ownerIds(capsule)[0]).toContain('UserRepository')
       expect(candidateIds(capsule).some((id) => id.includes('UserApiService'))).toBe(true)
+      expect(candidateIds(capsule).some((id) => id.includes('UserDao'))).toBe(true)
       expect(ownerIds(capsule).some((id) => id.includes('UserApiService'))).toBe(true)
+      expect(capsule.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(false)
     }
   })
 
   it('5-6: still selects the ViewModel for a state task and the service for a network-contract task', () => {
-    expect(implementation('Update UserViewModel state handling.').focus.focusFilePath).toBe(VM)
+    const state = implementation('Update UserViewModel state handling.')
+    expect(state.focus.focusFilePath).toBe(VM)
+    expect(ownerIds(state)[0]).toContain('UserViewModel')
+    expect(candidateIds(state).some((id) => id.includes('UserHomeScreen'))).toBe(true)
+    expect(state.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(false)
     const contract = implementation('Change the UserApiService Retrofit contract.')
     expect(contract.focus.focusFilePath).toBe(SERVICE)
     expect(ownerIds(contract)[0]).toContain('UserApiService')
+    expect(candidateIds(contract).some((id) => id.includes('UserRepository'))).toBe(true)
+    expect(contract.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(false)
+  })
+
+  it('2b: a direct single-screen presentation request does not conflict with navigation or test projections', () => {
+    const capsule = implementation('Update UserHomeScreen presentation.')
+    expect(capsule.focus.focusFilePath).toBe(SCREEN)
+    expect(ownerIds(capsule)[0]).toContain('UserHomeScreen')
+    expect(candidateIds(capsule).some((id) => id.includes('AppNavigation'))).toBe(true)
+    expect(candidateIds(capsule).some((id) => id.includes('UserHomeScreenTest'))).toBe(true)
+    expect(capsule.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(false)
   })
 
   it('13: keeps ambiguity for a genuine multi-layer request instead of a falsely certain single owner', () => {
@@ -118,7 +138,32 @@ describe('D2-A: edit-target selection with exclusion and dependency clauses', ()
     expect(ids).toContain('UserHomeScreen')
     expect(ids).toContain('UserViewModel')
     expect(capsule.contextAdequacy.status).not.toBe('context sufficient for implementation')
-    expect(capsule.conflicts.conflicts.some((c: any) => c.kind === 'android-ambiguous-owner')).toBe(true)
+    const ambiguity = capsule.conflicts.conflicts.find((c: any) => c.kind === 'android-ambiguous-owner')
+    expect(ambiguity).toBeTruthy()
+    expect(ambiguity.candidates.some((candidate: any) => candidate.nodeId.includes('UserHomeScreen'))).toBe(true)
+    expect(ambiguity.candidates.some((candidate: any) => candidate.nodeId.includes('UserViewModel'))).toBe(true)
+    expect(ambiguity.candidates.some((candidate: any) => candidate.nodeId.includes('AppNavigation') || candidate.nodeId.includes('MainActivity'))).toBe(false)
+    expect(candidateIds(capsule).some((id) => id.includes('AppNavigation'))).toBe(true)
+    expect(ambiguity.reason).toContain('multiple primary responsibilities')
+  })
+
+  it('18: two explicitly plausible screens remain competing primary owners', () => {
+    const capsule = implementation('Change the screen layout for UserHomeScreen and UserSettingsScreen.')
+    const ambiguity = capsule.conflicts.conflicts.find((c: any) => c.kind === 'android-ambiguous-owner' && c.candidates.some((candidate: any) => candidate.nodeId.includes('UserHomeScreen')) && c.candidates.some((candidate: any) => candidate.nodeId.includes('UserSettingsScreen')))
+    expect(candidateIds(capsule).some((id) => id.includes('UserHomeScreen'))).toBe(true)
+    expect(candidateIds(capsule).some((id) => id.includes('UserSettingsScreen'))).toBe(true)
+    expect(ambiguity).toBeTruthy()
+    expect(ambiguity.candidates.map((candidate: any) => candidate.nodeId).sort()).toEqual([
+      'android-compose-declaration:app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt#UserHomeScreen',
+      'android-compose-declaration:app/src/main/kotlin/com/example/kitdemo/UserSettingsScreen.kt#UserSettingsScreen',
+    ])
+  })
+
+  it('19: a nonexistent screen remains unresolved instead of receiving a fabricated owner', () => {
+    const capsule = implementation('Change UnknownProfileScreen presentation.')
+    expect(capsule.focus.focusNodeId).toBeNull()
+    expect(ownerIds(capsule)).toEqual([])
+    expect(capsule.conflicts.status).toBe('none')
   })
 
   it('12: an explicit focus file stays boosted and wins when the request states no competing layer', () => {
@@ -164,6 +209,9 @@ describe('tests remain valid test-oriented requests and are never production own
   it('7: a test-implementation request keeps the test as its focus', () => {
     const capsule = context(androidIndex, 'test-implementation', 'Update the UserHomeScreenTest assertion.')
     expect(capsule.focus.focusFilePath).toBe(SCREEN_TEST)
+    const testLocation = capsule.candidateNodes.find((candidate: any) => candidate.nodeId.includes('UserHomeScreenTest') && candidate.classificationRoles?.some((role: any) => role.editGuidance === 'test-only'))
+    expect(testLocation).toBeTruthy()
+    expect(ownerIds(capsule).some((id) => id.includes('UserHomeScreenTest'))).toBe(false)
   })
 
   it('15: the same request under the implementation role keeps the wrong-layer conflict and no test owner', () => {
