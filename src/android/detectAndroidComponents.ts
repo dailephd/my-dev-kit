@@ -1,6 +1,6 @@
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
 import type { AndroidModule, AndroidProjectArtifact } from './androidProjectTypes.js'
-import { readBoundedSourceBody } from './boundedSourceBodyScan.js'
+import { readBoundedDeclarationHeader, readBoundedSourceBody } from './boundedSourceBodyScan.js'
 import { detectAndroidComponentDependencies } from './detectAndroidComponentDependencies.js'
 import {
   ANDROID_COMPONENTS_ARTIFACT_KIND,
@@ -342,7 +342,7 @@ function evaluateAllRoles(
   // `class` symbols and Retrofit evidence to `interface` symbols below.
   if (symbol.kind === 'class') {
     for (const rule of STANDARD_RULES) {
-      const match = evaluateStandardRole(rule, symbol, file, moduleInfo)
+      const match = evaluateStandardRole(rule, symbol, file, moduleInfo, projectRoot)
       if (match) matches.push(match)
     }
   }
@@ -404,29 +404,36 @@ function evaluateStandardRole(
   rule: StandardRoleRule,
   symbol: SymbolDefinition,
   file: FileSummary,
-  moduleInfo: ModuleInfo
+  moduleInfo: ModuleInfo,
+  projectRoot: string
 ): RoleMatch | null {
-  const superMatch = signatureContainsAny(symbol.signature, rule.strongSuperclassTokens)
-  if (superMatch) {
+  const superclass = findStandardRoleSuperclass(rule, symbol, file, projectRoot)
+  if (superclass) {
     return {
       role: rule.role,
       confidence: 'high',
-      evidence: [{ kind: 'superclass', value: superMatch, source: symbol.signature ?? '', confidence: 'high' }],
+      evidence: [{ kind: 'superclass', value: superclass.token, source: superclass.source, confidence: 'high' }],
       warnings: [],
     }
   }
 
+  // A file-level import is not proof that every class in the file has the imported
+  // framework role (v1.13.0 D2-D). Import evidence counts only when the same
+  // symbol also carries its own role signal (the role's name suffix).
   const importMatch = importsContainAny(file.imports, rule.mediumImportSubstrings)
-  if (importMatch) {
+  if (importMatch && symbol.name.endsWith(rule.weakNameSuffix)) {
     return {
       role: rule.role,
       confidence: 'medium',
-      evidence: [{ kind: 'import', value: importMatch, source: file.path, confidence: 'medium' }],
+      evidence: [
+        { kind: 'import', value: importMatch, source: file.path, confidence: 'medium' },
+        { kind: 'name', value: symbol.name, source: file.path, confidence: 'low' },
+      ],
       warnings: [],
     }
   }
 
-  if (symbol.name.endsWith(rule.weakNameSuffix)) {
+  if (!importMatch && symbol.name.endsWith(rule.weakNameSuffix)) {
     if (rule.weakRequiresSourceSetMain && moduleInfo.sourceSet !== 'main') return null
     const warning = `Ambiguous ${rule.role} role for '${symbol.name}': matched only by name suffix '${rule.weakNameSuffix}', no annotation/superclass/import evidence found.`
     return {
@@ -438,6 +445,203 @@ function evaluateStandardRole(
   }
 
   return null
+}
+
+interface StandardRoleSuperclass {
+  token: string
+  source: string
+}
+
+/**
+ * Explicit supported superclass for a standard Android class role. Java keeps the
+ * existing signature token match. Kotlin reads the declared supertype list only:
+ * a type that appears solely as a constructor parameter type is never a
+ * superclass. A first-line signature that does not settle the question
+ * (multiline primary constructor) is completed by one bounded declaration-header
+ * read; anything still unsettled yields no superclass evidence.
+ */
+function findStandardRoleSuperclass(
+  rule: StandardRoleRule,
+  symbol: SymbolDefinition,
+  file: FileSummary,
+  projectRoot: string
+): StandardRoleSuperclass | null {
+  if (file.language !== 'kotlin') {
+    const token = signatureContainsAny(symbol.signature, rule.strongSuperclassTokens)
+    return token ? { token, source: symbol.signature ?? '' } : null
+  }
+
+  let inspection: KotlinSupertypeInspection = symbol.signature
+    ? inspectKotlinClassSupertypes(symbol.signature, symbol.name, true)
+    : { status: 'insufficient' }
+  let source = symbol.signature ?? ''
+  if (inspection.status === 'insufficient') {
+    const header = readBoundedDeclarationHeader(projectRoot, file.path, symbol.location.line)
+    if (header) {
+      inspection = inspectKotlinClassSupertypes(header.text, symbol.name, header.truncated)
+      source = `${file.path}:${header.startLine}-${header.endLine}`
+    }
+  }
+  if (inspection.status !== 'supertypes') return null
+  for (const token of rule.strongSuperclassTokens) {
+    if (inspection.names.includes(token)) return { token, source }
+  }
+  return null
+}
+
+export type KotlinSupertypeInspection =
+  | { status: 'supertypes'; names: string[] }
+  | { status: 'none' }
+  | { status: 'insufficient' }
+
+/** Replaces comment and string/char-literal content with spaces, preserving newlines and length. */
+function blankKotlinCommentsAndStrings(text: string): string {
+  const out = text.split('')
+  let i = 0
+  const blank = (from: number, to: number) => {
+    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' '
+  }
+  while (i < text.length) {
+    const two = text.slice(i, i + 2)
+    if (two === '//') {
+      let end = text.indexOf('\n', i)
+      if (end < 0) end = text.length
+      blank(i, end)
+      i = end
+    } else if (two === '/*') {
+      const close = text.indexOf('*/', i + 2)
+      const end = close < 0 ? text.length : close + 2
+      blank(i, end)
+      i = end
+    } else if (text.startsWith('"""', i)) {
+      const close = text.indexOf('"""', i + 3)
+      const end = close < 0 ? text.length : close + 3
+      blank(i, end)
+      i = end
+    } else if (text[i] === '"' || text[i] === "'") {
+      const quote = text[i] as string
+      let j = i + 1
+      while (j < text.length && text[j] !== quote && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1
+      const end = Math.min(j + 1, text.length)
+      blank(i, end)
+      i = end
+    } else {
+      i += 1
+    }
+  }
+  return out.join('')
+}
+
+function skipBalanced(text: string, start: number, open: string, close: string): number {
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]
+    if (c === open) depth += 1
+    else if (c === close && !(close === '>' && text[i - 1] === '-')) {
+      depth -= 1
+      if (depth === 0) return i + 1
+    }
+  }
+  return -1
+}
+
+/**
+ * Bounded, conservative reader for the supertype list of one Kotlin class
+ * declaration header (v1.13.0 D2-D). Not a Kotlin parser: it understands the
+ * class name, optional type parameters, annotations, the `constructor` keyword,
+ * one primary-constructor parameter list, and a `: A(), B` supertype list, in that
+ * order. Comments and string literals are ignored. `truncated` means the text may
+ * continue past what was supplied.
+ */
+export function inspectKotlinClassSupertypes(headerText: string, className: string, truncated: boolean): KotlinSupertypeInspection {
+  const text = blankKotlinCommentsAndStrings(headerText)
+  const escapedName = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const declaration = new RegExp(`\\bclass\\s+\`?${escapedName}\`?(?![\\w\`])`).exec(text)
+  if (!declaration) return { status: 'insufficient' }
+  const declarationLine = text.slice(0, declaration.index).split('\n').length
+  if (declarationLine > 3) return { status: 'insufficient' }
+
+  let pos = declaration.index + declaration[0].length
+  let sawConstructor = false
+  for (;;) {
+    while (pos < text.length && /\s/.test(text[pos] as string)) pos += 1
+    if (pos >= text.length) return truncated ? { status: 'insufficient' } : { status: 'none' }
+    const c = text[pos] as string
+    if (c === '<' && !sawConstructor) {
+      const end = skipBalanced(text, pos, '<', '>')
+      if (end < 0) return { status: 'insufficient' }
+      pos = end
+    } else if (c === '@') {
+      const annotation = /^@[\w.]+(?::[\w.]+)?/.exec(text.slice(pos))
+      if (!annotation) return { status: 'insufficient' }
+      pos += annotation[0].length
+      let look = pos
+      while (look < text.length && text[look] === ' ') look += 1
+      if (text[look] === '(') {
+        const end = skipBalanced(text, look, '(', ')')
+        if (end < 0) return { status: 'insufficient' }
+        pos = end
+      }
+    } else if (!sawConstructor && /^constructor\b/.test(text.slice(pos))) {
+      pos += 'constructor'.length
+    } else if (c === '(' && !sawConstructor) {
+      const end = skipBalanced(text, pos, '(', ')')
+      if (end < 0) return { status: 'insufficient' }
+      sawConstructor = true
+      pos = end
+    } else {
+      break
+    }
+  }
+
+  if (text[pos] !== ':') return { status: 'none' }
+  pos += 1
+  let list = ''
+  let depth = 0
+  let terminated = false
+  for (; pos < text.length; pos++) {
+    const c = text[pos] as string
+    if (depth === 0 && c === '{') {
+      terminated = true
+      break
+    }
+    if (depth === 0 && /^where\b/.test(text.slice(pos)) && /\s/.test(text[pos - 1] ?? ' ')) {
+      terminated = true
+      break
+    }
+    if (c === '(' || c === '[' || c === '<') depth += 1
+    else if (c === ')' || c === ']' || (c === '>' && text[pos - 1] !== '-')) depth -= 1
+    if (c === '\n' && depth === 0) {
+      const before = list.trimEnd()
+      const after = text.slice(pos + 1).trimStart()
+      if (before.length > 0 && !before.endsWith(',') && !after.startsWith(',')) {
+        if (after.length === 0 && truncated) return { status: 'insufficient' }
+        terminated = true
+        break
+      }
+    }
+    list += c
+  }
+  if (depth !== 0) return { status: 'insufficient' }
+  if (!terminated && truncated) return { status: 'insufficient' }
+
+  const names: string[] = []
+  let current = ''
+  let level = 0
+  const flush = () => {
+    const entry = current.trim().replace(/^(?:@[\w.]+(?:\([^)]*\))?\s*)+/, '').split(/\sby\s/)[0] ?? ''
+    const nameMatch = /^[\w.`]+/.exec(entry.trim())
+    if (nameMatch) names.push((nameMatch[0].split('.').pop() ?? '').replace(/`/g, ''))
+    current = ''
+  }
+  for (const c of list) {
+    if (c === '(' || c === '<' || c === '[') level += 1
+    else if (c === ')' || c === '>' || c === ']') level -= 1
+    if (c === ',' && level === 0) flush()
+    else current += c
+  }
+  flush()
+  return names.length > 0 ? { status: 'supertypes', names } : { status: 'insufficient' }
 }
 
 function evaluateNameOrPathRole(

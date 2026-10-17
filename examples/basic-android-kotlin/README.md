@@ -144,7 +144,7 @@ npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-ki
 npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-kit --android-role generated-file --json
 ```
 
-The first command also returns `UserUiState` and `MainActivity` (the latter with `likely` confidence), so pick the owner by reading the candidates, not the first row. The second command returns no results here because the example contains no generated or build output and none of it is indexed.
+The first command returns `UserViewModel` (high-confidence `ViewModel` superclass evidence from its multiline declaration). Earlier builds also returned `UserUiState` and `MainActivity` because a file-level import was treated as role evidence; re-index with a current build if you still see them. The second command returns no results here because the example contains no generated or build output and none of it is indexed.
 
 Natural-language `context` requests do not reliably select these owners; a request that names the ViewModel or the repository can move the focus away from the screen you meant. See D2 in [WORKFLOWS.md](../../docs/WORKFLOWS.md#d2-context-owner-selection-is-unresolved) and verify the edit target from source.
 
