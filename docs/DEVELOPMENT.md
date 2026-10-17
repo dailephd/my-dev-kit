@@ -129,11 +129,11 @@ This suite is separate from release and security validation. `my-dev-kit`
 owns retrieval regression checks; `my-dev-kit-lab` continues to own
 release-readiness, dependency/package, and security validation workflows.
 
-## v1.13.0 Android retrieval regression suite (unreleased candidate)
+## v1.13.0 Android retrieval regression suite
 
 The v1.7.0 section above is the historical description of the core suite when
 it shipped; lookup and slice execution were added later and are described
-here as current state of the unreleased v1.13.0 candidate branch. Nothing in
+here as current state of the v1.13.0 release. Nothing in
 this section is a public CLI command or part of the published package.
 
 Two configurations share the one runner in `src/retrievalRegression/`:
@@ -653,7 +653,7 @@ Included examples:
   Python example project.
 
 - examples/basic-android-kotlin/
-  Public Android/Kotlin/Compose static retrieval example (v1.13.0 candidate). It is a public example, not an internal test fixture; the Android fixtures under tests/fixtures/ remain internal.
+  Public Android/Kotlin/Compose static retrieval example packaged in v1.13.0. It is a public example, not an internal test fixture; the Android fixtures under tests/fixtures/ remain internal.
 
 The package may include selected example source folders for public smoke tests. Development-only generated artifacts under examples should not be committed or published.
 

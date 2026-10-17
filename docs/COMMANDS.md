@@ -1,6 +1,6 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The current published public surface is `1.12.6`: nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, and the v1.12.6 additions below. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The current published public surface is `1.13.0`: nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
@@ -164,9 +164,9 @@ Static project/module/source-set, plugin/dependency declarations, manifest permi
 
 For complete artifact schemas, stable identities, supported fact categories, and analyzer-specific limitations, use [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) and [ARCHITECTURE.md](ARCHITECTURE.md). These are artifact contracts, not additional CLI commands.
 
-### Android static-analysis boundaries (v1.13.0 candidate)
+### Android static-analysis boundaries (v1.13.0)
 
-The following was verified against the public example (`examples/basic-android-kotlin`) with the v1.13.0 candidate build. The CLI surface it uses is the published v1.12.6 command set.
+The following was verified against the packaged public example (`examples/basic-android-kotlin`) with v1.13.0. The Android selectors use existing CLI command families.
 
 Observed graph edge kinds in the example (reproduced by the commands in "Android command examples (public example)" below): `activity-hosts-composable`, `composable-references-viewmodel`, `compose-state-reads-viewmodel`, `viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`, and `compose-route-resolves-to-screen`. Which edge appears depends on the selector and `--depth`: a default-depth `--composable` slice reaches `viewmodel-uses-repository`, and `dao-uses-entity` and `room-database-exposes-dao` appear only at `--depth 3` from the ViewModel.
 
@@ -642,7 +642,7 @@ Companion syntax and limitations are linked from the ecosystem guide. There is n
 
 `npm run build`, `npm test`, `npm run typecheck`, `npm run docs:check`, `npm run verify`, and `npm run benchmark:retrieval` are source-checkout maintainer commands. They are not extra installed CLI commands. In the reviewed package, `verify` runs typecheck/build/docs checks and does not replace `npm test`.
 
-The v1.7 retrieval-regression suite is maintainer tooling. Local unreleased v1.13 work must not be documented as published command surface before release. Do not invent `benchmark:retrieval:android` in the reviewed published baseline. On the unreleased v1.13.0 candidate branch it exists as a source-checkout maintainer script; see [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite-unreleased-candidate). It is not an installed CLI command.
+The v1.7 retrieval-regression suite is maintainer tooling. The `benchmark:retrieval:android` script is available from a source checkout; it is not an installed CLI command. See [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite).
 
 There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-stack execution, watch, deployment, browser-observation, security, or automatic workflow command in my-dev-kit. Use supported `source --contains`, local component-tree/flow options, and companion tools where appropriate. Future plugin/retrieval API work remains roadmap scope, not installed behavior.
 

@@ -1,14 +1,26 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { VERSION } from '../../src/version.js'
 
 const repoRoot = path.resolve(__dirname, '..', '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
+  version: string
   scripts: Record<string, string>
+}
+const packageLock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as {
+  version: string
+  packages: Record<string, { version: string }>
 }
 const releaseGuide = fs.readFileSync(path.join(repoRoot, 'docs', 'RELEASE.md'), 'utf8')
 
 describe('package script contract: test vs verify', () => {
+  it('keeps package, lockfile, and CLI versions in sync', () => {
+    expect(pkg.version).toBe(packageLock.version)
+    expect(pkg.version).toBe(packageLock.packages[''].version)
+    expect(pkg.version).toBe(VERSION)
+  })
+
   it('defines a canonical full test script', () => {
     expect(pkg.scripts.test).toBe('vitest run')
   })

@@ -172,7 +172,7 @@ Exact selectors retain ambiguity. A manifest component is not automatically the 
 
 ### Public example: project root, source sets, and analyzer status
 
-The public example (`examples/basic-android-kotlin`, part of the unreleased v1.13.0 candidate) is the concrete reference for this workflow. From the repository root of a built checkout:
+The public example (`examples/basic-android-kotlin`, packaged in v1.13.0) is the concrete reference for this workflow. From the repository root of a built checkout:
 
 ```powershell
 node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
@@ -400,7 +400,7 @@ Keep in mind:
 
 Inspect the command result's `incrementalRefresh` (or the printed `Refresh scope: ...` line) to see requested versus applied scope and the fallback reason, if any, rather than assuming the requested scope always ran. Neither scope is documented here as universally "safer" or "best" — pick based on how conservative the desired fresh-extraction boundary should be for the change being made.
 
-## Workflow 18: Android coding-agent workflow (v1.13.0 candidate)
+## Workflow 18: Android coding-agent workflow (v1.13.0)
 
 Use this ordered sequence when a coding agent is asked to modify the public Android example, or any Android project indexed the same way. It assumes the Workflow 10 index of `examples/basic-android-kotlin` and a built checkout (`node dist/cli.js`). The example request deliberately mixes two layers:
 

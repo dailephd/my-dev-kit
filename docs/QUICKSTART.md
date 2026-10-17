@@ -182,7 +182,7 @@ Source retrieval never modifies source files. The `--max-lines` limit is enforce
 
 ### v1.11.0 Compose retrieval
 
-This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.12.6`. The examples below may also be run from a source checkout built with `npm run build`.
+This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.13.0`. The examples below may also be run from a source checkout built with `npm run build`.
 
 ```sh
 node dist/cli.js source --index .my-dev-kit --composable HomeScreen --include-compose-tree --format numbered
@@ -271,9 +271,9 @@ npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --r
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
-### Android example (v1.13.0 release candidate)
+### Android example (v1.13.0)
 
-`examples/basic-android-kotlin` is a small Kotlin, Compose, Room, and Retrofit project for trying Android retrieval. The example directory is part of the unreleased v1.13.0 candidate, so run it from a source checkout until a release that contains it is published. Prerequisites are Node.js 18 or later and npm. Gradle, the Android SDK, and an emulator are not needed because my-dev-kit reads source and never builds or runs it.
+`examples/basic-android-kotlin` is a small packaged Kotlin, Compose, Room, and Retrofit project for trying Android retrieval. Prerequisites are Node.js 18 or later and npm. Gradle, the Android SDK, and an emulator are not needed because my-dev-kit reads source and never builds or runs it.
 
 From the repository root, build once and index all three Android source sets:
 

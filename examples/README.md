@@ -80,7 +80,7 @@ Classification is conservative and static: categories, edit guidance, readiness,
 - Manifest and deep-link evidence (`AndroidManifest.xml`, routes, `strings.xml`).
 - Compose UI test and unit test source (`app/src/androidTest`, `app/src/test`).
 
-Index it with all three source roots (`app/src/main`, `app/src/test`, `app/src/androidTest`) as shown above; `--out .my-dev-kit` is relative to `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`. It is a public example, not one of the internal Android fixtures under `tests/fixtures/` that the test suite and benchmarks use. It has not been compiled with Gradle, built with the Android SDK, or run on a device or emulator, and its tests have not been executed. It is part of the unreleased v1.13.0 candidate: until a release containing it is published, run it from a built source checkout (`node dist/cli.js` instead of `npx @dailephd/my-dev-kit`). The Android coding-agent workflow using it is Workflow 18 in [WORKFLOWS.md](../docs/WORKFLOWS.md).
+Index it with all three source roots (`app/src/main`, `app/src/test`, `app/src/androidTest`) as shown above; `--out .my-dev-kit` is relative to `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`. It is a public example, not one of the internal Android fixtures under `tests/fixtures/` that the test suite and benchmarks use. It has not been compiled with Gradle, built with the Android SDK, or run on a device or emulator, and its tests have not been executed. It is packaged in v1.13.0 and can be used with the installed CLI (`npx @dailephd/my-dev-kit`). The Android coding-agent workflow using it is Workflow 18 in [WORKFLOWS.md](../docs/WORKFLOWS.md).
 
 See each example's `README.md` for its focused workflow.
 

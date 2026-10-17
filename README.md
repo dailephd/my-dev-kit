@@ -132,17 +132,17 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.12.6
+## Latest release: v1.13.0
 
-`@dailephd/my-dev-kit@1.12.6` is the current release. It adds ownership-oriented search and trustworthy symbol boundaries for bounded source retrieval while retaining ordinary relevance search and conservative fallback for unknown boundaries. It also includes affected-neighborhood incremental refresh from v1.12.5. Install with `npm install -g @dailephd/my-dev-kit`; see the [v1.12.6 release notes](CHANGELOG.md#1126---2026-10-16), [commands](docs/COMMANDS.md), and [roadmap](docs/ROADMAP.md#version-1126).
+`@dailephd/my-dev-kit@1.13.0` is the latest release represented by this package. It adds twelve Android retrieval benchmarks, lookup and slice regression assertions, and the packaged Android/Kotlin example with Android workflow documentation. It also corrects context owner ranking, Android test ownership, symbol-local component-role detection, and single-layer owner conflicts while preserving genuine ambiguity and static-analysis limits. Earlier releases, including v1.12.6, remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1130).
 
-The current development branch also contains the completed v1.13.0 Android retrieval benchmark, public example, and workflow-documentation implementation. It remains an unreleased candidate: the published v1.12.6 package does not include these changes. The candidate is awaiting the separate standardized pre-release audit and release preparation.
+The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 
 ### v1.12.6 bounded retrieval precision
 
 Version 1.12.6 is a bounded retrieval-precision patch over the existing graph-guided workflow. Ownership search helps surface grounded production owners while retaining relevant tests and supporting evidence. Optional parser-derived `endLine` values let source retrieval and local source bundles return complete known symbols and keep continuation within their boundaries. Raw relevance search and conservative behavior for unknown or older-index boundaries remain supported. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
 
-The candidate adds two generic retrieval corrections to the existing graph-guided workflow:
+The v1.12.6 release added two generic retrieval corrections to the existing graph-guided workflow:
 
 - **Explicit ownership-oriented search.** `search --query "<text>" --intent ownership` ranks the same candidate pool by static, inspectable ownership tiers (`direct-owner`, `production-candidate`, `supporting-evidence`) so a grounded production owner stays discoverable when a strongly matching test would otherwise outrank it. Tests, fixtures, generated files, and docs remain in the results as supporting evidence. Ownership ranking is advisory static evidence, not edit authorization.
 - **Preserved raw relevance search.** `search --query` without `--intent` (or with `--intent relevance`) keeps the existing relevance-ranked behavior and output unchanged.
@@ -564,7 +564,7 @@ npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --c
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
-Android example: `examples/basic-android-kotlin` is a static Kotlin, Compose, Room, and Retrofit retrieval sample in the unreleased v1.13.0 candidate (see its [README](examples/basic-android-kotlin/README.md); it is not compiled or run).
+Android example: `examples/basic-android-kotlin` is a packaged static Kotlin, Compose, Room, and Retrofit retrieval sample introduced in v1.13.0 (see its [README](examples/basic-android-kotlin/README.md); it is not compiled or run).
 
 See [examples/README.md](examples/README.md) for more detail.
 
@@ -614,7 +614,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.12.6 is the current release. The v1.13.0 Android retrieval benchmark, public example, and workflow implementation is complete on its feature branch and remains unreleased; the standardized pre-release audit and release preparation are still pending. Later planned scopes from v1.14.0 through v2.0.0 remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.13.0 is the latest release represented by this package. Later planned scopes from v1.14.0 through v2.0.0 remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
 
 ## Support the project
 

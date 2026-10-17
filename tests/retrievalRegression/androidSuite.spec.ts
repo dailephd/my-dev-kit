@@ -393,7 +393,6 @@ describe('compatibility and maintainer script', () => {
       'tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit/retrieval-regression --fail-on-regression'
     )
     expect(pkg.scripts.verify).not.toContain('benchmark:retrieval')
-    expect(pkg.version).toBe('1.12.6')
   })
 
   it('keeps benchmark configuration out of the published package allowlist', () => {

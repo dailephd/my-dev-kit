@@ -46,7 +46,7 @@ The app is one module with manual construction in `MainActivity`. It deliberatel
 
 Android project, Gradle, manifest, resource, navigation, Compose, and test evidence is detected under `--root` automatically.
 
-This example is part of the unreleased v1.13.0 candidate. The commands below are written with `npx @dailephd/my-dev-kit`; from a built source checkout use `node dist/cli.js` in its place (the command surface is the same). See the [quickstart](../../docs/QUICKSTART.md) and the [Android coding-agent workflow](../../docs/WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130-candidate).
+This example is included in the v1.13.0 package. The commands below use the installed `npx @dailephd/my-dev-kit` CLI; from a source checkout, `node dist/cli.js` provides the same command surface. See the [quickstart](../../docs/QUICKSTART.md) and the [Android coding-agent workflow](../../docs/WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130).
 
 ## 5. Index the example
 
