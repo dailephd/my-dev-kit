@@ -8,7 +8,9 @@ import { prepareTaskIndex } from './indexPreparation.js'
 import { runContextForTask } from './contextExecutionAdapter.js'
 import { computeTaskVerdict } from './verdict.js'
 import type {
+  RetrievalRegressionLookupExecution,
   RetrievalRegressionSearchExecution,
+  RetrievalRegressionSliceExecution,
   RetrievalRegressionSourceExecution,
   RetrievalRegressionSuiteConfig,
   RetrievalRegressionTask,
@@ -157,13 +159,43 @@ function blockedResult(
   }
 }
 
-/** Builds the existing `search`/`source` CLI arguments for a non-context execution task. */
+type CommandExecution =
+  | RetrievalRegressionSearchExecution
+  | RetrievalRegressionSourceExecution
+  | RetrievalRegressionLookupExecution
+  | RetrievalRegressionSliceExecution
+
+/** Builds the existing `search`/`source`/`lookup`/`slice` CLI arguments for a non-context execution task. */
 export function buildCommandArgs(options: {
   indexDir: string
   task: RetrievalRegressionTask
-  execution: RetrievalRegressionSearchExecution | RetrievalRegressionSourceExecution
+  execution: CommandExecution
 }): string[] {
   const { indexDir, task, execution } = options
+  if (execution.kind === 'lookup') {
+    const args = ['src/cli.ts', 'lookup', '--index', indexDir]
+    if (execution.node !== undefined) args.push('--node', execution.node)
+    if (execution.androidComponent !== undefined) args.push('--android-component', execution.androidComponent)
+    if (execution.depth !== undefined) args.push('--depth', String(execution.depth))
+    if (execution.resolveClassification === true) args.push('--resolve-classification')
+    args.push('--json')
+    return args
+  }
+  if (execution.kind === 'slice') {
+    const args = ['src/cli.ts', 'slice', '--index', indexDir]
+    if (execution.node !== undefined) args.push('--node', execution.node)
+    if (execution.androidRoute !== undefined) args.push('--android-route', execution.androidRoute)
+    if (execution.androidComponent !== undefined) args.push('--android-component', execution.androidComponent)
+    if (execution.composable !== undefined) args.push('--composable', execution.composable)
+    if (execution.depth !== undefined) args.push('--depth', String(execution.depth))
+    if (execution.direction !== undefined) args.push('--direction', execution.direction)
+    if (execution.includeViewmodel === true) args.push('--include-viewmodel')
+    if (execution.includeNavigation === true) args.push('--include-navigation')
+    if (execution.includeDataFlow === true) args.push('--include-data-flow')
+    if (execution.includeTests === true) args.push('--include-tests')
+    args.push('--json')
+    return args
+  }
   if (execution.kind === 'search') {
     const args = ['src/cli.ts', 'search', '--index', indexDir, '--query', task.query ?? '']
     if (execution.intent !== undefined) args.push('--intent', execution.intent)
@@ -187,7 +219,7 @@ export function buildCommandArgs(options: {
 function executeCommandTask(options: {
   repoRoot: string
   task: RetrievalRegressionTask
-  execution: RetrievalRegressionSearchExecution | RetrievalRegressionSourceExecution
+  execution: CommandExecution
   indexDir: string
   fixtureRoot: string
   sourceRoots: string[]
@@ -220,10 +252,8 @@ function executeCommandTask(options: {
   } else {
     try {
       const parsed = JSON.parse(spawned.stdout) as Record<string, unknown>
-      const requiredKey = execution.kind === 'search' ? 'results' : 'content'
-      if (parsed === null || typeof parsed !== 'object' || parsed[requiredKey] === undefined) {
-        errors.push(`${execution.kind} command JSON result is missing required "${requiredKey}" output.`)
-      }
+      const shapeProblem = commandShapeProblem(execution.kind, parsed)
+      if (shapeProblem) errors.push(`${execution.kind} command JSON result ${shapeProblem}`)
     } catch (error) {
       errors.push(`${execution.kind} command stdout was not valid JSON: ${(error as Error).message}`)
     }
@@ -283,4 +313,16 @@ function executeCommandTask(options: {
     assertionResults,
     assertionSummary,
   }
+}
+
+/** Returns a description of what is missing when the parsed stdout lacks the minimal structure of its command, else undefined. */
+function commandShapeProblem(kind: CommandExecution['kind'], parsed: Record<string, unknown> | null): string | undefined {
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return 'is not a JSON object.'
+  if (kind === 'search') return parsed.results === undefined ? 'is missing required "results" output.' : undefined
+  if (kind === 'source') return parsed.content === undefined ? 'is missing required "content" output.' : undefined
+  if (kind === 'lookup') return typeof parsed.status === 'string' ? undefined : 'is missing required string "status" output.'
+  // slice: an ordinary graph slice has nodes/edges arrays; Android selector outcomes carry a string status.
+  return Array.isArray(parsed.nodes) || typeof parsed.status === 'string'
+    ? undefined
+    : 'is missing both graph "nodes" output and a string "status" output.'
 }
