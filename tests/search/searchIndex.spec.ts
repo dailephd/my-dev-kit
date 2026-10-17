@@ -890,3 +890,95 @@ function fixtureCodeGraph(): CodeGraph {
     },
   }
 }
+
+describe('public search is unchanged by the context connector-term correction (v1.13.0 Batch 1C)', () => {
+  it('still tokenizes and matches short connector terms exactly as before', () => {
+    expect(normalizeSearchQuery('add a field to the User')).toEqual(['add', 'a', 'field', 'to', 'the', 'user'])
+    const short = runSearch('a')
+    expect(short.results.length).toBeGreaterThan(0)
+    expect(short.results.every((item) => item.matchReasons.some((reason) => reason.term === 'a'))).toBe(true)
+    const sentence = runSearch('add a field to the user')
+    expect(sentence.results.length).toBeGreaterThan(0)
+    expect(runSearch('add a field to the user').results).toEqual(sentence.results)
+  })
+
+  it('is deterministic for a short-term-only query', () => {
+    expect(runSearch('a').results).toEqual(runSearch('a').results)
+  })
+})
+
+describe('searchIndex ownership: Android source-set test paths (v1.13.0 D2-B)', () => {
+  function androidSymbolIndex(): SymbolIndex {
+    const sym = (file: string, name: string) => ({
+      name,
+      kind: 'class' as const,
+      location: { file, line: 1 },
+      exported: true,
+    })
+    const file = (path: string, symbols: ReturnType<typeof sym>[]) => ({
+      path,
+      language: 'kotlin' as const,
+      lineCount: 5,
+      imports: [],
+      exports: [],
+      symbols,
+      hasCallGraphEntries: false,
+    })
+    const files = [
+      file('app/src/main/kotlin/com/example/UserHomeScreen.kt', [sym('app/src/main/kotlin/com/example/UserHomeScreen.kt', 'UserHomeScreen')]),
+      file('app/src/main/kotlin/com/example/AndroidTestHelperScreen.kt', [sym('app/src/main/kotlin/com/example/AndroidTestHelperScreen.kt', 'AndroidTestHelperScreen')]),
+      file('app/src/androidTest/kotlin/com/example/UserHomeScreenTest.kt', [sym('app/src/androidTest/kotlin/com/example/UserHomeScreenTest.kt', 'UserHomeScreenTest')]),
+      file('app/src/test/kotlin/com/example/UserHomeScreenUnitTest.kt', [sym('app/src/test/kotlin/com/example/UserHomeScreenUnitTest.kt', 'UserHomeScreenUnitTest')]),
+    ]
+    return {
+      schemaVersion: '2',
+      buildTime: '2026-05-12T00:00:00.000Z',
+      repoRoot: '/repo',
+      sourceRoots: ['app/src/main', 'app/src/test', 'app/src/androidTest'],
+      fileCount: files.length,
+      symbolCount: files.length,
+      files,
+    } as unknown as SymbolIndex
+  }
+
+  function androidSearch(query: string, intent?: 'ownership'): SearchIndexResult {
+    return searchIndex({
+      resolved: fixtureResolved(),
+      symbolIndex: androidSymbolIndex(),
+      codeGraph: { artifactKind: 'code-graph', schemaVersion: '1.0.0', createdAt: '2026-05-12T00:00:00.000Z', nodes: [], edges: [] } as unknown as CodeGraph,
+      query,
+      limit: 50,
+      intent,
+      createdAt: '2026-05-12T00:00:00.000Z',
+    })
+  }
+
+  const tierOf = (result: SearchIndexResult, id: string) => result.results.find((item) => item.id === id)?.ownership?.tier
+
+  it('demotes androidTest and unit-test source-set symbols to supporting evidence but keeps production eligible', () => {
+    const result = androidSearch('UserHomeScreen', 'ownership')
+    expect(tierOf(result, 'symbol:app/src/main/kotlin/com/example/UserHomeScreen.kt#UserHomeScreen')).toBe('direct-owner')
+    expect(tierOf(result, 'symbol:app/src/androidTest/kotlin/com/example/UserHomeScreenTest.kt#UserHomeScreenTest')).toBe('supporting-evidence')
+    expect(tierOf(result, 'file:app/src/androidTest/kotlin/com/example/UserHomeScreenTest.kt')).toBe('supporting-evidence')
+    expect(tierOf(result, 'symbol:app/src/test/kotlin/com/example/UserHomeScreenUnitTest.kt#UserHomeScreenUnitTest')).toBe('supporting-evidence')
+  })
+
+  it('does not treat a production symbol or basename that merely contains "androidTest" as test-scoped', () => {
+    const result = androidSearch('AndroidTestHelperScreen', 'ownership')
+    expect(tierOf(result, 'symbol:app/src/main/kotlin/com/example/AndroidTestHelperScreen.kt#AndroidTestHelperScreen')).toBe('direct-owner')
+  })
+
+  it('keeps the androidTest candidate discoverable with unchanged lexical score and match reasons', () => {
+    const relevance = androidSearch('UserHomeScreen')
+    const owned = androidSearch('UserHomeScreen', 'ownership')
+    const id = 'symbol:app/src/androidTest/kotlin/com/example/UserHomeScreenTest.kt#UserHomeScreenTest'
+    const before = relevance.results.find((item) => item.id === id)
+    const after = owned.results.find((item) => item.id === id)
+    expect(before).toBeTruthy()
+    expect(after).toBeTruthy()
+    expect(after?.score).toBe(before?.score)
+    expect(after?.matchReasons).toEqual(before?.matchReasons)
+    expect(after?.ownership?.lexicalScore).toBe(before?.score)
+    expect(after?.ownership?.evidence ?? []).toEqual([])
+  })
+})

@@ -14,11 +14,13 @@ import type {
   CommandResultExpectation,
   ConflictExpectation,
   FocusExpectation,
+  LookupResultExpectation,
   ModeEffectExpectation,
   NoRawContentExpectation,
   RetrievalRegressionExpectation,
   SelectedGraphExpectation,
   SemanticSummaryExpectation,
+  SliceResultExpectation,
   SourceEvidenceExpectation,
   TaskAssertionSummary,
 } from './types.js'
@@ -908,6 +910,14 @@ function evaluateCommandResult(taskId: string, expectation: CommandResultExpecta
   }
 
   const json = result as Record<string, unknown>
+
+  if (expectation.lookup !== undefined || expectation.slice !== undefined) {
+    const nested = expectation.lookup ?? expectation.slice!
+    const outcome = expectation.lookup !== undefined ? evaluateLookupExpectation(expectation.lookup, json) : evaluateSliceExpectation(expectation.slice!, json)
+    const nestedSummary = describeExpectation(nested, Object.keys(nested) as Array<keyof typeof nested>)
+    return [buildCommandAssertion(taskId, severity, nestedSummary, outcome, evidence)]
+  }
+
   const problems: string[] = []
   const blocked: string[] = []
   const observed: string[] = []
@@ -1015,6 +1025,359 @@ function evaluateCommandResult(taskId: string, expectation: CommandResultExpecta
       evidencePath: evidence.commandResultPath,
     }),
   ]
+}
+
+// --- Lookup / slice command results ------------------------------------------------
+
+interface CommandEvaluation {
+  problems: string[]
+  blocked: string[]
+  observed: string[]
+}
+
+function buildCommandAssertion(
+  taskId: string,
+  severity: AssertionSeverity,
+  expectedSummary: string,
+  outcome: CommandEvaluation,
+  evidence: AssertionEvidence
+): AssertionResult {
+  if (outcome.blocked.length > 0) {
+    return makeResult({
+      taskId,
+      kind: 'commandResult',
+      index: 0,
+      status: 'blocked',
+      severity: 'required',
+      message: `Cannot evaluate commandResult assertion: ${outcome.blocked.join('; ')}.`,
+      expectedSummary,
+      actualSummary: 'result shape unavailable for the requested fields',
+      evidencePath: evidence.commandResultPath,
+    })
+  }
+  return makeResult({
+    taskId,
+    kind: 'commandResult',
+    index: 0,
+    status: outcome.problems.length === 0 ? 'pass' : 'fail',
+    severity,
+    message: outcome.problems.length === 0 ? 'Command result satisfied expectations.' : outcome.problems.join('; '),
+    expectedSummary,
+    actualSummary: outcome.observed.length > 0 ? outcome.observed.join(', ') : 'no observable fields',
+    evidencePath: evidence.commandResultPath,
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Reads `candidates[].graphNodeId` from an Android selector response; undefined when malformed. */
+function readCandidateIds(candidates: unknown): string[] | undefined {
+  if (!Array.isArray(candidates)) return undefined
+  const ids: string[] = []
+  for (const candidate of candidates) {
+    if (!isRecord(candidate) || typeof candidate.graphNodeId !== 'string' || candidate.graphNodeId.length === 0) return undefined
+    ids.push(candidate.graphNodeId)
+  }
+  return ids
+}
+
+function checkCandidateExpectations(
+  expectation: { requiredCandidateIds?: string[]; forbiddenCandidateIds?: string[]; expectedCandidateCount?: number },
+  candidateIds: string[],
+  problems: string[],
+  observed: string[]
+): void {
+  observed.push(`candidateCount=${candidateIds.length}`)
+  if (expectation.requiredCandidateIds !== undefined || expectation.forbiddenCandidateIds !== undefined) {
+    observed.push(`candidateIds=${JSON.stringify(candidateIds)}`)
+  }
+  for (const id of expectation.requiredCandidateIds ?? []) {
+    if (!candidateIds.includes(id)) problems.push(`required candidate "${id}" not found`)
+  }
+  for (const id of expectation.forbiddenCandidateIds ?? []) {
+    if (candidateIds.includes(id)) problems.push(`forbidden candidate "${id}" was returned`)
+  }
+  if (expectation.expectedCandidateCount !== undefined && expectation.expectedCandidateCount !== candidateIds.length) {
+    problems.push(`expected ${expectation.expectedCandidateCount} candidate(s) but observed ${candidateIds.length}`)
+  }
+}
+
+const ANDROID_LOOKUP_KIND = 'my-dev-kit-v1-android-component-lookup-result'
+const ANDROID_LOOKUP_STATUSES = ['found', 'ambiguous', 'not-found']
+
+function evaluateLookupExpectation(expectation: LookupResultExpectation, json: Record<string, unknown>): CommandEvaluation {
+  const evaluation: CommandEvaluation = { problems: [], blocked: [], observed: [] }
+  const { problems, blocked, observed } = evaluation
+
+  const genericNode = isRecord(json.node) ? json.node : undefined
+  const isAndroid = json.artifactKind === ANDROID_LOOKUP_KIND
+
+  let status: string
+  let nodeId: string | undefined
+  let nodeKind: string | undefined
+  let candidateIds: string[] | undefined
+
+  if (isAndroid) {
+    if (typeof json.status !== 'string' || !ANDROID_LOOKUP_STATUSES.includes(json.status)) {
+      blocked.push('Android lookup result has no valid "status"')
+      return evaluation
+    }
+    status = json.status
+    candidateIds = readCandidateIds(json.candidates)
+    if (candidateIds === undefined) {
+      blocked.push('Android lookup result has no valid "candidates" array')
+      return evaluation
+    }
+    const detail = json.detail
+    if (status === 'found') {
+      if (!isRecord(detail) || typeof detail.graphNodeId !== 'string') {
+        blocked.push('Android lookup "found" result has no detail.graphNodeId')
+        return evaluation
+      }
+      nodeId = detail.graphNodeId
+    } else if (detail !== null && detail !== undefined) {
+      blocked.push(`Android lookup "${status}" result unexpectedly carries a selected detail`)
+      return evaluation
+    }
+    if (status === 'not-found' && candidateIds.length > 0) {
+      blocked.push('Android lookup "not-found" result unexpectedly carries candidates')
+      return evaluation
+    }
+    if (status === 'ambiguous' && candidateIds.length < 2) {
+      blocked.push('Android lookup "ambiguous" result has fewer than two candidates')
+      return evaluation
+    }
+  } else if (genericNode && json.status === 'found' && typeof genericNode.id === 'string' && typeof genericNode.kind === 'string') {
+    status = 'found'
+    nodeId = genericNode.id
+    nodeKind = genericNode.kind
+  } else {
+    blocked.push('lookup result is neither a generic node lookup (status "found" with node.id/node.kind) nor an Android component lookup')
+    return evaluation
+  }
+
+  observed.push(`status=${JSON.stringify(status)}`)
+  if (nodeId !== undefined) observed.push(`nodeId=${JSON.stringify(nodeId)}`)
+  if (nodeKind !== undefined) observed.push(`nodeKind=${JSON.stringify(nodeKind)}`)
+
+  if (expectation.expectedStatus !== undefined && expectation.expectedStatus !== status) {
+    problems.push(`expected status ${JSON.stringify(expectation.expectedStatus)} but observed ${JSON.stringify(status)}`)
+  }
+  if (expectation.expectedNodeId !== undefined) {
+    if (nodeId === undefined) problems.push(`expected node "${expectation.expectedNodeId}" but no node was selected (status ${status})`)
+    else if (nodeId !== expectation.expectedNodeId) problems.push(`expected node "${expectation.expectedNodeId}" but observed "${nodeId}"`)
+  }
+  if (expectation.expectedNodeKind !== undefined) {
+    if (nodeKind === undefined) blocked.push('node kind is not reported by Android component lookup results')
+    else if (nodeKind !== expectation.expectedNodeKind) problems.push(`expected node kind "${expectation.expectedNodeKind}" but observed "${nodeKind}"`)
+  }
+
+  const candidateFieldsRequested =
+    expectation.requiredCandidateIds !== undefined || expectation.forbiddenCandidateIds !== undefined || expectation.expectedCandidateCount !== undefined
+  if (candidateFieldsRequested) {
+    if (candidateIds === undefined) blocked.push('generic node lookup results do not carry candidates')
+    else checkCandidateExpectations(expectation, candidateIds, problems, observed)
+  }
+  return evaluation
+}
+
+interface SliceGraphView {
+  nodeIds: Set<string>
+  nodeKinds: Set<string>
+  edgeKinds: Set<string>
+  edgeKeys: Set<string>
+  nodeCount: number
+  edgeCount: number
+}
+
+const edgeKey = (source: string, kind: string, target: string): string => JSON.stringify([source, kind, target])
+
+/** Validates an ordinary graph slice: unique node/edge ids and edges whose endpoints are returned nodes. Returns a problem string when malformed. */
+function readSliceGraph(json: Record<string, unknown>): SliceGraphView | string {
+  const nodes = json.nodes
+  const edges = json.edges
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) return 'graph slice has no "nodes"/"edges" arrays'
+  const nodeIds = new Set<string>()
+  const nodeKinds = new Set<string>()
+  for (const node of nodes) {
+    if (!isRecord(node) || typeof node.id !== 'string' || node.id.length === 0 || typeof node.kind !== 'string') {
+      return 'graph slice contains a node without string "id"/"kind"'
+    }
+    if (nodeIds.has(node.id)) return `graph slice contains duplicate node id "${node.id}"`
+    nodeIds.add(node.id)
+    nodeKinds.add(node.kind)
+  }
+  const edgeIds = new Set<string>()
+  const edgeKinds = new Set<string>()
+  const edgeKeys = new Set<string>()
+  for (const edge of edges) {
+    if (
+      !isRecord(edge) ||
+      typeof edge.id !== 'string' ||
+      edge.id.length === 0 ||
+      typeof edge.source !== 'string' ||
+      typeof edge.target !== 'string' ||
+      typeof edge.kind !== 'string'
+    ) {
+      return 'graph slice contains an edge without string "id"/"source"/"target"/"kind"'
+    }
+    if (edgeIds.has(edge.id)) return `graph slice contains duplicate edge id "${edge.id}"`
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+      return `graph slice edge "${edge.id}" references an endpoint that is not a returned node`
+    }
+    edgeIds.add(edge.id)
+    edgeKinds.add(edge.kind)
+    edgeKeys.add(edgeKey(edge.source, edge.kind, edge.target))
+  }
+  return { nodeIds, nodeKinds, edgeKinds, edgeKeys, nodeCount: nodes.length, edgeCount: edges.length }
+}
+
+function readSliceSummary(json: Record<string, unknown>, field: 'androidDataFlow' | 'androidTests', countKeys: string[]): Record<string, unknown> | undefined {
+  const summary = json[field]
+  if (!isRecord(summary) || summary.requested !== true || typeof summary.truncated !== 'boolean') return undefined
+  for (const key of countKeys) {
+    const count = summary[key]
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return undefined
+  }
+  return summary
+}
+
+function evaluateSliceExpectation(expectation: SliceResultExpectation, json: Record<string, unknown>): CommandEvaluation {
+  const evaluation: CommandEvaluation = { problems: [], blocked: [], observed: [] }
+  const { problems, blocked, observed } = evaluation
+
+  const graphEvidenceRequested =
+    expectation.requiredNodeIds !== undefined ||
+    expectation.forbiddenNodeIds !== undefined ||
+    expectation.requiredNodeKinds !== undefined ||
+    expectation.requiredEdgeKinds !== undefined ||
+    expectation.requiredEdges !== undefined ||
+    expectation.forbiddenEdges !== undefined ||
+    expectation.connectedPaths !== undefined ||
+    expectation.maxNodes !== undefined ||
+    expectation.maxEdges !== undefined ||
+    expectation.expectedDataFlowTruncated !== undefined ||
+    expectation.requireAndroidTests !== undefined
+
+  let graph: SliceGraphView | undefined
+  let status: string
+  let candidateIds: string[] | undefined
+
+  if (Array.isArray(json.nodes) || Array.isArray(json.edges)) {
+    const read = readSliceGraph(json)
+    if (typeof read === 'string') {
+      blocked.push(read)
+      return evaluation
+    }
+    graph = read
+    status = 'ok'
+  } else if (json.status === 'ambiguous' || json.status === 'not-found') {
+    status = json.status
+    candidateIds = readCandidateIds(json.candidates)
+    if (candidateIds === undefined) {
+      blocked.push('Android slice result has no valid "candidates" array')
+      return evaluation
+    }
+    if (status === 'not-found' && candidateIds.length > 0) {
+      blocked.push('Android slice "not-found" result unexpectedly carries candidates')
+      return evaluation
+    }
+    if (status === 'ambiguous' && candidateIds.length < 2) {
+      blocked.push('Android slice "ambiguous" result has fewer than two candidates')
+      return evaluation
+    }
+  } else {
+    blocked.push('slice result is neither a graph slice (nodes/edges) nor an Android selector "ambiguous"/"not-found" result')
+    return evaluation
+  }
+
+  observed.push(`status=${JSON.stringify(status)}`)
+  const expectedStatus = expectation.expectedStatus ?? (graphEvidenceRequested ? 'ok' : undefined)
+  if (expectedStatus !== undefined && expectedStatus !== status) {
+    problems.push(
+      graph === undefined && graphEvidenceRequested
+        ? `expected graph evidence (status "ok") but the Android selector returned "${status}" with no graph`
+        : `expected status ${JSON.stringify(expectedStatus)} but observed ${JSON.stringify(status)}`
+    )
+  }
+
+  if (candidateIds !== undefined) {
+    const candidateFieldsRequested = expectation.requiredCandidateIds !== undefined || expectation.expectedCandidateCount !== undefined
+    if (candidateFieldsRequested) checkCandidateExpectations(expectation, candidateIds, problems, observed)
+    else observed.push(`candidateCount=${candidateIds.length}`)
+    return evaluation
+  }
+  if (!graph) return evaluation
+
+  observed.push(`nodeCount=${graph.nodeCount}`, `edgeCount=${graph.edgeCount}`)
+  for (const id of expectation.requiredNodeIds ?? []) {
+    if (!graph.nodeIds.has(id)) problems.push(`required node "${id}" not found`)
+  }
+  for (const id of expectation.forbiddenNodeIds ?? []) {
+    if (graph.nodeIds.has(id)) problems.push(`forbidden node "${id}" was returned`)
+  }
+  for (const kind of expectation.requiredNodeKinds ?? []) {
+    if (!graph.nodeKinds.has(kind)) problems.push(`required node kind "${kind}" not found`)
+  }
+  for (const kind of expectation.requiredEdgeKinds ?? []) {
+    if (!graph.edgeKinds.has(kind)) problems.push(`required edge kind "${kind}" not found`)
+  }
+  for (const edge of expectation.requiredEdges ?? []) {
+    if (!graph.edgeKeys.has(edgeKey(edge.source, edge.kind, edge.target))) {
+      problems.push(`required edge ${edge.source} --${edge.kind}--> ${edge.target} not found`)
+    }
+  }
+  for (const edge of expectation.forbiddenEdges ?? []) {
+    if (graph.edgeKeys.has(edgeKey(edge.source, edge.kind, edge.target))) {
+      problems.push(`forbidden edge ${edge.source} --${edge.kind}--> ${edge.target} was returned`)
+    }
+  }
+  const view = graph
+  for (const [pathIndex, path] of (expectation.connectedPaths ?? []).entries()) {
+    const label = `connected path #${pathIndex + 1}`
+    const missingNodes = path.nodeIds.filter((id) => !view.nodeIds.has(id))
+    if (missingNodes.length > 0) {
+      problems.push(`${label} is broken: node(s) ${missingNodes.map((id) => `"${id}"`).join(', ')} not returned`)
+      continue
+    }
+    for (let i = 0; i < path.edgeKinds.length; i++) {
+      const from = path.nodeIds[i]!
+      const to = path.nodeIds[i + 1]!
+      const kind = path.edgeKinds[i]!
+      if (!view.edgeKeys.has(edgeKey(from, kind, to))) {
+        problems.push(`${label} is broken at step ${i + 1}: no edge ${from} --${kind}--> ${to}`)
+        break
+      }
+    }
+  }
+  if (expectation.maxNodes !== undefined && graph.nodeCount > expectation.maxNodes) {
+    problems.push(`node count ${graph.nodeCount} exceeds maxNodes ${expectation.maxNodes}`)
+  }
+  if (expectation.maxEdges !== undefined && graph.edgeCount > expectation.maxEdges) {
+    problems.push(`edge count ${graph.edgeCount} exceeds maxEdges ${expectation.maxEdges}`)
+  }
+
+  if (expectation.expectedDataFlowTruncated !== undefined) {
+    const summary = readSliceSummary(json, 'androidDataFlow', ['addedNodeCount', 'addedEdgeCount'])
+    if (!summary) blocked.push('slice result has no valid "androidDataFlow" summary (was --include-data-flow requested?)')
+    else {
+      observed.push(`dataFlowTruncated=${JSON.stringify(summary.truncated)}`)
+      if (summary.truncated !== expectation.expectedDataFlowTruncated) {
+        problems.push(`expected androidDataFlow.truncated ${expectation.expectedDataFlowTruncated} but observed ${String(summary.truncated)}`)
+      }
+    }
+  }
+  if (expectation.requireAndroidTests === true) {
+    const summary = readSliceSummary(json, 'androidTests', ['productionSeedCount', 'relatedTestMethodCount', 'addedNodeCount', 'addedEdgeCount'])
+    if (!summary) blocked.push('slice result has no valid "androidTests" summary (was --include-tests requested?)')
+    else {
+      observed.push(`relatedTestMethodCount=${String(summary.relatedTestMethodCount)}`)
+      if (summary.relatedTestMethodCount === 0) problems.push('androidTests summary reports no related test methods')
+    }
+  }
+  return evaluation
 }
 
 // --- shared helpers --------------------------------------------------------------

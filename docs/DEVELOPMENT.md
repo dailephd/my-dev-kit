@@ -129,6 +129,85 @@ This suite is separate from release and security validation. `my-dev-kit`
 owns retrieval regression checks; `my-dev-kit-lab` continues to own
 release-readiness, dependency/package, and security validation workflows.
 
+## v1.13.0 Android retrieval regression suite
+
+The v1.7.0 section above is the historical description of the core suite when
+it shipped; lookup and slice execution were added later and are described
+here as current state of the v1.13.0 release. Nothing in
+this section is a public CLI command or part of the published package.
+
+Two configurations share the one runner in `src/retrievalRegression/`:
+
+- **Core suite.** Configuration `benchmarks/retrieval/v1.7/core.json`, command
+  `npm run benchmark:retrieval`, fourteen tasks (the original context tasks
+  plus the v1.12.6 search and source tasks).
+- **Android suite.** Configuration `benchmarks/retrieval/v1.13/android.json`
+  (suite id `android-v1.13`), command `npm run benchmark:retrieval:android`,
+  twelve tasks `android-v113-a01` through `a12` over Android fixtures. The
+  per-task descriptions, fixtures, and known limitations are in
+  `benchmarks/retrieval/v1.13/README.md`.
+
+What the runner supports:
+
+- Five execution kinds per task: `context` (the default when `execution` is
+  omitted), `search`, `source`, `lookup`, and `slice`. The shipped Android
+  configuration uses `context`, `source`, and `slice`; the shipped task
+  configurations do not currently use `lookup`, which is covered by the
+  runner's tests.
+- Fixture resolution is relative to the configuration file and unchanged:
+  checked-in fixtures under `tests/fixtures/` are never modified. Each task
+  builds its own index under `<out>/tasks/<task-id>/index/`, never inside the
+  fixture.
+- Typed `commandResult` assertions for `lookup` and `slice`: expected status
+  (`found`/`ok`, `ambiguous`, `not-found`), required nodes, node kinds, and
+  edges (kind, or exact `source`/`kind`/`target`), connected-path assertions
+  that must hold inside one returned graph, forbidden nodes and edges,
+  `maxNodes`/`maxEdges` bounds, data-flow truncation, and related Android test
+  evidence. Ambiguous and not-found outcomes are first-class expected results,
+  not errors.
+- Boundedness: each task has caps, slice depth in the shipped Android suite is
+  at most 3, and results are ordered and independent of timestamps and
+  temporary paths.
+
+Verdicts and reports:
+
+- `PASS`: every required assertion held. `REGRESSION`: a required expectation
+  was evaluated and failed. `BLOCKED`: judgment could not be attempted (command
+  failure, unreadable or malformed output, or missing requested evidence). At
+  suite level `BLOCKED` outranks `REGRESSION`, which outranks `PASS`. Optional
+  (`required: false`) assertions can only warn.
+- Both scripts pass `--fail-on-regression`, so a regression or blocked task
+  exits nonzero.
+- Each run writes `<out>/retrieval-regression-report.json` and `.txt` plus a
+  `tasks/<task-id>/` directory per task (for `context` tasks the capsule and
+  audit record, and a `task-execution.json` record). The npm scripts write to
+  `.my-dev-kit/retrieval-regression` (core) and
+  `.my-dev-kit/retrieval-regression-android` (Android). These directories are
+  generated and ignored.
+- The npm scripts hard-code `--out`. To keep earlier results, call the runner
+  directly with a different output directory instead of overwriting the
+  default one, for example:
+
+```sh
+npx tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.13/android.json --out .my-dev-kit/retrieval-regression-<name> --fail-on-regression
+```
+
+A benchmark `PASS` means the asserted static evidence is still produced for
+the fixture. It is not Android runtime testing: Gradle, an emulator,
+instrumentation, and application or test execution are never involved, and a
+pass says nothing about whether a device runs a screen or a test passes. The
+Android suite also does not assert source-set classification beyond the
+`src/test` versus `src/androidTest` paths in node IDs.
+
+Public Android example validation is separate from the benchmarks:
+`tests/integration/androidV113Batch4PublicExample.spec.ts` indexes
+`examples/basic-android-kotlin` and checks the evidence and commands its README
+shows. Check packaging with `npm pack --dry-run --json`: the eighteen example
+files (`README.md`, the three Gradle `.kts` files, and `app/src`) are
+allowlisted in `package.json` `files`, while `benchmarks/`, `tests/`, and
+reports are not packaged. The benchmark README and configuration remain
+maintainer-only.
+
 ## Build
 
 Build the distributable CLI:
@@ -572,6 +651,9 @@ Included examples:
 
 - examples/basic-python/
   Python example project.
+
+- examples/basic-android-kotlin/
+  Public Android/Kotlin/Compose static retrieval example packaged in v1.13.0. It is a public example, not an internal test fixture; the Android fixtures under tests/fixtures/ remain internal.
 
 The package may include selected example source folders for public smoke tests. Development-only generated artifacts under examples should not be committed or published.
 

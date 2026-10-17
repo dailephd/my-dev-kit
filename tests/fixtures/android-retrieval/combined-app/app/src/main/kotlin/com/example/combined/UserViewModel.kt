@@ -5,4 +5,10 @@ import com.example.combined.data.UserRepository
 
 class UserViewModel(
     private val repository: UserRepository
-) : ViewModel()
+) : ViewModel() {
+    val uiState: StateFlow<String> = MutableStateFlow("idle")
+
+    fun refreshUsers() {
+        repository.toString()
+    }
+}

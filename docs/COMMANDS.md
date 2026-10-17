@@ -1,6 +1,6 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The reviewed public surface is `1.12.5`: nine commands, including core indexing and retrieval of selected test files and the additive incremental refresh-scope selector. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The current published public surface is `1.13.0`: nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
@@ -164,6 +164,25 @@ Static project/module/source-set, plugin/dependency declarations, manifest permi
 
 For complete artifact schemas, stable identities, supported fact categories, and analyzer-specific limitations, use [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md) and [ARCHITECTURE.md](ARCHITECTURE.md). These are artifact contracts, not additional CLI commands.
 
+### Android static-analysis boundaries (v1.13.0)
+
+The following was verified against the packaged public example (`examples/basic-android-kotlin`) with v1.13.0. The Android selectors use existing CLI command families.
+
+Observed graph edge kinds in the example (reproduced by the commands in "Android command examples (public example)" below): `activity-hosts-composable`, `composable-references-viewmodel`, `compose-state-reads-viewmodel`, `viewmodel-uses-repository`, `repository-uses-dao`, `repository-uses-service`, `dao-uses-entity`, `room-database-exposes-dao`, and `compose-route-resolves-to-screen`. Which edge appears depends on the selector and `--depth`: a default-depth `--composable` slice reaches `viewmodel-uses-repository`, and `dao-uses-entity` and `room-database-exposes-dao` appear only at `--depth 3` from the ViewModel.
+
+Relationships not established:
+
+- No complete click-handler-to-state-mutation edge: the click fact and the ViewModel reference are separate, and `refreshUsers()` is not linked from the handler. `uiState` is not indexed as a class-member node.
+- No database-to-entity edge from `@Database(entities = [...])`; the entity is reached through the DAO (`dao-uses-entity`).
+- No link from a unit test that constructs `UserViewModel` to that class, and no resolution of an interface test double to its interface (`android-test-uses-double` links a test to its doubles only).
+- Related-test expansion (`--include-tests`) is bounded and may return only some tests; use `--android-role` or `search --query` to find the rest.
+
+Not performed: Gradle execution or dependency resolution, Android compilation or application launch, Compose rendering, runtime string-resource resolution, manifest merging or effective resource-overlay selection, runtime ViewModel dependency injection, network requests, Room query execution, instrumented or unit test execution, indexing of every Kotlin member independently, and slice traversal of arbitrary depth (`--depth` is bounded and `--include-data-flow` is a fixed edge family).
+
+Component roles (v1.13.0 D2-D): `search --android-role` returns the nodes whose classification carries the role, and that classification is projected from `android-components.json`. For the standard class roles (Activity, Fragment, ViewModel, Service, BroadcastReceiver, ContentProvider, Worker) the component evidence is tied to each declaration: a file import alone no longer gives every class in the file a role (so `--android-role view-model` in the public example returns `UserViewModel` only, not `MainActivity` or `UserUiState`), and a Kotlin superclass declared after a multiline constructor is read by a bounded declaration-header inspection (12 lines, 1500 characters). Role detection remains top-level-only and is not a Kotlin compiler; a declaration whose header cannot be read within those bounds keeps name-suffix or import-plus-suffix evidence only. Re-index to refresh classifications produced by earlier builds.
+
+Analyzer status: `partial` for `android-gradle` (version-less BOM-managed coordinates such as `androidx.compose.ui:ui` produce warnings) and for `classification` (per-entry warnings where no static classification evidence matched) means the artifact was produced with documented gaps. It is not by itself a correctness defect. A zero-result exact selector, or an accepted `--android-role` with no matches, is a valid `status: ok` result and does not show that the application lacks the corresponding runtime behavior.
+
 ## search
 
 Discover files, symbols, graph evidence, and specialized static facts.
@@ -214,7 +233,7 @@ npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol
 - `--intent relevance`: the existing relevance ranking. It is the default, so omitting `--intent` is equivalent. Output is unchanged: no `intent` field, no per-result `ownership` object.
 - `--intent ownership`: an explicit, opt-in ranking of the same candidate pool for implementation-ownership discovery. The result object carries `intent: "ownership"`, and every result carries an `ownership` object. Plain-text output prints an `Intent: ownership` line and an `ownership: <tier> (<evidence kinds>)` line per result.
 - Selector exclusivity: `--intent` is valid only with `--query`. It is rejected with `--route`, `--storage-key`, `--ui`, `--android-route`, `--permission`, `--resource`, `--android-component`, `--composable`, `--test-tag`, `--android-ui`, and `--android-role`. `--intent` without `--query` is rejected. An unknown value is rejected with the allowed values `relevance, ownership`. These are argument errors with exit code 2.
-- Ownership tiers, in rank order: `direct-owner`, `production-candidate`, `supporting-evidence`. A result is tier-eligible as a production owner only when it is a file or symbol outside test-scoped, fixture, generated, and docs-only paths and is not classified `test-only`, `docs-only`, or `generated-do-not-edit`. Ineligible results (tests, fixtures, generated files, docs) are kept and reported as `supporting-evidence`; ownership mode never removes them.
+- Ownership tiers, in rank order: `direct-owner`, `production-candidate`, `supporting-evidence`. A result is tier-eligible as a production owner only when it is a file or symbol outside test-scoped, fixture, generated, and docs-only paths and is not classified `test-only`, `docs-only`, or `generated-do-not-edit`. Test-scoped paths include conventional test files and directories and the Android `src/test` and `src/androidTest` source sets (matched as whole path segments, so a production file or symbol that merely contains `androidTest` in its name stays eligible). Ineligible results (tests, fixtures, generated files, docs) are kept and reported as `supporting-evidence`; ownership mode never removes them.
 - Provenance: each `ownership.evidence[]` entry has a `kind` and `sourceId`. Direct kinds are `direct-symbol-name`, `classified-primary-edit`, and `production-lexical-match`. Recovery kinds are `indexed-file-dependency`, `resolved-relative-import`, and `same-file-symbol`, which also carry `seedPath`, `targetPath`, and (for imports) the original `specifier`.
 - Lexical score and match reasons are preserved: `ownership.lexicalScore` always equals the result `score`, and `matchReasons` is not modified. Ownership adjustments are the tier and tie-breaking order only; no new lexical weights are introduced.
 - Grounded one-hop owner recovery: a lexically matching seed file (typically a strongly matching test or usage file) may promote a production file it directly depends on, using only the indexed file-dependency graph, `imports`/`depends-on` file edges, and the file's own relative import specifiers resolved against the indexed path inventory, including NodeNext `./x.js` to `./x.ts`/`./x.tsx` resolution. Recovery is exactly one hop. A recovered file that had no lexical match appears with `score: 0` and no match reasons. Recovered relationships are computed at query time and are not persisted as graph edges.
@@ -395,6 +414,42 @@ The Android data-flow allowlist covers existing Activity/Compose/ViewModel/Repos
 
 This remains static analysis. No dependency injection, database query, Retrofit request, test execution, or complete coverage is established.
 
+### Android command examples (public example)
+
+These commands span `index`, `search`, `lookup`, `slice`, `source`, `context`, and `view`; each was run against `examples/basic-android-kotlin` with a source-checkout build (`node dist/cli.js`, the same surface as the published package). Run them from the repository root. `IDX` stands for `examples/basic-android-kotlin/.my-dev-kit`.
+
+```powershell
+node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+node dist/cli.js search --index IDX --composable UserHomeScreen --json
+node dist/cli.js search --index IDX --test-tag refresh_users_button --json
+node dist/cli.js search --index IDX --android-component MainActivity --json
+node dist/cli.js lookup --index IDX --android-component MainActivity --json
+node dist/cli.js source --index IDX --android-route settings --format numbered
+node dist/cli.js source --index IDX --resource string/user_screen_title --format numbered
+node dist/cli.js slice --index IDX --android-route settings --json
+node dist/cli.js slice --index IDX --composable UserHomeScreen --include-data-flow --json
+node dist/cli.js slice --index IDX --node "symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel" --include-data-flow --depth 3 --json
+node dist/cli.js slice --index IDX --node "symbol:app/src/main/kotlin/com/example/kitdemo/data/UserRepository.kt#UserRepository" --depth 1 --json
+node dist/cli.js slice --index IDX --composable UserHomeScreen --include-tests --json
+node dist/cli.js search --index IDX --android-role android-unit-test --json
+node dist/cli.js source --index IDX --file app/src/main/kotlin/com/example/kitdemo/data/UserDao.kt --start 1 --end 12 --format numbered
+node dist/cli.js source --index IDX --file app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt --continue-from 10 --max-lines 10 --format numbered
+node dist/cli.js context --index IDX --role architecture --query "Locate the owner for changing the UserHomeScreen layout" --out IDX/home-architecture.json --json
+node dist/cli.js view --index IDX --graph compose-navigation --format dot --out IDX/compose-navigation.dot --json
+```
+
+Expected results for the example:
+
+- `--composable UserHomeScreen` returns one `android-composable` result with `matchKind: composable-name`. `--test-tag refresh_users_button` returns one `android-compose-fact` (`resolved-test-tag`) in `UserHomeScreen.kt`. `--android-component MainActivity` returns the manifest component with `sourceClassCandidates` pointing to the `MainActivity` symbol.
+- Route and resource retrieval return `AppNavigation.kt` (`composable("settings")`) and `strings.xml` (the `user_screen_title` definition). The route slice has a `compose-navigation-targets-route` edge and a `compose-route-resolves-to-screen` edge.
+- `--include-data-flow` is limited by `--depth` and reports `androidDataFlow` with `truncated: false` for these inputs; the ViewModel depth-3 slice reaches the DAO, entity, and Room database edges.
+- The repository slice at depth 1 returns `repository-uses-dao` and `repository-uses-service`.
+- `--include-tests` adds `androidTests` and the instrumented test's methods; `--android-role android-unit-test` returns the five `UserViewModelTest` nodes under `app/src/test`.
+- A `source` window ends with a `[CONTINUE: ... from line N (reason: ...)]` marker when capped; pass N to `--continue-from`.
+- Selector behavior with no match: `search --composable NoSuchScreen` and `search --android-role generated-file` return an empty result list (`status: ok`) and exit 0, `lookup --android-component NoSuchActivity` returns `status: not-found`, and `source --android-route nosuchroute` prints `Status: not-found`. In this example every exact selector above resolves to one candidate, so no exact-selector ambiguity occurs; the free-text `search --query UserViewModel` returns the production class and its test with the same score, which is the ambiguity to resolve by path and classification.
+
+Take node IDs from `search` output. Identity forms such as `symbol:<path>#<Name>`, `android-compose-declaration:<path>#<Name>`, and `android-test-method:<path>#<Class>.<method>` are name-based. IDs that embed a position (`::testtag#0@L23`, the `#1` route ordinal, `strings.xml#value:1`, the manifest `:0` ordinal) can change when the source changes, so do not copy them into long-lived notes. There is no `trace-state` command, no arbitrary Kotlin-member selector, no `compose-screen` role, no manifest-merging option, and no unlimited slice traversal.
+
 ## view
 
 Render a selected graph artifact as DOT, SVG, or PNG.
@@ -496,6 +551,10 @@ npx @dailephd/my-dev-kit context --request context-request.json --json
 - `--no-source`: suppress source-slice/bundle selection, not graph/metadata evidence.
 - `--json`: structured command output.
 
+Query interpretation: for lexical candidate discovery, `context` may drop the bare lowercase low-information connector words `a`, `to`, `in`, and `the` from a multiword natural-language query, so that incidental substring matches on those words cannot dominate owner selection. The original query is preserved in the capsule, and the query actually searched is recorded in `queryPlan.searchQueries` and in the audit `run-search` step.
+
+Android task intent (v1.13.0 D2 correction): the internal Android intent model used by `context` ranking ignores layer terms inside exclusion clauses (`without`, `except`, `excluding`, `preserving`, `do not`, `don't`, `must not`, `should not`, `but not`) and dependency clauses (`from`, `using`, `via`, `through`, `calling`), each ending at punctuation, `but`, `then`, `instead`, `so`, `while`, or a new marker, or after 8 words. Those terms remain in the lexical query and in candidate, graph, and dependency evidence. Bare `layout` and `presentation` are UI terms, and only when no intent term matched does a CamelCase identifier ending in `Screen`, `ViewModel`, `Repository`, `Dao`, or `Entity` imply its layer. There is no new option or request field. Query sensitivity and genuine multi-owner ambiguity remain; see [WORKFLOWS.md](WORKFLOWS.md#d2-context-owner-selection-is-unresolved). Quoted phrases, paths, routes, identifiers, capitalized words, single-term queries, and queries made only of connector words are never altered. This applies only to `context`; the public `search` command keeps its existing tokenizer and ranking.
+
 ### Structured requests and role boundaries
 
 Use schema `1.0.0` and the exact current fields defined in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md). A small architecture request is:
@@ -583,7 +642,7 @@ Companion syntax and limitations are linked from the ecosystem guide. There is n
 
 `npm run build`, `npm test`, `npm run typecheck`, `npm run docs:check`, `npm run verify`, and `npm run benchmark:retrieval` are source-checkout maintainer commands. They are not extra installed CLI commands. In the reviewed package, `verify` runs typecheck/build/docs checks and does not replace `npm test`.
 
-The v1.7 retrieval-regression suite is maintainer tooling. Local unreleased v1.13 work must not be documented as published command surface before release. Do not invent `benchmark:retrieval:android` in the reviewed published baseline.
+The v1.7 retrieval-regression suite is maintainer tooling. The `benchmark:retrieval:android` script is available from a source checkout; it is not an installed CLI command. See [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite).
 
 There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-stack execution, watch, deployment, browser-observation, security, or automatic workflow command in my-dev-kit. Use supported `source --contains`, local component-tree/flow options, and companion tools where appropriate. Future plugin/retrieval API work remains roadmap scope, not installed behavior.
 

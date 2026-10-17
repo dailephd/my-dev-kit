@@ -1671,7 +1671,7 @@ Symbol-boundary regression:
 
 ## Version 1.13.0
 
-**Status: planned.**
+**Status: published.**
 
 Version 1.13.0 adds Android retrieval benchmarks, examples, and workflow documentation.
 

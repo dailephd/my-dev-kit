@@ -170,6 +170,24 @@ Use source roots that exist in the target. Kotlin/Java extensions are recognized
 
 Exact selectors retain ambiguity. A manifest component is not automatically the same node as its source class. Static evidence does not prove dependency resolution, merged manifests, resource selection, dependency injection, runtime navigation, builds, or security. There is no `android-relationships.json` prerequisite.
 
+### Public example: project root, source sets, and analyzer status
+
+The public example (`examples/basic-android-kotlin`, packaged in v1.13.0) is the concrete reference for this workflow. From the repository root of a built checkout:
+
+```powershell
+node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --out .my-dev-kit --dry-run --json
+```
+
+- **Project root.** `--root` is the directory holding `settings.gradle.kts`, `build.gradle.kts`, and `app/`. Android detection reads Gradle settings/build files, `AndroidManifest.xml`, `res/`, and Compose navigation calls under that root. The `android-project` analyzer reports the detected modules and source sets (for the example: the root module `.` and the `app` module, whose source sets are `main`, `test`, and `androidTest`). Detection does not widen your `--src` choice.
+- **Relative `--out`.** `.my-dev-kit` is resolved against `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`. Do not write `--out examples/basic-android-kotlin/.my-dev-kit`.
+- **Why list all three source sets.** The `--src` roots decide which files get `file:` and `symbol:` nodes, file-level imports, and `source --contains` coverage. For the example, `app/src/main` alone discovers 10 Kotlin files and all three roots discover 12. In a `main`-only index the Android test-semantic analyzer still detects the two test files from the project's test roots and `--android-role` and `--query` still return `android-test-*` nodes, but `lookup --node file:app/src/test/...` returns not found and `source --contains FakeUserDao` finds nothing. Pass `app/src/test` and `app/src/androidTest` so production, unit-test, and instrumented-test code are all reachable through the same index.
+- **Artifacts depend on evidence.** The manifest, resource, and navigation artifacts are generated only from the matching files under the detected modules: `android-manifest` from `AndroidManifest.xml`, `android-resources` from `res/values`, `android-navigation` from `composable("...")` route calls, and the Compose and test artifacts from indexed or detected Kotlin sources. A missing artifact means that evidence was not found or not analyzed, not that the application lacks the behavior.
+- **Analyzer statuses.** Read `analyzers[].status` in the `index --json` result or `manifest.json`. `complete` means the analyzer ran and found what it supports. `partial` means it produced output with per-item warnings. `skipped` and `not-run` mean it did not apply or was not requested. For the example, `android-gradle` is `partial` (four warnings that BOM-managed coordinates such as `androidx.compose.ui:ui` carry no version) and `classification` is `partial` (27 per-entry warnings such as "no static file-level pattern matched" and "Compose route has no exact static screen resolution"). `frontend-reachability` is `skipped` and `call-graph` and `model-view-lineage` are `not-run`, because the example has no web source and no `--call-graph`. Partial status is not by itself a correctness defect; retrieval from the other artifacts works. Read the warnings before deciding whether a missing fact matters.
+- **Generated directories.** Default ignores skip `build`, `.gradle`, `out`, `output`, `.my-dev-kit`, and `.my-dev-kit-*` at any depth, so Gradle build output and previous indexes are not indexed. The example has no build output, so `search --android-role generated-file` correctly returns zero results; see the fixture-backed benchmark A11 in [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite-unreleased-candidate) for the generated-output case.
+
+The detailed per-file walkthrough is in the [example README](../examples/basic-android-kotlin/README.md).
+
 ## Workflow 11: Stage-role context refresh
 
 Role and mode are independent. Refresh evidence at the point its owning stage needs it rather than reuse one early capsule forever.
@@ -231,6 +249,30 @@ The analyzer discovers supported test classes/methods/facts under detected unit/
 
 A test reference is not coverage proof. No indexing or graph command executes the test, initializes a rule, launches an Activity, or verifies an assertion. Use actual project test commands separately.
 
+### Public example: unit and instrumented tests
+
+Index both test source sets first (`--src app/src/test --src app/src/androidTest`, see Workflow 10), then, from the repository root of a built checkout:
+
+```powershell
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --android-role android-unit-test --json
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --android-role instrumented-test --json
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --android-role compose-ui-test --json
+node dist/cli.js lookup --index examples/basic-android-kotlin/.my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/kitdemo/UserHomeScreenTest.kt#UserHomeScreenTest.refreshButtonIsClickable" --depth 1 --json
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --node "android-test-method:app/src/androidTest/kotlin/com/example/kitdemo/UserHomeScreenTest.kt#UserHomeScreenTest.refreshButtonIsClickable" --format numbered
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --include-tests --json
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --node "android-test-class:app/src/test/kotlin/com/example/kitdemo/UserViewModelTest.kt#UserViewModelTest" --depth 1 --json
+```
+
+What these return for the example:
+
+- `android-unit-test` returns only `app/src/test/.../UserViewModelTest.kt` nodes: the file, the class, and its `setUp`, `tearDown`, and `refreshUsersPublishesRepositoryResult` methods. This is JVM unit-test source, run by `./gradlew test` in a real project.
+- `instrumented-test` returns only `app/src/androidTest/.../UserHomeScreenTest.kt` nodes: the file, the class, and the `refreshButtonIsClickable` and `showsTitleAndRefreshButton` methods. This is Android instrumented source that needs a device or emulator in a real project. `compose-ui-test` returns the same four nodes, because the class uses a Compose test rule; the unit test does not carry that role.
+- Every test node carries `test-only` edit guidance. Classification roles are static path and evidence labels.
+- The `--composable UserHomeScreen --include-tests` slice adds the instrumented class, its methods, assertion facts, and two `android-test-references-composable` edges. The unit-test class slice shows `android-test-uses-double` edges to the two in-test fakes and its methods, but no edge to `UserViewModel` or `UserRepository`.
+- Related-test expansion from a ViewModel or repository node (`slice --node symbol:...UserViewModel --include-data-flow --include-tests`) reached only the instrumented tests, through the composable that consumes the ViewModel. It did not add `UserViewModelTest`, even though that test constructs `UserViewModel`. Find the unit test with `--android-role android-unit-test` or `search --query UserViewModelTest`; do not infer from an empty related-test result that no unit test exists.
+
+Test declarations and facts are indexed from source. They show what a test file declares and references, not that it compiles, was run, or passed. The benchmark that retrieves both source sets (A12) distinguishes them through the `src/test` and `src/androidTest` paths in node IDs, not through a separate source-set metadata field.
+
 ## Workflow 14: Compose and Android-test graph views
 
 ```powershell
@@ -267,6 +309,65 @@ Supported intent and relationships can prefer Compose for UI work, ViewModel for
 
 Inspect actual required owner/contract evidence. No selected owner is edit authorization or a runtime guarantee. For test implementation, use current changed production and responsibility evidence.
 
+### Wrong-layer edit examples (public example)
+
+These are evidence-gathering examples for a person or coding agent, not automated editing instructions. They use the index from Workflow 10 (`examples/basic-android-kotlin/.my-dev-kit`) and `node dist/cli.js` from a built checkout. Paths below are relative to `examples/basic-android-kotlin/app/src/main/kotlin/com/example/kitdemo/` unless noted.
+
+**W01 - UI presentation change.**
+
+- Task: "Move the refresh button above the title on the user home screen."
+- Responsibility: UI composition and layout, which belongs to the Compose screen.
+- Primary owner: `UserHomeScreen.kt` (classified `compose-ui-component`, `safe-primary-edit-target`).
+- Supporting files: `app/src/main/res/values/strings.xml` for label text, `AppNavigation.kt` for the route, and `app/src/androidTest/.../UserHomeScreenTest.kt` as the test that references the `refresh_users_button` tag.
+- Evidence commands:
+
+```powershell
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --json
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --include-compose-tree --format numbered
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --include-tests --json
+node dist/cli.js context --index examples/basic-android-kotlin/.my-dev-kit --role architecture --query "Locate the owner for changing the UserHomeScreen layout" --out examples/basic-android-kotlin/.my-dev-kit/home-architecture.json --json
+```
+
+- Wrong-layer choice: editing `UserHomeScreenTest.kt` because it matched the query as strongly as the screen, or editing `UserViewModel.kt` because the screen reads its state. The test is supporting evidence and carries `test-only` guidance; the ViewModel owns state, not placement.
+- Still uncertain: whether the new layout renders as intended, and whether the existing test still passes. Neither is established by retrieval.
+
+**W02 - ViewModel state or action change.**
+
+- Task: "When refresh runs, keep the previous users visible and expose an error flag."
+- Responsibility: state and action implementation, which belongs to the ViewModel.
+- Primary owner: `UserViewModel.kt` (`UserViewModel`, `refreshUsers()`, and `UserUiState` in the same file).
+- Supporting files: `UserHomeScreen.kt` as a downstream consumer that reads `uiState` through `collectAsState()`, `data/UserRepository.kt` as the called dependency, and `app/src/test/.../UserViewModelTest.kt` as the unit test.
+- Evidence commands:
+
+```powershell
+node dist/cli.js lookup --index examples/basic-android-kotlin/.my-dev-kit --node "symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel" --depth 1 --resolve-classification --json
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --file app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt --symbol UserViewModel --format numbered
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --node "symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel" --include-data-flow --include-tests --depth 2 --json
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --android-role android-unit-test --json
+```
+
+- Wrong-layer choice: changing only the `onClick` lambda in `UserHomeScreen.kt`, which cannot change what `refreshUsers()` does, or changing `UserRepository.kt` for a purely presentational state decision.
+- Still uncertain: the graph has no edge from the click handler to `refreshUsers()` or to a state mutation, and `uiState` is not an indexed member node, so confirm the path in the source. The related-test slice reached the instrumented Compose test but not `UserViewModelTest`; find that with the role search.
+
+**W03 - Data-access behavior change.**
+
+- Task: "Make refresh save the downloaded users before returning them."
+- Responsibility: Repository-level data access, which combines the DAO and the Retrofit service.
+- Primary owner: `data/UserRepository.kt` (`UserRepository.refreshUsers()`).
+- Supporting files: `data/UserDao.kt` and `data/UserApiService.kt` as the interfaces it calls, `data/UserEntity.kt`, `data/AppDatabase.kt`, and `UserViewModel.kt` as its caller.
+- Evidence commands:
+
+```powershell
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --node "symbol:app/src/main/kotlin/com/example/kitdemo/data/UserRepository.kt#UserRepository" --depth 1 --json
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --file app/src/main/kotlin/com/example/kitdemo/data/UserRepository.kt --symbol UserRepository --format numbered
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --file app/src/main/kotlin/com/example/kitdemo/data/UserDao.kt --start 1 --end 12 --format numbered
+```
+
+- Wrong-layer choice: selecting `UserHomeScreen.kt` or `UserViewModel.kt` because the symptom is visible there, or editing only `UserApiService.kt` or `UserDao.kt`. Those interfaces define signatures; the behavior that combines them lives in the repository. The `repository-uses-dao` and `repository-uses-service` edges show the dependencies, not which one is wrong.
+- Still uncertain: the example has no repository test, Room queries and network calls are never executed, and the DAO and Retrofit test doubles are not linked to their interfaces.
+
+**Natural-language `context` remains query-sensitive.** The post-correction public-example checks show the intended screen, ViewModel, Repository, or Retrofit service as the focus for the tested single-layer requests, without false owner conflicts from supporting candidates. Requests that span UI and ViewModel state, name multiple plausible screens, or lack enough evidence remain ambiguous or unresolved. Check the focus, `selectedOwners`, role/context adequacy, and conflicts before editing; do not treat the first ranked candidate as automatic edit authority.
+
 ## Workflow 17: Choose an incremental refresh strategy (v1.12.5)
 
 This workflow uses the installed `@dailephd/my-dev-kit@1.12.5` CLI.
@@ -298,6 +399,70 @@ Keep in mind:
 - this does not use graph-diff, and it does not recurse past one hop.
 
 Inspect the command result's `incrementalRefresh` (or the printed `Refresh scope: ...` line) to see requested versus applied scope and the fallback reason, if any, rather than assuming the requested scope always ran. Neither scope is documented here as universally "safer" or "best" — pick based on how conservative the desired fresh-extraction boundary should be for the change being made.
+
+## Workflow 18: Android coding-agent workflow (v1.13.0)
+
+Use this ordered sequence when a coding agent is asked to modify the public Android example, or any Android project indexed the same way. It assumes the Workflow 10 index of `examples/basic-android-kotlin` and a built checkout (`node dist/cli.js`). The example request deliberately mixes two layers:
+
+> "Show a progress indicator on the home screen while users are refreshing, and make the refreshing flag clear if the repository call fails."
+
+The first half is UI work (`UserHomeScreen.kt` reads `isRefreshing`). The second half is state work (`UserViewModel.refreshUsers()` sets and clears it). Treat them as two edits with two owners and two sets of evidence.
+
+1. **Establish the index identity.** Read `manifest.json` (`projectRoot`, `sourceRoots`, `createdAt`, analyzer statuses) and compare it with the current checkout. If source changed since `createdAt`, re-run the Workflow 10 index command first. A context capsule reports freshness as `unknown` when the manifest does not record a commit, so do not treat a directory name as proof of currency.
+2. **Search for the named screen.** Use the exact selector, then the raw query to see what else competes:
+
+```powershell
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --json
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --query UserHomeScreen --limit 10 --json
+```
+
+   The exact selector returns one `android-composable` node. The raw query returns the `UserHomeScreenTest` symbol and the `UserHomeScreen` symbol with the same score, test first. That is ordinary relevance ranking, not a defect by itself, and it is not edit authority.
+3. **Inspect production and test candidates.** Check each candidate's path and its `classificationRoles[].editGuidance`. `UserHomeScreen` is `compose-ui-component` with `safe-primary-edit-target`; `UserHomeScreenTest` is `instrumented-test` with `test-only`. `search --query UserHomeScreen --intent ownership` is optional here: it labels the production symbol `direct-owner` and keeps `UserHomeScreenTest` visible as `supporting-evidence`, because `src/test` and `src/androidTest` paths are test-scoped. (Before the v1.13.0 D2 correction the `androidTest` symbol was also labeled `direct-owner`.) Still read the path and classification, not only `ownership.tier`.
+4. **Resolve the exact owner.** Pick the production candidate for the UI half and `UserViewModel` for the state half. If two production candidates remain plausible, keep both and decide from source, not from rank.
+5. **Lookup the owner.** `lookup --node "android-compose-declaration:app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt#UserHomeScreen" --depth 1 --resolve-classification --json`, and the same for `symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel`.
+6. **Slice the relevant dependencies.** Keep it bounded:
+
+```powershell
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --include-data-flow --json
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --node "symbol:app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt#UserViewModel" --include-data-flow --depth 2 --json
+```
+
+   Expect `composable-references-viewmodel`, `compose-state-reads-viewmodel`, and `viewmodel-uses-repository`. Expect no click-handler-to-state edge. `--include-data-flow` is a fixed Android edge family limited by `--depth`; check `androidDataFlow.truncated`.
+7. **Retrieve bounded source.** `source --composable UserHomeScreen --format numbered` and `source --file app/src/main/kotlin/com/example/kitdemo/UserViewModel.kt --symbol UserViewModel --format numbered`. Follow any `[CONTINUE: ...]` line with `--continue-from`. The Kotlin symbol end is not trusted, so a preview may stop early.
+8. **Inspect related tests.** Run `slice ... --include-tests` for the composable and `search --android-role android-unit-test`. See Workflow 13: the related-test slice found the instrumented test, and the unit test was found only by role or name search.
+9. **Check classification and conflict evidence.** Generate a role-specific capsule and read it; do not just accept it:
+
+```powershell
+node dist/cli.js context --index examples/basic-android-kotlin/.my-dev-kit --role implementation --query "Show a progress indicator on UserHomeScreen while UserViewModel is refreshing" --out examples/basic-android-kotlin/.my-dev-kit/progress-context.json --audit-out examples/basic-android-kotlin/.my-dev-kit/progress-audit.json --json
+```
+
+   Read `focus`, `selectedOwners`, `contextAdequacy`, `roleAdequacy`, and any conflict. For this single-sentence request that mentions both layers, the capsule selects `UserViewModel` as focus, keeps `UserHomeScreen` among the owners, and reports a conflict and an unresolved adequacy status instead of a single certain owner. Report that conflict. Do not delete one half of the request to make it go away.
+10. **Decide whether the context is sufficient before editing.** Proceed only when, for each edit, you have: the exact production owner and its source, its immediate dependencies from a bounded slice, the closest test (or a stated test gap), and no unreported conflict. Otherwise retrieve more or ask. Success of every command above is not sufficient; a `context` capsule with a conflict, or a related-test slice that is empty, still requires a decision.
+
+A search rank never authorizes an edit, and an instrumented test is never the production screen merely because it ranks first. Present ambiguous results and missing graph edges to whoever approves the change.
+
+<a id="d2-context-owner-selection-is-unresolved"></a>
+
+### D2: context owner selection and ambiguity boundaries
+
+`context` chooses its focus from request wording plus a fixed Android task-intent model. The v1.13.0 D2 correction changed three things, all deterministic and bounded:
+
+- Terms inside an exclusion clause (`without changing the ViewModel`, `while preserving ...`, `do not touch ...`) or a dependency clause (`from the DAO and Retrofit service`, `using ...`, `via ...`) no longer count as the layer being changed. They stay in the lexical query, the candidate list, graph neighborhoods, and dependency evidence; they just no longer earn the task-intent ranking boost.
+- Bare `layout` and `presentation` count as UI terms. When no intent term matches at all, a CamelCase identifier ending in `Screen`, `ViewModel`, `Repository`, `Dao`, or `Entity` implies that layer.
+- `src/androidTest` is test-scoped for `search --intent ownership`, so an instrumented test is `supporting-evidence`, never `direct-owner`. The test stays discoverable with its score and match reasons unchanged.
+
+In the public example, "Change the UserHomeScreen layout without changing the ViewModel" and "Update UserHomeScreen presentation while preserving UserViewModel behavior" focus `UserHomeScreen` without treating its click-handler facts as competing owners. "Update UserHomeScreen presentation" keeps the screen as the production UI focus while navigation and related tests remain available as evidence. "Change UserRepository data-loading behavior without modifying UserApiService" and "Change how UserRepository refreshes users from the DAO and Retrofit service" focus `UserRepository`; the DAO and service remain supporting evidence. "Change the UserApiService Retrofit contract" focuses `UserApiService` while keeping the Repository available. "Update UserViewModel state handling" focuses `UserViewModel` without treating its consuming Compose screens as competing state owners. These results describe ownership/conflict selection, not a guarantee that every role-adequacy condition is satisfied. "Update the UserHomeScreenTest assertion" stays a test-oriented request, and under the `implementation` role it still reports the test-primary-target conflict.
+
+Android ambiguous-owner conflicts compare candidates classified as primary for an active task intent. Supporting candidates, such as `ui-event` facts for a screen request or Compose consumers for a ViewModel-state request, stay in retrieval and graph evidence but do not compete solely because they are present. A source symbol and its Compose projection are one owner when the existing `defines-composable` graph edge establishes that relationship. Distinct primary production owners are not collapsed; a request that names two screens remains ambiguous, and a request spanning UI and ViewModel state retains a multi-responsibility conflict.
+
+What is **not** solved, and stays a verification duty:
+
+- Query sensitivity remains. The intent model is lexical: a request that genuinely names two layers (for example a screen and its ViewModel state) keeps both responsibilities visible and reports an ambiguous-owner conflict. The clause lists are fixed, so an unusual way of excluding or depending on a component is not recognized. Multiple distinct owners that are primary for the same requested responsibility also remain ambiguous; ranking alone does not prove unique edit ownership.
+- The false `view-model` ambiguity between `MainActivity` and `UserViewModel` was caused by `android-components` assigning `view-model` to every class in a file that imports `androidx.lifecycle.ViewModel`; that component-role defect is corrected (D2-D). After a fresh index, `search --android-role view-model` returns `UserViewModel` only. Indexes built before D2-D must be rebuilt. The single-layer conflict correction uses current classification and graph evidence; it does not provide complete Kotlin parsing or runtime validation.
+- `slice --include-tests` from a ViewModel or repository does not reach a unit test that only constructs the real class. That is a static-analysis limit, not a missing index: test-to-ViewModel edges exist only for a mock, fake, or stub whose referenced type resolves to an indexed class.
+- The benchmark fixture phrasing noted in `benchmarks/retrieval/v1.13/README.md` (a "change the UserHomeScreen layout" request on `combined-app`) was not re-evaluated here.
+
+Keep verifying the production owner with the exact selectors above, confirm the actual edit target from source, and treat a conflict or unresolved adequacy status as a decision for the person approving the change.
 
 ## Bundled examples
 

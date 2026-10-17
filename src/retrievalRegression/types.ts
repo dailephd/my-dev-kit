@@ -145,8 +145,9 @@ export interface AdequacyExpectation {
 }
 
 /**
- * Machine-readable command-result expectations for `search` and `source` execution tasks.
- * Search fields: requiredResultIds, topK. Source fields: everything else except those two.
+ * Machine-readable command-result expectations for `search`, `source`, `lookup` and `slice` execution tasks.
+ * Search fields: requiredResultIds, topK. Source fields: expectedMode through continuationReason.
+ * Lookup/slice tasks use only the matching nested `lookup`/`slice` object (plus `required`).
  */
 export interface CommandResultExpectation {
   requiredResultIds?: string[]
@@ -161,7 +162,58 @@ export interface CommandResultExpectation {
   symbolBoundaryKnown?: boolean
   nextStartLine?: number
   continuationReason?: 'symbol-end-unknown' | 'max-lines-reached' | 'window-capped' | 'eof'
+  /** Valid only with `lookup` execution. */
+  lookup?: LookupResultExpectation
+  /** Valid only with `slice` execution. */
+  slice?: SliceResultExpectation
   required?: boolean
+}
+
+export type LookupExpectedStatus = 'found' | 'ambiguous' | 'not-found'
+export type SliceExpectedStatus = 'ok' | 'ambiguous' | 'not-found'
+
+/** Typed `lookup` result expectations (`commandResult.lookup`). */
+export interface LookupResultExpectation {
+  expectedStatus?: LookupExpectedStatus
+  /** Generic lookup: returned `node.id`. Android component lookup: `detail.graphNodeId`. */
+  expectedNodeId?: string
+  /** Generic node lookup only: returned `node.kind`. */
+  expectedNodeKind?: string
+  /** Android component lookup: `candidates[].graphNodeId`. */
+  requiredCandidateIds?: string[]
+  forbiddenCandidateIds?: string[]
+  expectedCandidateCount?: number
+}
+
+/** Exact directed graph edge identity used by slice edge assertions. */
+export interface SliceEdgeExpectation {
+  source: string
+  kind: string
+  target: string
+}
+
+/** Ordered connected path inside one returned slice: `edgeKinds.length === nodeIds.length - 1`. */
+export interface SliceConnectedPathExpectation {
+  nodeIds: string[]
+  edgeKinds: string[]
+}
+
+/** Typed `slice` result expectations (`commandResult.slice`). */
+export interface SliceResultExpectation {
+  expectedStatus?: SliceExpectedStatus
+  requiredNodeIds?: string[]
+  forbiddenNodeIds?: string[]
+  requiredNodeKinds?: string[]
+  requiredEdgeKinds?: string[]
+  requiredEdges?: SliceEdgeExpectation[]
+  forbiddenEdges?: SliceEdgeExpectation[]
+  connectedPaths?: SliceConnectedPathExpectation[]
+  maxNodes?: number
+  maxEdges?: number
+  requiredCandidateIds?: string[]
+  expectedCandidateCount?: number
+  expectedDataFlowTruncated?: boolean
+  requireAndroidTests?: boolean
 }
 
 export interface RetrievalRegressionExpectation {
@@ -182,7 +234,7 @@ export interface RetrievalRegressionExpectation {
   adequacy?: AdequacyExpectation
 }
 
-export type RetrievalRegressionExecutionKind = 'context' | 'search' | 'source'
+export type RetrievalRegressionExecutionKind = 'context' | 'search' | 'source' | 'lookup' | 'slice'
 
 export interface RetrievalRegressionContextExecution {
   kind: 'context'
@@ -204,11 +256,44 @@ export interface RetrievalRegressionSourceExecution {
   continueFrom?: number
 }
 
+/** Exactly one of `node` or `androidComponent` must be set. */
+export interface RetrievalRegressionLookupExecution {
+  kind: 'lookup'
+  node?: string
+  androidComponent?: string
+  /** Integer 0 through 3. */
+  depth?: number
+  /** Only valid with `node`. */
+  resolveClassification?: boolean
+}
+
+export type RetrievalRegressionSliceDirection = 'both' | 'incoming' | 'outgoing'
+
+/** Exactly one of `node`, `androidRoute`, `androidComponent` or `composable` must be set. */
+export interface RetrievalRegressionSliceExecution {
+  kind: 'slice'
+  node?: string
+  androidRoute?: string
+  androidComponent?: string
+  composable?: string
+  /** Integer 0 through 3. */
+  depth?: number
+  direction?: RetrievalRegressionSliceDirection
+  /** Only valid with `composable`. */
+  includeViewmodel?: boolean
+  /** Only valid with `composable`. */
+  includeNavigation?: boolean
+  includeDataFlow?: boolean
+  includeTests?: boolean
+}
+
 /** Omitted `execution` means the original context-capsule execution. */
 export type RetrievalRegressionExecution =
   | RetrievalRegressionContextExecution
   | RetrievalRegressionSearchExecution
   | RetrievalRegressionSourceExecution
+  | RetrievalRegressionLookupExecution
+  | RetrievalRegressionSliceExecution
 
 export interface RetrievalRegressionTask {
   id: string
@@ -379,7 +464,7 @@ export interface RetrievalRegressionMetrics {
   noRawContentAssertionPassRate: number | null
   capComplianceAssertionPassRate: number | null
   adequacyAssertionPassRate: number | null
-  /** Additive: pass rate of search/source command-result assertions (null when none were evaluated). */
+  /** Additive: pass rate of search/source/lookup/slice command-result assertions (null when none were evaluated). */
   commandResultAssertionPassRate?: number | null
   candidateFileCount: number | null
   candidateNodeCount: number | null

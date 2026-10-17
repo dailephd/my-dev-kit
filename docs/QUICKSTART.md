@@ -182,7 +182,7 @@ Source retrieval never modifies source files. The `--max-lines` limit is enforce
 
 ### v1.11.0 Compose retrieval
 
-This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.12.6`. The examples below may also be run from a source checkout built with `npm run build`.
+This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.13.0`. The examples below may also be run from a source checkout built with `npm run build`.
 
 ```sh
 node dist/cli.js source --index .my-dev-kit --composable HomeScreen --include-compose-tree --format numbered
@@ -271,6 +271,39 @@ npx @dailephd/my-dev-kit source --index examples/basic-react-tsx/.my-dev-kit --r
 npx @dailephd/my-dev-kit view --index examples/basic-react-tsx/.my-dev-kit --graph react-component --format dot --out examples/basic-react-tsx/.my-dev-kit/react-component.dot
 ```
 
+### Android example (v1.13.0)
+
+`examples/basic-android-kotlin` is a small packaged Kotlin, Compose, Room, and Retrofit project for trying Android retrieval. Prerequisites are Node.js 18 or later and npm. Gradle, the Android SDK, and an emulator are not needed because my-dev-kit reads source and never builds or runs it.
+
+From the repository root, build once and index all three Android source sets:
+
+```sh
+npm ci
+npm run build
+node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+```
+
+`--out` is resolved against `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`; do not prefix the example path again. Without `app/src/test` and `app/src/androidTest`, the unit and instrumented tests are not indexed at all. Inspect the manifest for the roots and analyzer statuses before retrieving:
+
+```sh
+node -e "const m=require('./examples/basic-android-kotlin/.my-dev-kit/manifest.json');console.log(m.sourceRoots.join(', '));console.log(m.analyzers.map(a=>a.id+': '+a.status).join('\n'))"
+```
+
+The `android-gradle` and `classification` analyzers report `partial` for this example. That is expected static-analysis coverage, not a failed index; see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v1100).
+
+Search for a known composable, look it up by the exact `graphNodeId` the search returns, then take a bounded slice and bounded source:
+
+```sh
+node dist/cli.js search --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --json
+node dist/cli.js lookup --index examples/basic-android-kotlin/.my-dev-kit --node "android-compose-declaration:app/src/main/kotlin/com/example/kitdemo/UserHomeScreen.kt#UserHomeScreen" --depth 1 --json
+node dist/cli.js slice --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --include-data-flow --json
+node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --max-lines 40 --format numbered
+```
+
+The slice reports the `composable-references-viewmodel`, `compose-state-reads-viewmodel`, and `viewmodel-uses-repository` edges plus the `android-test-references-composable` edges for the instrumented test. To find tests, run `search --android-role android-unit-test` or `--android-role instrumented-test`. These are static results: no test is executed and no screen is rendered.
+
+Continue with the [detailed example walkthrough](../examples/basic-android-kotlin/README.md) for routes, resources, Room and Retrofit relationships, and test retrieval, and with the Android coding-agent workflow in [WORKFLOWS.md](WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130-candidate).
+
 ## Clean up generated artifacts
 
 **Deletion safety:** These optional commands permanently remove local indexes. Run them only for directories that you created for this walkthrough, after confirming they contain no pre-existing or shared data. Do not remove an existing index simply because it is Git-ignored.
@@ -291,10 +324,12 @@ For bundled examples in a cloned repository:
 # macOS / Linux
 rm -rf examples/basic-ts/.my-dev-kit
 rm -rf examples/basic-react-tsx/.my-dev-kit
+rm -rf examples/basic-android-kotlin/.my-dev-kit
 
 # Windows (PowerShell)
 Remove-Item -Recurse -Force examples/basic-ts/.my-dev-kit
 Remove-Item -Recurse -Force examples/basic-react-tsx/.my-dev-kit
+Remove-Item -Recurse -Force examples/basic-android-kotlin/.my-dev-kit
 ```
 
 ## Beyond the basics

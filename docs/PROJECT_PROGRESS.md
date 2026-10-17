@@ -4,7 +4,18 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.12.6` is the current release. Version 1.12.5 remains the previous published release.
+`@dailephd/my-dev-kit@1.13.0` is the current release. Version 1.12.6 remains the previous published release.
+
+## Shipped: v1.13.0
+
+Version 1.13.0 adds Android retrieval benchmarks, a packaged public Android example, and Android workflow documentation. It also corrects retrieval owner selection and Android evidence classification while retaining conservative static-analysis boundaries.
+
+- The Android benchmark has twelve tasks and 52 assertions; the original core benchmark has fourteen tasks and 64 assertions. The full repository suite passed with 217 files and 3,117 tests.
+- The release passed clean installation, typecheck, build, documentation checks, security tests, package inventory and installed-package acceptance. The npm package contains 50 files, including all eighteen public Android example files.
+- Exact-candidate readiness CI passed on Ubuntu, macOS, and Windows with Node.js 24.x. The release-preparation commit is independently validated by its own local and hosted checks.
+- Android retrieval remains static evidence: the example is not compiled with Gradle or executed on an Android device, and the package does not claim runtime rendering, resource resolution, test execution, or complete runtime navigation.
+- D2-C remains a documented static-evidence limitation. A focused pre-release test run recorded one timeout in `androidV110Retrieval` during concurrent CLI-heavy execution; the isolated rerun and complete suite passed. The timing observation remains in the readiness report.
+- D2-E removed reproduced false ambiguity from single-layer screen and ViewModel requests while retaining genuine ambiguity for requests spanning UI and ViewModel state or naming multiple plausible screens.
 
 ## Shipped: v1.12.6
 
@@ -45,13 +56,13 @@ Final readiness and publication state:
 - The supplemental Lab experiments remain classified `INCONCLUSIVE_SUPPLEMENTAL`; they were not represented as passes.
 - Version 1.12.6 is now published. The earlier implementation and readiness stages are complete historical records.
 
-The existing v1.13.0 Android retrieval benchmark/example/workflow milestone and all later roadmap assignments remain unchanged.
+The v1.13.0 Android retrieval benchmark/example/workflow milestone has since been published. Later roadmap assignments remain unchanged.
 
 ## Shipped: v1.12.5
 
 Version 1.12.5 ships affected-neighborhood incremental refresh in the existing indexing pipeline. The installed CLI supports `index --incremental --refresh-scope <changed-files|affected-neighborhood>`; plain `--incremental` remains compatible with `changed-files`. The affected-neighborhood scope freshly extracts unchanged files exactly one graph hop from modified or removed baseline files, verified against the trusted prior index. Missing, incompatible, unreadable, or mismatched baseline evidence fails closed to a truthful full rebuild. No-change invocations remain no-ops, and call-graph regeneration remains separately reported.
 
-This release provides the affected-neighborhood incremental refresh capability required by Lab v0.6.3. Lab v0.6.3 and Kit v1.12.6 were separate subsequent milestones and have since been published. Kit v1.13.0 remains the next planned Android retrieval benchmark/example/workflow milestone; later roadmap scope is unchanged.
+This release provided the affected-neighborhood incremental refresh capability required by Lab v0.6.3. Lab v0.6.3 and Kit v1.12.6 were separate subsequent milestones and have since been published. At the time of the v1.12.5 progress update, Kit v1.13.0 was the next planned Android retrieval benchmark/example/workflow milestone. It has since been published; later roadmap scope is unchanged.
 
 ### v1.12.5 release validation
 
@@ -79,7 +90,7 @@ Version 1.12.4 was published with package metadata and the CLI both reporting `1
 - External reproduction against a real multi-root repository: 5/5 previously unreachable test files pass indexing, lookup, slice, exact-text, and file-source checks.
 - GitHub Actions passed on Linux, Windows, and macOS with Node.js 24.x.
 
-See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the historical corrective patch details and preserved roadmap. Kit v1.12.5 (affected-neighborhood incremental refresh) and Kit v1.12.6 (bounded retrieval precision) are published releases; v1.13.0 remains the next planned Android retrieval benchmark/example/workflow milestone. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the additive v1.12.5 and v1.12.6 local decisions did not move the existing 1.13.0–1.16.0 assignments.
+See [CHANGELOG.md](../CHANGELOG.md) and [ROADMAP.md](ROADMAP.md) for the historical corrective patch details and preserved roadmap. Kit v1.12.5 (affected-neighborhood incremental refresh) and Kit v1.12.6 (bounded retrieval precision) are published releases. At the time of the v1.12.3 progress update, v1.13.0–v1.16.0 remained the assigned roadmap sequence; v1.13.0 has since been published. ECO-00 was adopted on 2026-09-25 as a repository-level cross-tool contract/roadmap freeze; the additive v1.12.5 and v1.12.6 local decisions did not move the existing assignments.
 
 ## Shipped: v1.12.3
 

@@ -1,0 +1,751 @@
+{
+  "schemaVersion": "1.0.0",
+  "suiteId": "android-v1.13",
+  "name": "Android Retrieval Benchmarks",
+  "description": "Twelve deterministic Android retrieval scenarios over checked-in Android fixtures. Each task runs one retrieval operation (context, source, or slice) and asserts only the static evidence the current analyzers actually produce. See README.md in this directory for the tested and untested portion of every scenario.",
+  "target": "my-dev-kit",
+  "defaultMode": "general",
+  "tasks": [
+    {
+      "id": "android-v113-a01",
+      "title": "A01 Add a new Compose screen",
+      "description": "Feature-add context request to add a Compose screen next to UserHomeScreen. Verifies the existing screen composable is the focus, the sibling screen file is retained, no Activity or resource owner is promoted by connector-term ranking, and no generated file becomes a source target. The query intentionally keeps the words a and to (v1.13.0 Batch 1C correction).",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "query": "add a new Compose screen next to UserHomeScreen",
+      "mode": "feature-add",
+      "noSource": false,
+      "skip": false,
+      "tags": ["android", "context", "compose", "feature-add", "v1.13.0"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+      "expectations": {
+        "candidateFiles": [
+          { "pathContains": "app/src/main/kotlin/com/example/combined/UserHomeScreen.kt", "topK": 3, "required": true },
+          { "pathContains": "app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt", "topK": 6, "required": true }
+        ],
+        "candidateNodes": [
+          { "nodeId": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen", "topK": 3, "required": true }
+        ],
+        "focus": {
+          "nodeId": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+          "pathContains": "UserHomeScreen.kt",
+          "allowNoFocus": false,
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": ["android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen"],
+          "requiredFileContains": ["UserHomeScreen.kt"],
+          "forbiddenFileContains": ["/build/", "strings.xml"],
+          "maxNodes": 30,
+          "maxEdges": 40,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFileContains": ["UserHomeScreen.kt"],
+          "forbiddenFileContains": ["/build/", "MainActivity.kt", "strings.xml"],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "classificationSummary": {
+          "required": true,
+          "requiredCategories": ["compose-ui-component"],
+          "requiredEditGuidance": ["safe-primary-edit-target"],
+          "allowUnavailable": false
+        },
+        "artifactReferences": { "requiredKinds": ["symbolIndex", "codeGraph"], "allowUnavailable": false, "required": true },
+        "conflicts": { "expectedStatus": "none", "allowNone": true, "required": true },
+        "modeEffects": { "expectedMode": "feature-add", "requireModeEffect": true, "required": true },
+        "auditSteps": {
+          "requiredStepIds": [
+            "step-validate-inputs",
+            "step-load-manifest",
+            "step-run-search",
+            "step-select-primary-focus",
+            "step-write-context-capsule",
+            "step-write-retrieval-audit-record"
+          ],
+          "requireUniqueStepIds": true,
+          "minStepCount": 20,
+          "required": true
+        },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 50, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+        "adequacy": {
+          "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"],
+          "allowAssumptions": true,
+          "allowConflict": false,
+          "allowInsufficient": false,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "android-v113-a02",
+      "title": "A02 Modify an existing Compose screen",
+      "description": "Bounded source retrieval of the UserHomeScreen declaration by exact symbol node. Verifies the correct file, line window, screen content (including the string-resource reference, test tag and ViewModel read), and the honest unknown-boundary cursor the Kotlin parser produces.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "source", "compose", "symbol-boundary", "v1.13.0"],
+      "execution": {
+        "kind": "source",
+        "node": "symbol:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+        "maxLines": 40
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedMode": "node",
+          "expectedStartLine": 4,
+          "expectedEndLine": 15,
+          "expectedLineCount": 12,
+          "requiredContent": [
+            "fun UserHomeScreen()",
+            "R.string.user_screen_title",
+            "viewModel.refreshUsers()",
+            "Modifier.testTag(\"refresh_users_button\")"
+          ],
+          "forbiddenContent": ["fun UserSettingsScreen", "class UserViewModel", "package com.example.combined"],
+          "continuation": "present",
+          "symbolBoundaryKnown": false,
+          "nextStartLine": 16,
+          "continuationReason": "eof",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "android-v113-a03",
+      "title": "A03 Test tag, composable and ViewModel evidence",
+      "description": "Composable slice around UserHomeScreen with direct ViewModel inclusion and bounded related-test evidence. Verifies the refresh_users_button test-tag and click facts, the composable-to-ViewModel reference, and the instrumented test method that references the composable. The graph has no direct click-handler-to-ViewModel-method or state edge, so none is asserted.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "compose", "test-tag", "viewmodel", "tests", "v1.13.0"],
+      "execution": { "kind": "slice", "composable": "UserHomeScreen", "depth": 1, "includeViewmodel": true, "includeTests": true },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::testtag#0@L11",
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::click#0@L10",
+              "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+            ],
+            "requiredNodeKinds": ["android-compose-fact", "android-test-method", "android-test-class"],
+            "requiredEdgeKinds": ["android-test-references-composable"],
+            "requiredEdges": [
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                "kind": "composable-has-fact",
+                "target": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::testtag#0@L11"
+              },
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                "kind": "composable-has-fact",
+                "target": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::click#0@L10"
+              },
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                "kind": "composable-references-viewmodel",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "android-test-file:app/src/androidTest/kotlin/com/example/combined/UserHomeScreenTest.kt",
+                  "android-test-class:app/src/androidTest/kotlin/com/example/combined/UserHomeScreenTest.kt#UserHomeScreenTest",
+                  "android-test-method:app/src/androidTest/kotlin/com/example/combined/UserHomeScreenTest.kt#UserHomeScreenTest.showsRefreshButtonAndTitle"
+                ],
+                "edgeKinds": ["defines-test-class", "test-class-defines-method"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel",
+                "kind": "composable-references-viewmodel",
+                "target": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen"
+              }
+            ],
+            "requireAndroidTests": true,
+            "maxNodes": 20,
+            "maxEdges": 20
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a04",
+      "title": "A04 Route to composable and navigation declaration",
+      "description": "Exact unique Android route slice for the settings route. Verifies the route resolves to ComposeSettingsScreen through the exact route-to-screen edge, the declaring AppNav.kt file defines that screen, and unrelated routes, the home screen and the sibling settings composable are excluded.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "navigation", "route", "v1.13.0"],
+      "execution": { "kind": "slice", "androidRoute": "settings", "depth": 2 },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "android-navigation-compose-route:app/src/main/kotlin/com/example/combined/AppNav.kt#2",
+              "symbol:app/src/main/kotlin/com/example/combined/AppNav.kt#ComposeSettingsScreen",
+              "file:app/src/main/kotlin/com/example/combined/AppNav.kt"
+            ],
+            "requiredNodeKinds": ["android-compose-route"],
+            "requiredEdges": [
+              {
+                "source": "android-navigation-compose-route:app/src/main/kotlin/com/example/combined/AppNav.kt#2",
+                "kind": "compose-route-resolves-to-screen",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/AppNav.kt#ComposeSettingsScreen"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "file:app/src/main/kotlin/com/example/combined/AppNav.kt",
+                  "symbol:app/src/main/kotlin/com/example/combined/AppNav.kt#ComposeSettingsScreen"
+                ],
+                "edgeKinds": ["defines"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-navigation-compose-route:app/src/main/kotlin/com/example/combined/AppNav.kt#0",
+              "android-navigation-compose-route:app/src/main/kotlin/com/example/combined/AppNav.kt#8",
+              "symbol:app/src/main/kotlin/com/example/combined/AppNav.kt#ComposeHomeScreen",
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "android-navigation-compose-route:app/src/main/kotlin/com/example/combined/AppNav.kt#2",
+                "kind": "compose-route-resolves-to-screen",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/AppNav.kt#ComposeHomeScreen"
+              }
+            ],
+            "maxNodes": 5,
+            "maxEdges": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a05",
+      "title": "A05 String resource to composable and tests",
+      "description": "Composable slice (depth 2, related tests) around UserHomeScreen. Verifies the composable-to-string-resource usage chain at the graph level (string-resource fact, resource definition, composable-to-test reference) without pinning the positional strings.xml resource ordinal. The resource name user_screen_title is carried in a node label the typed assertions cannot read, so the exact resource is covered by A02 source content instead.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "resource", "string-resource", "tests", "v1.13.0"],
+      "execution": { "kind": "slice", "composable": "UserHomeScreen", "depth": 2, "includeTests": true },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::stringresource#0@L7",
+              "android-test-class:app/src/androidTest/kotlin/com/example/combined/UserHomeScreenTest.kt#UserHomeScreenTest"
+            ],
+            "requiredNodeKinds": ["android-resource-definition", "android-test-method"],
+            "requiredEdgeKinds": ["compose-string-references-resource", "source-references-resource", "android-test-references-composable"],
+            "requiredEdges": [
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                "kind": "composable-has-fact",
+                "target": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::stringresource#0@L7"
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen"
+            ],
+            "requireAndroidTests": true,
+            "maxNodes": 40,
+            "maxEdges": 45
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a06",
+      "title": "A06 ViewModel state to UI ownership evidence",
+      "description": "Composable slice around UserHomeScreen with direct ViewModel inclusion. Verifies the composable references UserViewModel, the collectAsState fact reads the ViewModel, and the slice does not expand into the data layer or the sibling screen. Static ownership evidence only; uiState is not an indexed member node and nothing here proves runtime rendering.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "viewmodel", "state-ownership", "v1.13.0"],
+      "execution": { "kind": "slice", "composable": "UserHomeScreen", "depth": 1, "includeViewmodel": true },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+              "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel",
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::state#0@L6"
+            ],
+            "requiredEdges": [
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                "kind": "composable-references-viewmodel",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+              },
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::state#0@L6",
+                "kind": "compose-state-reads-viewmodel",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+                  "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::state#0@L6",
+                  "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+                ],
+                "edgeKinds": ["composable-has-fact", "compose-state-reads-viewmodel"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel",
+                "kind": "compose-state-reads-viewmodel",
+                "target": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen::state#0@L6"
+              }
+            ],
+            "maxNodes": 14,
+            "maxEdges": 14
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a07",
+      "title": "A07 Repository to Room DAO and Retrofit service",
+      "description": "Node slice around UserRepository with bounded Android data-flow expansion. Verifies one connected ViewModel to Repository to DAO to Entity path and a ViewModel to Repository to Retrofit service path inside the same returned graph, rejects reversed or mis-attributed data-layer edges, and requires a non-truncated data-flow summary.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "data-flow", "repository", "room", "retrofit", "v1.13.0"],
+      "execution": {
+        "kind": "slice",
+        "node": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+        "depth": 2,
+        "includeDataFlow": true
+      },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserApiService.kt#UserApiService",
+              "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel"
+            ],
+            "requiredEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                "kind": "repository-uses-dao",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao"
+              },
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                "kind": "repository-uses-service",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserApiService.kt#UserApiService"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity"
+                ],
+                "edgeKinds": ["viewmodel-uses-repository", "repository-uses-dao", "dao-uses-entity"]
+              },
+              {
+                "nodeIds": [
+                  "symbol:app/src/main/kotlin/com/example/combined/UserViewModel.kt#UserViewModel",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserApiService.kt#UserApiService"
+                ],
+                "edgeKinds": ["viewmodel-uses-repository", "repository-uses-service"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                "kind": "repository-uses-dao",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository"
+              },
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                "kind": "repository-uses-service",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao"
+              },
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                "kind": "repository-uses-dao",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserApiService.kt#UserApiService"
+              }
+            ],
+            "expectedDataFlowTruncated": false,
+            "maxNodes": 30,
+            "maxEdges": 36
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a08",
+      "title": "A08 Room entity to DAO, repository and test implications",
+      "description": "Node slice around UserEntity (depth 3, data flow, related tests). Verifies the Room database to DAO to Entity and Repository to DAO to Entity connected paths and that the repository test-double fact referencing UserRepository is retrieved (its fact id embeds a source line, so only its node kind and edge kind are asserted). The related-test summary also reflects the Compose UI test reached through the ViewModel; test doubles of the DAO and Retrofit interfaces are not resolved by the static graph and no such edges are asserted.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "room", "entity", "dao", "repository", "tests", "v1.13.0"],
+      "execution": {
+        "kind": "slice",
+        "node": "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity",
+        "depth": 3,
+        "includeDataFlow": true,
+        "includeTests": true
+      },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+              "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+              "symbol:app/src/main/kotlin/com/example/combined/data/AppDatabase.kt#AppDatabase"
+            ],
+            "requiredNodeKinds": ["android-test-class", "android-test-fact"],
+            "requiredEdgeKinds": ["android-test-references-viewmodel"],
+            "requiredEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                "kind": "dao-uses-entity",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "symbol:app/src/main/kotlin/com/example/combined/data/AppDatabase.kt#AppDatabase",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity"
+                ],
+                "edgeKinds": ["room-database-exposes-dao", "dao-uses-entity"]
+              },
+              {
+                "nodeIds": [
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserRepository.kt#UserRepository",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                  "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity"
+                ],
+                "edgeKinds": ["repository-uses-dao", "dao-uses-entity"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserSettingsScreen.kt#UserSettingsScreen"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserEntity.kt#UserEntity",
+                "kind": "dao-uses-entity",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao"
+              },
+              {
+                "source": "symbol:app/src/main/kotlin/com/example/combined/data/UserDao.kt#UserDao",
+                "kind": "room-database-exposes-dao",
+                "target": "symbol:app/src/main/kotlin/com/example/combined/data/AppDatabase.kt#AppDatabase"
+              }
+            ],
+            "expectedDataFlowTruncated": false,
+            "requireAndroidTests": true,
+            "maxNodes": 30,
+            "maxEdges": 36
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a09",
+      "title": "A09 Manifest permission and component source",
+      "description": "Exact Android component slice for SyncService. Verifies the manifest file declares the service, the service uses the declared INTERNET permission, and the manifest component resolves to its source class. Other components and permissions are excluded. Manifest attributes such as android:exported are not compared by the typed assertions and are therefore not covered.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "skip": false,
+      "tags": ["android", "slice", "manifest", "permission", "component", "v1.13.0"],
+      "execution": { "kind": "slice", "androidComponent": "com.example.combined.SyncService", "depth": 1 },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "android-manifest-component:app/src/main/AndroidManifest.xml#service:.SyncService:0",
+              "android-manifest-file:app/src/main/AndroidManifest.xml",
+              "android-permission-ref:android.permission.INTERNET",
+              "symbol:app/src/main/kotlin/com/example/combined/MainActivity.kt#SyncService"
+            ],
+            "requiredNodeKinds": ["android-manifest-component", "android-permission"],
+            "requiredEdges": [
+              {
+                "source": "android-manifest-component:app/src/main/AndroidManifest.xml#service:.SyncService:0",
+                "kind": "component-uses-permission",
+                "target": "android-permission-ref:android.permission.INTERNET"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "android-manifest-file:app/src/main/AndroidManifest.xml",
+                  "android-manifest-component:app/src/main/AndroidManifest.xml#service:.SyncService:0",
+                  "symbol:app/src/main/kotlin/com/example/combined/MainActivity.kt#SyncService"
+                ],
+                "edgeKinds": ["manifest-declares-component", "manifest-component-resolves-to-source"]
+              }
+            ],
+            "forbiddenNodeIds": [
+              "android-manifest-component:app/src/main/AndroidManifest.xml#activity:.MainActivity:0",
+              "android-manifest-component:app/src/main/AndroidManifest.xml#activity:com.example.other.MainActivity:1",
+              "android-permission-ref:android.permission.READ_CONTACTS",
+              "android-permission-ref:com.example.combined.permission.DEBUG_LOGGING"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "android-manifest-component:app/src/main/AndroidManifest.xml#service:.SyncService:0",
+                "kind": "component-uses-permission",
+                "target": "android-permission-ref:android.permission.READ_CONTACTS"
+              }
+            ],
+            "maxNodes": 6,
+            "maxEdges": 6
+          }
+        }
+      }
+    },
+    {
+      "id": "android-v113-a10",
+      "title": "A10 Screen UI versus ViewModel ownership",
+      "description": "Ordinary UI-change context request naming UserHomeScreen. Verifies the Compose screen composable, not the ViewModel, instrumented test or Activity, is the selected focus, that the screen and its sibling are retained as candidates, and that no ownership conflict is reported. Other phrasings of similar requests currently select the test or the ViewModel (see README); this task records the supported phrasing without hardcoding behavior.",
+      "fixtureRoot": "../../../tests/fixtures/android-retrieval/combined-app",
+      "sourceRoots": ["app/src/main", "app/src/debug", "app/src/test", "app/src/androidTest", "core/src/main"],
+      "query": "modify the UserHomeScreen composable UI",
+      "mode": "feature-add",
+      "noSource": false,
+      "skip": false,
+      "tags": ["android", "context", "compose", "viewmodel", "ownership", "v1.13.0"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+      "expectations": {
+        "candidateFiles": [
+          { "pathContains": "app/src/main/kotlin/com/example/combined/UserHomeScreen.kt", "topK": 3, "required": true }
+        ],
+        "candidateNodes": [
+          { "nodeId": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen", "topK": 2, "required": true }
+        ],
+        "focus": {
+          "nodeId": "android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen",
+          "pathContains": "UserHomeScreen.kt",
+          "allowNoFocus": false,
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": ["android-compose-declaration:app/src/main/kotlin/com/example/combined/UserHomeScreen.kt#UserHomeScreen"],
+          "requiredFileContains": ["UserHomeScreen.kt"],
+          "forbiddenFileContains": ["/build/", "strings.xml"],
+          "maxNodes": 30,
+          "maxEdges": 40,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFileContains": ["UserHomeScreen.kt"],
+          "forbiddenFileContains": ["/build/", "UserViewModel.kt", "strings.xml"],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "classificationSummary": {
+          "required": true,
+          "requiredCategories": ["compose-ui-component"],
+          "requiredEditGuidance": ["safe-primary-edit-target"],
+          "allowUnavailable": false
+        },
+        "artifactReferences": { "requiredKinds": ["symbolIndex", "codeGraph"], "allowUnavailable": false, "required": true },
+        "conflicts": { "expectedStatus": "none", "allowNone": true, "required": true },
+        "modeEffects": { "expectedMode": "feature-add", "requireModeEffect": true, "required": true },
+        "auditSteps": {
+          "requiredStepIds": [
+            "step-validate-inputs",
+            "step-load-manifest",
+            "step-run-search",
+            "step-select-primary-focus",
+            "step-write-context-capsule",
+            "step-write-retrieval-audit-record"
+          ],
+          "requireUniqueStepIds": true,
+          "minStepCount": 20,
+          "required": true
+        },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 50, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+        "adequacy": {
+          "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"],
+          "allowAssumptions": true,
+          "allowConflict": false,
+          "allowInsufficient": false,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "android-v113-a11",
+      "title": "A11 Generated Gradle and build output avoidance",
+      "description": "Ordinary production-source change request referencing MainActivity in an Android app whose build directory holds generated Java and Kotlin files. Verifies the real production MainActivity is the focus and source evidence, generated files are never source evidence or graph files, and the generated build path is present only as static classification evidence marked generated-do-not-edit with a generated-build-file risk.",
+      "fixtureRoot": "../../../tests/fixtures/android/generated-build-output",
+      "sourceRoots": ["app"],
+      "query": "update the MainActivity class in the Android app",
+      "mode": "feature-add",
+      "noSource": false,
+      "skip": false,
+      "tags": ["android", "context", "generated-output", "gradle", "v1.13.0"],
+      "caps": { "maxCandidateFiles": 12, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+      "expectations": {
+        "candidateFiles": [
+          { "path": "app/src/main/kotlin/com/example/MainActivity.kt", "topK": 1, "required": true }
+        ],
+        "candidateNodes": [
+          { "nodeId": "symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity", "topK": 1, "required": true }
+        ],
+        "focus": {
+          "nodeId": "symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity",
+          "path": "app/src/main/kotlin/com/example/MainActivity.kt",
+          "allowNoFocus": false,
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": ["symbol:app/src/main/kotlin/com/example/MainActivity.kt#MainActivity"],
+          "requiredFileContains": ["app/src/main/kotlin/com/example/MainActivity.kt"],
+          "forbiddenFileContains": ["/build/", "Generated"],
+          "maxNodes": 30,
+          "maxEdges": 40,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFileContains": ["app/src/main/kotlin/com/example/MainActivity.kt"],
+          "forbiddenFileContains": ["/build/", "Generated"],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "classificationSummary": {
+          "required": true,
+          "requiredCategories": ["activity", "generated-file"],
+          "requiredEditGuidance": ["generated-do-not-edit"],
+          "requiredRiskLabels": ["generated-build-file-risk"],
+          "allowUnavailable": false
+        },
+        "artifactReferences": { "requiredKinds": ["symbolIndex", "codeGraph"], "allowUnavailable": false, "required": true },
+        "conflicts": { "expectedStatus": "none", "allowNone": true, "required": true },
+        "modeEffects": { "expectedMode": "feature-add", "requireModeEffect": true, "required": true },
+        "auditSteps": {
+          "requiredStepIds": [
+            "step-validate-inputs",
+            "step-load-manifest",
+            "step-run-search",
+            "step-select-primary-focus",
+            "step-write-context-capsule",
+            "step-write-retrieval-audit-record"
+          ],
+          "requireUniqueStepIds": true,
+          "minStepCount": 20,
+          "required": true
+        },
+        "noRawContent": { "enabled": true },
+        "caps": { "maxCandidateFiles": 12, "maxCandidateNodes": 50, "maxSourceSlices": 6, "maxGraphNodes": 30, "maxGraphEdges": 40 },
+        "adequacy": {
+          "allowedStatuses": ["context sufficient for implementation", "context sufficient with listed assumptions"],
+          "allowAssumptions": true,
+          "allowConflict": false,
+          "allowInsufficient": false,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "android-v113-a12",
+      "title": "A12 Unit and instrumented test evidence",
+      "description": "Node slice around LoginViewModel with bounded related-test retrieval in the test-semantic fixture. Verifies the unit test class (src/test) that mocks the ViewModel and the instrumented Compose test (src/androidTest) that references the composable using it are both retrieved, each with its own exact test-to-production relationship and test-class hierarchy. Existence of a test is not evidence it ran, and the typed assertions do not read source-set metadata beyond the source-set path in node ids.",
+      "fixtureRoot": "../../../tests/fixtures/android-test-semantic/basic-app",
+      "sourceRoots": ["app/src/main", "app/src/test", "app/src/androidTest"],
+      "skip": false,
+      "tags": ["android", "slice", "tests", "unit-test", "instrumented-test", "v1.13.0"],
+      "execution": {
+        "kind": "slice",
+        "node": "symbol:app/src/main/kotlin/com/example/LoginViewModel.kt#LoginViewModel",
+        "depth": 1,
+        "includeTests": true
+      },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "symbol:app/src/main/kotlin/com/example/LoginViewModel.kt#LoginViewModel",
+              "android-compose-declaration:app/src/main/kotlin/com/example/Screens.kt#HomeScreen",
+              "android-test-class:app/src/test/kotlin/com/example/LoginViewModelTest.kt#LoginViewModelTest",
+              "android-test-class:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest",
+              "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButtonAndWelcomeText"
+            ],
+            "requiredNodeKinds": ["android-test-class", "android-test-method", "android-test-fact"],
+            "requiredEdgeKinds": ["android-test-references-viewmodel", "android-test-references-composable"],
+            "requiredEdges": [
+              {
+                "source": "android-compose-declaration:app/src/main/kotlin/com/example/Screens.kt#HomeScreen",
+                "kind": "composable-references-viewmodel",
+                "target": "symbol:app/src/main/kotlin/com/example/LoginViewModel.kt#LoginViewModel"
+              }
+            ],
+            "connectedPaths": [
+              {
+                "nodeIds": [
+                  "android-test-file:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt",
+                  "android-test-class:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest",
+                  "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButtonAndWelcomeText"
+                ],
+                "edgeKinds": ["defines-test-class", "test-class-defines-method"]
+              }
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "android-test-class:app/src/test/kotlin/com/example/LoginViewModelTest.kt#LoginViewModelTest",
+                "kind": "test-class-defines-method",
+                "target": "android-test-method:app/src/androidTest/kotlin/com/example/HomeScreenTest.kt#HomeScreenTest.showsLoginButtonAndWelcomeText"
+              }
+            ],
+            "requireAndroidTests": true,
+            "maxNodes": 12,
+            "maxEdges": 14
+          }
+        }
+      }
+    }
+  ]
+}

@@ -121,6 +121,72 @@ describe('detectContextConflicts: Android wrong-layer kinds', () => {
     expect(ambiguous!.affectedNodes.sort()).toEqual(['vm-a', 'vm-b'])
   })
 
+  it('does not promote same-role supporting UI facts to competing owners when a primary screen owner is present', () => {
+    const screen = node({ nodeId: 'screen', kind: 'android-composable', score: 100, classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const clickA = node({ nodeId: 'click-a', kind: 'android-compose-fact', score: 98, classificationRoles: [role('ui-event', 'inspect-before-edit')] })
+    const clickB = node({ nodeId: 'click-b', kind: 'android-compose-fact', score: 98, classificationRoles: [role('ui-event', 'inspect-before-edit')] })
+    const candidates = [screen, clickA, clickB]
+    const result = detectContextConflicts({
+      focus: focusOn('screen'),
+      candidateNodes: candidates,
+      role: 'implementation',
+      androidIntents: new Set<AndroidIntent>(['ui']),
+    })
+
+    expect(result.conflicts.some((conflict) => conflict.kind === 'android-ambiguous-owner')).toBe(false)
+    expect(candidates.map((candidate) => candidate.nodeId)).toEqual(['screen', 'click-a', 'click-b'])
+  })
+
+  it('does not treat supporting Compose candidates as state owners when a primary ViewModel is present', () => {
+    const viewModel = node({ nodeId: 'view-model', kind: 'symbol', androidArtifactId: 'android-components', score: 100, classificationRoles: [role('view-model', 'safe-primary-edit-target')] })
+    const navigation = node({ nodeId: 'navigation', kind: 'android-composable', score: 98, classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const screen = node({ nodeId: 'screen', kind: 'android-composable', score: 98, classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const result = detectContextConflicts({
+      focus: focusOn('view-model'),
+      candidateNodes: [viewModel, navigation, screen],
+      role: 'implementation',
+      androidIntents: new Set<AndroidIntent>(['state']),
+    })
+
+    expect(result.conflicts.some((conflict) => conflict.kind === 'android-ambiguous-owner')).toBe(false)
+  })
+
+  it('uses defines-composable to avoid counting a source symbol and its Android projection as two owners', () => {
+    const sourceProjection = node({ nodeId: 'screen-symbol', kind: 'symbol', androidArtifactId: 'android-compose-semantic', score: 100, filePath: 'Screen.kt', classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const screenProjection = node({ nodeId: 'screen-compose', kind: 'android-composable', score: 100, filePath: 'Screen.kt', classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const otherScreen = node({ nodeId: 'other-screen', kind: 'android-composable', score: 99, filePath: 'OtherScreen.kt', classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const graph = emptyGraph([{ id: 'defines-screen', source: 'screen-symbol', target: 'screen-compose', kind: 'defines-composable' }])
+    const result = detectContextConflicts({
+      focus: focusOn('screen-compose'),
+      candidateNodes: [sourceProjection, screenProjection, otherScreen],
+      codeGraph: graph,
+      role: 'implementation',
+      androidIntents: new Set<AndroidIntent>(['ui']),
+    })
+    const ambiguous = result.conflicts.find((conflict) => conflict.kind === 'android-ambiguous-owner')
+
+    expect(ambiguous?.affectedNodes).toEqual(['other-screen', 'screen-compose'])
+    expect(ambiguous?.candidates.map((candidate) => candidate.nodeId)).toEqual(['screen-compose', 'other-screen'])
+    expect(ambiguous?.candidates.every((candidate) => candidate.editGuidance.includes('safe-primary-edit-target'))).toBe(true)
+    expect(ambiguous?.reason).toContain('primary for an active task intent')
+  })
+
+  it('retains explicit ambiguity when active primary intents identify distinct production layers', () => {
+    const screen = node({ nodeId: 'screen', kind: 'android-composable', score: 100, classificationRoles: [role('compose-ui-component', 'safe-primary-edit-target')] })
+    const viewModel = node({ nodeId: 'view-model', kind: 'symbol', androidArtifactId: 'android-components', score: 90, classificationRoles: [role('view-model', 'safe-primary-edit-target')] })
+    const result = detectContextConflicts({
+      focus: focusOn('screen'),
+      candidateNodes: [screen, viewModel],
+      role: 'implementation',
+      androidIntents: new Set<AndroidIntent>(['ui', 'state']),
+    })
+    const ambiguous = result.conflicts.find((conflict) => conflict.kind === 'android-ambiguous-owner')
+
+    expect(ambiguous?.affectedNodes).toEqual(['screen', 'view-model'])
+    expect(ambiguous?.reason).toContain('spans multiple primary responsibilities (state, ui)')
+    expect(ambiguous?.candidates.map((candidate) => candidate.nodeId)).toEqual(['screen', 'view-model'])
+  })
+
   it('TST-627: android-unresolved-owner when wrong-layer-risk evidence exists and no eligible owner remains', () => {
     const focus = node({ nodeId: 'vm-risky', score: 10, androidArtifactId: 'android-components', classificationRoles: [role('view-model', 'read-only-reference')] })
     const summary = {

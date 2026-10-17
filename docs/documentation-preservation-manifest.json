@@ -322,8 +322,8 @@
   "statusBoundaries": {
     "documentKeywords": {
       "README.md": [
-        "Latest release: v1.12.6",
-        "@dailephd/my-dev-kit@1.12.6",
+        "Latest release: v1.13.0",
+        "@dailephd/my-dev-kit@1.13.0",
         "planned scopes",
         "v1.12.6 bounded retrieval precision"
       ],
@@ -340,7 +340,7 @@
         "Area of Improvements 4 (1 entry)"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.12.6 is the current release",
+        "Version 1.13.0 is the current release",
         "### v1.12.6 bounded retrieval precision"
       ],
       "docs/CONTRACTS.md": [
@@ -529,7 +529,8 @@
       "## 1.12.2",
       "## 1.12.3",
       "## 1.12.4",
-      "## 1.12.6"
+      "## 1.12.6",
+      "## 1.13.0 - 2026-10-17"
     ],
     "requiredUnreleasedVersionHeadings": [
       "## Unreleased"

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { executeTask } from '../../src/retrievalRegression/taskExecutor.js'
+import { buildCommandArgs, executeTask } from '../../src/retrievalRegression/taskExecutor.js'
 import type { RetrievalRegressionSuiteConfig, RetrievalRegressionTask } from '../../src/retrievalRegression/types.js'
 
 const tempDirs: string[] = []
@@ -176,5 +176,135 @@ describe('executeTask search/source execution', () => {
     expect(result.status).toBe('blocked')
     expect(result.verdict).toBe('BLOCKED')
     expect(result.errors[0]).toContain('exited with code')
+  }, 60000)
+})
+
+describe('buildCommandArgs lookup/slice', () => {
+  const task = { id: 't', title: 'T' } as RetrievalRegressionTask
+
+  it('builds only supported lookup options and always requests JSON', () => {
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'lookup', node: 'n' } })).toEqual(['src/cli.ts', 'lookup', '--index', 'idx', '--node', 'n', '--json'])
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'lookup', node: 'n', depth: 0, resolveClassification: true } })).toEqual([
+      'src/cli.ts', 'lookup', '--index', 'idx', '--node', 'n', '--depth', '0', '--resolve-classification', '--json',
+    ])
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'lookup', androidComponent: 'Main', depth: 2 } })).toEqual([
+      'src/cli.ts', 'lookup', '--index', 'idx', '--android-component', 'Main', '--depth', '2', '--json',
+    ])
+  })
+
+  it('builds slice selectors, depth, direction and include flags and omits unset or false options', () => {
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'slice', node: 'n' } })).toEqual(['src/cli.ts', 'slice', '--index', 'idx', '--node', 'n', '--json'])
+    expect(
+      buildCommandArgs({
+        indexDir: 'idx',
+        task,
+        execution: { kind: 'slice', composable: 'Home', depth: 3, direction: 'outgoing', includeViewmodel: true, includeNavigation: true, includeDataFlow: true, includeTests: true },
+      })
+    ).toEqual([
+      'src/cli.ts', 'slice', '--index', 'idx', '--composable', 'Home', '--depth', '3', '--direction', 'outgoing',
+      '--include-viewmodel', '--include-navigation', '--include-data-flow', '--include-tests', '--json',
+    ])
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'slice', androidRoute: 'r', includeTests: false } })).toEqual([
+      'src/cli.ts', 'slice', '--index', 'idx', '--android-route', 'r', '--json',
+    ])
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'slice', androidComponent: 'c' } })).toContain('--android-component')
+  })
+
+  it('leaves the existing search and source argument construction unchanged', () => {
+    expect(buildCommandArgs({ indexDir: 'idx', task: { ...task, query: 'q' }, execution: { kind: 'search', intent: 'ownership', limit: 5 } })).toEqual([
+      'src/cli.ts', 'search', '--index', 'idx', '--query', 'q', '--intent', 'ownership', '--limit', '5', '--json',
+    ])
+    expect(buildCommandArgs({ indexDir: 'idx', task, execution: { kind: 'source', node: 'n', maxLines: 4, continue: true } })).toEqual([
+      'src/cli.ts', 'source', '--index', 'idx', '--node', 'n', '--max-lines', '4', '--continue', '--json',
+    ])
+  })
+})
+
+describe('executeTask lookup/slice execution', () => {
+  async function run(task: RetrievalRegressionTask) {
+    const root = tmpRoot()
+    const fixtureDir = makeTinyFixture(root)
+    const configPath = join(root, 'core.json')
+    writeFileSync(configPath, '{}', 'utf8')
+    return executeTask({
+      repoRoot: process.cwd(),
+      configPath,
+      outputDir: join(root, 'out'),
+      task: { ...task, fixtureRoot: fixtureDir, sourceRoots: ['src'] },
+      config: sampleConfig,
+    })
+  }
+
+  it('executes a generic node lookup and a node slice with typed expectations', async () => {
+    const lookup = await run({
+      id: 'lookup-task',
+      title: 'Lookup',
+      execution: { kind: 'lookup', node: 'symbol:src/a.ts#add', depth: 1 },
+      expectations: { commandResult: { lookup: { expectedStatus: 'found', expectedNodeId: 'symbol:src/a.ts#add', expectedNodeKind: 'symbol' } } },
+    })
+    expect(lookup.status).toBe('executed')
+    expect(lookup.verdict).toBe('PASS')
+    expect(lookup.query).toBeUndefined()
+    const record = JSON.parse(readFileSync(lookup.artifactPaths!.taskExecutionPath!, 'utf8'))
+    expect(record.commandExecution).toMatchObject({ kind: 'lookup', status: 'executed', exitCode: 0 })
+
+    const slice = await run({
+      id: 'slice-task',
+      title: 'Slice',
+      execution: { kind: 'slice', node: 'symbol:src/a.ts#add', depth: 1 },
+      expectations: {
+        commandResult: {
+          slice: {
+            requiredNodeIds: ['file:src/a.ts', 'symbol:src/a.ts#add'],
+            requiredEdges: [{ source: 'file:src/a.ts', kind: 'defines', target: 'symbol:src/a.ts#add' }],
+            connectedPaths: [{ nodeIds: ['file:src/a.ts', 'symbol:src/a.ts#add'], edgeKinds: ['defines'] }],
+            forbiddenEdges: [{ source: 'symbol:src/a.ts#add', kind: 'defines', target: 'file:src/a.ts' }],
+            maxNodes: 2,
+          },
+        },
+      },
+    })
+    expect(slice.verdict).toBe('PASS')
+    expect(slice.assertionResults![0]).toMatchObject({ kind: 'commandResult', status: 'pass' })
+  }, 60000)
+
+  it('marks a failed lookup/slice expectation REGRESSION and an unknown node BLOCKED', async () => {
+    const wrongKind = await run({
+      id: 'lookup-wrong-kind',
+      title: 'Wrong kind',
+      execution: { kind: 'lookup', node: 'symbol:src/a.ts#add' },
+      expectations: { commandResult: { lookup: { expectedNodeKind: 'file' } } },
+    })
+    expect(wrongKind.verdict).toBe('REGRESSION')
+
+    const forbidden = await run({
+      id: 'slice-forbidden',
+      title: 'Forbidden node',
+      execution: { kind: 'slice', node: 'symbol:src/a.ts#add', depth: 1 },
+      expectations: { commandResult: { slice: { forbiddenNodeIds: ['file:src/a.ts'] } } },
+    })
+    expect(forbidden.verdict).toBe('REGRESSION')
+
+    const unknown = await run({
+      id: 'slice-unknown',
+      title: 'Unknown node',
+      execution: { kind: 'slice', node: 'symbol:src/a.ts#missing' },
+      expectations: { commandResult: { slice: { requiredNodeIds: ['symbol:src/a.ts#missing'] } } },
+    })
+    expect(unknown.status).toBe('blocked')
+    expect(unknown.verdict).toBe('BLOCKED')
+    expect(unknown.errors[0]).toContain('slice command exited with code')
+  }, 90000)
+
+  it('regresses when requested Android test evidence is empty', async () => {
+    const result = await run({
+      id: 'slice-empty-tests',
+      title: 'Empty test evidence',
+      execution: { kind: 'slice', node: 'symbol:src/a.ts#add', depth: 0, includeTests: true },
+      expectations: { commandResult: { slice: { requireAndroidTests: true } } },
+    })
+    // includeTests is requested, so the Android summary is produced (zero related tests on a non-Android node): REGRESSION, not PASS.
+    expect(result.verdict).toBe('REGRESSION')
+    expect(result.assertionResults![0]!.message).toContain('no related test methods')
   }, 60000)
 })

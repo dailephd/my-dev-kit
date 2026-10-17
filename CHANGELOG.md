@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.13.0 - 2026-10-17
+
+- Added twelve deterministic Android retrieval benchmark tasks with 52 assertions while preserving the fourteen-task core suite and its 64 assertions. Added typed lookup/slice regression assertions and packaged the public Android/Kotlin example with Android retrieval workflow documentation.
+- Corrected context ranking noise, task intent and excluded/dependency mentions, production-owner eligibility for instrumented tests, and declaration-local Android component-role detection. Corrected false single-layer owner conflicts while preserving genuine multi-owner ambiguity.
+- Preserved static-analysis boundaries: the example and retrieval evidence do not execute Gradle, an Android application, unit tests, or instrumented tests; runtime Compose rendering, resource resolution, dependency injection, and complete runtime navigation are not claimed.
+
 ## 1.12.6 - 2026-10-16
 
 - Added explicit ownership-oriented generic search: `search --query "<text>" --intent <relevance|ownership>`. Omitted intent and `relevance` keep the existing relevance ranking and output unchanged. `--intent` is valid only with `--query` and is rejected with every other search selector. `ownership` ranks the same candidate pool into static `direct-owner`, `production-candidate`, and `supporting-evidence` tiers with inspectable provenance, preserves each result's lexical `score` and match reasons, keeps tests, fixtures, generated files, and docs as supporting evidence, and recovers a grounded production owner one hop from a strongly matching seed file (indexed file dependencies, `imports`/`depends-on` edges, and resolved relative imports including NodeNext `.js` to `.ts`/`.tsx`) within fixed bounds, reporting bounds through `warnings`. Rankings are advisory evidence, not edit authorization, and recovered relationships are not persisted graph edges.

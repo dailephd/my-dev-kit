@@ -8,6 +8,7 @@ Run the commands from the repository root with Node.js and npm available. Python
 - `basic-python` — a small Python project for code-graph indexing and search behavior.
 - `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, conservative static `trace-view` behavior, and (v1.5.0) conservative static classification of its `User` interface.
 - `basic-react-tsx` — a small React/TSX project for frontend semantic indexing, exact string retrieval, React region retrieval, local component-tree retrieval, frontend graph views, and v1.3.0 frontend-reachability retrieval (route, browser-storage, UI markers).
+- `basic-android-kotlin` — a small Kotlin, Compose, Room, and Retrofit Android project for static Android retrieval (Compose screens, ViewModel, repository, manifest, navigation, resources, unit and instrumented tests). It is a static retrieval sample; Gradle, the Android SDK, and an emulator are not required and it has not been compiled or run.
 
 Normal users should run `npx @dailephd/my-dev-kit` inside their own project:
 
@@ -26,6 +27,10 @@ npx @dailephd/my-dev-kit search --index examples/basic-ts/.my-dev-kit --query "s
 # Python graph example
 npx @dailephd/my-dev-kit index --root examples/basic-python --src src --language python --out .my-dev-kit --json
 npx @dailephd/my-dev-kit search --index examples/basic-python/.my-dev-kit --query "greet" --limit 5 --json
+
+# Android Kotlin/Compose example (static retrieval sample; see its README)
+npx @dailephd/my-dev-kit index --root examples/basic-android-kotlin --src app/src/main --src app/src/test --src app/src/androidTest --out .my-dev-kit --json
+npx @dailephd/my-dev-kit search --index examples/basic-android-kotlin/.my-dev-kit --composable UserHomeScreen --json
 
 # Data-model example
 npx @dailephd/my-dev-kit index --root examples/basic-data-model-ts --src src --out .my-dev-kit --json
@@ -63,6 +68,20 @@ npx @dailephd/my-dev-kit source --index examples/basic-data-model-ts/.my-dev-kit
 
 Classification is conservative and static: categories, edit guidance, readiness, and risk labels are derived only from file paths, naming conventions, and existing index/semantic evidence, never from runtime or browser behavior. An index built without the classification analyzer (or an older index) is still fully usable — `search`/`lookup`/`slice`/`source` simply omit the classification fields.
 
+### Android example categories
+
+[`basic-android-kotlin`](basic-android-kotlin/README.md) covers seven categories of Android evidence, all retrieved statically from source:
+
+- A minimal Kotlin Android app (`MainActivity`, manifest entry).
+- A minimal Compose screen (`UserHomeScreen`, `UserSettingsScreen`).
+- Compose + ViewModel + Repository (`UserViewModel`, `UserRepository`).
+- A Room entity and DAO (`UserEntity`, `UserDao`, `AppDatabase`).
+- A Retrofit service (`UserApiService`).
+- Manifest and deep-link evidence (`AndroidManifest.xml`, routes, `strings.xml`).
+- Compose UI test and unit test source (`app/src/androidTest`, `app/src/test`).
+
+Index it with all three source roots (`app/src/main`, `app/src/test`, `app/src/androidTest`) as shown above; `--out .my-dev-kit` is relative to `--root`, so the index is `examples/basic-android-kotlin/.my-dev-kit`. It is a public example, not one of the internal Android fixtures under `tests/fixtures/` that the test suite and benchmarks use. It has not been compiled with Gradle, built with the Android SDK, or run on a device or emulator, and its tests have not been executed. It is packaged in v1.13.0 and can be used with the installed CLI (`npx @dailephd/my-dev-kit`). The Android coding-agent workflow using it is Workflow 18 in [WORKFLOWS.md](../docs/WORKFLOWS.md).
+
 See each example's `README.md` for its focused workflow.
 
 Generated `.my-dev-kit` directories are local output only and are not tracked in the repository.
@@ -74,5 +93,5 @@ Generated `.my-dev-kit` directories are local output only and are not tracked in
 Remove all generated example indexes with this shell-neutral Node.js command:
 
 ```sh
-node -e "for (const path of ['examples/basic-ts/.my-dev-kit','examples/basic-python/.my-dev-kit','examples/basic-data-model-ts/.my-dev-kit','examples/basic-react-tsx/.my-dev-kit']) require('fs').rmSync(path,{recursive:true,force:true})"
+node -e "for (const path of ['examples/basic-ts/.my-dev-kit','examples/basic-python/.my-dev-kit','examples/basic-data-model-ts/.my-dev-kit','examples/basic-react-tsx/.my-dev-kit','examples/basic-android-kotlin/.my-dev-kit']) require('fs').rmSync(path,{recursive:true,force:true})"
 ```

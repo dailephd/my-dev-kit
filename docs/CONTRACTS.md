@@ -80,6 +80,11 @@ test-command evidence" below.
 The capsule carries bounded evidence selected for downstream use: request and
 index identity, limits, required/optional/dropped context, query plan,
 candidates, focus, graph/source selection, retention, warnings, and adequacy.
+The query plan keeps the original and normalized query; `searchQueries` holds
+the effective lexical query, which differs from the normalized query only when
+`context` suppressed the low-information connector words `a`, `to`, `in`, and
+`the` from a multiword request (never from quoted, path, route, identifier, or
+single-term input). This does not change `search` behavior or any schema field.
 Role-aware output adds responsibility mapping, freshness, budget/truncation,
 evidence origin, and role-condition coverage.
 
