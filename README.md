@@ -136,6 +136,8 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 `@dailephd/my-dev-kit@1.12.6` is the current release. It adds ownership-oriented search and trustworthy symbol boundaries for bounded source retrieval while retaining ordinary relevance search and conservative fallback for unknown boundaries. It also includes affected-neighborhood incremental refresh from v1.12.5. Install with `npm install -g @dailephd/my-dev-kit`; see the [v1.12.6 release notes](CHANGELOG.md#1126---2026-10-16), [commands](docs/COMMANDS.md), and [roadmap](docs/ROADMAP.md#version-1126).
 
+The current development branch also contains the completed v1.13.0 Android retrieval benchmark, public example, and workflow-documentation implementation. It remains an unreleased candidate: the published v1.12.6 package does not include these changes. The candidate is awaiting the separate standardized pre-release audit and release preparation.
+
 ### v1.12.6 bounded retrieval precision
 
 Version 1.12.6 is a bounded retrieval-precision patch over the existing graph-guided workflow. Ownership search helps surface grounded production owners while retaining relevant tests and supporting evidence. Optional parser-derived `endLine` values let source retrieval and local source bundles return complete known symbols and keep continuation within their boundaries. Raw relevance search and conservative behavior for unknown or older-index boundaries remain supported. See [ROADMAP.md](docs/ROADMAP.md#version-1126).
