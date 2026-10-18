@@ -8,7 +8,7 @@ Use this guide to select and combine workflows. Use each tool's own command and 
 
 For dependency-aware future sequencing, shared contract governance, proposed version coordination, compatibility certification, and the gap-to-milestone plan, see [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md). The coordinated roadmap is planning authority for cross-repository sequencing only; repository-local `ROADMAP.md` files remain normative for their own version scope until explicitly reconciled.
 
-This guide consolidates the former Orchestrator ecosystem guide, the web/full-stack vertical-slice workflow, and the cross-tool recipes below. It preserves onboarding, greenfield work, version batches, patches, coordinated changes, documentation reconciliation, security, release, recovery, and handoff responsibilities. It does not change any roadmap or publish a new product capability.
+This guide consolidates the former Orchestrator ecosystem guide, the web/full-stack vertical-slice workflow, and the cross-tool recipes below. It preserves onboarding, greenfield work, version batches, patches, coordinated changes, documentation reconciliation, security, release, recovery, and handoff responsibilities. It does not change any roadmap or publish a new product capability. **Section 19** separately documents planner-led operating procedures based on the project workflow templates, including graph-guided retrieval, staged implementation, full-version delivery, forensic/editorial documentation, pre-release readiness, and controlled publication. These are complete lifecycle procedures, not newly implemented CLI commands.
 
 ### Evidence labels
 
@@ -736,6 +736,8 @@ Baseline/reference approval is a separate governance operation using the existin
 
 ## 10. Version, patch, extraction, and coordinated work
 
+These concise task recipes are supplemented by the complete stage/transition/gate procedures in [Section 19](#19-planner-led-operating-procedures-and-workflow-template-catalog).
+
 ### Feature-version workflow
 
 Preserve the roadmap's version goal, exclusions, and dependencies. Inspect current code before freezing batches. Group changes by shared owners, contracts, fixtures, and tests rather than equal-sized lists. Each prompt includes inherited state, bounded scope, exact edit areas, planner-authored tests, validation, Git authority, report paths, and stop conditions. Do not recreate earlier batches.
@@ -753,6 +755,8 @@ Record every repository/commit pair, package/API/schema dependency, compatibilit
 After explicit release authorization, publish upstream-first where dependencies require it. Reinstall and validate the exact published upstream in the consumer before releasing the consumer. No single current command coordinates all repository releases.
 
 ## 11. Documentation reconciliation and preservation
+
+For documentation-history loss use the separate forensic workflow first, then the editorial workflow only after preservation and factual correctness are established. See [Sections 19.7 and 19.8](#197-forensic-documentation-recovery).
 
 Inventory current implementation, scripts, commands, schemas, examples, package contents, and tracked documents. Compare both ways: unsupported documentation and implemented-but-undocumented behavior. Verify exact command names and flag combinations, installed-versus-checkout usage, output/exit semantics, links, and current-versus-planned status. Only then improve structure and language.
 
@@ -787,6 +791,8 @@ Warm-index-reuse is a Lab-owned experiment/reporting capability: Lab evaluates t
 Preserve partial agent outcomes, timeouts, usage limits, target immutability, missing metrics, and unmatched evidence. Use `report render`, `plots generate`, and `gallery build` only with the artifact families they support. Do not feed raw Observer or workflow-feedback files into a Lab renderer and assume compatibility.
 
 ## 13. Readiness, release, and publication
+
+The exact-candidate readiness and controlled publication procedures, including stop/transition rules, are specified in [Sections 19.9 and 19.10](#199-exact-candidate-pre-release-readiness).
 
 Implementation completeness, readiness, release preparation, and publication are different states. A feature or documentation task does not authorize moving between them automatically. Consult the target's [release guide](RELEASE.md) and its own CI/security rules.
 
@@ -909,3 +915,175 @@ The former Orchestrator `docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md` is intentional
 Other repositories should link to this file, not copy it, regenerate it through a hidden sync script, or require private `.txt` references. The installed my-dev-kit package should include this guide under its explicit package-files policy. Repository changes do not retroactively modify an already published npm tarball.
 
 Update recipes only after inspecting the relevant current command/contract owners. Keep facts, manual policies, trial results, limitations, and proposed improvements distinguishable. A newly documented composition becomes empirically verified only when an actual matched execution and its evidence are recorded.
+
+
+## 19. Planner-led operating procedures and workflow-template catalog
+
+This section documents the **end-to-end operating procedures** represented by the workflow templates in this project's source collection. It is a workflow router and lifecycle reference for the global planner, not a series of CLI pairings. Select the correct procedure before writing a coding-agent prompt. Execute only the approved stages and gates; a documented composition is not proof that the composition has passed an integrated test.
+
+These source templates are planner-side references, **not files shipped in the npm packages or available inside every project**. Coding-agent prompts must therefore be self-contained. Use the installed tools' actual commands, schemas and help; do not instruct agents to retrieve private template files they cannot access.
+
+### 19.1 Workflow source inventory and revisions
+
+- **Bounded graph retrieval:** graph-guided-bounded-retrieval-workflow-template(1)(1).txt. Reusable single-repository Kit retrieval method, not a full Orchestrator lifecycle.
+- **Direct versus staged implementation:** stage-context-workflow_revised_20260802.txt and its duplicate (1) copy; 20260802_retrieval-first, 20260814_precedent-first, and 20260819_project-contained variants. These are **revisions of one workflow**, not independent workflows to run together. The 2026-08-19 revision is the latest supplied one. It adds project-contained storage to the preceding mandatory retrieval and contract-precedent gates.
+- **Version delivery:** version-implementation-workflow.txt. The overarching sequence from approved version scope through batches, documentation, readiness, release preparation, publication and next-version selection.
+- **Documentation recovery:** forensic-documentation.txt. History-based recovery of compressed or deleted documentation, with preservation manifests, tests and anti-drift controls.
+- **Documentation editing:** editorial-documentation.txt. Separate audience, organization, relocation, navigation and language review after factual recovery/reconciliation.
+- **Immutable candidate readiness:** standardized-pre-release-audit-workflow.txt. Release-candidate tests, security, cross-platform and evidence gates without editing the candidate.
+- **Publication:** standardized-release-prompt-template-fixed(1).txt. Release PR through exact-CI, tag, GitHub Release and npm-last publication.
+- **Structural governance, not a task workflow:** global_planner_structural_contract.txt. Assigns architectural nodes, edges, contracts, structural paths, generated outputs and approvals to the planner, not the implementer.
+
+An older source filename does not confer priority over a later source or a currently approved repository manifest. Historical template versions may reference old package pins, incompatible index-retention policies or superseded publication order. Do **not** concatenate all versions into one prompt.
+
+### 19.2 Router: which procedure to activate
+
+The global planner first verifies the latest handoff and frozen work, repository and package identities, current accepted architecture, relevant source/contract authority, explicit output paths, and current approval status. The planner selects the procedure; the coding agent does not choose its own mode.
+
+- For bounded work with established owners, fixed scope and focused tests: **DIRECT_IMPLEMENTATION** (19.4), using bounded Kit retrieval (19.3).
+- For unresolved ownership, competing layers, new cross-tool protocol or public-contract family, substantial migration/extraction, a prior context failure or integrity-sensitive lifecycle work: **FULL_STAGE_CONTEXT** (19.5).
+- For a whole planned version: **version delivery** (19.6). Each implementation batch then uses direct or staged execution according to concrete activation facts.
+- For lost/compressed plans or release history: **forensic recovery** (19.7), possibly followed by **editorial** review (19.8).
+- For an implementation-complete exact candidate: **pre-release readiness** (19.9), with no implementation changes inside the audit.
+- Only after readiness, release preparation and distinct user authorization: **controlled publication** (19.10).
+- For an outcome requiring changes to more than one repository-owned contract: **coordinated cross-repository work** (19.11), with separate repository validation and dependency ordering.
+
+An architecture ambiguity discovered during a direct task requires the planner to issue a **new staged contract**, not a silent hybrid execution. Failures go to a bounded correction and dependent revalidation rather than automatically moving to the next phase. Implementation, commit, push, merge, release, deployment and npm publication are distinct permissions.
+
+### 19.3 Bounded graph-guided retrieval — Kit
+
+**Input:** planner-selected source roots, a validated index location and identity, the specific task question, and a known or suspected code owner.
+
+1. Verify repository/source-root identity and index freshness. Reuse and incrementally refresh a stable index for normal bounded work, or create separately named frozen before/after snapshots when the task requires them. Use the actual project's authorized index path; examples in older templates do not authorize arbitrary folders.
+2. Search concrete names, error strings or task terms. Begin with up to three focused searches and three strong exact candidate lookups; treat these as reassessment budgets, not hard correctness limits.
+3. Select the existing owner and extension point. Use a bounded depth-1 slice when edges matter; depth 2 only for an unresolved dependency/caller/test.
+4. Retrieve exact symbols/source blocks, then continuation and relevant local dependencies; use bounded line ranges only if symbol retrieval remains insufficient. Whole source/test files are a **last resort** and require a recorded evidence gap.
+5. Use a bounded architecture/implementation/test context request only when ordinary retrieval cannot resolve a specific owner, contract or test responsibility. A static capsule does not prove runtime behavior or override readiness.
+6. Stop exploring once the owner, intended change point, preserved contract and focused validation target are known. Refresh after editing only if subsequent retrieval depends on changed source.
+
+**Gate/output:** report selected nodes, queries, exact retrieved source, omitted or ambiguous evidence, full-file exceptions, and test target. If ownership is unresolved, return NEED_CONTEXT rather than reading the entire repository or choosing a new architecture. Do not delete old indexes required by an approved retention or audit contract.
+
+### 19.4 Bounded direct implementation — Kit plus native project validation
+
+**Entry:** planner has frozen the scope, current owner/extension point, prior accepted batch, exact source/test areas, test responsibilities, and Git authority.
+
+1. Verify branch, commit, manifest, worktree and package/tool identities.
+2. Perform targeted Kit retrieval **before implementing new behavior**, even in a continuation with an already known owner. For repair, use a valid existing index before deciding whether a refresh is necessary.
+3. Before materially extending a public artifact, identity model, schema, persistence boundary or protocol, inspect **analogous existing contracts, reusable types, provenance, identity rules, validators, numeric bounds, readers/writers, and nearest tests**. Record each witness or grounded absence.
+4. Implement only the approved behavior in its existing owner. Keep private implementation decisions inside delegated boundaries and preserve the planner's graph and governed file locations.
+5. Add behavior-derived positive/negative/boundary tests and update only directly affected documentation.
+6. Run focused tests followed by the repository's required normal verification once. Report exact exit codes, changed files, retrieval limitations, and any full-file fallback.
+
+**Exit:** PASS, PASS_WITH_NOTES, NEEDS_CORRECTION, BLOCKED, or an explicit escalation to full staging as justified. Do not initialize Orchestrator or run a pre-release/publication procedure merely for ceremony. Finishing one batch does not grant the next batch or release.
+
+### 19.5 Full staged implementation — Kit + Orchestrator; Lab separate
+
+**Entry:** at least one concrete full-stage activation condition, and a planner-approved mode, path contract, tests and release/commit authority.
+
+1. Resolve and **pin** actual published Kit and Orchestrator versions for the run unless an exact approved version is supplied. Keep tool installations, npm cache, temp, indexes and native run state under the approved project-owned roots.
+2. Start or resume the exact native Orchestrator mode: feature, repair, test, refactor, harden, extraction or greenfield. Record run ID, current native stage, actual generated prompt and packet, and repository identity.
+3. Follow the **current native stage metadata**. Invoke status/prompt/check as applicable; read generated instructions and named upstream artifacts. Do not invent a parallel fixed stage list or mark a stage merely because a file exists.
+4. For architecture, retrieve bounded Kit context and inspect canonical implementation precedents, contracts and nearest tests. The planner resolves proposed graph/schema/path changes.
+5. Before production editing, satisfy implementation-role freshness and adequacy requirements when the native stage demands them. Keep the generated capsule, audit and supplemental packet/report mutually consistent. Missing required evidence blocks; optional-only truncation is not automatically a blocker.
+6. Edit only while the implementation stage is **current and gate-authorized**. Record actual changed production files and stable symbols.
+7. Before test edits, use actual changed-surface/test-implementation evidence when required. Bind test responsibility IDs to those real changes; context reports and indexes are not native stage artifacts.
+8. Follow native judge, correction, final-report and export gates in their real order. Neither a handmade PASS nor a mark command bypasses RunIntegrityGate.
+
+**Exit evidence:** run and stage IDs, producer index/capsule/audit identity, adequacy/omission and disagreement, native artifact completion, actual implementation/tests, validation commands, correction history, and eligible final export. Lab is **not a per-stage dependency**: use it in a separately authorized coordinated validation or regression replay. The Orchestrator does not execute the coding agent or project tests.
+
+### 19.6 Whole-version implementation — the master lifecycle
+
+Use version-implementation-workflow.txt as a **sequence** over independent procedures, not as one undifferentiated coding-agent job:
+
+1. **Plan version:** preserve the exact agreed roadmap version, goal, dependencies, excluded future work, structural contracts, acceptance and required validation.
+2. **Split into batches:** group by shared ownership and independently testable contracts. A batch is one part of the **unchanged complete version scope**.
+3. **Implement batches:** planner chooses 19.4 or 19.5 for each. Incorporate earlier accepted reports; never recreate architecture already delivered by preceding batches.
+4. **Implementation-completeness/documentation reconciliation:** compare source and documentation **both ways**. Repair stale current facts but preserve future version goals and history.
+5. **Pre-release readiness:** run 19.9 against one exact candidate. PASS_READY_FOR_RELEASE_PREP does **not** mean publish-ready.
+6. **Release preparation:** finalize package/CLI version identity, lockfile, future-final release documents and safe packaged contents; repeat necessary validation.
+7. **Publication:** run 19.10 only with explicit authorization and satisfied external gates.
+8. **Next version:** verify the actual published/deferred state and next agreed roadmap version; return to step 1.
+
+Keep a transition ledger with exact candidate SHA, branch, verdict, evidence, blockers, and one next permitted action. Detailed batch histories belong in implementation reports and handoffs, **not** per-batch roadmap status.
+
+### 19.7 Forensic documentation recovery
+
+**Trigger:** missing/compressed roadmap versions, lost commands or workflow families, altered architecture pillars, vanished release entries, or suspected unauthorized cleanup.
+
+1. Freeze the actual Git/document state; classify planning, current-state, historical and mixed sections with separate authorities.
+2. Inspect history across branches, tags and relevant PRs to find the last comprehensive form, destructive drift, and later intentional changes.
+3. Inventory before/after headings, individual planned versions, command families, release history, project domains and size reductions; construct a drift timeline and decision ledger.
+4. Recover by **historical merge, not blind rollback**: restore comprehensive structure while keeping later approved decisions and verified release status. Preserve ambiguous future plans for review; do not silently delete them.
+5. Extend the existing documentation-preservation policy/manifest/checker and add tests proving unauthorized loss or compression fails. Do not build a parallel checker unnecessarily.
+6. Validate preserved headings/versions, real current facts, references, tests, diffs and documentation gates. A separate authorized recovery PR is not a feature release.
+
+**Exit:** restoration and relocation decisions with history witnesses, preservation-test evidence, final inventory and PASS/NEEDS_CORRECTION/BLOCKED. No package bump, tag, deployment, or publication.
+
+### 19.8 Editorial review after factual reconciliation
+
+**Entry:** the current technical facts and protected plans have been reconciled; the remaining task concerns readability and canonical placement.
+
+Classify public documents by audience and primary owner. Build protected inventories for commands, public contracts, roadmap versions and boundaries. Create a document-by-document editorial plan and **relocation ledger** before moving content. Polish tone, headings, terminology, links, examples, and navigation in the appropriate owner; keep short summaries/links in other documents where readers need them. Render the Markdown, check for lost content and run docs, link and preservation gates.
+
+**Exit:** editorial verdict plus exact relocation and protected-content comparison. Do not treat polished wording as verified behavior. If the audit uncovers missing history, return to 19.7. Editorial improvements never authorize version changes, removal of future plans or publication.
+
+### 19.9 Exact-candidate pre-release readiness
+
+**Entry:** implementation and documentation reconciliation complete; one frozen implementation candidate SHA and accepted handoff.
+
+1. Record branch, candidate SHA, target release version, **current** package version, CI matrix and dependencies.
+2. Validate controlled worktree and clean package installation; docs/current-state consistency; typecheck and build.
+3. Run the **full** functional regression suite plus version-specific acceptance, not focused subsets alone.
+4. Check package inventory with dry-run and then actual packed/installed-consumer verification where supported. Packaging completeness is not consumer behavior proof.
+5. Run applicable target security, fuzz/adversarial checks, Lab security validation and separate code-rot audit; keep scanner skips separate from PASS.
+6. Perform host-critical smokes, **exact-SHA** required platform CI, applicable hosted CodeQL plus alert disposition, and declared external dependency-contract checks. Use conditional Lab indexing/retrieval experiments where the candidate change warrants them.
+7. Verify candidate, target, fixture, installed package, and upstream immutability; final candidate SHA must equal starting SHA.
+
+**Failure:** required failure means NEEDS_CORRECTION; unavailable required access/evidence means BLOCKED. **Do not fix in the readiness workflow.** Make a separate bounded correction, obtain a new SHA, and rerun the invalidated readiness evidence (normally the full audit). One likely transient CI failure may receive **one** exact-SHA rerun with both results recorded; never rerun until green. Only all applicable required gates passing yields PASS_READY_FOR_RELEASE_PREP, **not** publication permission.
+
+### 19.10 Release preparation and standardized publication
+
+**Entry:** exact candidate has PASS_READY_FOR_RELEASE_PREP; required Git/release actions separately authorized.
+
+**Release preparation:** verify registry, branch and tag state; prepare the approved release branch; reconcile package and lockfile versions plus CLI version surface; finalize CHANGELOG, README and current-status prose into their intended **post-publication** state *before* the release PR; check package contents and the **actual tarball README/CHANGELOG**. Keep roadmap plans comprehensive. The release branch must not carry stale “latest previous version” or “pending publication” claims that would survive into the package.
+
+**Publication order under the later fixed template's npm-last invariant:**
+
+1. Push the release branch, open the release PR against the actual repository primary branch, and require PR CI and review.
+2. Merge by repository policy with authorization, verify merged-primary-branch CI and exact package/source identity.
+3. Create and push the annotated tag for the verified merged commit; inspect any required tag CI.
+4. Create/verify GitHub Release, tag target and release-channel parity.
+5. Complete **all remaining Git/file/package/GitHub mutations**, including temporary package/tarball cleanup, and verify npm target version availability.
+6. Run separately authorized **npm publish --access public as the final state-changing command**.
+7. Use **read-only** registry, tag, release and repository checks afterwards.
+
+**Failure/partial publication:** record exactly which operations completed; never blindly retry a publish, force-push or retag. Authentication requires user action. The older compact version-lifecycle template's publication sequence must not silently override the later fixed npm-last release invariant. Different repository release policies require explicit reconciliation rather than assumption.
+
+### 19.11 Coordinated cross-repository development and release
+
+**Trigger:** one objective changes behavior/contracts across more than one repository (not merely one agent using two CLI tools).
+
+1. The planner freezes a **cross-repository graph**: each root, branch, commit and release identity; owned nodes and edges; producer-consumer schemas; identity/freshness/version constraints; exact output/storage paths; public/private boundaries; testing and release order.
+2. Identify whether each link is an **existing supported handoff**, a user/agent composition, or a **new planned adapter**. Orchestrator 1.7.0 generic ECO intake has Kit 1.12.5 / Observer 0.10.0 exact pins and one native subject identity; current Lab does not yet supply the planned generic verification producer. Do not relabel latest packages or declare ECO-01 certification on fixture evidence.
+3. Split work along actual ownership and dependency boundaries. For each repository, separately choose direct/staged execution and preserve its manifest and Git history.
+4. Verify producer artifacts **as actually emitted** and consumer behavior **as actually accepted**, including negative version, schema, subject, environment, missing/stale evidence and snapshot replacement cases. Distinguish static, browser and execution-assurance evidence.
+5. Run project tests, installed-consumer/packaged validation, appropriate Lab/Observer checks, and exact candidate CI per changed repository; do not treat a successful consumer fixture as full real producer certification.
+6. Reconcile local docs/statuses in each repo, keeping **this** document as the central cross-tool workflow owner. If publication is separately approved, release necessary upstream dependencies first, then reinstall/test exact published upstream versions in downstream consumers before their releases.
+
+**Exit:** compatibility matrix, each repository's exact SHA/validation/remaining limits, real integration witnesses, ordered release decision, and a single planner handoff. There is no current all-four-repos implementation or release CLI.
+
+### 19.12 Handoff and re-entry
+
+A reusable handoff records the **last valid gate and first invalidated gate**; objective and frozen scope; branches/SHAs/tool versions; planner-owned architecture nodes/edges/paths; selected mode and native run/stage; producer evidence and native artifacts; code/tests/CI; accepted decisions, failures, unresolved risks, permissions, and **one exact next permissible action**.
+
+A failed implementation test routes to bounded correction and dependent test validation. Failed documentation preservation routes to historical recovery, not merely language polishing. Failed readiness routes to a new candidate and re-audit. A blocked producer/consumer contract routes to compatibility design, not forced acceptance. Interrupted publication first checks external tag/registry/release facts before retrying. No next stage or commit is authorized by a previous stage's success alone.
+
+Return reports in the final response unless the planner specifies an **exact authorized persistent path**. Native Orchestrator artifacts remain mandatory within native runs.
+
+### 19.13 Structural and evidence safeguards across all procedures
+
+The planner owns architectural nodes, edges, schemas, public contracts, significant directories, **all governed report/cache/index/temp paths**, and acceptance tests. The coding agent can choose private implementation internals only inside delegated boundaries. A project's manifest and approved path contract constrain every workflow; an unspecified output file name or conflicting placement rule is not an invitation to invent a folder.
+
+Where templates disagree—**stable incremental index versus destructive per-version index cleanup; user-global tooling versus project-contained tool/cache state; or publication ordering**—record the conflict and use the currently approved project contract. Protect pre-existing indexes, runs and audit evidence; do not delete for cosmetic hygiene. Keep project-owned state under authorized project roots, with an expressly approved isolated-consumer workspace exception when exact package acceptance requires it.
+
+Keep verdicts distinct: recipe documented is not recipe executed; static retrieval does not prove runtime behavior; locally passing tests do not prove cross-platform readiness; historical fixed-fixture compatibility does not certify latest producer versions; readiness is not publication. Record the actual execution evidence and limitations.
