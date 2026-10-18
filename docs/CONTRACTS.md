@@ -217,13 +217,22 @@ untrusted-input, and generated-output safety.
 
 - my-dev-kit owns repository indexing, bounded retrieval, and static evidence.
 - my-dev-kit-orchestrator owns staged workflows, prompts, artifacts, readiness,
-  lifecycle, judge/correction routing, and publication authorization.
+  lifecycle, judge/correction routing, and final-report eligibility.
 - my-dev-kit-lab owns experiments, audits, security validation, evidence and
   reporting, and release-readiness support.
+- my-frontend-observer owns browser observations, visual/reference contracts,
+  bounded runtime context, and the human-controlled visual-change lifecycle.
+  It does not edit target source or grant automatic acceptance.
 
 Orchestrator guides agents to run my-dev-kit. It does not turn my-dev-kit into a
 workflow engine. Lab evaluates evidence and agreement. It does not become the
 production retrieval runtime.
+
+Publication authority remains with the user and repository release policy.
+Evidence compatibility is specific to the receiving contract and exact producer
+version; the latest releases are not automatically a certified ecosystem tuple.
+The [ecosystem workflow guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#918-command-surface-compatibility-map)
+owns the current handoff map and its limitations.
 
 ## Contract change discipline
 

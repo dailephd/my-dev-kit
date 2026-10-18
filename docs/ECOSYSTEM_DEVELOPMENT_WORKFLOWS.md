@@ -26,7 +26,20 @@ The recipes in this guide are agent compositions. A successful execution must su
 - Lab: [Commands](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md), [security validation](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/security-validation-framework.md).
 - Observer: [Commands](https://github.com/dailephd/my-frontend-observer/blob/master/docs/COMMANDS.md), [workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md), [contracts](https://github.com/dailephd/my-frontend-observer/blob/master/docs/CONTRACTS.md).
 
-The documentation review used source package versions my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.5.0`, and Observer `0.8.1`. These are a review baseline, not permanent installation pins or a new claim about registry availability. Record the versions actually installed for every run. Keep one version per tool fixed during a run. Pin exact versions for reproduction, compatibility experiments, and release validation.
+The original documentation review used my-dev-kit `1.12.3`, Orchestrator `1.4.1`, Lab `0.5.0`, and Observer `0.8.1`. Preserve that historical review separately from the current release snapshot below.
+
+### Current reviewed releases — 2026-10-17
+
+| Tool | Published version | Reviewed default-branch commit | Current scope relevant to this guide |
+| --- | --- | --- | --- |
+| my-dev-kit | [1.13.0](https://github.com/dailephd/my-dev-kit/releases/tag/v1.13.0) | `67c2f6c7d79eab0acc186b23b123fa40bfc50dbf` | Static retrieval, Android/Compose ownership and test evidence, incremental refresh, Android benchmarks/examples/workflows. |
+| Orchestrator | [1.7.0](https://github.com/dailephd/my-dev-kit-orchestrator/releases/tag/v1.7.0) | `b9b5288af2600b84b29b28edd69470927ad6676c` | Lifecycle/telemetry plus generic evidence requirements, inspection, and readiness integration with specific native adapters. |
+| Lab | [0.9.3](https://github.com/dailephd/my-dev-kit-lab/releases/tag/v0.9.3) | `24994168a7ba9cada40915d08a736b4b4902d1a3` | Eight experiments, explicit real-agent campaigns, saved prompt comparison, multi-source galleries, audits/security/tutorials. |
+| Observer | [0.10.1](https://github.com/dailephd/my-frontend-observer/releases/tag/v0.10.1) | `ad18f1830b3c26d25f08ff1edcf60b724dfcc575` | Browser/reference contracts, project checks, bounded context, human-controlled visual-request correction and acceptance. |
+
+Orchestrator's v1.7.0 release tag points to `074091ec4f898970bc95d1422705d77f62ee4827`; the reviewed default branch contains later documentation changes. These are dated inspection facts, not permanent installation pins. Record the installed package and source identities for each run and keep them fixed during that run.
+
+**This latest-release snapshot is not a tested or certified four-tool bundle.** Orchestrator 1.7.0's generic native adapters accept exactly Kit **1.12.5** and Observer **0.10.0**. Latest Kit 1.13.0 and Observer 0.10.1 do not satisfy those adapter pins. A run has one native subject identity; Kit static and Observer runtime subjects cannot be merged or relabeled into one identity. Lab 0.10.0 / LAB-EVIDENCE-01 remains the planned producer prerequisite for ECO-01. See the compatibility map and compatibility rehearsal below before attempting evidence intake.
 
 ## 2. Responsibility and execution boundaries
 
@@ -36,9 +49,9 @@ The documentation review used source package versions my-dev-kit `1.12.3`, Orche
 
 **my-dev-kit** owns indexing, search, exact lookup, bounded source, slices, graph views, data-model/lineage evidence, context capsules, and graph differences. Classification and graph edges are conservative static evidence, not runtime reachability, security findings, or complete test coverage.
 
-**Orchestrator** owns staged prompts, native artifacts, readiness, lifecycle, judge/correction routing, and export. It does not run the agent, my-dev-kit, Docker, databases, project tests, Observer, Lab, or publication. Its bounded Observer consumer is a library boundary, not automatic browser integration.
+**Orchestrator** owns staged prompts, native artifacts, readiness, lifecycle, judge/correction routing, and export. It does not run the agent, my-dev-kit, Docker, databases, project tests, Observer, Lab, or publication. Its bounded Observer consumer and native-evidence adapters validate explicit inputs; `status --json` and `check --json` inspect the selected run, while library APIs persist a run evidence snapshot. Neither path launches a browser or executes a producer.
 
-**Observer** owns local browser observations, comparisons, executable frontend contracts, external-reference evidence and fidelity, bounded runtime context, and explicit runtime/static correlation. It never edits target source. Runtime target identity, reference-region identity, and static source identity remain different concepts.
+**Observer** owns local browser observations, comparisons, executable frontend contracts, external-reference evidence and fidelity, bounded runtime context, explicit runtime/static correlation, and the human-controlled visual-request lifecycle. It never edits target source. Runtime target identity, reference-region identity, and static source identity remain different concepts.
 
 **Lab** owns supported experiments, audits, automated security validation, and reports. It supplements rather than replaces project tests and browser evidence. It is not a mandatory per-edit step, a generic web penetration tester, or a universal consumer of arbitrary ecosystem feedback files.
 
@@ -64,12 +77,16 @@ RUNTIME_EVIDENCE: <routes, states, viewports, targets and required checks>
 ASSURANCE: <required Lab/project checks, optional checks, failure thresholds>
 CORRECTION_LIMIT: <default three failed-candidate correction cycles>
 AUTHORITY: <separate edit, commit, push, merge, release and deployment permissions>
-REPORT: docs/reports/<task-slug>-implementation.md
-FEEDBACK: docs/reports/<task-slug>-ecosystem-feedback.md
-EVIDENCE_ROOT: .my-dev-kit-workflows/<task-slug>/
+DOCUMENTATION_OWNER: <existing canonical document for any required update>
+REPORT: FINAL_RESPONSE_ONLY | <exact authorized project-owned report path>
+FEEDBACK: FINAL_RESPONSE_ONLY | <exact authorized project-owned feedback path>
+EVIDENCE_ROOT: <exact authorized project/tool output path, or NONE>
+OUTPUT_POLICY: <create/reuse/overwrite, ignore/track, retention and cleanup rules>
 ```
 
-An existing project report convention may replace the two report paths, but the prompt must resolve exact paths before execution. Do not scatter alternative reports across directories. Generated indexes, observations, logs, test data, and temporary configuration belong in the ignored evidence root or an established project-owned tool directory. Preserve native tool filenames and returned artifact IDs.
+Read the project's placement manifest and applicable agent instructions first. Reuse the existing owner and resolve exact paths before a write, including whether a directory may be created and whether existing output may be reused or overwritten. The default report and feedback destination is the final response unless a task explicitly requires a persisted file under an established owner. Native Orchestrator run artifacts remain required when full staging is selected; the final-response default does not waive its native contracts. Example paths in this guide illustrate tool syntax and do not independently authorize new folders.
+
+Generated indexes, observations, logs, test data, and temporary configuration belong in the authorized ignored evidence root or established tool directory. Some Lab external-local experiments require output outside the immutable target; declare a separate experiment workspace and its exact paths before execution. Preserve native tool filenames, artifact IDs, and existing evidence. Do not invent parallel documentation/report owners.
 
 Use dedicated test data and a non-production database. Preserve pre-existing work and untracked files. Do not reset, clean, stash, force push, rewrite a user's branch, or delete another task's evidence. Never remove the before-index or approved browser baseline while later checks still reference it. Do not commit secrets, session credentials, private browser captures, raw context dumps, package archives, or generated logs.
 
@@ -86,7 +103,7 @@ npx @dailephd/my-frontend-observer --help
 
 Verify versions and command-specific help from the actual installation before using an example. A local dependency can determine what `npx` resolves. Record that identity rather than assuming `npx` always downloads the newest release.
 
-Lab `security validate`, `audit`, the `tutorial` family, and experiment discovery/execution are installed CLI commands in the reviewed `0.5.0` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
+Lab `security validate`, `audit`, the `tutorial` family, and experiment discovery/execution are installed CLI commands in the reviewed `0.9.3` surface. `npm run security:validate` and `npm run audit` are contributor aliases run from a Lab checkout, not commands to run in an arbitrary target project. Lab's global `--workspace` precedes the command:
 
 ```powershell
 npx @dailephd/my-dev-kit-lab --workspace ".my-dev-kit-workflows/<task>/lab" audit --target "<absolute-target>" --types code-rot --format text,json --fail-on none
@@ -103,11 +120,13 @@ my-dev-kit-lab experiment describe --experiment warm-index-reuse
 my-dev-kit-lab experiment run --experiment warm-index-reuse [options]
 ```
 
-The `--kit-command <command>` option is specific to `warm-index-reuse`; it is not a context-strategy-comparison option. The registered Lab plugins are `context-strategy-comparison` and `warm-index-reuse`.
+The registered Lab plugins are `context-strategy-comparison`, `warm-index-reuse`, `incremental-change-staleness`, `context-window-scaling`, `retrieval-precision-recall`, `retrieval-query-strategy-comparison`, `context-pack-generation`, and `agent-success-rate`.
 
-The warm-index experiment prepares one my-dev-kit index per benchmark-project group and reuses it across that group's tasks. Each task also receives a matched raw-full-file baseline. Deterministic fake-agent correctness and token evidence are produced; fake-agent token evidence is simulated harness telemetry, not provider billing telemetry. Real Codex/Claude warm-index campaigns remain future Lab scope.
+`--kit-command <command>` is supported by the seven Kit-backed plugins, with `agent-success-rate` accepting it only in explicit real mode. It is not a `context-strategy-comparison` option. Inspect `experiment describe` and the [Lab command reference](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md) for each plugin's mutually exclusive fixture/external-local/real-mode inputs.
 
-Warm-index executions produce bounded `report.json`, `report.txt`, and `report.html` outputs with the warm-index evidence section. Plot generation supports four warm-index families: amortized index cost, raw versus retrieved context size, fake-agent correctness, and cumulative fake-agent token usage.
+The ordinary warm-index experiment prepares one my-dev-kit index per benchmark-project group and reuses it across that group's tasks. Each task also receives a matched raw-full-file baseline. Its default fake-agent correctness/token evidence is deterministic harness telemetry, not provider billing telemetry. Since Lab 0.5.2, explicit real warm-index campaigns are also supported: `--campaign codex-full|claude-full|codex-timeout-isolation --include-real-agents` selects one provider and the frozen bundled production corpus. Campaign mode does not accept an external `--target`; optional `--case` and `--timeout-ms` constrain the run. This is separate from the `agent-success-rate` campaign/checkpoint interface. Real provider execution requires explicit selection and authorization; saved-report review does not.
+
+Warm-index executions produce bounded `report.json`, `report.txt`, and `report.html` outputs with the warm-index evidence section. Plot generation supports four warm-index families: amortized index cost, raw versus retrieved context size, agent correctness, and cumulative agent token usage. Ordinary fake-agent runs retain simulated telemetry; explicit real campaigns report the selected provider evidence and preserve unavailable metrics.
 
 Lab's installed tutorial surface is also current in this baseline:
 
@@ -131,6 +150,15 @@ These two labels are planner policies, not Orchestrator CLI modes. Do not build 
 A single continuous coding-agent session may advance through multiple native stages, but only in the order and under the gates the tool actually provides. The feature lifecycle still has separate `implementation` and `test-implementation` stages. One session is not permission to collapse stages, pre-mark artifacts, bypass readiness, or make tests optional.
 
 If bounded inspection exposes a genuine unresolved architectural decision, preserve completed evidence and report the exact decision. Do not substitute an arbitrary owner or automatically restart an entire workflow.
+
+### Tool-local starting points
+
+A useful task may need only one tool. Start with its existing local workflow and add another authority only when the task needs its evidence:
+
+- **Kit:** resolve an implementation owner, retrieve bounded dependency/test evidence, or choose changed-files versus affected-neighborhood incremental refresh. The Android coding-agent walkthrough also exercises wrong-layer choices and ambiguity. See [Kit workflows](WORKFLOWS.md).
+- **Orchestrator:** inspect and recover a saved native run, or use proof-only for a declared verification responsibility without a planned production change. Prompt generation and lifecycle completion remain distinct from execution. See [Orchestrator workflows](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/WORKFLOWS.md).
+- **Lab:** validate the deterministic agent-success harness before an explicit real campaign, or compare completed prompt-template campaigns with `report compare-prompts` and browse them through `gallery build --source`. Saved-report comparison invokes no provider and must retain `INCOMPARABLE`/`UNVERIFIED` evidence. See [Lab workflows](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/WORKFLOWS.md).
+- **Observer:** rehearse a contract with a deliberately failing protected-area candidate and then a corrected candidate against the same frozen baseline. This tests whether the declared guard catches the intended regression before relying on it for routine changes. See [Observer workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md).
 
 ## 5. Static context and evidence refresh
 
@@ -270,7 +298,7 @@ Refresh test context after production changes. Complete the use-case and regress
 
 ### 8.4 Observer evaluation and correction
 
-Prefer Observer 0.8.1's project workflow for ordinary repeated coding-agent checks. Resolve configuration once, freeze its acceptance inputs, and retain the same baseline alias throughout the task:
+Use Observer 0.10.1's project workflow, introduced in 0.8.1, for ordinary repeated coding-agent checks. Resolve configuration once, freeze its acceptance inputs, and retain the same baseline alias throughout the task:
 
 ```powershell
 npx @dailephd/my-frontend-observer init --url "http://127.0.0.1:<port>/<route>" --viewport 1280x720 --targets-file "<targets.json>"
@@ -330,7 +358,7 @@ Change the shared owner, test each affected contract, inspect graph/Git differen
 
 **Input:** the user's selected reference or existing design precedent. Import and explicitly approve the reference, author only the design requirements that matter, bind reference regions to runtime targets, and retrieve the responsible component and style precedent. Implement, capture the candidate, evaluate fidelity and preservation, then correct from failed evidence.
 
-**Output:** evidence-backed agreement with selected measurable requirements. Use `view` for optional human inspection. The viewer is not a source editor, automatic annotation author, screenshot-cloning engine, or approval substitute. Record unsupported styling requirements rather than claim a complete visual match.
+**Output:** evidence-backed agreement with selected measurable requirements. Use `view` for optional human inspection. Passive viewer inspection does not change the evidence. Explicit project-aware annotation, activation, handoff, check, correction, and acceptance actions can persist their documented authoring/workflow artifacts; they never edit target source. The viewer is not an automatic annotation author, screenshot-cloning engine, or approval substitute. Record unsupported styling requirements rather than claim a complete visual match.
 
 ### 9.4 Golden runtime extraction
 
@@ -457,7 +485,9 @@ Inspect the run result and canonical artifacts: `artifacts/tutorial.webm`, reque
 
 **Output:** assertion-backed runtime evidence plus synchronized human-facing tutorial artifacts. The WebM is reviewable documentation, not proof by itself. Tutorial generation does not replace project tests, Observer acceptance contracts, security validation, or release authorization.
 
-## 9.15 Command-surface compatibility map
+<a id="915-command-surface-compatibility-map"></a>
+
+### 9.18 Command-surface compatibility map
 
 This section comes from a command-by-command review of all four current public surfaces, not only their named workflow guides. Use these five compatibility classes when composing tools:
 
@@ -467,57 +497,58 @@ This section comes from a command-by-command review of all four current public s
 - **Complementary evidence:** both tools inspect the same candidate but neither consumes the other's artifact.
 - **Not directly compatible:** similar-looking paths or JSON are different contracts and must not be connected without a documented adapter.
 
-### my-dev-kit to Orchestrator
+#### my-dev-kit to Orchestrator
 
 - **Manual synthesis:** `my-dev-kit context --out ... --audit-out ...` produces the raw capsule/audit evidence referenced by Orchestrator's implementation/test supplemental packet and retrieval-report contracts. Orchestrator does not accept a raw context capsule as a native artifact. The agent populates the fixed supplemental wrappers, preserving producer identity, freshness, adequacy, truncation, responsibility mappings, and the raw evidence paths.
 - **Manual synthesis:** `search`, `lookup`, `slice`, and `source` evidence can support `reports/architecture-context-retrieval-report.txt` and `artifacts/architecture-context-packet.txt`. One top-ranked result is not a completed architecture packet.
 - **Manual synthesis:** `graph-diff --before ... --after ... --json` is useful verification/judge evidence for changed ownership and relationships, but Orchestrator has no direct graph-diff ingestion command.
+- **Version-pinned evidence adapter:** Orchestrator 1.7.0 can inspect a generic evidence envelope that references an accepted native Kit capsule/audit pair and can persist a run snapshot through `replaceRunEcosystemEvidence(...)`. Its native adapter requires Kit 1.12.5. Generic evidence augments readiness; it does not turn the capsule into a native implementation packet, execute a test, or certify a tuple.
 
-### my-dev-kit to Observer
+#### my-dev-kit to Observer
 
 - **Programmatic adapter:** Observer's released `deriveRuntimeStaticCorrelations(...)` / `attachRuntimeStaticCorrelations(...)` library surface accepts plain caller-supplied static candidate records. A small adapter may map my-dev-kit file/symbol IDs and evidence references into those records. Do not pass raw my-dev-kit search/lookup/context JSON directly.
 - **Manual synthesis:** Observer target IDs, test IDs, visible text, or failure diagnostics can become my-dev-kit `search --ui`, `source --contains`, ordinary `search --query`, or exact-node follow-up questions. This is a runtime-to-source investigation, not automatic causal ownership.
 - **Not directly compatible:** Observer `view --context-file` accepts exactly one Observer `BoundedAgentContextArtifact` schema value. It does **not** accept a my-dev-kit context capsule or retrieval audit.
 
-### Observer to Orchestrator
+#### Observer to Orchestrator
 
-- **Direct programmatic handoff:** Orchestrator's `consumeBoundedObserverEvidence(...)` mirrors and validates Observer's `my-frontend-observer/bounded-agent-context` schema `1.0.0`. The producer artifact can therefore cross this boundary without inventing a second schema.
-- This is a **library-to-library boundary**, not an Orchestrator CLI command. Orchestrator does not launch Observer.
+- **Direct programmatic handoff:** Orchestrator's pure `consumeBoundedObserverEvidence(...)` validates the Observer-owned `my-frontend-observer/bounded-agent-context` schema `1.0.0`, producer name and nonempty version, native identity, bounds, and frontend-change-review projection. It does not impose the generic ECO adapter's 0.10.0 pin, so a valid 0.10.1 artifact can use this separate library boundary. Its readiness result does not establish installed-pair certification.
+- **Version-pinned generic ECO intake:** Orchestrator 1.7.0's separate generic adapter accepts exactly Observer 0.10.0 native context. `status --json` and `check --json` expose the selected run's `ecosystem` projection; `replaceRunEcosystemEvidence(...)` persists its evidence snapshot. There is no standalone `check --ecosystem-evidence` flag. Neither interface launches Observer, and 0.10.1 does not pass this generic adapter's exact-version requirement.
 - **Manual synthesis:** Observer `check [baseline] --json` is concise final-candidate runtime acceptance evidence for Orchestrator verification/final reporting. No current Orchestrator CLI parses that JSON automatically.
 
-### my-dev-kit and Orchestrator to Lab
+#### my-dev-kit and Orchestrator to Lab
 
 - **Programmatic adapter:** Lab's released stage-context experiment support can consume explicit my-dev-kit context-capsule/retrieval-audit paths and Orchestrator `WorkflowInstructionPacket` inputs through its documented `v043StrategyInputs` / `v043RunAssurance` programmatic configuration.
 - There are **no installed CLI flags** that turn arbitrary live capsule/audit/packet paths into that six-strategy stage-context experiment. Use the programmatic experiment path or a separately authorized source-checkout adapter.
 - **Direct experiment ownership:** Lab's `context-strategy-comparison` plugin owns the `raw-full-file` versus `my-dev-kit-guided` comparison. A caller should not pre-run both strategies and then relabel unrelated outputs as one Lab experiment.
-- **Direct command injection exists only where documented:** `my-dev-kit-lab demo final ... --kit-command <command>` accepts an explicit my-dev-kit-compatible command for the final-demo pipeline, and `experiment run --experiment warm-index-reuse --kit-command <command>` accepts the warm-index-specific command. Context-strategy-comparison does not expose `--kit-command`.
+- **Direct command injection exists only where documented:** `my-dev-kit-lab demo final ... --kit-command <command>` accepts an explicit my-dev-kit-compatible command for the final-demo pipeline, and the seven Kit-backed experiment plugins accept `--kit-command` under their own mode constraints (`agent-success-rate` requires real mode). Context-strategy-comparison does not expose `--kit-command`.
 
-### Lab to my-dev-kit
+#### Lab to my-dev-kit
 
 - **Manual synthesis:** JSON/text findings from `audit --types code-rot|security` and `security validate` can supply file paths, categories, or candidate surfaces for my-dev-kit `search`, `lookup`, `slice`, and bounded `source` inspection.
 - A Lab code-rot finding is a candidate, not deletion authority. Use graph/source evidence to check consumers and ownership before changing code.
 - A Lab security finding is not a source owner. Use my-dev-kit to find validators, boundaries, callers, data paths, manifest/component evidence, or tests before repair.
 
-### Lab to Observer
+#### Lab to Observer
 
 - **Direct file-type handoff:** Lab tutorial runs can emit PNG screenshots. A deliberately selected tutorial screenshot can be supplied to Observer `import-reference <image-file>`, because that command accepts PNG/JPEG/WebP input. It becomes only an imported external reference until explicitly approved and supplied with selected requirements/bindings.
 - This is useful for source-to-target extraction or UI reconstruction when the tutorial state is the selected visual precedent. The screenshot does not transfer tutorial assertions, behavior, authentication, or application state.
 - **Not directly compatible:** Lab tutorial manifests, experiment reports, security reports, and audit reports are not Observer observation/comparison/contract artifacts.
-- **Not directly compatible:** Lab's gallery currently does not consume tutorial manifests, and its `--visualizations` inputs refer to Lab visualization-demo artifacts rather than arbitrary my-dev-kit graph SVG/DOT directories or Observer evidence roots.
+- **Lab-local gallery handoff:** Lab 0.9.3 `gallery build --source <path>` consumes supported Lab outputs, including tutorial manifests, warm-index outputs, and saved prompt comparisons. Its legacy `--visualizations` input refers to Lab visualization-demo artifacts. Neither route makes arbitrary Kit graph SVG/DOT directories or Observer evidence roots into supported gallery inputs.
 
-### Observer to Lab
+#### Observer to Lab
 
 - **Complementary evidence:** run Observer project acceptance and Lab security/audit against the same exact candidate revision when both runtime presentation and risk evidence matter.
 - **Not directly compatible:** Lab report renderers, plot generators, galleries, and experiment commands do not generically ingest Observer observation/comparison/evaluation artifacts.
 - A future experiment may deliberately model Observer evidence, but do not claim that integration until a registered experiment/adapter exists.
 
-### Orchestrator to Lab and Observer
+#### Orchestrator to Lab and Observer
 
 - **Manual synthesis:** Orchestrator's verification/final-report stages may reference Lab security/audit outputs and Observer project-check results. They remain independent authorities with their own pass/block semantics.
 - **Not directly compatible:** `my-dev-kit-orchestrator export` is a human/coding-agent handoff document, not a machine input accepted by my-dev-kit, Lab, or Observer.
 - **Complementary evidence:** an Orchestrator `harden`, `repair`, `refactor`, `feature`, or `extraction` run can coordinate the other tools, but the coding agent executes those commands externally and records exact evidence.
 
-### Same-target convergence
+#### Same-target convergence
 
 Several of the most useful compositions have no artifact pipe at all:
 
@@ -529,26 +560,28 @@ Several of the most useful compositions have no artifact pipe at all:
 
 Record the same Git commit/worktree identity and deterministic runtime/test data for all of them. Never combine evidence from different candidates into one PASS.
 
-### Pairwise coverage checklist
+#### Pairwise coverage checklist
 
 The command-surface audit explicitly checked every directed pair among the four tools:
 
-- **my-dev-kit → Orchestrator:** manual wrapper/synthesis around raw capsule/audit and architecture evidence.
+- **my-dev-kit → Orchestrator:** manual supplemental wrapper/synthesis around raw capsule/audit and architecture evidence, plus exact-version native evidence inspection through the 1.7.0 generic intake contract.
 - **Orchestrator → my-dev-kit:** manual query/request derivation from the active stage, supplemental template, blocker, or correction target. No Orchestrator artifact is a direct my-dev-kit CLI input.
 - **my-dev-kit → Observer:** programmatic static-candidate adapter for runtime/static correlation, plus manual source lookup from known runtime identifiers.
 - **Observer → my-dev-kit:** manual runtime-target/test-id/text/route-to-static investigation. No Observer artifact is a direct my-dev-kit CLI input.
 - **my-dev-kit → Lab:** Lab-owned guided-retrieval and warm-index experiments plus explicit `demo final --kit-command`; stage-context capsule/audit consumption is programmatic rather than a generic installed-file flag.
 - **Lab → my-dev-kit:** manual finding-to-owner/dependency investigation.
 - **Orchestrator → Observer:** external execution coordinated by the coding agent; Orchestrator does not launch Observer.
-- **Observer → Orchestrator:** direct bounded-agent-context wire-contract consumption at the library boundary; concise `check --json` remains manually cited.
+- **Observer → Orchestrator:** pure bounded-agent-context consumption plus separately version-pinned generic evidence inspection; Observer `check --json` results remain manually cited.
 - **Orchestrator → Lab:** programmatic `WorkflowInstructionPacket` / stage-context experiment inputs, plus ordinary external assurance execution.
 - **Lab → Orchestrator:** manual verification/final-report references to security/audit/experiment evidence; no generic report importer.
 - **Observer → Lab:** complementary same-candidate evidence only in the current public surfaces; no generic Observer-artifact experiment/report input.
 - **Lab → Observer:** direct image-file compatibility for deliberately selected tutorial screenshots into `import-reference`; other Lab artifacts are not Observer inputs.
 
-This pairwise inventory is the completeness check for the current four-tool public surfaces. Re-run it whenever a tool adds a command, artifact family, installed CLI route, or public library handoff.
+This pairwise inventory records the reviewed handoff classes; it is not an execution test of all twelve directed pairs. Re-run it whenever a tool adds a command, artifact family, installed CLI route, or public library handoff.
 
-## 9.16 Audit finding to dependency-safe repair
+<a id="916-audit-finding-to-dependency-safe-repair"></a>
+
+### 9.19 Audit finding to dependency-safe repair
 
 **Use when:** Lab reports a code-rot or security candidate and you need to decide what actually owns the behavior before editing.
 
@@ -561,7 +594,9 @@ This pairwise inventory is the completeness check for the current four-tool publ
 
 **Output:** a repair justified by both the original finding and the actual source dependency/ownership evidence. A Lab candidate alone is never permission to delete or rewrite code.
 
-## 9.17 Runtime failure to source candidate to correlated context
+<a id="917-runtime-failure-to-source-candidate-to-correlated-context"></a>
+
+### 9.20 Runtime failure to source candidate to correlated context
 
 **Use when:** Observer reports a failing target/contract/reference result and a coding agent needs a small source candidate set.
 
@@ -571,11 +606,13 @@ This pairwise inventory is the completeness check for the current four-tool publ
 4. When a programmatic adapter is available, map those file/symbol candidates into Observer's plain static-evidence records and call `deriveRuntimeStaticCorrelations(...)` / `attachRuntimeStaticCorrelations(...)`.
 5. Produce the Observer-owned `BoundedAgentContextArtifact` with correlated/ambiguous/unavailable status preserved.
 6. Optionally inspect that exact artifact with `my-frontend-observer view --context-file <artifact.json>`.
-7. In staged work, pass the same artifact to Orchestrator's `consumeBoundedObserverEvidence(...)` boundary and record its independent readiness result.
+7. In staged work, pass the valid native artifact through Orchestrator's pure `consumeBoundedObserverEvidence(...)` boundary and record its independent readiness result. This pure API validates the bounded schema/projection without the separate generic ECO adapter's exact-version pin. Use the generic intake only when its stronger version/subject requirements also hold; never change producer metadata to make them hold.
 
 **Output:** bounded runtime evidence plus a conservative static candidate set. "Correlated" still means evidence association, not proven causal ownership.
 
-## 9.18 Real stage-context experiment from current workflow evidence
+<a id="918-real-stage-context-experiment-from-current-workflow-evidence"></a>
+
+### 9.21 Real stage-context experiment from current workflow evidence
 
 **Use when:** evaluating whether my-dev-kit context and/or Orchestrator instruction packets actually improve coding-agent work.
 
@@ -589,7 +626,9 @@ This pairwise inventory is the completeness check for the current four-tool publ
 
 **Output:** an evidence-backed comparison of actual stage-context strategies. This is the correct ecosystem path for testing context usefulness, not an informal comparison of unrelated transcripts.
 
-## 9.19 Interaction-heavy runtime evidence plus visual acceptance
+<a id="919-interaction-heavy-runtime-evidence-plus-visual-acceptance"></a>
+
+### 9.22 Interaction-heavy runtime evidence plus visual acceptance
 
 **Use when:** a user flow needs real clicks/fills/drags plus a stable visual/layout contract.
 
@@ -601,7 +640,9 @@ This pairwise inventory is the completeness check for the current four-tool publ
 
 **Output:** separate behavioral-interaction proof and frontend visual/contract proof for the same candidate. Do not pipe the tutorial manifest into Observer or merge the two verdict systems.
 
-## 9.20 Android static ownership plus Android security validation
+<a id="920-android-static-ownership-plus-android-security-validation"></a>
+
+### 9.23 Android static ownership plus Android security validation
 
 **Use when:** changing Android permissions, exported components, deep links, repositories/data paths, or security-sensitive platform behavior.
 
@@ -614,7 +655,9 @@ This pairwise inventory is the completeness check for the current four-tool publ
 
 **Output:** Android change evidence that combines architecture/ownership with security checks while keeping each tool's limits explicit.
 
-## 9.21 Final-candidate multi-tool evidence packet
+<a id="921-final-candidate-multi-tool-evidence-packet"></a>
+
+### 9.24 Final-candidate multi-tool evidence packet
 
 **Use when:** a coding agent, reviewer, or release gate needs one concise record of a final candidate without inventing a universal ecosystem verdict.
 
@@ -627,6 +670,69 @@ Collect, for one exact source revision:
 - Orchestrator status/check/judge/final eligibility when staged execution was selected.
 
 The implementation/final report references these artifacts and records each independent semantic result. A required failure remains a failure. A missing required result remains missing. There is no command that averages them into one score.
+
+### 9.25 Consumer compatibility rehearsal before a producer upgrade
+
+**Use when:** deciding whether a new Kit or Observer release can feed an Orchestrator run through the generic ECO evidence path. This checks the consumer contract independently of whether the producer works correctly by itself.
+
+1. Select one capability and one native producer subject. For the reviewed Orchestrator 1.7.0 adapters, use Kit 1.12.5 static context or Observer 0.10.0 frontend-change-review evidence. Preserve package, native schema, artifact identity, freshness, and original bytes. Never relabel a 1.13.0 or 0.10.1 artifact as an older producer.
+2. Activate the required contract with `start --ecosystem-requirements <requirements.json>` or the library `createRun` input `ecosystemRequirementsDocument`. Then use the library-only `replaceRunEcosystemEvidence(runFolder, document)` to store a complete current evidence snapshot. There is no CLI replacement command. Requirements become immutable for the run.
+3. Keep the requirements subject equal to the envelope and native subject. Kit uses its static project identity; Observer uses its runtime context identity. Separate runs can attest separate native subjects. Neither current adapter attests an execution environment, so a context-only requirement may omit the optional environment; an environment-dependent claim needs another assurance path.
+4. Inspect the selected run with the implemented CLI:
+
+```powershell
+npx @dailephd/my-dev-kit-orchestrator@1.7.0 status --root "<project-root>" --run "<run-id>" --json
+npx @dailephd/my-dev-kit-orchestrator@1.7.0 check --root "<project-root>" --run "<run-id>" --all --strict --json
+```
+
+`--json` changes the output projection; it does not select all checks. The example explicitly adds `--all --strict` for the broader run check.
+
+5. From an exact Orchestrator source checkout, exercise its existing consumer-owned positive and negative fixtures (these are tests, not installed CLI inputs) for unsupported producer version, stale evidence, subject mismatch, environment requirements, unavailable native files, and conflicting evidence. Record the exact failure codes and native file hashes. An unsuitable applicable item can keep a requirement unmet even when a positive item is also present; replace the complete snapshot after a real refresh rather than accumulating stale items.
+6. Confirm that satisfied ECO evidence still cannot manufacture project test success, judge acceptance, or final-report eligibility. Shared run loading may reconcile derived lifecycle state in `run.json`; inspection does not execute the project or producer.
+
+**Output:** a reproducible compatibility result for one exact consumer/producer/capability tuple, plus the precise upgrade gap. Consumer fixture success is not ECO-01 certification. Lab's generic producer/adapter remains planned for 0.10.0, and no latest-four-tool certified bundle is established by this recipe. Native adapter and gate authority: [Orchestrator contracts](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/CONTRACTS.md).
+
+### 9.26 Matched retrieval quality, context-pack, and budget review
+
+**Use when:** a real repository produces noisy retrieval, large context, or uncertain coverage, and the team needs evidence before selecting a retrieval approach. Lab 0.9.3 can run the three retrieval/context-pack plugins and context-window scaling on the same explicit external-local subject.
+
+Freeze one local Git worktree and a reviewed `LocalRepositorySubjectConfigV1` outside that immutable target. The config owns `subjectId`, cases, source roots, queries, expected files/symbols, raw include globs, and a complete deterministic `answerKey` with expected facts and file/symbol targets. Use the detailed [Lab command contract](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/COMMANDS.md) rather than guessing the ground-truth shape. Fix the installed Kit command and record both package versions.
+
+With exact output roots authorized outside the target repository, run:
+
+```powershell
+my-dev-kit-lab experiment run --experiment retrieval-precision-recall --target "<local-git-root>" --local-subject-config "<subject.json>" --kit-command "<exact-kit-command>" --out "<experiment-workspace>/precision"
+my-dev-kit-lab experiment run --experiment retrieval-query-strategy-comparison --target "<local-git-root>" --local-subject-config "<subject.json>" --kit-command "<exact-kit-command>" --out "<experiment-workspace>/query-strategies"
+my-dev-kit-lab experiment run --experiment context-pack-generation --target "<local-git-root>" --local-subject-config "<subject.json>" --kit-command "<exact-kit-command>" --out "<experiment-workspace>/context-packs"
+my-dev-kit-lab experiment run --experiment context-window-scaling --target "<local-git-root>" --local-subject-config "<subject.json>" --kit-command "<exact-kit-command>" --context-budgets 8k,16k,32k,64k --out "<experiment-workspace>/budgets"
+```
+
+Do not add `--case`, `--benchmark-project`, or an invented strategy selector in this external-local mode; the config and plugin treatments own those choices. Confirm target immutability after each run. These plugins invoke Kit retrieval but no coding provider. External-local reports redact durable identities and do not persist context-pack bodies.
+
+Compare each plugin's actual measures separately: retrieval precision/recall, query-treatment differences, fact coverage and context size, and budget fit. Keep cases with missing/unavailable evidence visible. The plugins have different treatments; sharing a subject does not create a new paired agent-success trial or prove that the best retrieval score improves edits. Follow up with an explicitly authorized matched agent experiment only when that separate question matters. Current `agent-success-rate` uses the bundled self-target corpus; it does not accept this external-local subject. A trial on that repository requires a separately authorized experiment adapter rather than invented `--target` support.
+
+**Output:** a repository-specific choice supported by named cases and ground truth, with measured quality/size tradeoffs and unresolved cases. This is a composition of existing experiments, not an automatic strategy selector or direct pipe between their outputs.
+
+### 9.27 Visual request to bounded handoff, correction, and human acceptance
+
+**Use when:** a frontend request needs a frozen actual/reference acceptance contract, an external coding-agent handoff, and a reviewable correction history. Observer 0.10.1 owns the visual-request state machine; Kit can supply source ownership and Orchestrator can optionally govern the coding work.
+
+For an initialized Observer project with the required contract/reference acceptance already configured, capture or select the exact baseline observation and start the project-aware viewer without automatically opening a browser. Capturing an observation does not approve it:
+
+```powershell
+my-frontend-observer capture baseline
+my-frontend-observer view --no-open
+```
+
+Open the returned local URL deliberately. Do not add an explicit `--root` for this project-aware authoring path. In the viewer, create the draft, confirm annotation intent, create the actual/reference workflow, and explicitly activate acceptance. Workflow creation freezes acceptance inputs; activation validates that frozen selection and updates project acceptance. The workflow retains the prior acceptance selection for explicit restoration. Restore checks that the activated selection is still current and preserves unrelated project configuration edits.
+
+Use **Prepare handoff** to create the Observer-owned `VisualChangeAgentHandoff` and its canonical primary bounded context. Supplied supplemental context remains independent and unchanged. Feed observed IDs/text/targets into Kit search → lookup → slice → bounded source to identify plausible edit owners. The external actor makes authorized source changes and runs project tests; Observer never edits the application. If native staging adds value, use Orchestrator's ordinary workflow and keep newer Observer outputs as manual evidence unless the receiving adapter explicitly supports them.
+
+Run the handoff's expected post-edit command, `my-frontend-observer check <baseline-alias> --json`, for canonical acceptance. To record a visual-workflow attempt, use the viewer's explicit **Run check** action; a standalone CLI check is not itself a promise to attach a `VisualChangeAttempt`. Review the latest pending attempt, request correction when needed, and accept only a latest PASS through the explicit human action. Comparison-only or review-required results cannot become accepted PASS by prose.
+
+Baseline/reference approval is a separate governance operation using the existing `approve-baseline` or `approve-reference` command and its documented inputs. The viewer records already-completed governance; neither an accepted attempt nor a PASS silently promotes a baseline. Restore acceptance explicitly when the temporary project configuration should end. There is no `visual-request` CLI command: drafting, activation, handoff, attempt review, governance recording, and restore are the documented project-aware viewer actions.
+
+**Output:** an auditable request → frozen acceptance → source change → recorded check → human disposition chain, with separate source, runtime, and lifecycle authorities. Exact action prerequisites and transitions remain in [Observer workflows](https://github.com/dailephd/my-frontend-observer/blob/master/docs/WORKFLOWS.md).
 
 ## 10. Version, patch, extraction, and coordinated work
 
@@ -674,7 +780,7 @@ Lab contributor self-validation remains a separate checkout workflow. `npm test`
 
 ### Experiments and reporting
 
-The registered experiment plugins are `context-strategy-comparison` and `warm-index-reuse`. Inspect the selected plugin before choosing cases and strategies. For warm-index-reuse, `experiment run --kit-command <command>` supplies the warm-index-specific kit command; context-strategy-comparison does not accept that option. CLI strategies and programmatic stage-context inputs are distinct. The fixed context-integrity smoke is a historical/frozen-fixture developer workflow, not a configurable arbitrary-run replay CLI.
+The eight registered experiment plugins and their Kit-command boundaries are listed in section 3. Inspect the selected plugin before choosing cases, strategies, or target modes. Seven Kit-backed plugins support `--kit-command` with plugin-specific constraints; context-strategy-comparison does not accept it. CLI strategies and programmatic stage-context inputs are distinct. The fixed context-integrity smoke is a historical/frozen-fixture developer workflow, not a configurable arbitrary-run replay CLI.
 
 Warm-index-reuse is a Lab-owned experiment/reporting capability: Lab evaluates the experiment, audits/security checks, and reports, while my-dev-kit remains the index/search producer and the ecosystem does not make warm-index-reuse a mandatory orchestration workflow.
 
@@ -708,7 +814,7 @@ Resume at the earliest invalidated evidence or lifecycle gate. Preserve the bran
 
 For stale/wrong-root indexes, rebuild only the necessary current evidence. For capsule/audit contradiction, regenerate the pair rather than hand-edit either side. For inadequate architecture or unclear contracts, resolve the precise missing decision. For a failed test/CI/package/security gate, correct the authorized cause and rerun dependent checks. Do not turn optional truncation into an entire workflow restart.
 
-In staged work, `status`, `check`, `prompt`, and correction routing remain authoritative. Artifact presence, `mark complete`, or an authored judge PASS cannot bypass canonical readiness or final-report eligibility. Do not invent a `status --json` flag. Avoid custom `start --output-dir` runs when subsequent commands cannot rediscover them.
+In staged work, `status`, `check`, `prompt`, and correction routing remain authoritative. Artifact presence, `mark complete`, or an authored judge PASS cannot bypass canonical readiness or final-report eligibility. Orchestrator 1.7.0 supports `status --json` and `check --json`. Shared run loading can reconcile derived lifecycle state and atomically persist `run.json`; these commands do not execute agents or project commands, author missing stage artifacts, or manually mark stages. Avoid custom `start --output-dir` runs when subsequent commands cannot rediscover them.
 
 A continuation handoff records repository/branch/commit, tool versions, run ID and stage, worktree state, validated outcomes, reports and raw-evidence paths, accepted architecture, current blockers, authorization, exact next action, and remaining roadmap without reordering it. Export a native run when eligible, but retain project-level context that export does not supply. If using the existing future-heavy handoff convention, target 50% remaining plan, 30% reusable workflow, 10% completed history, and 10% current state/risks. This is a writing convention, not an artifact schema.
 
@@ -767,7 +873,7 @@ A safe fallback may allow the feature to continue, but cannot erase the gap, mut
 
 ### End-of-run feedback
 
-Write the report even on a block or an otherwise successful feature. Include total material issues, blocking/degraded/informational counts, counts by class and owner, unique causes versus retry count, tool/version identities, the complete records, and the smallest next action. Zero issues is a valid result. Do not manufacture suggestions or precision.
+Return the feedback record even on a block or an otherwise successful feature. Persist it only when REPORT/FEEDBACK names an authorized path; otherwise include it in the final response. Include total material issues, blocking/degraded/informational counts, counts by class and owner, unique causes versus retry count, tool/version identities, the complete records, and the smallest next action. Zero issues is a valid result. Do not manufacture suggestions or precision.
 
 Keep separate outcomes:
 
@@ -782,7 +888,7 @@ To design an improvement plan, group confirmed reproductions and documented limi
 
 ## 17. Final report and review checklist
 
-Report the exact candidate and actual result, not only a list of files. Include user-flow proof, completed/unfinished layers, API/client wiring evidence, scenario/test results, baseline and final candidate identities, semantic Observer results, correction attempts, final impact review, required assurance, remaining skips/risks, Git actions, and both report paths.
+Report the exact candidate and actual result, not only a list of files. Include user-flow proof, completed/unfinished layers, API/client wiring evidence, scenario/test results, baseline and final candidate identities, semantic Observer results, correction attempts, final impact review, required assurance, remaining skips/risks, Git actions, and authorized report paths or the final-response-only destination.
 
 Before accepting PASS, verify:
 

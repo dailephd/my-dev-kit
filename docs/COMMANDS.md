@@ -134,12 +134,12 @@ Do not delete the baseline required by a pending comparison. Watch mode and univ
 
 ### Incremental refresh scope (v1.12.5)
 
-This subsection describes the installed v1.12.5 CLI behavior.
+This subsection describes the installed CLI behavior introduced in v1.12.5 and retained in the current release.
 
 ```powershell
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --json
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
 ```
 
 - Allowed scope values: `changed-files`, `affected-neighborhood`.
@@ -626,12 +626,12 @@ Exit 0 means a valid comparison, including one with differences. Graph equality 
 
 The [ecosystem workflow guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) is the sole home for cross-repository recipes. This section defines how to use this command reference without importing foreign syntax.
 
-The command-by-command compatibility audit is in [section 9.15 of the ecosystem guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#915-command-surface-compatibility-map). It distinguishes direct file/CLI handoffs, programmatic adapters, manual synthesis, complementary evidence, and look-alike artifacts that are **not** directly compatible. Use that classification before wiring my-dev-kit output into another ecosystem tool.
+The command-by-command compatibility audit is in [section 9.18 of the ecosystem guide](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#918-command-surface-compatibility-map). It distinguishes direct file/CLI handoffs, programmatic adapters, manual synthesis, complementary evidence, and look-alike artifacts that are **not** directly compatible. Use that classification before wiring my-dev-kit output into another ecosystem tool.
 
 - Use my-dev-kit for static evidence. Use the target project's commands for builds, databases, test execution, browser actions, and application startup.
 - Use `my-dev-kit-orchestrator` for its own eight-command lifecycle. `DIRECT_IMPLEMENTATION` and `FULL_STAGE_CONTEXT` are workflow policies, not its `--mode` values.
 - Use installed `my-dev-kit-lab security validate` and `my-dev-kit-lab audit` where supported. Put its global `--workspace` before the command. Do not run Lab's source-checkout npm aliases in the target project.
-- Use `my-frontend-observer` for its own local browser observations and evaluations. Its current package is `@dailephd/my-frontend-observer`, while the executable remains `my-frontend-observer`. Observer 0.8.1 provides the project workflow `init`, `capture baseline`, and `check baseline --json`. Bounded-context/correction functions also remain library APIs. Do not invent additional CLI subcommands for those functions.
+- Use `my-frontend-observer` for its own local browser observations and evaluations. Its current package is `@dailephd/my-frontend-observer`, while the executable remains `my-frontend-observer`. The project workflow introduced in Observer 0.8.1 provides `init`, `capture baseline`, and `check baseline --json`. Observer 0.10.1 also includes the human-controlled visual-request lifecycle through guarded project-aware viewer actions. General bounded-context/correlation functions remain library APIs; use the Observer command reference for the existing CLI commands and viewer-only lifecycle actions.
 - Do not pipe unrelated JSON artifacts together without a documented consumer. Runtime/static correlation needs explicit candidate evidence, not equal-looking names.
 - Preserve semantic results. A graph-diff difference, partial observation, incomparable comparison, or not-evaluated fidelity result can accompany exit 0. Observer project `check` distinguishes PASS, FAIL, REVIEW_REQUIRED, and BLOCKED. Comparison alone remains REVIEW_REQUIRED. Required acceptance must inspect the actual result.
 - A complete full-stack task requires real backend/client/UI wiring, applicable use-case tests, protected behavior, and final-state runtime evidence. None of these is established by a context command alone.
@@ -662,4 +662,4 @@ There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-s
 
 **Unexpected zero-match or empty graph:** check the semantic result and required scope. A valid empty result is not proof of sufficient context or successful application behavior.
 
-**Workflow needs a missing command:** verify the command's actual owner and installation. Record unsupported/manual/library-only boundaries in the ecosystem feedback report rather than invent a flag or secretly require a source checkout.
+**Workflow needs a missing command:** verify the command's actual owner and installation. Record unsupported/manual/library-only boundaries in the task feedback record rather than invent a flag or secretly require a source checkout.

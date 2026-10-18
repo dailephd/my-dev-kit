@@ -63,7 +63,7 @@ Review match reasons, semantic/classification metadata, callers/dependencies, an
 **Locating an implementation owner (v1.12.6).** When the question is "where does this behavior live in production code" for a natural-language query and indexed tests are likely to outrank the production owner, run the initial search with ownership intent instead of, or in addition to, the raw search:
 
 ```powershell
-node dist/cli.js search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
+npx @dailephd/my-dev-kit search --index .my-dev-kit --query "<behavior or symbol>" --intent ownership --limit 10 --json
 ```
 
 Ownership intent is optional. Ordinary relevance search remains the default and needs no `--intent`; do not add `--intent ownership` to every search. Read each result's `ownership.tier` and `ownership.evidence`: `direct-owner` and `production-candidate` results are static production-owner evidence, `supporting-evidence` results (tests, fixtures, generated, docs) remain visible, and a recovered file with `score: 0` was promoted only by a direct relationship from a matching seed file. The ranking is advisory. Continue with exact lookup, a bounded slice, and symbol source for the returned candidate, and inspect the closest tests and the actual implementation before editing. A `direct-owner` tier is never edit authorization.
@@ -184,7 +184,7 @@ node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main -
 - **Why list all three source sets.** The `--src` roots decide which files get `file:` and `symbol:` nodes, file-level imports, and `source --contains` coverage. For the example, `app/src/main` alone discovers 10 Kotlin files and all three roots discover 12. In a `main`-only index the Android test-semantic analyzer still detects the two test files from the project's test roots and `--android-role` and `--query` still return `android-test-*` nodes, but `lookup --node file:app/src/test/...` returns not found and `source --contains FakeUserDao` finds nothing. Pass `app/src/test` and `app/src/androidTest` so production, unit-test, and instrumented-test code are all reachable through the same index.
 - **Artifacts depend on evidence.** The manifest, resource, and navigation artifacts are generated only from the matching files under the detected modules: `android-manifest` from `AndroidManifest.xml`, `android-resources` from `res/values`, `android-navigation` from `composable("...")` route calls, and the Compose and test artifacts from indexed or detected Kotlin sources. A missing artifact means that evidence was not found or not analyzed, not that the application lacks the behavior.
 - **Analyzer statuses.** Read `analyzers[].status` in the `index --json` result or `manifest.json`. `complete` means the analyzer ran and found what it supports. `partial` means it produced output with per-item warnings. `skipped` and `not-run` mean it did not apply or was not requested. For the example, `android-gradle` is `partial` (four warnings that BOM-managed coordinates such as `androidx.compose.ui:ui` carry no version) and `classification` is `partial` (27 per-entry warnings such as "no static file-level pattern matched" and "Compose route has no exact static screen resolution"). `frontend-reachability` is `skipped` and `call-graph` and `model-view-lineage` are `not-run`, because the example has no web source and no `--call-graph`. Partial status is not by itself a correctness defect; retrieval from the other artifacts works. Read the warnings before deciding whether a missing fact matters.
-- **Generated directories.** Default ignores skip `build`, `.gradle`, `out`, `output`, `.my-dev-kit`, and `.my-dev-kit-*` at any depth, so Gradle build output and previous indexes are not indexed. The example has no build output, so `search --android-role generated-file` correctly returns zero results; see the fixture-backed benchmark A11 in [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite-unreleased-candidate) for the generated-output case.
+- **Generated directories.** Default ignores skip `build`, `.gradle`, `out`, `output`, `.my-dev-kit`, and `.my-dev-kit-*` at any depth, so Gradle build output and previous indexes are not indexed. The example has no build output, so `search --android-role generated-file` correctly returns zero results; see the fixture-backed benchmark A11 in [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite) for the generated-output case.
 
 The detailed per-file walkthrough is in the [example README](../examples/basic-android-kotlin/README.md).
 
@@ -370,13 +370,13 @@ node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --file
 
 ## Workflow 17: Choose an incremental refresh strategy (v1.12.5)
 
-This workflow uses the installed `@dailephd/my-dev-kit@1.12.5` CLI.
+This workflow uses the installed CLI. The refresh-scope behavior introduced in `@dailephd/my-dev-kit@1.12.5` remains available in the current release.
 
 ### Default / changed-files
 
 ```powershell
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --json
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --refresh-scope changed-files --json
 ```
 
 Use either form for the existing minimal fresh-extraction behavior: only added/changed files are freshly extracted, and every other unchanged file is reused. The two forms are equivalent.
@@ -384,7 +384,7 @@ Use either form for the existing minimal fresh-extraction behavior: only added/c
 ### Affected-neighborhood
 
 ```powershell
-node dist/cli.js index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
+npx @dailephd/my-dev-kit index --root . --src src --out .my-dev-kit --incremental --refresh-scope affected-neighborhood --json
 ```
 
 Use this when a more conservative one-hop fresh-extraction scope is desired: unchanged files exactly one graph hop from a modified or removed file are also freshly re-extracted, rather than only reused from the previous run.
