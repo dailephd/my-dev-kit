@@ -33,12 +33,13 @@ const EXPECTED={
  'multiline.rs':['café','next'],
 };
 const sha=b=>createHash('sha256').update(b).digest('hex');
-const write=(p,data)=>fs.writeFileSync(p,typeof data==='string'?data:JSON.stringify(data,null,2)+'\n',{flag:'wx'});
+const write=(p,data)=>fs.writeFileSync(p,typeof data==='string'||Buffer.isBuffer(data)?data:JSON.stringify(data,null,2)+'\n',{flag:'wx'});
 const files=p=>fs.readdirSync(p,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(path.join(p,e.name)):[path.join(p,e.name)]);
 const flag=(n,k)=>typeof n[k]==='function'?n[k]():n[k];
 const CASES=[
  {id:'official-native',backend:'native',family:'official',runtime:'tree-sitter',runtimeVersion:'0.22.4',grammar:'tree-sitter-rust',grammarVersion:'0.24.0',asset:'tree-sitter-rust.wasm'},
  {id:'official-wasm',backend:'wasm',family:'official',runtime:'web-tree-sitter',runtimeVersion:'0.25.10',grammar:'tree-sitter-rust',grammarVersion:'0.24.0',asset:'tree-sitter-rust.wasm'},
+ {id:'official-release-wasm',backend:'wasm',family:'official-release',runtime:'web-tree-sitter',runtimeVersion:'0.25.10',grammar:'tree-sitter-rust',grammarVersion:'0.24.0',asset:'tree-sitter-rust.wasm',loadedGrammarVersion:'0.24.2',loadedGrammarRevision:'77a3747266f4d621d0757825e6b11edcbf991ca5',assetUrl:'https://github.com/tree-sitter/tree-sitter-rust/releases/download/v0.24.2/tree-sitter-rust.wasm',assetSha256:'24c89bd9252255e4aebbcbd7d2d308bd92c86dd95a130fdc80efa49577b8d738'},
  {id:'orchard-wasm',backend:'wasm',family:'orchard',runtime:'web-tree-sitter',runtimeVersion:'0.25.10',grammar:'tree-sitter-rust-orchard',grammarVersion:'0.16.10',asset:'tree-sitter-rust_orchard.wasm'}
 ];
 async function probe(backend,family) {
@@ -83,7 +84,7 @@ async function probe(backend,family) {
   if(Buffer.byteLength(source)>65536)throw Error('fixture size bound');
   const t=parse(source),o=inspect(t,source);t.delete?.();
   const negative=['unicode-malformed.rs','extern-malformed.rs'].includes(file);
-  const unsupported=family==='official'&&['basic.rs','unsafe-qualifiers.rs'].includes(file);
+  const unsupported=(family==='official'&&['basic.rs','unsafe-qualifiers.rs'].includes(file))||(family==='official-release'&&file==='unsafe-qualifiers.rs');
   const failures=[];
   if(o.hasError!==Boolean(negative||unsupported))failures.push('unexpected error/recovery state');
   // Recovery is never accepted as a trusted boundary, even if a child looks clean.
@@ -137,7 +138,12 @@ async function qualify(root,only,attempt){
    result.grammarSource=['grammar.js','src/parser.c','src/scanner.c'].map(p=>({path:p,sha256:sha(fs.readFileSync(path.join(grammar,p)))}));
    result.orchardNativePrebuildPresent=c.family==='orchard'?result.grammarAssets.some(p=>p.path.endsWith('.node')):undefined;
    const assets=path.join(stage,'assets');fs.mkdirSync(assets);
-   fs.copyFileSync(path.join(grammar,c.asset),path.join(assets,'grammar.wasm'));
+   if(c.assetUrl){
+    const response=await fetch(c.assetUrl);if(!response.ok)throw Error('release asset HTTP '+response.status);
+    const bytes=Buffer.from(await response.arrayBuffer());if(sha(bytes)!==c.assetSha256)throw Error('release asset integrity mismatch');
+    write(path.join(assets,'grammar.wasm'),bytes);
+    result.loadedGrammar={version:c.loadedGrammarVersion,revision:c.loadedGrammarRevision,url:c.assetUrl,bytes:bytes.length,sha256:sha(bytes),preparationSourceIsNotLoadedGrammar:true};
+   }else fs.copyFileSync(path.join(grammar,c.asset),path.join(assets,'grammar.wasm'));
    const licenses=path.join(stage,'LICENSES');fs.mkdirSync(licenses);
    for(const name of Object.keys(prepDeps)){const p=path.join(stage,'node_modules',name);const j=JSON.parse(fs.readFileSync(path.join(p,'package.json')));const license=fs.readdirSync(p).find(n=>/^license(\.md)?$/i.test(n));if(!license)throw Error('missing license '+name);fs.copyFileSync(path.join(p,license),path.join(licenses,name+'.txt'));(result.licenses??=[]).push({name,version:j.version,declaredLicense:j.license,sha256:sha(fs.readFileSync(path.join(p,license)))});}
    fs.copyFileSync(fileURLToPath(import.meta.url),path.join(stage,'runner.mjs'));
@@ -178,4 +184,3 @@ else{
  const attempt=a<0?undefined:process.argv[a+1];if(attempt&&!/^[a-z0-9-]+$/.test(attempt))throw Error('invalid attempt');
  await qualify(path.resolve(process.argv[p+1]),q<0?undefined:process.argv[q+1],attempt);
 }
-
