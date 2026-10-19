@@ -18,7 +18,7 @@ import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.j
 // ---------------------------------------------------------------------------
 
 /** Schema version string for artifact forward-compatibility checks. */
-export const SCHEMA_VERSION = '2'
+export const SCHEMA_VERSION = '3'
 
 /** Artifact filenames (relative to the output directory). */
 export const ARTIFACT_MAIN = 'symbol-index.json'
@@ -64,6 +64,9 @@ export interface SymbolLocation {
  * defined at a specific location in a source file.
  */
 export interface SymbolDefinition {
+  nodeId?: string
+  qualifiedName?: string
+  ownerKey?: string
   /** Declared name of the symbol. */
   name: string
   /** Declaration kind. */
@@ -188,6 +191,9 @@ export interface FileDependencyEdge {
  * traversal, cross-file lookup, and visualization labels.
  */
 export interface GraphSymbolRecord {
+  nodeId?: string
+  qualifiedName?: string
+  ownerKey?: string
   /** Source file, relative to repo root (forward slashes). */
   file: string
   /** Declared name of the symbol. */

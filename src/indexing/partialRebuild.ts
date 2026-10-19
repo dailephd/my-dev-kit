@@ -21,6 +21,7 @@
  */
 
 import * as fs from 'node:fs'
+import { assignDeclarationIdentities } from '../symbol-index/declarationIdentity.js'
 import * as path from 'node:path'
 import { createCallGraph } from '../symbol-index/graphBuilder.js'
 import { buildGraphSection, type FileExtractionMeta } from '../symbol-index/builder.js'
@@ -129,6 +130,9 @@ function cleanSymbol(symbol: SymbolDefinition): SymbolDefinition {
     exported: symbol.exported,
   }
   if (symbol.signature !== undefined) clean.signature = symbol.signature
+  if (symbol.nodeId !== undefined) clean.nodeId = symbol.nodeId
+  if (symbol.qualifiedName !== undefined) clean.qualifiedName = symbol.qualifiedName
+  if (symbol.ownerKey !== undefined) clean.ownerKey = symbol.ownerKey
   return clean
 }
 
@@ -208,6 +212,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const sourceText = readFileSafely(file.absPath)
     if (sourceText === null) continue
     const extraction = adapter.extractFromSource(relPath, sourceText)
+    extraction.symbols = assignDeclarationIdentities(relPath, extraction.symbols)
     freshPaths.add(relPath)
     rawExtractions.push({ relPath, extraction })
     fileExtractionMeta.set(relPath, {

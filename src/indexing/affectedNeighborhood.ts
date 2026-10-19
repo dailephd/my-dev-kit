@@ -1,3 +1,4 @@
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 /**
  * Affected-neighborhood selection (v1.12.5 Batch 1, internal and pure).
  *
@@ -81,7 +82,6 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 const fileNodeId = (filePath: string): string => `file:${filePath}`
-const symbolNodeId = (filePath: string, name: string): string => `symbol:${filePath}#${name}`
 
 function insideSourceRoots(filePath: string, sourceRoots: readonly string[] | undefined): boolean {
   if (!sourceRoots) return true
@@ -211,11 +211,12 @@ export function selectAffectedNeighborhood(input: SelectAffectedNeighborhoodInpu
 
     const seededForFile = new Set<string>()
     for (const rawSymbol of entry.symbols as unknown[]) {
-      const symbol = rawSymbol as { name?: unknown } | null
+      const symbol = rawSymbol as { name?: unknown; nodeId?: unknown } | null
       if (!symbol || typeof symbol !== 'object' || !isNonEmptyString(symbol.name)) {
         return unsafe('malformed-symbol-ownership', `Baseline file "${seedPath}" has a symbol without a string name.`)
       }
-      const symbolId = symbolNodeId(seedPath, symbol.name)
+      if (symbol.nodeId !== undefined && !isNonEmptyString(symbol.nodeId)) return unsafe('malformed-symbol-ownership', 'Invalid persisted symbol nodeId.')
+      const symbolId = declarationNodeId(seedPath, { name: symbol.name, nodeId: symbol.nodeId as string | undefined })
       const symbolNode = model.nodes.get(symbolId)
       if (!symbolNode) continue // no graph node: never fabricate a seed
       if (symbolNode.kind !== 'symbol' || symbolNode.path !== seedPath || symbolNode.symbolName !== symbol.name) {
@@ -283,7 +284,9 @@ function groundedOwnerPath(node: CodeGraphNode, ownership: ReadonlyMap<string, u
   if (!isNonEmptyString(node.path) || !ownership.has(node.path)) return null
   if (node.kind === 'file') return node.id === fileNodeId(node.path) ? node.path : null
   if (node.kind === 'symbol') {
-    return isNonEmptyString(node.symbolName) && node.id === symbolNodeId(node.path, node.symbolName) ? node.path : null
+    if (!isNonEmptyString(node.symbolName)) return null
+    const entry = ownership.get(node.path) as { symbols?: Array<{ name: string; nodeId?: string }> }
+    return entry.symbols?.some((symbol) => symbol.name === node.symbolName && declarationNodeId(node.path!, symbol) === node.id) ? node.path : null
   }
   return null
 }

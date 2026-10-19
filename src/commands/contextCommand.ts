@@ -147,7 +147,15 @@ export function registerContextCommand(program: Command): void {
         warnings: [],
       })
 
-      const symbolIndex = readRequiredJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, 'symbol index')
+      let symbolIndex: SymbolIndex
+      try {
+        symbolIndex = readRequiredJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, 'symbol index')
+      } catch (error) {
+        if (normalized.beforeIndex && normalized.afterIndex && error instanceof Error && error.message.includes('Unsupported symbol index schema version:')) {
+          throw new Error(`Incompatible beforeIndex/afterIndex symbol-index schema versions: ${error.message}`)
+        }
+        throw error
+      }
       const codeGraph = readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph')
 
       const queryPlan = buildQueryPlan({ originalQuery: normalized.query, mode })

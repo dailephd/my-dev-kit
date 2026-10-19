@@ -11,6 +11,7 @@
  */
 
 import * as fs from 'fs'
+import { assignDeclarationIdentities } from './declarationIdentity.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
@@ -135,6 +136,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
 
     const adapter = registry.adapterForFile(relPath)!
     const result = adapter.extractFromSource(relPath, sourceText)
+    result.symbols = assignDeclarationIdentities(relPath, result.symbols)
     rawExtractions.push({ relPath, extraction: result })
     fileExtractionMeta.set(relPath, {
       reExportSpecifiers: result.reExportSpecifiers,
@@ -265,6 +267,9 @@ export function buildGraphSection(
         kind: sym.kind,
         exported: sym.exported,
         line: sym.location.line,
+        nodeId: sym.nodeId,
+        qualifiedName: sym.qualifiedName,
+        ownerKey: sym.ownerKey,
       })
     }
   }

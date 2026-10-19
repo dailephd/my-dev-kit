@@ -36,7 +36,7 @@ import { VERSION } from '../version.js'
 import { readIndexManifest } from './readIndexManifest.js'
 
 export const CACHE_METADATA_FILENAME = 'cache-metadata.json'
-export const CACHE_SCHEMA_VERSION = '1.2.0'
+export const CACHE_SCHEMA_VERSION = '1.3.0'
 export const INDEX_ARTIFACT_SCHEMA_VERSION = '1.0.0'
 
 const SAMPLE_LIMIT = 20

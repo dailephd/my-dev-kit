@@ -2,7 +2,8 @@ import * as fs from 'node:fs'
 import type { Command } from 'commander'
 import { loadSourceArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { assertSymbolSpanPresent, buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice } from '../lookup/getSourceSlice.js'
-import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
+import { AmbiguousSymbolError, resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
+import { declarationNodeId, legacyDeclarationId } from '../symbol-index/declarationIdentity.js'
 import type { SourceSlice, SourceSliceMode, SourceTarget } from '../lookup/sourceSliceTypes.js'
 import {
   parseSourceOutputFormat,
@@ -95,6 +96,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
     .action(function (this: Command, options: SourceCommandOptions) {
+      try {
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
         handleReachabilitySource(this, options, reachabilityMode)
@@ -177,7 +179,7 @@ export function registerSourceCommand(program: Command): void {
       } else {
         const nodeTarget = resolveFileNodeTarget(artifacts.codeGraph!, options.node!, options.maxLines)
         target = nodeTarget.mode === 'symbol'
-          ? resolveSymbolTarget(artifacts.symbolIndex!, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines)
+          ? resolveSymbolTarget(artifacts.symbolIndex!, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines, nodeTarget.nodeId)
           : nodeTarget
       }
 
@@ -191,6 +193,7 @@ export function registerSourceCommand(program: Command): void {
         mode,
         symbolName: target.symbolName,
         symbolEndLine: target.symbolEndLine,
+        targetId: target.nodeId,
         semanticRoles: target.semanticRoles,
         artifactRefs: target.artifactRefs,
         evidenceRefs: target.evidenceRefs,
@@ -200,7 +203,8 @@ export function registerSourceCommand(program: Command): void {
           artifacts.resolved.manifest,
           options.index,
           target.filePath,
-          target.symbolName
+          target.symbolName,
+          target.nodeId
         ),
         androidComponentRoles: target.androidComponentRoles,
         androidComponentRefs: target.androidComponentRefs,
@@ -208,6 +212,16 @@ export function registerSourceCommand(program: Command): void {
       })
 
       emitSourceResult(result, format, options)
+      } catch (error) {
+        if (error instanceof AmbiguousSymbolError) {
+          const result = { status: 'error', code: error.code, message: error.message, candidates: error.candidates }
+          if (options.json || options.format === 'json') console.log(JSON.stringify(result, null, 2))
+          else console.error(`${error.message}\n${JSON.stringify(error.candidates, null, 2)}`)
+          process.exitCode = 2
+          return
+        }
+        throw error
+      }
     })
 }
 
@@ -379,7 +393,8 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
   if (options.symbol && artifacts.symbolIndex) {
     try {
       symTarget = resolveSymbolTarget(artifacts.symbolIndex, filePath, options.symbol, options.maxLines)
-    } catch {
+    } catch (error) {
+      if (error instanceof AmbiguousSymbolError) throw error
       // symbol metadata is optional in continue-from mode
     }
   }
@@ -506,7 +521,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
   let evidenceRefs = undefined
 
   if (nodeTarget.mode === 'symbol') {
-    const symTarget = resolveSymbolTarget(artifacts.symbolIndex!, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines)
+    const symTarget = resolveSymbolTarget(artifacts.symbolIndex!, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines, nodeTarget.nodeId)
     filePath = symTarget.filePath
     symbolName = symTarget.symbolName ?? null
     symStartLine = symTarget.startLine!
@@ -729,6 +744,21 @@ function handleSourceBundle(options: SourceCommandOptions, format: SourceOutputF
   const maxLinesPerBundle = options.maxBundleLines ?? DEFAULT_MAX_BUNDLE_LINES
   const maxBlocks = options.maxBlocks ?? DEFAULT_MAX_BLOCKS
 
+  // Select the exact primary declaration before the existing name-based bundle engine runs.
+  // Other declarations remain available for expansion; ambiguous same-name alternatives do not.
+  let bundleIndex = artifacts.symbolIndex!
+  if (options.node) {
+    const nodeTarget = resolveFileNodeTarget(artifacts.codeGraph!, options.node, options.maxLines)
+    if (nodeTarget.mode === 'symbol') {
+      const exact = resolveSymbolTarget(bundleIndex, nodeTarget.filePath, nodeTarget.symbolName!, options.maxLines, nodeTarget.nodeId)
+      bundleIndex = { ...bundleIndex, files: bundleIndex.files.map((file) => file.path !== exact.filePath ? file : {
+        ...file, symbols: file.symbols.filter((symbol) => symbol.name !== exact.symbolName || declarationNodeId(file.path, symbol) === exact.nodeId),
+      }) }
+    }
+  } else if (options.file && options.symbol) {
+    resolveSymbolTarget(bundleIndex, options.file, options.symbol, options.maxLines)
+  }
+
   const bundle = buildSourceBundle({
     indexDir: options.index,
     projectRoot: artifacts.resolved.manifest.projectRoot,
@@ -745,7 +775,7 @@ function handleSourceBundle(options: SourceCommandOptions, format: SourceOutputF
     includeProps: options.includeProps === true,
     includeLocalComponents: options.includeLocalComponents === true,
     includeLocalDeps: (options.includeLocalDeps === true) || (options.expandToLocalDependencies === true),
-    symbolIndex: artifacts.symbolIndex!,
+    symbolIndex: bundleIndex,
     codeGraph: artifacts.codeGraph,
     frontendArtifact,
   })
@@ -778,9 +808,10 @@ function resolveClassificationSummaryForTarget(
   manifest: IndexManifest,
   indexDir: string,
   filePath: string,
-  symbolName: string | null | undefined
+  symbolName: string | null | undefined,
+  nodeId?: string
 ): ClassificationCommandSummary | null {
-  const targetId = symbolName ? `symbol:${filePath}#${symbolName}` : `file:${filePath}`
+  const targetId = nodeId ?? (symbolName ? legacyDeclarationId(filePath, symbolName) : `file:${filePath}`)
   const artifact = loadClassificationArtifact(indexDir, manifest)
   return buildClassificationCommandSummary(findClassificationEntryByTargetId(artifact, targetId))
 }

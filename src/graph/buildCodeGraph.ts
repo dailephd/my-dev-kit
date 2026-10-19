@@ -1,3 +1,4 @@
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 import type { CallGraph, SymbolIndex, SymbolDefinition } from '../symbol-index/types.js'
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from './codeGraphTypes.js'
 import { CODE_GRAPH_SCHEMA_VERSION } from './codeGraphTypes.js'
@@ -23,8 +24,10 @@ export function buildCodeGraph(options: BuildCodeGraphOptions): CodeGraph {
     })
 
     for (const symbol of file.symbols) {
-      const symbolId = symbolNodeId(file.path, symbol.name)
-      symbolIds.set(symbolKey(file.path, symbol), symbolId)
+      const symbolId = declarationNodeId(file.path, symbol)
+      const key = symbolKey(file.path, symbol)
+      // A legacy call record has only file/name/line; same-line duplicates are unresolvable.
+      symbolIds.set(key, symbolIds.has(key) ? '' : symbolId)
       nodes.push({
         id: symbolId,
         kind: 'symbol',
@@ -34,6 +37,8 @@ export function buildCodeGraph(options: BuildCodeGraphOptions): CodeGraph {
         symbolKind: symbol.kind,
         line: symbol.location.line,
         exported: symbol.exported,
+        ...(symbol.qualifiedName !== undefined ? { qualifiedName: symbol.qualifiedName } : {}),
+        ...(symbol.ownerKey !== undefined ? { ownerKey: symbol.ownerKey } : {}),
       })
       edges.push({
         id: edgeId(fileId, 'defines', symbolId),
@@ -79,6 +84,14 @@ export function buildCodeGraph(options: BuildCodeGraphOptions): CodeGraph {
 
   sortById(nodes)
   sortById(edges)
+  const nodeIds = new Set<string>()
+  for (const node of nodes) {
+    if (nodeIds.has(node.id)) throw new Error(`Duplicate code graph node ID: ${node.id}`)
+    nodeIds.add(node.id)
+  }
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) throw new Error(`Invalid code graph edge endpoint: ${edge.id}`)
+  }
 
   const fileNodeCount = nodes.filter((node) => node.kind === 'file').length
   const symbolNodeCount = nodes.filter((node) => node.kind === 'symbol').length
@@ -102,20 +115,20 @@ function fileNodeId(filePath: string): string {
   return `file:${filePath}`
 }
 
-function symbolNodeId(filePath: string, name: string): string {
-  return `symbol:${filePath}#${name}`
-}
-
 function symbolKey(filePath: string, symbol: SymbolDefinition): string {
   return `${filePath}#${symbol.name}@${symbol.location.line}`
 }
 
 function findSymbolId(symbolIds: Map<string, string>, filePath: string, name: string): string | undefined {
   const prefix = `${filePath}#${name}@`
+  const matches = new Set<string>()
   for (const [key, id] of symbolIds) {
-    if (key.startsWith(prefix)) return id
+    if (key.startsWith(prefix)) {
+      if (!id) return undefined
+      matches.add(id)
+    }
   }
-  return undefined
+  return matches.size === 1 ? [...matches][0] : undefined
 }
 
 function edgeId(source: string, kind: string, target: string): string {

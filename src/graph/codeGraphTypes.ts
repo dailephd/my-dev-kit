@@ -3,7 +3,7 @@ import type { FrontendSourceRef, ReactFlowRelationshipKind } from '../frontend/i
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
 
-export const CODE_GRAPH_SCHEMA_VERSION = '1.0.0'
+export const CODE_GRAPH_SCHEMA_VERSION = '1.1.0'
 
 export type CodeGraphNodeKind =
   | 'file'
@@ -97,6 +97,8 @@ export type CodeGraphEdgeKind =
   | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
+  qualifiedName?: string
+  ownerKey?: string
   id: string
   kind: CodeGraphNodeKind
   label: string

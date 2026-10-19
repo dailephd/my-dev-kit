@@ -1,3 +1,5 @@
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
+import { validateStructuralArtifact } from '../indexing/loadIndexArtifacts.js'
 import type { CodeGraph, CodeGraphEdge, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { FileSummary, SymbolDefinition, SymbolIndex } from '../symbol-index/types.js'
@@ -535,6 +537,7 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   ]
   if (symbol.exported) fields.push(field('export', symbol.name, WEIGHTS.export))
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
+  if (symbol.qualifiedName) fields.push(field('symbolName', symbol.qualifiedName, WEIGHTS.symbolName))
   fields.push(...semanticFields(symbol.semanticRoles, symbol.artifactRefs))
   fields.push(...classificationFields(symbol.classificationRoles))
   fields.push(...androidComponentFields(symbol.androidComponentRoles))
@@ -542,10 +545,10 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   return {
     item: {
       kind: 'symbol',
-      id: symbolNodeId(file.path, symbol.name),
+      id: declarationNodeId(file.path, symbol),
       label: symbol.name,
       path: file.path,
-      nodeId: symbolNodeId(file.path, symbol.name),
+      nodeId: declarationNodeId(file.path, symbol),
       semanticRoles: symbol.semanticRoles,
       artifactRefs: symbol.artifactRefs,
       classificationRoles: symbol.classificationRoles,
@@ -656,6 +659,8 @@ function artifactRefFields(artifactRefs: CodeGraphNode['artifactRefs'] | SymbolD
 }
 
 function validateArtifacts(symbolIndex: SymbolIndex, codeGraph: CodeGraph): void {
+  validateStructuralArtifact(symbolIndex, 'symbol index')
+  validateStructuralArtifact(codeGraph, 'code graph')
   if (!symbolIndex || typeof symbolIndex !== 'object' || !Array.isArray(symbolIndex.files)) {
     throw new Error('Invalid symbol index artifact: files must be an array.')
   }
@@ -666,8 +671,4 @@ function validateArtifacts(symbolIndex: SymbolIndex, codeGraph: CodeGraph): void
 
 function fileNodeId(filePath: string): string {
   return `file:${filePath}`
-}
-
-function symbolNodeId(filePath: string, name: string): string {
-  return `symbol:${filePath}#${name}`
 }

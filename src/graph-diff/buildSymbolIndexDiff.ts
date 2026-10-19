@@ -1,3 +1,4 @@
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 import type { FileSummary, SymbolIndex } from '../symbol-index/types.js'
 import { deepEqual } from './diffUtils.js'
 import type { SymbolIndexDiffSection } from './types.js'
@@ -74,7 +75,10 @@ function flattenSymbols(files: FileSummary[]): Map<string, FileSummary['symbols'
   const bySymbolId = new Map<string, FileSummary['symbols'][number]>()
   for (const file of files) {
     for (const symbol of file.symbols) {
-      bySymbolId.set(`symbol:${file.path}#${symbol.name}`, symbol)
+      const id = declarationNodeId(file.path, symbol)
+      // Historical artifacts may already have collapsed identity. Preserve that comparison behavior.
+      if (symbol.nodeId && bySymbolId.has(id)) throw new Error(`Duplicate declaration identity in diff: ${id}`)
+      bySymbolId.set(id, symbol)
     }
   }
   return bySymbolId
