@@ -105,7 +105,8 @@
       "1.12.3",
       "1.12.4",
       "1.12.5",
-      "1.12.6"
+      "1.12.6",
+      "1.13.0"
     ],
     "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
@@ -424,7 +425,13 @@
         "Real stage-context experiment from current workflow evidence",
         "Interaction-heavy runtime evidence plus visual acceptance",
         "Android static ownership plus Android security validation",
-        "Final-candidate multi-tool evidence packet"
+        "Final-candidate multi-tool evidence packet",
+        "Tool-local starting points",
+        "Consumer compatibility rehearsal before a producer upgrade",
+        "Matched retrieval quality, context-pack, and budget review",
+        "Visual request to bounded handoff, correction, and human acceptance",
+        "FINAL_RESPONSE_ONLY",
+        "This latest-release snapshot is not a tested or certified four-tool bundle."
       ],
       "docs/ecosystem/ECO_00_CONTRACT_FREEZE.md": [
         "# ECO-00 contract and roadmap freeze",

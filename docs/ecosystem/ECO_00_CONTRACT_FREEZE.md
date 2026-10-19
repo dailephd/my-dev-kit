@@ -23,7 +23,7 @@ This tuple is inspection provenance and a supported planning baseline. It is not
 ## Adopted version decisions
 
 - Kit keeps 1.13.0 and 1.14.0 unchanged; 1.15.0 is KIT-API-01 and 1.16.0 is KIT-OPS-01.
-- Orchestrator 1.5.0 is published Semantic Continuity; 1.6.0 / ORC-TELEMETRY is published as of 2026-09-26; 1.7.0 remains ORC-EVIDENCE-01.
+- Orchestrator 1.5.0 is published Semantic Continuity; 1.6.0 / ORC-TELEMETRY is published as of 2026-09-26; 1.7.0 / ORC-EVIDENCE-01 is published as of 2026-10-15. The adopted version assignments are unchanged.
 - Lab 0.6.0-0.9.2 keep their existing meanings. LAB-EVIDENCE-01 is assigned to the first unreserved minor, 0.10.0. Later assurance reservations are 0.11.0-0.17.0. No existing Lab feature is moved.
 - Observer 0.11.0-0.14.0 are adopted as diagnostics, controlled state, performance evidence, and bounded browser/viewport matrix milestones, subject to Observer's Project Description and Project Milestones authority.
 
@@ -64,11 +64,17 @@ Positive fixtures must validate against their schema. Files named `*.invalid.jso
 
 ## Dependency outcome
 
-ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer prerequisite is Orchestrator 1.7.0 / ORC-EVIDENCE-01. Kit 1.13.0 and Lab 0.6.1 remain independent valid local next milestones.
+ORC-TELEMETRY is complete with published Orchestrator 1.6.0, and the consumer-local ORC-EVIDENCE-01 is complete with published Orchestrator 1.7.0. As of 2026-10-17, Kit 1.13.0, Lab 0.9.3, and Observer 0.10.1 are also published. The remaining ecosystem producer prerequisite is Lab 0.10.0 / LAB-EVIDENCE-01; independent local version scope remains unchanged.
 
-ECO-01 requires LAB-EVIDENCE-01 (Lab 0.10.0) and ORC-EVIDENCE-01 (Orchestrator 1.7.0) as exact candidates or releases. ORC-EVIDENCE-01 may be implemented against these frozen contracts before the Lab producer exists, but certification cannot occur until the producer and consumer tuple is tested together.
+ECO-01 requires LAB-EVIDENCE-01 (Lab 0.10.0) and ORC-EVIDENCE-01 (Orchestrator 1.7.0) as exact candidates or releases. ORC-EVIDENCE-01 has released against these frozen contracts before the Lab producer exists, but certification cannot occur until the producer and consumer tuple is tested together.
+
+Current Orchestrator 1.7.0 ECO adapters accept exactly Kit 1.12.5 static context or Observer 0.10.0 runtime context; newer Kit 1.13.0 and Observer 0.10.1 artifacts do not satisfy those version checks. There is no Lab verification adapter. One run subject must match both the envelope and native producer subject, so static Kit and runtime Observer identities cannot be blended into one verification run. Neither adapter attests the optional execution environment, and supplying `environment` in requirements cannot be satisfied by them. Current evidence updates replace the complete snapshot rather than accumulate stale references. These are consumer-local limits, not revisions to the frozen reference schemas or evidence identities.
+
+The frozen Kit 1.12.4 baseline/proposed proof tuple remains historical and unchanged. The latest four-package tuple is not certified, and the current adapter's Kit 1.12.5 pin does not rewrite that baseline. See the central roadmap's current-state update and source record for released versions and exact consumer evidence.
 
 ## Repository adoption/change ledger
+
+The following entries preserve the adoption-era ledger and its early status updates. Their references to "current" and "next" describe that historical state; the dated current update follows them.
 
 - **my-dev-kit:** central roadmap changed from proposal to adopted ECO-00 baseline; shared registry/schemas/fixtures/milestone registry/baseline bundle added; local roadmap gained 1.15.0 and 1.16.0; 1.13.0/1.14.0/2.0.0 preserved.
 - **my-dev-kit-orchestrator:** 1.6.0 is now current/published; 1.7.0 remains next as ORC-EVIDENCE-01; native RSP-NNN, telemetry, and integrity ownership remain Orchestrator-owned.
@@ -76,6 +82,8 @@ ECO-01 requires LAB-EVIDENCE-01 (Lab 0.10.0) and ORC-EVIDENCE-01 (Orchestrator 1
 - **my-frontend-observer:** durable intent and milestone authority extended first, then roadmap/current-state updated for 0.11.0-0.14.0; 0.10.0 remains current.
 
 No package, dependency, tag, release, or publication state is changed by this ledger.
+
+**Current update — 2026-10-17:** Kit 1.13.0, Lab 0.9.3, Orchestrator 1.7.0, and Observer 0.10.1 are published. Orchestrator's consumer-local ORC-EVIDENCE-01 release is recorded in `milestones.json` at release commit `074091ec4f898970bc95d1422705d77f62ee4827`, published 2026-10-15T19:03:09Z. The next ecosystem prerequisite is Lab 0.10.0 / LAB-EVIDENCE-01, followed by exact producer/consumer integration and certification. The historical ledger, frozen baseline, adopted reservations, and native ownership remain intact; no certified/active bundle or later Orchestrator reservation is inferred.
 
 ## Non-goals
 
