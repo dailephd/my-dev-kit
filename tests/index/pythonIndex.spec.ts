@@ -18,7 +18,7 @@ vi.mock('node:child_process', async (importOriginal) => {
       const result = actual.spawnSync(...args) as unknown as Record<string, unknown>
       const argv = args[1] as string[] | undefined
       const isSymbolScript =
-        argv?.[0] === '-c' && typeof argv[1] === 'string' && argv[1].includes('json.dumps({"symbols": symbols})')
+        argv?.[0] === '-I' && argv[1] === '-S' && argv[2] === '-c' && typeof argv[3] === 'string' && argv[3].includes('json.dumps({"symbols": symbols})')
       return symbolScriptOverride.transform && isSymbolScript ? symbolScriptOverride.transform(result) : result
     }) as unknown as typeof actual.spawnSync,
   }
@@ -387,6 +387,8 @@ describe('Python symbol end lines', () => {
       ['decorated', 'function', 4, 5],
       ['fetch', 'function', 7, 8],
       ['Service', 'class', 13, 17],
+      ['value', 'field', 14, 14],
+      ['run', 'method', 16, 17],
       ['MAX_RETRIES', 'const', 19, 20],
       ['LIMIT', 'const', 21, 21],
     ])

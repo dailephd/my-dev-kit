@@ -71,11 +71,19 @@ export function buildCodeGraph(options: BuildCodeGraphOptions): CodeGraph {
 
   for (const call of options.callGraph?.edges ?? []) {
     if (!call.callee.file) continue
-    const source = symbolIds.get(`${call.caller.file}#${call.caller.name}@${call.caller.line}`)
-    const target = findSymbolId(symbolIds, call.callee.file, call.callee.name)
+    const verified = (id: string | undefined, file: string, line?: number) => id && nodes.some(n =>
+      n.kind === 'symbol' && n.id === id && n.path === file && (line === undefined || n.line === line)) ? id : undefined
+    const source = call.callerNodeId !== undefined
+      ? verified(call.callerNodeId, call.caller.file, call.caller.line)
+      : symbolIds.get(`${call.caller.file}#${call.caller.name}@${call.caller.line}`)
+    const target = call.calleeNodeId !== undefined
+      ? verified(call.calleeNodeId, call.callee.file)
+      : findSymbolId(symbolIds, call.callee.file, call.callee.name)
     if (!source || !target) continue
+    const callId = `${edgeId(source, 'calls', target)}@${call.callLine}`
+    if (call.calleeNodeId !== undefined && edges.some(edge => edge.id === callId)) continue
     edges.push({
-      id: `${edgeId(source, 'calls', target)}@${call.callLine}`,
+      id: callId,
       source,
       target,
       kind: 'calls',

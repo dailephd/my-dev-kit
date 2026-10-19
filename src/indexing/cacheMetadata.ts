@@ -184,6 +184,9 @@ export interface ConfigFingerprintInput {
  */
 export function computeConfigFingerprint(input: ConfigFingerprintInput): string {
   const normalized = {
+    // Extractor semantics changed without changing the cache storage format.
+    // Invalidate B02's no-change shortcut before it can retain missing Python facts.
+    pythonExtractionRevision: 'v1.14.0-b03',
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),
     callGraphEnabled: input.callGraphEnabled,

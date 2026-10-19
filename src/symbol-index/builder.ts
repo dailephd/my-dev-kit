@@ -147,6 +147,8 @@ export function buildIndex(config: BuildConfig): BuildResult {
       language: result.language,
       lineCount: result.lineCount,
       imports: result.imports,
+      ...(result.importBindings ? { importBindings: result.importBindings } : {}),
+      ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       exports: result.exports,
       symbols: result.symbols,
       hasCallGraphEntries: false, // updated below if call graph is built
@@ -270,6 +272,7 @@ export function buildGraphSection(
         nodeId: sym.nodeId,
         qualifiedName: sym.qualifiedName,
         ownerKey: sym.ownerKey,
+        ...(sym.declarationMetadata ? { declarationMetadata: sym.declarationMetadata } : {}),
       })
     }
   }

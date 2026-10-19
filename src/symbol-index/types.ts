@@ -30,6 +30,8 @@ export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' |
 /** Classification of a symbol declaration. */
 export type SymbolKind =
   | 'function'
+  | 'method'
+  | 'field'
   | 'class'
   | 'interface'
   | 'type'
@@ -64,6 +66,7 @@ export interface SymbolLocation {
  * defined at a specific location in a source file.
  */
 export interface SymbolDefinition {
+  declarationMetadata?: { decorators?: DecoratorMetadata[] }
   nodeId?: string
   qualifiedName?: string
   ownerKey?: string
@@ -100,6 +103,8 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  warnings?: string[]
+  importBindings?: ImportBinding[]
   /** File path relative to the repo root, forward slashes. */
   path: string
   /** Source language of the file. */
@@ -191,6 +196,7 @@ export interface FileDependencyEdge {
  * traversal, cross-file lookup, and visualization labels.
  */
 export interface GraphSymbolRecord {
+  declarationMetadata?: SymbolDefinition['declarationMetadata']
   nodeId?: string
   qualifiedName?: string
   ownerKey?: string
@@ -253,6 +259,8 @@ export interface SymbolIndexGraph {
  * file (e.g. external library calls).
  */
 export interface CallGraphEdge {
+  callerNodeId?: string
+  calleeNodeId?: string
   caller: {
     file: string
     name: string
@@ -265,6 +273,29 @@ export interface CallGraphEdge {
   }
   /** Source line of the call expression. */
   callLine: number
+}
+
+/** Observed static import syntax; resolution never implies runtime import behavior. */
+export interface ImportBinding {
+  localName: string
+  importedName: string
+  sourceSpecifier: string
+  syntaxKind: 'python' | 'esm' | 'commonjs' | 'rust-use'
+  relativeLevel?: number
+  wildcard?: boolean
+  startLine: number
+  endLine: number
+  resolutionStatus?: 'observed' | 'resolved-local' | 'ambiguous' | 'unresolved' | 'external'
+}
+
+/** Bounded parser evidence, without evaluating decorator expressions. */
+export interface DecoratorMetadata {
+  path?: string
+  expressionKind: 'name' | 'attribute' | 'call' | 'unsupported'
+  startLine: number
+  endLine?: number
+  argumentShape: 'none' | 'literal' | 'mixed' | 'dynamic'
+  literalArguments?: Array<{ positionalIndex?: number; keywordName?: string; value: string | number | boolean | null }>
 }
 
 /**

@@ -133,6 +133,7 @@ function cleanSymbol(symbol: SymbolDefinition): SymbolDefinition {
   if (symbol.nodeId !== undefined) clean.nodeId = symbol.nodeId
   if (symbol.qualifiedName !== undefined) clean.qualifiedName = symbol.qualifiedName
   if (symbol.ownerKey !== undefined) clean.ownerKey = symbol.ownerKey
+  if (symbol.declarationMetadata !== undefined) clean.declarationMetadata = symbol.declarationMetadata
   return clean
 }
 
@@ -165,7 +166,11 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const adapter = registry.adapterForFile(relPath)
     if (!adapter) continue
 
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath)) {
+    // B02 Python summaries lack even the empty bindings array. Re-extract them
+    // rather than blessing missing B03 evidence as a compatible cached result.
+    const missingPythonEvidence = input.previousFileSummariesByPath.get(relPath)?.language === 'python' &&
+      input.previousFileSummariesByPath.get(relPath)?.importBindings === undefined
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
@@ -178,6 +183,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         language: previousSummary.language,
         lineCount: previousSummary.lineCount,
         imports: previousSummary.imports,
+        ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+        ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
         exports: previousSummary.exports,
         symbols: cleanSymbols,
         hasCallGraphEntries: false,
@@ -188,6 +195,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           language: previousSummary.language,
           lineCount: previousSummary.lineCount,
           imports: previousSummary.imports,
+          ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+          ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
           exports: previousSummary.exports,
           symbols: cleanSymbols,
           reExportSpecifiers,
@@ -224,6 +233,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       language: extraction.language,
       lineCount: extraction.lineCount,
       imports: extraction.imports,
+      ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
+      ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),
       exports: extraction.exports,
       symbols: extraction.symbols,
       hasCallGraphEntries: false,

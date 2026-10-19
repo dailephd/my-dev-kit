@@ -19,6 +19,7 @@ import {
   type SymbolKind,
   type SymbolLocation,
   type SourceLanguage,
+  type ImportBinding,
 } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,8 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  importBindings?: ImportBinding[]
+  warnings?: string[]
   language: SourceLanguage
   lineCount: number
   imports: string[]
