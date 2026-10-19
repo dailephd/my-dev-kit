@@ -473,6 +473,13 @@ The default registry supports TypeScript for `.ts`, `.tsx`, `.js`, and `.jsx`; P
 
 The Kotlin and Java adapters are conservative, deterministic, line/regex-based extractors (not the Kotlin compiler or `javac`), matching the TypeScript/Python precedent: top-level declarations only (classes, interfaces, objects, enums, records, annotation types, top-level functions/properties), no member-symbol model, no call-graph support (`supportsCallGraph: false`), and a best-effort single-declaration-per-file import resolution heuristic. See [ROADMAP.md](ROADMAP.md) Version 1.9.0 for full batch-by-batch detail.
 
+### Planned v1.14.0 Rust language subtrack (not implemented)
+
+The [v1.14.0 Rust plan](ROADMAP.md#rust-language-intelligence--planned-v1140-subtrack-not-implemented) extends this same language registry, symbol index, code graph and bounded retrieval architecture. As of the current v1.13.0 implementation, Rust is **not** registered and no Rust/Cargo parser, module graph, `--language rust` option or Rust-specific source/lookup support is shipped.
+
+Before implementing nested Rust `trait`/`impl` declarations, the planner must resolve generic graph symbol identity: current `src/graph/buildCodeGraph.ts` produces `symbol:<file>#<simpleName>`, so two same-named methods in distinct impl scopes collide. The intended change is an additive qualified-owner/identity and conservative Cargo/module relationship design with backwards-compatible TS/Python/Kotlin/Java readers, **not** a second indexer or Rust-only artifact family. The exact qualified-ID representation and Tree-sitter Node-native versus packaged-WASM backend remain R0 feasibility/compatibility decisions. Rust analysis will be static and must not execute Cargo, build scripts, macros or target code, or broaden user-selected `--src` roots.
+
+
 ## Symbol index layer
 
 Files:
