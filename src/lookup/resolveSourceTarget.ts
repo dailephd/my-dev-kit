@@ -37,6 +37,9 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
       warnings: ['File node retrieval returns a capped preview, not the whole file.'],
     }
   }
+  if (node.kind === 'framework-route' && node.path && Number.isInteger(node.line) && node.line! > 0) {
+    return { mode: 'node', nodeId: node.id, filePath: node.path, startLine: node.line!, endLine: node.line! + Math.max(1, Math.min(maxLines, 12)) - 1, warnings: ['Framework route source is a bounded declaration excerpt; the declaration end is unknown.'] }
+  }
   if (node.kind === 'symbol') {
     const filePath = node.path ?? parseSymbolNodeId(node.id).filePath
     const symbolName = node.symbolName ?? parseSymbolNodeId(node.id).symbolName

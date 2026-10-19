@@ -52,6 +52,7 @@ function toSelectedGraphNode(node: CodeGraphNode, focusNodeId: string): Selected
     kind: node.kind,
     label: node.label,
     ...(node.path ? { filePath: node.path } : {}),
+    ...(node.kind === 'framework-route' ? { routeMetadata: node.routeMetadata } : {}),
     reasons: [node.id === focusNodeId ? 'primary focus node' : 'direct neighbor of focus node'],
   }
 }
@@ -62,6 +63,7 @@ function toSelectedGraphEdge(edge: CodeGraphEdge, focusNodeId: string): Selected
     from: edge.source,
     to: edge.target,
     kind: edge.kind,
+    ...(edge.kind === 'framework-router-mounts-route' ? { metadata: edge.metadata, edgeId: edge.id } : {}),
     reasons: [touchesFocus ? 'connects directly to focus node' : 'edge among retained neighborhood nodes'],
   }
 }

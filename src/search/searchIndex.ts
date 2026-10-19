@@ -442,8 +442,8 @@ function buildFrontendValueFields(fileResult: FrontendFileResult): SearchCandida
   return fields
 }
 
-function isSearchableNode(node: CodeGraphNode): node is CodeGraphNode & { kind: 'file' | 'symbol' } {
-  return node.kind === 'file' || node.kind === 'symbol'
+function isSearchableNode(node: CodeGraphNode): node is CodeGraphNode & { kind: 'file' | 'symbol' | 'framework-route' } {
+  return node.kind === 'file' || node.kind === 'symbol' || node.kind === 'framework-route'
 }
 
 /** `android-*` node kinds are eligible for generic `search --query`/`context` candidate ranking (v1.10.0 Batch 6), reusing the same generic search engine rather than a second retrieval path. */
@@ -451,7 +451,7 @@ function isAndroidGraphNode(node: CodeGraphNode): boolean {
   return node.kind.startsWith('android-')
 }
 
-function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): SearchCandidate {
+function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' | 'framework-route' }): SearchCandidate {
   const fields: SearchCandidateField[] = [
     field('nodeId', node.id, WEIGHTS.nodeId),
     field('label', node.label, WEIGHTS.label),
@@ -460,6 +460,7 @@ function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' }): Searc
   if (node.symbolName) fields.push(field('symbolName', node.symbolName, WEIGHTS.symbolName))
   if (node.symbolKind) fields.push(field('symbolKind', node.symbolKind, WEIGHTS.symbolKind))
   if (node.exported && node.symbolName) fields.push(field('export', node.symbolName, WEIGHTS.export))
+  for (const value of Object.values(node.routeMetadata ?? {})) if (typeof value === 'string') fields.push(field('label', value, WEIGHTS.label))
   fields.push(...semanticFields(node.semanticRoles, node.artifactRefs))
   fields.push(...classificationFields(node.classificationRoles))
   fields.push(...androidComponentFields(node.androidComponentRoles))

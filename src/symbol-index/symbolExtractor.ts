@@ -28,6 +28,8 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  pythonOrmFacts?: import('./types.js').PythonOrmFact[]
+  frameworkRouteFacts?: import('./types.js').FrameworkRouteFact[]
   importBindings?: ImportBinding[]
   warnings?: string[]
   language: SourceLanguage

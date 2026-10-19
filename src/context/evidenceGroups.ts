@@ -217,7 +217,7 @@ function fileToItem(file: CandidateFile, relationship: string, basis: string): E
   }
 }
 
-function nodeToItem(node: CandidateNode, relationship: string, basis: string): EvidenceItemRef {
+function candidateNodeToItem(node: CandidateNode, relationship: string, basis: string): EvidenceItemRef {
   return {
     id: node.nodeId,
     itemKind: node.kind === 'symbol' ? 'symbol' : 'file',
@@ -543,6 +543,15 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   let roleConditionCoverage: RoleConditionCoverage[] = []
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
+  const nodeToItem = (node: CandidateNode, relationship: string, basis: string): EvidenceItemRef => {
+    const item = candidateNodeToItem(node, relationship, basis)
+    const fact = nodeGraphById.get(node.nodeId)
+    if (fact?.kind === 'framework-route') {
+      item.metadata = { ...item.metadata, nodeKind: fact.kind, ...fact.routeMetadata }
+      item.sourceLocation = { filePath: fact.path ?? node.filePath ?? '', line: fact.line }
+    }
+    return item
+  }
 
   const seedNodeIds = computeSeedNodeIds({ codeGraph, focusIntake, changedSurface })
   const structuralContractIds = new Set<string>()
@@ -689,6 +698,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       relationship: 'selected-graph-neighborhood',
       basis: n.reasons.join('; ') || 'selected graph neighborhood',
       provenance: 'selected-graph',
+      ...(nodeGraphById.get(n.nodeId)?.kind === 'framework-route' ? { metadata: { nodeKind: 'framework-route', ...nodeGraphById.get(n.nodeId)?.routeMetadata } } : {}),
     }))
     pushGroup('graph-neighborhood', graphNeighborhoodItems, {
       limit: null,

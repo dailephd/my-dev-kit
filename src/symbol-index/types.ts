@@ -103,6 +103,8 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  pythonOrmFacts?: PythonOrmFact[]
+  frameworkRouteFacts?: FrameworkRouteFact[]
   warnings?: string[]
   importBindings?: ImportBinding[]
   /** File path relative to the repo root, forward slashes. */
@@ -128,6 +130,48 @@ export interface FileSummary {
    * False if call-graph was not built or this file has no edges.
    */
   hasCallGraphEntries: boolean
+}
+
+/** Bounded syntax evidence from the isolated Python AST adapter. */
+export interface PythonOrmFact {
+  name: string
+  line: number
+  nodeId?: string
+  family: 'django' | 'sqlalchemy'
+  declarativeBase?: boolean
+  baseReference?: string
+  ownership?: 'verified' | 'unresolved'
+  ownerKey?: string
+  table?: string
+  fields: Array<{
+    name: string
+    line: number
+    type: string
+    options: Record<string, string | number | boolean | null>
+    target?: string
+    targetKind?: 'name' | 'string' | 'foreign-key' | 'dynamic'
+    relationship?: 'many-to-one' | 'one-to-one' | 'many-to-many' | 'field-reference'
+    unresolved?: boolean
+  }>
+}
+
+export interface FrameworkRouteFact {
+  kind: 'router' | 'route' | 'mount' | 'import'
+  name: string
+  line: number
+  column: number
+  status: 'static' | 'unresolved'
+  prefix?: string
+  path?: string
+  method?: string
+  handlerName?: string
+  handlerLine?: number
+  handlerId?: string
+  target?: string
+  module?: string
+  importedName?: string
+  qualifier?: string
+  relativeLevel?: number
 }
 
 /**

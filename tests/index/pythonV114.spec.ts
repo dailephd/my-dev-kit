@@ -17,7 +17,7 @@ import { spawnSync } from 'node:child_process'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
 
 const adapter = new PythonAdapter()
-const taskRoot = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b03-20261019/tests')
+const taskRoot = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b04-20261019/tests')
 function fixture(files: Record<string, string>) {
   mkdirSync(taskRoot, { recursive: true })
   const root = mkdtempSync(join(taskRoot, 'python-'))

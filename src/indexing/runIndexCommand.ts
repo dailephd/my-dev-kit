@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
+import { buildFrameworkRoutes } from '../graph/buildFrameworkRoutes.js'
 import { addFrontendRelationshipsToCodeGraph } from '../graph/addFrontendRelationshipsToCodeGraph.js'
 import { addAndroidRelationshipsToCodeGraph } from '../graph/addAndroidRelationshipsToCodeGraph.js'
 import { toForwardSlash } from '../io/pathUtils.js'
@@ -938,7 +939,7 @@ function finishIndexBuild(
   const errors: string[] = []
 
   const languages = inferLanguages(index.files.map((file) => file.language), options.language)
-  const codeGraph = buildCodeGraph({ symbolIndex: index, callGraph })
+  const codeGraph = buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files)
   const createdAt = new Date().toISOString()
   const baseManifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),

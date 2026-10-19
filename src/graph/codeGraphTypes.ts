@@ -6,6 +6,7 @@ import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.j
 export const CODE_GRAPH_SCHEMA_VERSION = '1.1.0'
 
 export type CodeGraphNodeKind =
+  | 'framework-route'
   | 'file'
   | 'symbol'
   | 'frontend-fact'
@@ -45,6 +46,9 @@ export type AndroidArtifactId =
   | 'android-test-semantic'
 
 export type CodeGraphEdgeKind =
+  | 'framework-route-defined-in-file'
+  | 'framework-route-handled-by-symbol'
+  | 'framework-router-mounts-route'
   | 'defines'
   | 'imports'
   | 'exports'
@@ -97,6 +101,7 @@ export type CodeGraphEdgeKind =
   | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
+  routeMetadata?: Record<string, string | number | boolean | null>
   qualifiedName?: string
   ownerKey?: string
   id: string

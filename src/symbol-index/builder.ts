@@ -148,6 +148,8 @@ export function buildIndex(config: BuildConfig): BuildResult {
       lineCount: result.lineCount,
       imports: result.imports,
       ...(result.importBindings ? { importBindings: result.importBindings } : {}),
+      ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
+      ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       exports: result.exports,
       symbols: result.symbols,

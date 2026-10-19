@@ -1,7 +1,7 @@
 ﻿import { spawnSync } from 'node:child_process'
 import * as path from 'node:path'
 import type { LanguageAdapter, ExtractionResult, SourceFileInput } from '../types.js'
-import type { CallGraphEdge, SymbolDefinition, SymbolLocation, ImportBinding, DecoratorMetadata } from '../../symbol-index/types.js'
+import type { CallGraphEdge, SymbolDefinition, SymbolLocation, ImportBinding, DecoratorMetadata, PythonOrmFact, FrameworkRouteFact } from '../../symbol-index/types.js'
 import { assignDeclarationIdentities } from '../../symbol-index/declarationIdentity.js'
 
 // Only this trusted script executes. Indexed source is passed to ast.parse via stdin.
@@ -132,6 +132,174 @@ def main():
         for n in body: w.visit(n)
         return result
     module_writes = writes(tree.body)
+    # B04 uses the same parsed tree. Only unique, unconditional import bindings
+    # establish framework ownership; target expressions are never evaluated.
+    orm, framework = [], []
+    wildcard = any(b["wildcard"] for b in bindings)
+    attribute_writes = set()
+    for written in ast.walk(tree):
+        if isinstance(written, ast.Attribute) and isinstance(written.ctx, (ast.Store, ast.Del)):
+            p = dotted(written)
+            if p: attribute_writes.add(p.split(".")[0])
+    blocked_framework_names = set()
+    def bound(p):
+        if not p or wildcard: return None
+        root = p.split(".")[0]
+        if root in blocked_framework_names or root in attribute_writes: return None
+        bs = [b for b in bindings if b["localName"] == root and b["topLevel"] and module_writes.count(root) == 1 and b["relativeLevel"] == 0]
+        if len(bs) != 1: return None
+        b = bs[0]
+        if b["form"] == "from": return b["sourceSpecifier"] + "." + b["importedName"] + p[len(root):]
+        prefix = b["qualifier"]
+        if p == prefix or p.startswith(prefix + "."): return b["sourceSpecifier"] + p[len(prefix):]
+        return None
+    def scalar(n):
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)) and isinstance(n.operand, ast.Constant) and type(n.operand.value) in (int, float):
+            n = ast.Constant(value=(-n.operand.value if isinstance(n.op, ast.USub) else n.operand.value))
+        if isinstance(n, ast.Constant) and (n.value is None or type(n.value) in (str, bool, int, float)):
+            v = n.value
+            if isinstance(v, str) and len(v) > 256: return False, None
+            if type(v) in (int, float) and (abs(v) > 9007199254740991 or not math.isfinite(v)): return False, None
+            return True, v
+        return False, None
+    def options(call):
+        result = {}
+        for k in call.keywords[:16]:
+            ok, v = scalar(k.value)
+            if k.arg and len(k.arg) <= 128 and ok: result[k.arg] = v
+            elif k.arg and len(k.arg) <= 128: result["unresolved:" + k.arg] = True
+        for i, a in enumerate(call.args[:16]):
+            ok, v = scalar(a)
+            if ok: result["arg" + str(i)] = v
+        return result
+    def value_of(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and len(n.value) <= 256: return n.value, "string"
+        p = dotted(n)
+        return (p, "name") if p and len(p) <= 256 else (None, "dynamic")
+    def assignment(n):
+        if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name): return n.targets[0].id, n.value
+        if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name): return n.target.id, n.value
+        return None, None
+    bases = {}
+    for n in tree.body:
+        if isinstance(n, ast.ClassDef) and module_writes.count(n.name) == 1 and not n.decorator_list and not n.keywords:
+            ps = [bound(dotted(b)) for b in n.bases]
+            if len(n.bases) == 1 and ps[0] == "sqlalchemy.orm.DeclarativeBase": bases[n.name] = "sqlalchemy"
+        name, v = assignment(n)
+        if name and isinstance(v, ast.Call) and bound(dotted(v.func)) in ("sqlalchemy.orm.declarative_base", "sqlalchemy.ext.declarative.declarative_base") and module_writes.count(name) == 1 and not v.args and not v.keywords:
+            bases[name] = "sqlalchemy"
+    django_fields = ("CharField", "TextField", "IntegerField", "BooleanField", "DateField", "DateTimeField", "DecimalField", "ForeignKey", "OneToOneField", "ManyToManyField")
+    def model_classes(body, owners, blocked):
+        counts = writes(body)
+        for n in body:
+            if isinstance(n, ast.ClassDef) and counts.count(n.name) == 1 and not n.decorator_list and not n.keywords:
+                yield n, owners, blocked
+                yield from model_classes(n.body, owners + [n.name], blocked + writes(n.body))
+    for n, owners, blocked in model_classes(tree.body, [], []):
+        blocked_framework_names = set(blocked)
+        family = None
+        base_reference, declarative_base, ownership = None, False, "verified"
+        if len(n.bases) == 1:
+            b = n.bases[0]
+            if bound(dotted(b)) == "django.db.models.Model": family = "django"
+            elif bound(dotted(b)) == "sqlalchemy.orm.DeclarativeBase": family, declarative_base = "sqlalchemy", True
+            elif isinstance(b, ast.Name) and bases.get(b.id) == "sqlalchemy" and b.id not in blocked and b.id not in attribute_writes: family, base_reference = "sqlalchemy", b.id
+            elif dotted(b) and not wildcard:
+                root = dotted(b).split(".")[0]
+                bs = [x for x in bindings if x["localName"] == root and x["topLevel"] and module_writes.count(root) == 1 and root not in blocked and root not in attribute_writes]
+                if len(bs) == 1:
+                    family, base_reference, ownership = "sqlalchemy", dotted(b), "unresolved"
+        if not family: continue
+        fact = {"name": n.name, "line": n.lineno, "family": family, "fields": []}
+        if owners: fact["ownerKey"] = "python/" + "/".join("class:" + x for x in owners)
+        if declarative_base: fact["declarativeBase"] = True
+        if base_reference: fact["baseReference"] = base_reference
+        fact["ownership"] = ownership
+        member_names = writes(n.body)
+        blocked_framework_names = set(blocked + member_names)
+        for member in n.body:
+            name, v = assignment(member)
+            if name == "__tablename__":
+                ok, table = scalar(v)
+                if ok and isinstance(table, str): fact["table"] = table
+            if not name or member_names.count(name) != 1: continue
+            annotation = member.annotation if isinstance(member, ast.AnnAssign) else None
+            mapped = isinstance(annotation, ast.Subscript) and bound(dotted(annotation.value)) == "sqlalchemy.orm.Mapped"
+            p = bound(dotted(v.func)) if isinstance(v, ast.Call) else None
+            typ = p.rsplit(".", 1)[-1] if p else "Mapped" if mapped else ""
+            if family == "django" and p not in ["django.db.models." + t for t in django_fields]: continue
+            if family == "sqlalchemy" and p not in ("sqlalchemy.Column", "sqlalchemy.orm.mapped_column", "sqlalchemy.orm.relationship") and not (mapped and v is None): continue
+            f = {"name": name, "line": member.lineno, "type": typ, "options": options(v) if isinstance(v, ast.Call) else {}}
+            if mapped:
+                a = dotted(annotation.slice)
+                if a and len(a) <= 256: f["options"]["mappedType"] = a
+            if isinstance(v, ast.Call):
+                if family == "django" and typ in ("ForeignKey", "OneToOneField", "ManyToManyField") or p == "sqlalchemy.orm.relationship":
+                    target_node = v.args[0] if v.args else next((k.value for k in v.keywords if k.arg in ("to", "argument")), None)
+                    target, tk = value_of(target_node)
+                    f.update({"targetKind": tk, "relationship": {"ForeignKey": "many-to-one", "OneToOneField": "one-to-one", "ManyToManyField": "many-to-many"}.get(typ, "field-reference")})
+                    if target: f["target"] = target
+                    else: f["unresolved"] = True
+                for a in v.args[:16]:
+                    if isinstance(a, ast.Call) and bound(dotted(a.func)) == "sqlalchemy.ForeignKey":
+                        target, tk = value_of(a.args[0] if a.args else None)
+                        f.update({"targetKind": "foreign-key" if tk == "string" else "dynamic", "relationship": "many-to-one"})
+                        if target: f["target"] = target
+                        else: f["unresolved"] = True
+                    else:
+                        t = bound(dotted(a.func if isinstance(a, ast.Call) else a))
+                        if t and t.startswith("sqlalchemy."):
+                            f["options"]["columnType"] = t[:256]
+                            if isinstance(a, ast.Call):
+                                for i, arg in enumerate(a.args[:16]):
+                                    ok, literal = scalar(arg)
+                                    if ok: f["options"]["typeArg" + str(i)] = literal
+                        ok, literal = scalar(a)
+                        if ok and "literal" not in f["options"]: f["options"]["literal"] = literal
+            fact["fields"].append(f)
+        orm.append(fact)
+    blocked_framework_names = set()
+    routers = {}
+    for n in tree.body:
+        name, v = assignment(n)
+        if name and isinstance(v, ast.Call) and bound(dotted(v.func)) in ("fastapi.FastAPI", "fastapi.APIRouter") and module_writes.count(name) == 1 and name not in attribute_writes:
+            prefix_nodes = [k.value for k in v.keywords if k.arg == "prefix"]
+            ok, prefix = scalar(prefix_nodes[0]) if len(prefix_nodes) == 1 else (True, "")
+            safe = ok and isinstance(prefix, str) and not any(k.arg is None for k in v.keywords) and not v.args
+            r = {"kind": "router", "name": name, "line": n.lineno, "column": n.col_offset, "status": "static" if safe else "unresolved"}
+            if safe: r["prefix"] = prefix
+            framework.append(r)
+            routers[name] = r
+    # Import evidence for cross-file mounts, with conditional/shadowed imports excluded.
+    if not wildcard:
+        for b in bindings:
+            if b["topLevel"] and module_writes.count(b["localName"]) == 1 and b["localName"] not in attribute_writes:
+                framework.append({"kind": "import", "name": b["localName"], "line": b["startLine"], "column": 0, "status": "static", "module": b["sourceSpecifier"], "importedName": b["importedName"] if b["form"] == "from" else "", "qualifier": b["qualifier"], "relativeLevel": b["relativeLevel"]})
+    methods = ("get", "post", "put", "patch", "delete", "head", "options", "trace")
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for d in n.decorator_list:
+                if not isinstance(d, ast.Call) or not isinstance(d.func, ast.Attribute): continue
+                receiver = dotted(d.func.value)
+                if receiver not in routers or d.func.attr not in methods: continue
+                path_node = d.args[0] if d.args else next((k.value for k in d.keywords if k.arg == "path"), None)
+                ok, route_path = scalar(path_node)
+                safe = n in tree.body and ok and isinstance(route_path, str) and not any(k.arg is None for k in d.keywords)
+                r = {"kind": "route", "name": receiver, "line": d.lineno, "column": d.col_offset, "status": "static" if safe else "unresolved", "method": d.func.attr.upper(), "handlerName": n.name, "handlerLine": n.lineno}
+                if ok and isinstance(route_path, str): r["path"] = route_path
+                if n not in tree.body or module_writes.count(n.name) != 1: r.pop("handlerName"); r.pop("handlerLine")
+                framework.append(r)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "include_router" and dotted(n.func.value) in routers:
+            pn = [k.value for k in n.keywords if k.arg == "prefix"]
+            ok, prefix = scalar(pn[0]) if len(pn) == 1 else (True, "")
+            target_node = n.args[0] if n.args else next((k.value for k in n.keywords if k.arg == "router"), None)
+            target = dotted(target_node)
+            top = any(isinstance(t, ast.Expr) and t.value is n for t in tree.body)
+            safe = top and target is not None and ok and isinstance(prefix, str) and not any(k.arg is None for k in n.keywords)
+            r = {"kind": "mount", "name": dotted(n.func.value), "line": n.lineno, "column": n.col_offset, "status": "static" if safe else "unresolved"}
+            if target: r["target"] = target[:256]
+            if ok and isinstance(prefix, str): r["prefix"] = prefix
+            framework.append(r)
     class Visitor(ast.NodeVisitor):
         def __init__(self):
             self.owners = []
@@ -173,7 +341,7 @@ def main():
     Visitor().visit(tree)
     bindings.sort(key=lambda b: b["startLine"])
     imports.sort(key=lambda i: i[0])
-    sys.stdout.write(json.dumps({"symbols": symbols, "imports": [i[1] for i in imports], "bindings": bindings, "calls": calls, "writes": module_writes, "classScopes": class_scopes}))
+    sys.stdout.write(json.dumps({"symbols": symbols, "imports": [i[1] for i in imports], "bindings": bindings, "calls": calls, "writes": module_writes, "classScopes": class_scopes, "orm": orm, "framework": framework}))
 main()
 `
 
@@ -187,6 +355,8 @@ interface ObservedCall {
   receiver: string | null
 }
 interface ParsedPython {
+  orm: PythonOrmFact[]
+  framework: FrameworkRouteFact[]
   symbols: Array<{ name: string; kind: SymbolDefinition['kind']; line: number; end_line: number | null; exported: boolean; signature?: string; ownerKey?: string; qualifiedName?: string; declarationMetadata?: { decorators?: DecoratorMetadata[] }; callableEvidence?: boolean }>
   imports: string[]
   bindings: BindingEvidence[]
@@ -215,8 +385,10 @@ function parsePython(file: string, source: string): { data?: ParsedPython; warni
 }
 function extracted(file: string, source: string, data?: ParsedPython, warning?: string): ExtractionResult {
   const lineCount = source.split('\n').length
-  return {
+  const result: ExtractionResult = {
     language: 'python', lineCount,
+    pythonOrmFacts: data?.orm ?? [],
+    frameworkRouteFacts: data?.framework ?? [],
     imports: [...new Set(data?.imports ?? [])],
     importBindings: (data?.bindings ?? []).map(({ form: _form, topLevel: _topLevel, qualifier: _qualifier, ...b }) => b),
     exports: [...new Set((data?.symbols ?? []).filter(s => s.exported).map(s => s.name))],
@@ -230,6 +402,16 @@ function extracted(file: string, source: string, data?: ParsedPython, warning?: 
     reExportSpecifiers: [], exportAllSpecifiers: [],
     ...(warning ? { warnings: [warning] } : {}),
   }
+  result.symbols = assignDeclarationIdentities(file, result.symbols)
+  for (const fact of result.pythonOrmFacts ?? []) {
+    const matches = result.symbols.filter(s => s.kind === 'class' && s.name === fact.name && s.location.line === fact.line)
+    if (matches.length === 1) fact.nodeId = matches[0].nodeId
+  }
+  for (const fact of result.frameworkRouteFacts ?? []) {
+    const matches = result.symbols.filter(s => s.name === fact.handlerName && s.location.line === fact.handlerLine && !s.ownerKey)
+    if (matches.length === 1) fact.handlerId = matches[0].nodeId
+  }
+  return result
 }
 
 // Candidate sets deliberately include both module.py and module/__init__.py.

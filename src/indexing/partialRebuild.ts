@@ -166,10 +166,9 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const adapter = registry.adapterForFile(relPath)
     if (!adapter) continue
 
-    // B02 Python summaries lack even the empty bindings array. Re-extract them
-    // rather than blessing missing B03 evidence as a compatible cached result.
+    // Re-extract summaries lacking B03 bindings or either B04 fact array.
     const missingPythonEvidence = input.previousFileSummariesByPath.get(relPath)?.language === 'python' &&
-      input.previousFileSummariesByPath.get(relPath)?.importBindings === undefined
+      (input.previousFileSummariesByPath.get(relPath)?.importBindings === undefined || input.previousFileSummariesByPath.get(relPath)?.pythonOrmFacts === undefined || input.previousFileSummariesByPath.get(relPath)?.frameworkRouteFacts === undefined)
     if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
@@ -184,6 +183,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         lineCount: previousSummary.lineCount,
         imports: previousSummary.imports,
         ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+        ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
+        ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
         ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
         exports: previousSummary.exports,
         symbols: cleanSymbols,
@@ -196,6 +197,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           lineCount: previousSummary.lineCount,
           imports: previousSummary.imports,
           ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+          ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
+          ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
           ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
           exports: previousSummary.exports,
           symbols: cleanSymbols,
@@ -234,6 +237,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       lineCount: extraction.lineCount,
       imports: extraction.imports,
       ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
+      ...(extraction.pythonOrmFacts ? { pythonOrmFacts: extraction.pythonOrmFacts } : {}),
+      ...(extraction.frameworkRouteFacts ? { frameworkRouteFacts: extraction.frameworkRouteFacts } : {}),
       ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),
       exports: extraction.exports,
       symbols: extraction.symbols,
