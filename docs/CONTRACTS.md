@@ -53,6 +53,13 @@ from older artifacts. Stable IDs and normalized repository-relative paths are
 part of interoperability between indexing, retrieval, diffing, and downstream
 evidence consumers.
 
+### Planned v1.14.0 Rust identity and compatibility gate (not a current public contract)
+
+The [v1.14.0 Rust subtrack](ROADMAP.md#rust-language-intelligence--planned-v1140-subtrack-not-implemented) requires generic symbol and code-graph identity to distinguish same-named associated methods in different Rust modules, traits and `impl` blocks. The current graph generator's `symbol:<file>#<simpleName>` IDs do **not** satisfy that requirement. Proposed qualified owner/namespace metadata, Rust-specific visibility/uncertainty, and crate/module graph nodes or edges are **design targets**, not implemented fields or schema-version commitments.
+
+The R0/R1 gates must freeze exact IDs, migration/old-reader rules, provenance, ambiguity behavior, and compatibility tests before code changes. Reuse the existing `symbol-index.json`, `code-graph.json`, context capsule, source continuation, incremental-cache, and graph-diff contracts; do not rekey unrelated languages or declare unsupported Rust CLI flags shipped. The current [graph schema](GRAPH_SCHEMA.md) still documents only the implemented v1.13.0 shapes. Neither static Cargo parsing nor observed `cfg`/`use`/trait syntax proves compiler resolution, selected features, test success, or target execution.
+
+
 ## Context request contract
 
 The type owner is `ContextRequest` in `src/context/types.ts`, with loading,
