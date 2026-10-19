@@ -1765,12 +1765,103 @@ Candidate framework targets:
 Candidate future languages:
 
 - Go
-- Rust
+- Rust — now detailed as a planned v1.14.0 subtrack below; not implemented or released
 - Java beyond Android use cases
 - C#
 - Kotlin beyond Android use cases
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
+
+### Rust language intelligence — planned v1.14.0 subtrack (not implemented)
+
+**Decision and scope.** Rust is promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
+
+**Completion definition.** The existing `index → search → lookup → slice → source → context → graph-diff` loop must retrieve exact, noncolliding crate/module/trait/impl/function/test ownership and bounded source ranges for supported Rust syntax, including multiple same-named methods. Cargo metadata and code graph edges must be conservative; unknown feature activation, unresolved imports, macro expansion, trait dispatch, runtime behavior, and excluded roots must remain explicit unknowns. An indexed `.rs` file count alone is **not** evidence of completed Rust support.
+
+#### Frozen responsibility and trust boundaries
+
+- Extend the **existing** language registry/adapter (`src/languages/`), generic symbol builder/types (`src/symbol-index/`), code graph (`src/graph/`), index/discovery/cache/partial refresh (`src/indexing/`), and search/lookup/source/slice/context/diff readers. Reuse `symbol-index.json`, `code-graph.json`, existing `manifest.json`, and the current nine CLI command families. No Rust-specific second index/search engine, parallel graph, `rust-index` command, or Orchestrator runtime.
+- `index` is local, deterministic and read-only **toward the target**; it never executes `cargo`, `rustc`, `rust-analyzer`, `build.rs`, procedural/ordinary macros, Rust binaries/tests, downloads, or user scripts. Build, Clippy, test and runtime verification belong to the target-project workflow or separate Lab/CI validation. Observer owns browser evidence, not Rust parsing.
+- The existing `--root`/repeated `--src`/exclude/ignore rules govern selected source. Cargo manifest inspection must not silently expand source roots, fetch dependency bodies, traverse outside the approved repository, or equate observed `cfg` branches with activated configurations.
+- Preserve all existing TypeScript/JavaScript/Python/Kotlin/Java graph IDs, saved artifact readers, context semantics, Android/frontend evidence, schema-version interpretation, deterministic ordering, bounded output, and safe incremental fallbacks. Any unavoidable incompatible change requires a separately approved migration and reader tests.
+- No new generic semantic claims: distinguish (1) parsed syntax, (2) uniquely resolved local structure, (3) narrowly justified static source relationships, and (4) compiler/runtime truth. Only the first three are candidates for `index`, with explicit provenance and uncertainty; the fourth is out of scope.
+
+#### Identity, node, and edge design requirements — unresolved until R0/R1
+
+The current generic graph helper constructs `symbol:<file>#<simpleName>`. Two `run` methods in distinct `impl` blocks in one file therefore collide, and the current `SymbolKind` and `SourceLanguage` unions lack Rust-specific coverage. **Qualified identity and backwards-compatible readers are mandatory before nested Rust extraction.** Proposed additive representation, subject to exact type/field/schema review:
+
+- Keep each declaration's simple `name` for display/search, plus its crate/target, inline/external module path, owner trait/type/impl, optional qualified display path, and parser-grounded 1-based source range. Define a deterministic, collision-free disambiguator for distinct declarations that share a qualified display path; do not assert stable identity after arbitrary source moves.
+- Represent an indexed file, Cargo package/crate target, module, trait/type/impl owner and symbol **in the existing generic code graph** as nodes or additive ownership fields according to the R1 compatibility decision. A Rust module nested within one file is a distinct scope; different targets with the same crate name are not one identity.
+- Candidate relationships include crate→target, target→root file, module containment/source, declaration/impl ownership, exact external `mod`→selected file, unique `use` and `pub use` resolution, unique trait/type impl ownership, and demonstrably grounded direct local calls. Reuse existing edge vocabulary when semantically equivalent and add edge kinds only with type/reader/version decisions. Never use `related-to` to disguise unknowns or create target nodes outside the index.
+- Distinguish Rust `pub`, `pub(crate)`, `pub(super)`, `pub(in ...)` and private syntax. The current generic `exported` boolean must not be treated as complete crate-public reachability. Trait method declaration and implementing method remain different.
+- Use explicit resolution outcomes wherever the existing evidence contracts permit: `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED_EXTERNAL`, `UNRESOLVED_SELECTED_ROOTS`, `CONDITIONAL`, `UNSUPPORTED_SYNTAX`, `MALFORMED`. Report bounded exact candidates when a name is ambiguous; never silently select the first matching `run` or an arbitrary module file.
+- Before freezing fields or paths, inspect `src/symbol-index/types.ts`, `src/graph/buildCodeGraph.ts`, existing graph ID consumers, source selectors, search/lookup/context/diff and incremental merge code. Decide how old readers handle missing new fields. The public `GRAPH_SCHEMA.md` remains an **implemented schema reference**, not permission to publish proposed fields as current.
+
+#### Parser and Cargo architectural gates
+
+- **Parser decision D02 is pending R0 evidence.** Compare (A) a Node-native Tree-sitter binding with the maintained Rust grammar and (B) `web-tree-sitter` with a pinned packaged Rust grammar WASM. Do not use regex-only brace/line extraction for nested Rust semantics; do not require rustc/rust-analyzer as the installed indexer's backend. Measure actual clean installed-package startup, parse accuracy, memory, throughput, binary assets/licensing, Node ABI/OS support, and package sizes on the supported Windows/Linux/macOS matrix. Select **one** production backend after the spike; no runtime downloading, grammar compilation or mandatory Rust toolchain.
+- Parse Rust 2015, 2018, 2021 and 2024 samples, malformed/recovery cases, Unicode and raw identifiers, doc comments, raw strings, macros and attributes. A parser-error-contaminated declaration cannot receive a supposedly trustworthy `endLine`. Preserve established 1-based inclusive lines and explicitly define any additional byte/column coordinate unit before a schema change.
+- Parse `Cargo.toml` conservatively **in-process** using a reviewed TOML parser. Represent ordinary/virtual workspaces, glob/exclude/default members, package/edition/target metadata, lib/bin/tests/examples/benches, `build.rs` as a file, proc-macro targets, local path dependencies/renames, nonstandard target roots, and malformed manifests. `Cargo.lock` is dependency metadata, not proof of source relationships.
+- Support inline/external `mod`, `foo.rs` and `foo/mod.rs`, literal `#[path]`, grouped/aliased/glob `use`, `self/super/crate`, `pub use`, visibility syntax, and exact locally provable module targets. `cfg`, `cfg_attr`, optional features, target-dependent alternatives, `include!` and generated code must stay conditional/unresolved; no module/trait/method resolution based only on filename resemblance.
+
+#### Planned declaration and retrieval contract
+
+- Extract free/async/const/unsafe/extern functions, generics/where clauses, structs (named/tuple/unit), enum variants, unions, traits and trait aliases if grammar permits, aliases, const/static, externally declared FFI items, supported macro declarations and **observed** invocations/derives/attributes.
+- Extract **associated methods/types/constants inside traits and inherent/trait `impl` blocks** in the first substantive Rust release. Preserve receiver syntax, trait/type owner, required declaration versus implementation body, and parser-grounded complete source spans. Four methods named `start` plus a trait declaration must remain independently addressable across module and impl ownership contexts.
+- Index `#[test]`, observed framework-specific test attributes, `#[cfg(test)]` modules, test target roots, fixtures/examples, errors, constants, validators and nearby tests for the existing role-aware `context` pipeline. A recognized test annotation does not prove a test was executed.
+- Make existing `search` and ownership intent recognize qualified Rust owners where grounded; `lookup`/`slice` expose bounded owner relationships; `source --node` and `source --file --symbol` use verified symbol spans and explicit ambiguity/continuation. Optional `--language rust` is **undecided** because the current CLI language selector does not follow Kotlin/Java extension detection uniformly. Do not document any Rust flag as shipped before parser/help tests.
+- Never assert method dispatch, generic trait coherence, runtime feature activation, cross-language FFI/WASM/native messaging targets, or complete Cargo namespace resolution. Reserve conservative direct-call edges for a separate optional batch.
+
+#### Incremental index, compatibility, and measurement gates
+
+- Treat the selected parser/grammar version, relevant Cargo manifests/workspace membership, `mod` path relations, `cfg` interpretation and approved source roots as dependency/fingerprint inputs **when they affect extracted semantics**. A Cargo-only edit or module rename must invalidate affected ownership; no stale module edge or dangling symbol survives.
+- Prove full-versus-`--incremental` parity after method edits, external module moves, Cargo workspace changes, cfg changes and parser changes. Preserve existing `changed-files`/`affected-neighborhood`/truthful `fallback-full`, manifest/cache checksum verification, frozen before/after snapshots and `graph-diff` identities.
+- Establish baseline cold/warm indexing latency, memory, index/artifact size, clean tarball/install/startup, selected source retrieval and context budgets on current TS/Python/Android cases **before** setting numeric Rust performance thresholds. A backend parsing fast on Linux but not installing on Windows is not releasable.
+- Run a small, legally redistributable, pinned-attribution Rust corpus (layered async service, CLI, multi-crate library) in addition to synthetic fixtures. No consumer-specific private repository content, dependency downloads, package install hooks executing target code, or source/test modification in the index path.
+
+#### R0–R10 planned implementation batches and acceptance gates
+
+These are **Rust workstream batches within v1.14.0**, not eleven new release versions. Each starts only after required earlier evidence and a planner-authored exact source/test/output path contract. Before R1, freeze the identity/schema design and choose the parser after measurements.
+
+- **R0 — Preflight and feasibility.** Verify source/release state, manifest, adapter/symbol/graph/cache contracts and old readers; demonstrate same-file/simple-name collision; compare native Tree-sitter against packaged WASM on a controlled, project-owned, nonproduction spike. **Gate:** planner-approved parser, collision-free qualified identity design, schema/backward-reader migration strategy, fixture oracle, and exact output paths.
+- **R1 — Qualified identity foundation.** Add additive owner/qualified declaration identity and deterministic Rust symbol IDs with explicit same-name ambiguity. **Gate:** same-named trait/inherent methods do not collide; existing TS/Python/Kotlin/Java ID/reader tests remain unchanged.
+- **R2 — Rust adapter and syntax.** Register the chosen AST-backed Rust adapter; recognize declarations, associated items and trustworthy spans; handle malformed text safely. **Gate:** F01/F04/F05/F08 syntax fixtures, parser asset/diagnostic, and nonexecution tests pass.
+- **R3 — Cargo and module graph.** Parse allowed local Cargo manifest facts and selected `mod` layouts without source-root expansion. **Gate:** F02/F06/F07/F09 fixtures, conditional states and symlink/path boundaries pass.
+- **R4 — Imports/reexports and graph.** Map uniquely resolved module and `use` paths into existing graph nodes/edges with explicit provenance. **Gate:** F03 exact-target oracle, no invented edges, no duplicate IDs and old reader compatibility.
+- **R5 — End-to-end retrieval.** Extend existing search/lookup/slice/source/context for qualified Rust identity, precise method source and related test evidence. **Gate:** F10/F13 mixed-language retrieval and exact ambiguity/source/capsule tests pass.
+- **R6 — Incremental and diff correctness.** Add Rust parser/Cargo/module/config fingerprints, dependency invalidation, trusted partial refresh and graph-diff parity. **Gate:** F11 semantic full/incremental equivalence under controlled source, manifest and grammar changes.
+- **R7 — Optional conservative call evidence.** Allow exact local direct-call links only when uniquely justified; leave method dispatch and generics unresolved. **Gate:** no false-positive edges on F04/F05/F06; may follow the core structural release if separately approved, rather than blocking it.
+- **R8 — Retrieval regressions and real-world validation.** Exercise ownership-intent retrieval, test mapping, source/continuation, mixed-language noninterference and independently checked licensed Rust fixtures. **Gate:** F13/F14 and inherited retrieval/Android/frontend regressions pass; downstream Orchestrator consumes real emitted existing-schema context without a new mode.
+- **R9 — Packaging, performance and security qualification.** Test the exact packed CLI on supported Node and Windows/Linux/macOS; parser assets shipped, clean consumer requires no Rust toolchain and no runtime download, bounded malformed-input/path/security cases, benchmark budget. **Gate:** actual installed-package acceptance plus matrix CI, no hidden target execution or broken binary/WASM assets.
+- **R10 — Documentation and separate release transitions.** Reconcile implementation against planned scope, examples and the existing public docs, schemas and preservation manifest. **Gate:** docs checks and protected-plan inventory pass, implementation-completeness validates what shipped; pre-release audit, release preparation and publication remain **separate user-authorized procedures**.
+
+#### Fixture and proof inventory (planned, exact filenames awaiting planner path freeze)
+
+Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/graph/`, `tests/source/`, `tests/lookup/`, `tests/search/`, `tests/slice/`, `tests/context/`, `tests/retrievalRegression/`, and the existing `examples/` owner; no new parallel testing infrastructure. R0 freezes exact new filenames and any additional `src/languages/rust/` children before implementation.
+
+- **F01–F04:** foundational syntax, module layouts, import trees, traits/`impl` including identical method names.
+- **F05–F08:** macros/raw strings, conditional compilation, Cargo multi-crate workspaces, parser errors/Unicode/CRLF/oversized cases.
+- **F09–F11:** source-root/symlink/nonexecution security, mixed Rust/TS/Python/Kotlin/Java, Cargo/config/module incremental invalidation.
+- **F12–F14:** packed consumer on the supported OS/Node matrix, the whole bounded retrieval loop, independent Rust/Cargo reference-oracle fixtures and licensed real-project corpus.
+
+**Acceptance invariants:** zero silently dropped duplicate-named declarations; zero identity collisions; all `RESOLVED` graph edges grounded in unique local selected targets; every `AMBIGUOUS` source/lookup preserving bounded candidates; precise or honestly unknown method boundaries; frozen snapshots never overwritten; equivalent timestamp-normalized full/incremental graphs; no regressions in existing language/Android/frontend consumers; bounded performance and deterministic portable packaging.
+
+#### Planner decision ledger and prerequisites (not all resolved)
+
+- **D01 placement:** **planned** v1.14.0 Rust subtrack; existing scope in every other v1.14 section and future version remains intact. **Not** an implementation-complete or released commitment.
+- **D02 parser:** Tree-sitter grammar as design direction; native Node vs packaged WASM is **UNRESOLVED until R0 cross-platform installed-package evidence**.
+- **D03 identity:** reuse generic symbol/graph with qualified Rust ownership and deterministic collision-free IDs; **exact field names, disambiguation algorithm, schema version and reader migration are UNRESOLVED until R0/R1**.
+- **D04 declarations:** nested trait/`impl` associated items are required for first substantive support; no regex-only top-level substitute.
+- **D05 Cargo:** local in-process TOML/source static metadata, no Cargo execution by default; decide artifact placement only after existing-owner review.
+- **D06 graph:** crate/target/module/trait/impl/symbol concepts and evidence-backed edges required; exact additive node/edge type shapes **UNRESOLVED**.
+- **D07 uncertainty:** explicit resolved/ambiguous/external/excluded/cfg/unsupported/malformed states; map onto existing diagnostics where possible.
+- **D08 CLI:** existing command families only; whether `--language rust` is appropriate is **UNRESOLVED**, not an advertised flag.
+- **D09 fixtures:** F01–F14 as above; independent reference facts, no oracle derived solely from the new parser.
+- **D10 performance/security:** freeze measured thresholds after parser spike; cross-platform packed CLI, bounded reads and no user-code execution required.
+- **D11 call graph:** conservative direct references optionally later; trait/method dispatch not required for core structural completeness.
+- **D12 downstream:** Orchestrator receives existing context; Lab Rust audit work, if any, is separately planned; Observer unchanged. **No automatic cross-repository implementation**.
+- **D13 governance:** planner freezes exact structural directories/new filenames/generated locations and acceptance before each batch; no automatic implementation, Git mutation, tag or package release from these roadmap notes.
+
 
 ## Version 1.15.0
 
