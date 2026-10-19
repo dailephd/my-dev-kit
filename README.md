@@ -614,7 +614,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [do
 
 ## Roadmap
 
-Version 1.13.0 is the latest release represented by this package. Later planned scopes from v1.14.0 through v2.0.0 remain unchanged. Historical release details and deferred v1.8.0 work remain in the canonical [roadmap](docs/ROADMAP.md) and [changelog](CHANGELOG.md).
+Version 1.13.0 is the latest release represented by this package. The planned v1.14.0 language/framework expansion now includes an explicitly planned, **unimplemented** Rust static-retrieval subtrack; existing Python, JavaScript, framework, other-language, and v1.15.0–v2.0.0 commitments remain in place. No Rust parser or Rust-specific CLI capability ships in this version. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--planned-v1140-subtrack-not-implemented) and [changelog](CHANGELOG.md) for planned scope and release history.
 
 ## Support the project
 
