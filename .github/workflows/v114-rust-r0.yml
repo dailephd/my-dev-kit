@@ -1,0 +1,31 @@
+name: v1.14 Rust R0 qualification
+on:
+  push:
+    branches: [validation/v1.14.0-rust-r0]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+      - name: Qualify pinned installed consumers
+        run: node scripts/rust-r0/runQualification.mjs --out "${{ runner.temp }}/v114-rust-r0"
+        env:
+          NODE_DISABLE_COMPILE_CACHE: '1'
+      - name: Upload exact measurements and package inventories
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-r0-${{ matrix.os }}
+          path: ${{ runner.temp }}/v114-rust-r0/results/
+          if-no-files-found: error
