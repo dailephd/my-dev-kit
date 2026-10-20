@@ -252,6 +252,21 @@ export function buildGraphSection(
   for (const { relPath, extraction } of rawExtractions) {
     const adapter = registry.adapterForFile(relPath)!
 
+    for (const fact of extraction.frameworkRouteFacts ?? []) {
+      if (fact.framework !== 'express' && fact.framework !== 'nestjs') continue
+      delete fact.handlerId
+      fact.handlerStatus = 'unresolved'
+      if (fact.kind === 'route' && fact.handlerName && fact.handlerLine !== undefined) {
+        const matches = extraction.symbols.filter(s => s.name === fact.handlerName && s.ownerKey === fact.ownerKey && s.location.line === fact.handlerLine)
+        if (matches.length === 1 && matches[0].nodeId) { fact.handlerId = matches[0].nodeId; fact.handlerStatus = 'resolved' }
+      }
+      if (fact.framework === 'nestjs') {
+        const controllers = (extraction.frameworkRouteFacts ?? []).filter(f => f.kind === 'controller' && f.name === fact.name)
+        const classes = extraction.symbols.filter(s => s.kind === 'class' && s.name === fact.name && controllers.length === 1 && s.location.line === controllers[0].line)
+        if (classes.length === 1) fact.controllerId = classes[0].nodeId
+      }
+    }
+
     if (extraction.language === 'javascript' || extraction.language === 'typescript') {
       for (const binding of extraction.importBindings ?? []) {
         const candidates = resolveJsTsCandidates(binding.sourceSpecifier, relPath, knownFiles)

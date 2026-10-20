@@ -939,6 +939,7 @@ function finishIndexBuild(
   const errors: string[] = []
 
   const languages = inferLanguages(index.files.map((file) => file.language), options.language)
+  // Reproject from every selected summary, including unchanged cross-file routers.
   const codeGraph = buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files)
   const createdAt = new Date().toISOString()
   const baseManifest = buildIndexManifest({

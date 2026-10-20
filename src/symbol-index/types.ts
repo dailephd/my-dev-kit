@@ -178,7 +178,15 @@ export interface PythonOrmFact {
 }
 
 export interface FrameworkRouteFact {
-  kind: 'router' | 'route' | 'mount' | 'import'
+  framework?: 'fastapi' | 'express' | 'nestjs'
+  kind: 'router' | 'route' | 'mount' | 'import' | 'controller' | 'export'
+  ownerKey?: string
+  endLine?: number
+  controllerId?: string
+  handlerStatus?: 'resolved' | 'unresolved'
+  syntax?: string[]
+  provenance?: string
+  warnings?: string[]
   name: string
   line: number
   column: number

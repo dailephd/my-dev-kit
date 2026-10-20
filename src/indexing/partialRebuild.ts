@@ -175,7 +175,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     // direct callers without optional B05 evidence retain identity-only reuse.
     const unresolvedJsBindings = previous && ['typescript', 'javascript'].includes(previous.language) &&
       previous.importBindings?.some(b => b.resolutionStatus === 'unresolved')
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings) {
+    const missingJsFrameworkEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.frameworkRouteFacts === undefined
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
@@ -183,6 +184,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       const exportAllSpecifiers = previousCacheEntry?.exportAllSpecifiers ?? []
       const cleanSymbols = previousSummary.symbols.map(cleanSymbol)
       const importBindings = previousSummary.importBindings?.map(binding => ({ ...binding }))
+      const frameworkRouteFacts = previousSummary.frameworkRouteFacts?.map(fact => ({ ...fact, ...(fact.syntax ? { syntax: [...fact.syntax] } : {}), ...(fact.warnings ? { warnings: [...fact.warnings] } : {}) }))
 
       summaries.push({
         path: relPath,
@@ -192,7 +194,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         ...(importBindings ? { importBindings } : {}),
         ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
         ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
-        ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
+        ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
         ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
         exports: previousSummary.exports,
         symbols: cleanSymbols,
@@ -207,7 +209,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           ...(importBindings ? { importBindings } : {}),
           ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
           ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
-          ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
+          ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
           ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
           exports: previousSummary.exports,
           symbols: cleanSymbols,

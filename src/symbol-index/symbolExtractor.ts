@@ -22,6 +22,7 @@ import {
   type ImportBinding,
   type JSDocMetadata,
   type CommonJsExportFact,
+  type FrameworkRouteFact,
 } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -108,10 +109,12 @@ export function extractFromSource(
   const commonJsExports: CommonJsExportFact[] = []
   extractDocumentation(sourceFile, filePath, symbols, warnings, endLineLimit)
   extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings)
+  const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
 
   return {
     importBindings,
     commonJsExports,
+    frameworkRouteFacts,
     ...(warnings.length ? { warnings } : {}),
     language,
     lineCount,
@@ -430,6 +433,165 @@ function extractDocumentation(sf: ts.SourceFile, file: string, symbols: SymbolDe
 }
 
 /** Conservative file-wide rejection of shadowed or reassigned Node globals. */
+/** Compiler syntax only. File-wide rejection deliberately favors missing evidence over false ownership. */
+function extractJsFrameworkEvidence(sf: ts.SourceFile, file: string, symbols: SymbolDefinition[], bindings: ImportBinding[], commonJsExports: CommonJsExportFact[], endLimit: number | null): FrameworkRouteFact[] {
+  const facts: FrameworkRouteFact[] = []
+  if (endLimit === null) return facts
+  const declarations = new Map<string, number>()
+  const unsafe = new Set<string>()
+  const aliases: Array<[string, string]> = []
+  const root = (n: ts.Node): string | undefined => ts.isIdentifier(n) ? n.text : ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n) ? root(n.expression) : undefined
+  const names = (n: ts.BindingName): string[] => ts.isIdentifier(n) ? [n.text] : n.elements.flatMap(e => ts.isOmittedExpression(e) ? [] : names(e.name))
+  const declare = (name: string) => declarations.set(name, (declarations.get(name) ?? 0) + 1)
+  const scan = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ts.isIdentifier(n.expression.expression) && ['Object', 'Reflect'].includes(n.expression.expression.text) && ['assign', 'defineProperty', 'defineProperties', 'set', 'deleteProperty', 'setPrototypeOf'].includes(n.expression.name.text) && n.arguments[0]) {
+      const name = root(n.arguments[0]); if (name) unsafe.add(name)
+    }
+    if (ts.isVariableDeclaration(n) || ts.isParameter(n)) names(n.name).forEach(declare)
+    if ((ts.isClassDeclaration(n) || ts.isFunctionDeclaration(n)) && n.name) declare(n.name.text)
+    if (ts.isImportClause(n) && n.name) declare(n.name.text)
+    if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n)) declare(n.name.text)
+    if (ts.isVariableDeclaration(n) && n.initializer && ts.isIdentifier(n.name) && ts.isIdentifier(n.initializer)) aliases.push([n.name.text, n.initializer.text])
+    if (ts.isVariableDeclaration(n) && !(ts.isVariableDeclarationList(n.parent) && n.parent.flags & ts.NodeFlags.Const)) names(n.name).forEach(x => unsafe.add(x))
+    let written: ts.Node | undefined
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      written = n.left
+      if (ts.isIdentifier(n.left) && ts.isIdentifier(n.right)) aliases.push([n.left.text, n.right.text])
+    }
+    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && (n.operator === ts.SyntaxKind.PlusPlusToken || n.operator === ts.SyntaxKind.MinusMinusToken)) written = n.operand
+    if (ts.isDeleteExpression(n)) written = n.expression
+    if (written) {
+      const name = root(written)
+      if (name) unsafe.add(name)
+      else {
+        const invalidate = (node: ts.Node): void => { if (ts.isIdentifier(node)) unsafe.add(node.text); ts.forEachChild(node, invalidate) }
+        invalidate(written)
+      }
+    }
+    ts.forEachChild(n, scan)
+  }
+  scan(sf)
+  for (const [name, count] of declarations) if (count !== 1) unsafe.add(name)
+  // A write through an alias invalidates both ends of the observed alias chain.
+  for (let i = 0; i <= aliases.length; i++) for (const [a, b] of aliases) if (unsafe.has(a) || unsafe.has(b)) { unsafe.add(a); unsafe.add(b) }
+  const safe = (name: string) => !unsafe.has(name) && declarations.get(name) === 1
+  const callable = new Map<string, number>()
+  for (const n of sf.statements) {
+    if (ts.isFunctionDeclaration(n) && n.name && n.body && safe(n.name.text)) callable.set(n.name.text, sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1)
+    if (ts.isVariableStatement(n)) for (const d of n.declarationList.declarations) if (ts.isIdentifier(d.name) && safe(d.name.text) && d.initializer && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))) callable.set(d.name.text, sf.getLineAndCharacterOfPosition(d.getStart(sf)).line + 1)
+  }
+  const literal = (n: ts.Node | undefined): string | undefined => n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text.length <= 1024 ? n.text : undefined
+  const position = (n: ts.Node) => { const p = sf.getLineAndCharacterOfPosition(n.getStart(sf)); return { line: p.line + 1, column: p.character, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1 } }
+  const typedImports = new Set<string>()
+  for (const n of sf.statements) if (ts.isImportDeclaration(n)) {
+    const c = n.importClause
+    if (c?.isTypeOnly) { if (c.name) typedImports.add(c.name.text); if (c.namedBindings && ts.isNamedImports(c.namedBindings)) c.namedBindings.elements.forEach(e => typedImports.add(e.name.text)) }
+    if (c?.namedBindings && ts.isNamedImports(c.namedBindings)) c.namedBindings.elements.filter(e => e.isTypeOnly).forEach(e => typedImports.add(e.name.text))
+  }
+  const origins = new Map<string, string>()
+  const nest = new Map<string, string>()
+  const recognizedNest = new Set(['Controller', 'Get', 'Post', 'Put', 'Patch', 'Delete', 'Options', 'Head', 'All', 'UseGuards', 'UseInterceptors', 'UsePipes', 'UseFilters', 'Inject', 'Injectable', 'SetMetadata', 'HttpCode', 'Header', 'Redirect', 'Version'])
+  for (const b of bindings) {
+    if (!safe(b.localName) || typedImports.has(b.localName) || b.resolutionStatus === 'unresolved') continue
+    if (b.sourceSpecifier === 'express') {
+      if (b.importedName === 'default' && b.syntaxKind === 'esm' || b.importedName === '*' && b.syntaxKind === 'commonjs') origins.set(b.localName, 'express')
+      if (b.importedName === 'Router') origins.set(b.localName, 'Router')
+    }
+    if (b.sourceSpecifier === '@nestjs/common' && b.syntaxKind === 'esm' && recognizedNest.has(b.importedName)) nest.set(b.localName, b.importedName)
+  }
+  for (const statement of sf.statements) if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const) for (const d of statement.declarationList.declarations) {
+    if (!ts.isIdentifier(d.name) || !d.initializer || !safe(d.name.text)) continue
+    const init = d.initializer
+    if (ts.isIdentifier(init) && safe(init.text) && origins.has(init.text)) origins.set(d.name.text, origins.get(init.text)!)
+    if (ts.isPropertyAccessExpression(init) && ts.isIdentifier(init.expression) && origins.get(init.expression.text) === 'express' && init.name.text === 'Router') origins.set(d.name.text, 'Router')
+    if (ts.isCallExpression(init) && init.arguments.length === 0) {
+      const callee = init.expression
+      const origin = ts.isIdentifier(callee) ? origins.get(callee.text) : ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && origins.get(callee.expression.text) === 'express' && callee.name.text === 'Router' ? 'Router' : undefined
+      if (origin === 'express' || origin === 'Router') {
+        origins.set(d.name.text, 'receiver')
+        facts.push({ framework: 'express', kind: 'router', name: d.name.text, ...position(d), status: 'static', prefix: '', provenance: 'express' })
+      }
+    }
+    if (ts.isIdentifier(init) && origins.get(init.text) === 'receiver') facts.push({ framework: 'express', kind: 'router', name: d.name.text, target: init.text, ...position(d), status: 'static', prefix: '', provenance: 'express' })
+  }
+  const exportFact = (name: string, target: string, n: ts.Node) => {
+    if (safe(target)) facts.push({ kind: 'export', name, target, ...position(n), status: 'static', ...(callable.has(target) ? { handlerLine: callable.get(target) } : {}), provenance: 'esm' })
+  }
+  for (const fact of commonJsExports) if (fact.resolutionStatus === 'resolved-local' && fact.bindingName && safe(fact.bindingName)) facts.push({ kind: 'export', name: fact.exportedName ?? '*', target: fact.bindingName, line: fact.startLine, column: 0, status: 'static', ...(callable.has(fact.bindingName) ? { handlerLine: callable.get(fact.bindingName) } : {}), provenance: 'commonjs' })
+  for (const n of sf.statements) {
+    if (ts.isExportDeclaration(n) && !n.isTypeOnly && !n.moduleSpecifier && n.exportClause && ts.isNamedExports(n.exportClause)) for (const e of n.exportClause.elements) if (!e.isTypeOnly) exportFact(e.name.text, e.propertyName?.text ?? e.name.text, e)
+    if (ts.isExportAssignment(n) && !n.isExportEquals && ts.isIdentifier(n.expression)) exportFact('default', n.expression.text, n)
+    if (hasExportKeyword(n)) {
+      const isDefault = ts.canHaveModifiers(n) && ts.getModifiers(n)?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword)
+      if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name) exportFact(isDefault ? 'default' : n.name.text, n.name.text, n)
+      if (ts.isVariableStatement(n)) for (const d of n.declarationList.declarations) if (ts.isIdentifier(d.name)) exportFact(d.name.text, d.name.text, d)
+    }
+  }
+  const methods = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'all'])
+  const syntax = (args: readonly ts.Expression[]): string[] => args.slice(0, 16).map(a => a.getText(sf).slice(0, 160))
+  for (const statement of sf.statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) continue
+    const call = statement.expression
+    if (!ts.isPropertyAccessExpression(call.expression) || !ts.isIdentifier(call.expression.expression)) continue
+    const receiver = call.expression.expression.text
+    if (!safe(receiver) || origins.get(receiver) !== 'receiver') continue
+    const method = call.expression.name.text
+    if (methods.has(method) && call.arguments.length >= 2) {
+      const path = literal(call.arguments[0])
+      const handler = call.arguments.at(-1)
+      const name = handler && ts.isIdentifier(handler) && safe(handler.text) ? handler.text : undefined
+      const local = name && callable.has(name) ? symbols.filter(s => s.name === name && !s.ownerKey && s.location.line === callable.get(name)) : []
+      const imported = name ? bindings.filter(b => b.localName === name && !typedImports.has(name) && b.resolutionStatus !== 'unresolved') : []
+      facts.push({ framework: 'express', kind: 'route', name: receiver, ...position(call), status: path === undefined ? 'unresolved' : 'static', ...(path !== undefined ? { path } : {}), method: method.toUpperCase(), ...(name && (local.length === 1 || imported.length === 1) ? { handlerName: name, ...(local.length === 1 ? { handlerLine: local[0].location.line } : {}) } : {}), syntax: syntax(call.arguments.slice(1)), provenance: 'express', warnings: path === undefined ? ['Dynamic or unsupported route path.'] : [] })
+    } else if (method === 'use') {
+      const prefix = literal(call.arguments[0])
+      const target = call.arguments[1]
+      const name = call.arguments.length === 2 && target && ts.isIdentifier(target) && safe(target.text) ? target.text : undefined
+      facts.push({ framework: 'express', kind: 'mount', name: receiver, ...position(call), status: prefix !== undefined && name !== undefined ? 'static' : 'unresolved', ...(prefix !== undefined ? { prefix } : {}), ...(name ? { target: name } : {}), provenance: 'express', warnings: prefix === undefined || !name ? ['Dynamic or unsupported mount.'] : [] })
+    }
+  }
+  const decorators = (n: ts.Node) => ts.canHaveDecorators(n) ? ts.getDecorators(n) ?? [] : []
+  const decoratorInfo = (d: ts.Decorator) => {
+    const call = ts.isCallExpression(d.expression) ? d.expression : undefined
+    const expr = call?.expression ?? d.expression
+    const name = ts.isIdentifier(expr) ? nest.get(expr.text) : undefined
+    return { name, call, path: call && call.arguments.length === 0 ? '' : call && call.arguments.length === 1 ? literal(call.arguments[0]) : undefined }
+  }
+  const metadata = (n: ts.Node): import('./types.js').DecoratorMetadata[] => decorators(n).slice(0, 24).map(d => {
+    const info = decoratorInfo(d)
+    return { path: info.name ? `@nestjs/common.${info.name}` : d.expression.getText(sf).slice(0, 128), expressionKind: info.call ? 'call' : 'name', startLine: position(d).line, endLine: position(d).endLine, argumentShape: !info.call || info.call.arguments.length === 0 ? 'none' : info.path !== undefined ? 'literal' : 'dynamic', ...(info.path !== undefined && info.call?.arguments.length ? { literalArguments: [{ positionalIndex: 0, value: info.path }] } : {}) }
+  })
+  for (const cls of sf.statements) {
+    if (!ts.isClassDeclaration(cls) || !cls.name || !safe(cls.name.text)) continue
+    const controllers = decorators(cls).filter(d => decoratorInfo(d).name === 'Controller')
+    if (controllers.length !== 1) continue
+    const controller = decoratorInfo(controllers[0])
+    const prefix = controller.path
+    const classSymbol = symbols.find(s => s.kind === 'class' && s.name === cls.name!.text && s.location.line === position(cls).line)
+    if (!classSymbol) continue
+    classSymbol.declarationMetadata = { ...classSymbol.declarationMetadata, decorators: metadata(cls) }
+    const classPosition = position(cls)
+    const ownerKey = `class:${cls.name.text}@${classPosition.line}:${classPosition.column}`
+    facts.push({ framework: 'nestjs', kind: 'controller', name: cls.name.text, ...classPosition, status: prefix !== undefined ? 'static' : 'unresolved', ...(prefix !== undefined ? { prefix } : {}), provenance: '@nestjs/common', syntax: decorators(cls).slice(0, 16).map(d => d.getText(sf).slice(0, 160)) })
+    for (const member of cls.members) {
+      if (!ts.isMethodDeclaration(member) || !member.body || !ts.isIdentifier(member.name)) continue
+      const implementations = cls.members.filter(m => ts.isMethodDeclaration(m) && m.body && ts.isIdentifier(m.name) && m.name.text === member.name.getText(sf))
+      if (implementations.length !== 1) continue
+      const supported = decorators(member).filter(d => methods.has((decoratorInfo(d).name ?? '').toLowerCase()))
+      if (!supported.length) continue
+      const location = locationOf(member, sf, file, endLimit)
+      const headerStart = ts.getModifiers(member)?.[0]?.getStart(sf) ?? member.name.getStart(sf)
+      const signature = sf.text.slice(headerStart, member.body.getStart(sf)).trim().replace(/\s+/g, ' ').slice(0, 120)
+      symbols.push({ name: member.name.text, kind: 'method', ownerKey, qualifiedName: `${cls.name.text}.${member.name.text}`, location, exported: false, signature, declarationMetadata: { decorators: metadata(member) } })
+      for (const d of supported) {
+        const info = decoratorInfo(d)
+        facts.push({ framework: 'nestjs', kind: 'route', name: cls.name.text, ownerKey, ...position(d), status: prefix !== undefined && info.path !== undefined ? 'static' : 'unresolved', ...(prefix !== undefined ? { prefix } : {}), ...(info.path !== undefined ? { path: info.path } : {}), method: info.name!.toUpperCase(), handlerName: member.name.text, handlerLine: location.line, provenance: '@nestjs/common', syntax: [...decorators(cls), ...decorators(member)].slice(0, 16).map(dec => dec.getText(sf).slice(0, 160)), warnings: prefix === undefined || info.path === undefined ? ['Dynamic controller prefix or method path.'] : [] })
+      }
+    }
+  }
+  return facts
+}
+
 function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[]): void {
   const shadowed = new Set<string>()
   const mutated = new Set<string>()

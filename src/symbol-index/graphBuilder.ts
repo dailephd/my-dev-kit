@@ -144,7 +144,7 @@ function extractEdges(
         const shadowed = hasLocalShadow(node, base, sourceFile)
         const target = shadowed ? undefined : importedNames.get(calleeName)
         const calleeFile = target?.file ?? null
-        const callers = symbols.filter(s => s.name === activeCaller.name && s.location.line === activeCaller.line)
+        const callers = symbols.filter(s => s.name === activeCaller.name && s.location.line === activeCaller.line && (!activeCaller.qualifiedName || s.qualifiedName === activeCaller.qualifiedName))
         edges.push({
           caller: {
             file: activeCaller.file,
@@ -169,6 +169,7 @@ interface CallerContext {
   file: string
   name: string
   line: number
+  qualifiedName?: string
 }
 
 /** If `node` is a named function/method/arrow-with-name, returns a new CallerContext. */
@@ -189,7 +190,8 @@ function resolveCaller(
     const ownerName = parent?.name
       ? `${parent.name}.${node.name.text}`
       : node.name.text
-    return { file: filePath, name: ownerName, line: lineOf(node) }
+    const cls = node.parent
+    return { file: filePath, name: ownerName, line: lineOf(node), ...(ts.isClassDeclaration(cls) && cls.name ? { qualifiedName: `${cls.name.text}.${node.name.text}` } : {}) }
   }
 
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
