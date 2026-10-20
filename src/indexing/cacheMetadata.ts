@@ -105,6 +105,7 @@ export type CacheMode =
   | 'incremental-partial-with-artifact-fallback'
 
 export interface ConfigFingerprintInput {
+  configuredImportsFingerprint?: string
   sourceRoots: string[]
   excludePatterns: string[]
   callGraphEnabled: boolean
@@ -190,6 +191,8 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     jsTsExtractionRevision: 'v1.14.0-b05',
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
     frontendFrameworkRevision: 'v1.14.0-b07',
+    configuredImportsRevision: 'v1.14.0-configured-imports',
+    configuredImportsFingerprint: input.configuredImportsFingerprint ?? null,
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),
     callGraphEnabled: input.callGraphEnabled,

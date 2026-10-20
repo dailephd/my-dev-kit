@@ -37,6 +37,8 @@ import {
   type ChangedFileSummary,
 } from './cacheMetadata.js'
 import { checkPartialRebuildEligibility, buildPartialSymbolIndex } from './partialRebuild.js'
+import { ConfiguredImportResolver } from '../languages/typescript/configuredImportResolver.js'
+import { resolveJsTsCandidates } from '../languages/typescript/adapter.js'
 import { loadTrustedBaseline } from './trustedBaseline.js'
 import { selectAffectedNeighborhood } from './affectedNeighborhood.js'
 import {
@@ -385,7 +387,9 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     androidResourcesResult,
   } = params
 
+  const configFiles = discoverSourceFiles({ repoRoot: projectRoot, sourceRoots: normalizedSourceRoots, userExcludes: options.exclude }).files
   const configFingerprint = computeConfigFingerprint({
+    configuredImportsFingerprint: new ConfiguredImportResolver(projectRoot).fingerprint(configFiles.filter(f => /\.(?:ts|tsx|js|jsx|cjs)$/.test(f.relPath)).map(f => f.relPath), resolveJsTsCandidates),
     sourceRoots: normalizedSourceRoots,
     excludePatterns: options.exclude ?? [],
     callGraphEnabled: options.callGraph === true,

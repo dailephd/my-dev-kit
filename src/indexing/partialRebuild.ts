@@ -143,7 +143,7 @@ function cleanSymbol(symbol: SymbolDefinition): SymbolDefinition {
  * files are simply absent from `discoveryFiles` and therefore never included.
  */
 export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): BuildPartialSymbolIndexResult {
-  const registry = input.registry ?? createDefaultRegistry()
+  const registry = input.registry ?? createDefaultRegistry(input.repoRoot)
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
@@ -287,6 +287,11 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
 
   const indexedFileSet = new Set(summaries.map((summary) => summary.path))
   const graph = buildGraphSection(rawExtractions, indexedFileSet, registry)
+  const warnings = new Map(rawExtractions.map(e => [e.relPath, e.extraction.warnings]))
+  for (const summary of summaries) {
+    if (warnings.get(summary.path)?.length) summary.warnings = warnings.get(summary.path)
+    else delete summary.warnings
+  }
   const symbolCount = summaries.reduce((sum, file) => sum + file.symbols.length, 0)
 
   const index: SymbolIndex = {

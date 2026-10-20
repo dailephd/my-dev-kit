@@ -25,9 +25,9 @@ export class LanguageRegistry {
   }
 }
 
-export function createDefaultRegistry(): LanguageRegistry {
+export function createDefaultRegistry(repoRoot?: string): LanguageRegistry {
   const registry = new LanguageRegistry()
-  registry.register(new TypeScriptAdapter())
+  registry.register(new TypeScriptAdapter(repoRoot))
   registry.register(new PythonAdapter())
   registry.register(new KotlinAdapter())
   registry.register(new JavaAdapter())

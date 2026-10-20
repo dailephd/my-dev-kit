@@ -12,7 +12,7 @@
 
 import * as fs from 'fs'
 import { assignDeclarationIdentities } from './declarationIdentity.js'
-import { resolveJsTsCandidates } from '../languages/typescript/adapter.js'
+import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
@@ -107,7 +107,7 @@ export type BuildIndexProgressEvent =
 export function buildIndex(config: BuildConfig): BuildResult {
   const startTime = Date.now()
   const buildTime = new Date().toISOString()
-  const registry = createDefaultRegistry()
+  const registry = createDefaultRegistry(config.repoRoot)
 
   const discovery = discoverSourceFiles({
     repoRoot: config.repoRoot,
@@ -200,6 +200,11 @@ export function buildIndex(config: BuildConfig): BuildResult {
   // Build richer graph section
   const indexedFileSet = new Set(summaries.map((s) => s.path))
   const graph = buildGraphSection(rawExtractions, indexedFileSet, registry)
+  const warnings = new Map(rawExtractions.map(e => [e.relPath, e.extraction.warnings]))
+  for (const summary of summaries) {
+    if (warnings.get(summary.path)?.length) summary.warnings = warnings.get(summary.path)
+    else delete summary.warnings
+  }
 
   const symbolCount = summaries.reduce((n, f) => n + f.symbols.length, 0)
 
@@ -251,6 +256,7 @@ export function buildGraphSection(
 
   for (const { relPath, extraction } of rawExtractions) {
     const adapter = registry.adapterForFile(relPath)!
+    extraction.warnings = extraction.warnings?.filter(w => !w.startsWith('Configured import unresolved:'))
 
     for (const fact of extraction.frameworkRouteFacts ?? []) {
       if (fact.framework !== 'express' && fact.framework !== 'nestjs') continue
@@ -269,7 +275,7 @@ export function buildGraphSection(
 
     if (extraction.language === 'javascript' || extraction.language === 'typescript') {
       for (const binding of extraction.importBindings ?? []) {
-        const candidates = resolveJsTsCandidates(binding.sourceSpecifier, relPath, knownFiles)
+        const candidates = adapter instanceof TypeScriptAdapter ? adapter.resolveCandidates(binding.sourceSpecifier, relPath, knownFiles) : []
         if (binding.resolutionStatus === 'unresolved') continue
         binding.resolutionStatus = candidates.length === 1 ? 'resolved-local' : candidates.length > 1 ? 'ambiguous' : binding.sourceSpecifier.startsWith('.') ? 'unresolved' : 'external'
       }
@@ -288,6 +294,12 @@ export function buildGraphSection(
     for (const specifier of extraction.exportAllSpecifiers) {
       const to = adapter.resolveImportToFile(specifier, relPath, knownFiles)
       if (to && to !== relPath) fileDeps.push({ from: relPath, to, kind: 'export-all' })
+    }
+
+    if (adapter instanceof TypeScriptAdapter) {
+      const diagnostics = [...new Set([...extraction.imports, ...extraction.reExportSpecifiers, ...extraction.exportAllSpecifiers]
+        .map(specifier => adapter.resolutionDiagnostic(specifier, relPath)).filter((value): value is string => !!value))].slice(0, 20)
+      if (diagnostics.length) extraction.warnings = [...(extraction.warnings ?? []), ...diagnostics]
     }
 
     for (const sym of extraction.symbols) {

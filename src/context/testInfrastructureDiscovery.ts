@@ -18,6 +18,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { resolveRelativeSpecifier } from '../languages/typescript/resolveRelativeSpecifier.js'
+import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
 import { DEFAULT_IGNORED_DIRECTORY_NAMES, DEFAULT_IGNORED_DIRECTORY_PREFIXES } from '../indexing/discoverSourceFiles.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import { declarationNodeId, parseDeclarationNodeId } from '../symbol-index/declarationIdentity.js'
@@ -186,15 +187,23 @@ interface TestFileAnalysis {
 
 /** One bounded read+scan pass per test-shaped file, reused by related-test, fixture,
  * factory, mock, and setup-fallback discovery so each file is only read once. */
-function analyzeTestShapedFiles(options: { repoRoot: string; sourceRoots: string[]; knownPaths: Set<string> }): TestFileAnalysis[] {
+function analyzeTestShapedFiles(options: { repoRoot: string; sourceRoots: string[]; knownPaths: Set<string>; symbolIndex: SymbolIndex }): TestFileAnalysis[] {
   const { repoRoot, sourceRoots, knownPaths } = options
   const testPaths = listTestShapedFiles(repoRoot, sourceRoots)
   const analyses: TestFileAnalysis[] = []
+  const configured = new TypeScriptAdapter(repoRoot)
+  const selected = [...knownPaths]
+  const dependencies = new Set((options.symbolIndex.graph?.fileDeps ?? []).filter(e => e.kind === 'import').map(e => `${e.from}\0${e.to}`))
   for (const testPath of testPaths) {
     const text = readBoundedText(path.join(repoRoot, testPath))
     if (text === null) continue
     const resolvedImports: Array<{ path: string; names: string[] }> = []
     for (const clause of extractImportClauses(text)) {
+      if (!clause.specifier.startsWith('.')) {
+        const target = configured.resolveImportToFile(clause.specifier, testPath, selected)
+        if (target && target !== testPath && dependencies.has(`${testPath}\0${target}`)) resolvedImports.push({ path: target, names: clause.names })
+        continue
+      }
       const resolved = resolveRelativeSpecifier(testPath, clause.specifier, knownPaths)
       if (resolved && resolved !== testPath) {
         const base = toForwardSlash(path.posix.normalize(path.posix.join(path.posix.dirname(testPath), clause.specifier)))
@@ -616,7 +625,7 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
 
   const filesOfInterestSet = new Set(filesOfInterest)
   const knownPaths = new Set(symbolIndex.files.map((f) => f.path))
-  const analyses = analyzeTestShapedFiles({ repoRoot, sourceRoots: symbolIndex.sourceRoots, knownPaths })
+  const analyses = analyzeTestShapedFiles({ repoRoot, sourceRoots: symbolIndex.sourceRoots, knownPaths, symbolIndex })
 
   const relatedMatches = findRelatedTests({ analyses, filesOfInterestSet, symbolsByPath: symbolsOfInterestByPath(symbolsOfInterest, symbolIndex) })
   const relatedTestItems = relatedMatches.map((m) =>
