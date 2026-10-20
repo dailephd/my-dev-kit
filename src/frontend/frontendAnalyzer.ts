@@ -156,6 +156,9 @@ function analyzeFile(filePath: string, sourceText: string): FrontendFileResult {
 
   const extractor = new FrontendExtractor(filePath, sourceFile, isTestFile)
   extractor.extract()
+  const handlerMethods = /^(?:src\/)?app\/(?:.*\/)?route\.[jt]s$/.test(filePath)
+    ? extractHttpMethodDeclarations(filePath, sourceFile)
+    : null
 
   return {
     filePath,
@@ -163,6 +166,9 @@ function analyzeFile(filePath: string, sourceText: string): FrontendFileResult {
     isTestFile,
     parseError: false,
     components: extractor.components,
+    ...(handlerMethods
+      ? { routeHandlerMethods: handlerMethods.methods, routeHandlerMethodsTruncated: handlerMethods.truncated }
+      : {}),
     localComponents: extractor.localComponents,
     propTypes: extractor.propTypes,
     hooks: extractor.hooks,
@@ -175,6 +181,35 @@ function analyzeFile(filePath: string, sourceText: string): FrontendFileResult {
     routeStrings: extractor.routeStrings,
     warnings: extractor.warnings,
   }
+}
+
+/** Reuses this file's compiler AST; no route module is loaded or executed. */
+function extractHttpMethodDeclarations(filePath: string, sourceFile: ts.SourceFile): { methods: NonNullable<FrontendFileResult['routeHandlerMethods']>; truncated: boolean } {
+  const methods = sourceFile.statements.flatMap((statement) => {
+    const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined
+    if (!modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
+        modifiers.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) return []
+    const declarations: Array<{ name: string; node: ts.Node }> = []
+    if (ts.isFunctionDeclaration(statement) && statement.body && statement.name) {
+      declarations.push({ name: statement.name.text, node: statement })
+    } else if (ts.isVariableStatement(statement) && (statement.declarationList.flags & ts.NodeFlags.Const)) {
+      for (const d of statement.declarationList.declarations) {
+        if (ts.isIdentifier(d.name) && d.initializer &&
+            (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer))) {
+          declarations.push({ name: d.name.text, node: d })
+        }
+      }
+    }
+    return declarations.filter((d) => /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(d.name)).map((d) => ({
+      method: d.name,
+      sourceRef: {
+        filePath,
+        line: sourceFile.getLineAndCharacterOfPosition(d.node.getStart(sourceFile)).line + 1,
+        endLine: sourceFile.getLineAndCharacterOfPosition(d.node.end).line + 1,
+      },
+    }))
+  })
+  return { methods: methods.slice(0, 32), truncated: methods.length > 32 }
 }
 
 function fileContainsJsx(sourceFile: ts.SourceFile): boolean {
@@ -436,6 +471,9 @@ class FrontendExtractor {
           self.routeStrings.push({
             id: self.nextId('route'),
             value: routeStr,
+            evidenceKind: ts.isPropertyAccessExpression(node.expression) &&
+              ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'page'
+              ? 'literal-goto' : undefined,
             testBlockId,
             sourceRef: self.sourceRef(node),
           })
@@ -1525,11 +1563,19 @@ function extractFirstStringArg(node: ts.CallExpression): string | null {
 }
 
 function detectFramework(node: ts.CallExpression): TestBlockCandidate['framework'] {
-  // Playwright: test() where 'test' was imported from @playwright/test
-  // Vitest: describe/it/test from 'vitest'
-  // We can't do import resolution statically here, so use heuristics:
-  // - If file contains page.goto or expect(page)... → playwright
-  // We leave this as generic since we don't have import info in extractor
+  // Classify only directly observed named framework imports. No config execution
+  // or cross-file binding resolution is implied; other blocks remain generic.
+  let expression = node.expression
+  while (ts.isPropertyAccessExpression(expression)) expression = expression.expression
+  if (!ts.isIdentifier(expression)) return 'generic'
+  for (const statement of node.getSourceFile().statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue
+    const bindings = statement.importClause?.namedBindings
+    if (!bindings || !ts.isNamedImports(bindings)) continue
+    if (!bindings.elements.some((e) => !e.isTypeOnly && e.name.text === expression.text && ['test', 'it', 'describe'].includes((e.propertyName ?? e.name).text))) continue
+    if (statement.moduleSpecifier.text === '@playwright/test') return 'playwright'
+    if (statement.moduleSpecifier.text === 'vitest') return 'vitest'
+  }
   return 'generic'
 }
 

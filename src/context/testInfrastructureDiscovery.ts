@@ -20,6 +20,7 @@ import { toForwardSlash } from '../io/pathUtils.js'
 import { resolveRelativeSpecifier } from '../languages/typescript/resolveRelativeSpecifier.js'
 import { DEFAULT_IGNORED_DIRECTORY_NAMES, DEFAULT_IGNORED_DIRECTORY_PREFIXES } from '../indexing/discoverSourceFiles.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import { declarationNodeId, parseDeclarationNodeId } from '../symbol-index/declarationIdentity.js'
 import { isFactoryLike, isFixtureLike, isMockLike, isSetupLike, isTestLike } from './evidenceClassification.js'
 import type {
   ContextRole,
@@ -75,7 +76,7 @@ export interface DiscoverTestInfrastructureOptions {
   symbolIndex: SymbolIndex
   /** Production file paths (project-relative, forward-slash) the caller wants related evidence for. */
   filesOfInterest: string[]
-  /** Production symbol IDs (`symbol:<path>#<name>`) the caller wants related evidence for. */
+  /** Exact production declaration IDs (legacy or B02-qualified). */
   symbolsOfInterest: string[]
   requestedEvidenceKinds: RequestedEvidenceKind[]
   repoRoot: string
@@ -149,8 +150,9 @@ interface ImportClause {
   names: string[]
 }
 
-const IMPORT_CLAUSE_PATTERN = /import\s+(?:type\s+)?([^'";]*?)\s*from\s*['"]([^'"]+)['"]/g
-const REQUIRE_CALL_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g
+// Consume comments and quoted text before considering an import declaration.
+// Captures are populated only for static import syntax, never dynamic import().
+const IMPORT_CLAUSE_PATTERN = /\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\bimport\s+(?:(?:type\s+)?([^'";]*?)\s*from\s*)?['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)/g
 
 /** Bounded, regex-based import-specifier scan. Never parses/evaluates the file as code. */
 function extractImportClauses(text: string): ImportClause[] {
@@ -158,8 +160,9 @@ function extractImportClauses(text: string): ImportClause[] {
   IMPORT_CLAUSE_PATTERN.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = IMPORT_CLAUSE_PATTERN.exec(text))) {
-    const clause = match[1].trim()
-    const specifier = match[2]
+    if (match[2] === undefined && match[3] === undefined) continue
+    const clause = (match[1] ?? '').trim()
+    const specifier = match[2] ?? match[3]
     const names: string[] = []
     const braceMatch = /\{([^}]*)\}/.exec(clause)
     if (braceMatch) {
@@ -170,15 +173,8 @@ function extractImportClauses(text: string): ImportClause[] {
         names.push(asMatch ? asMatch[1] : (trimmed.split(/\s+/)[0] ?? trimmed))
       }
     }
-    if (clause.length > 0 && !clause.startsWith('{') && !clause.startsWith('*')) {
-      const defaultMatch = /^(\w+)/.exec(clause)
-      if (defaultMatch) names.push(defaultMatch[1])
-    }
+    // A default import's local spelling is not an exported declaration name.
     results.push({ specifier, names })
-  }
-  REQUIRE_CALL_PATTERN.lastIndex = 0
-  while ((match = REQUIRE_CALL_PATTERN.exec(text))) {
-    results.push({ specifier: match[1], names: [] })
   }
   return results
 }
@@ -200,7 +196,18 @@ function analyzeTestShapedFiles(options: { repoRoot: string; sourceRoots: string
     const resolvedImports: Array<{ path: string; names: string[] }> = []
     for (const clause of extractImportClauses(text)) {
       const resolved = resolveRelativeSpecifier(testPath, clause.specifier, knownPaths)
-      if (resolved && resolved !== testPath) resolvedImports.push({ path: resolved, names: clause.names })
+      if (resolved && resolved !== testPath) {
+        const base = toForwardSlash(path.posix.normalize(path.posix.join(path.posix.dirname(testPath), clause.specifier)))
+        // Extensionless resolution must not select one of competing physical sources.
+        const extension = path.posix.extname(base)
+        const candidatePaths = !extension
+          ? ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'].map((suffix) => base + suffix)
+          : extension === '.js' && !knownPaths.has(base)
+            ? [base.slice(0, -3) + '.ts', base.slice(0, -3) + '.tsx']
+            : [resolved]
+        const candidates = candidatePaths.filter((p) => knownPaths.has(p))
+        if (candidates.length === 1) resolvedImports.push({ path: resolved, names: clause.names })
+      }
     }
     analyses.push({ testPath, resolvedImports })
   }
@@ -252,17 +259,21 @@ function rankRelatedTestMatches(matches: RelatedTestMatch[]): RelatedTestMatch[]
   return selected
 }
 
-/** Parses `symbol:<path>#<name>` IDs into a path -> simple-name-set lookup. */
-function symbolsOfInterestByPath(symbolsOfInterest: string[]): Map<string, Set<string>> {
-  const byPath = new Map<string, Set<string>>()
-  const pattern = /^symbol:(.+)#(.+)$/
+/** Resolve requested identities against unique exported declarations, retaining exact IDs. */
+function symbolsOfInterestByPath(symbolsOfInterest: string[], index: SymbolIndex): Map<string, Map<string, string>> {
+  const byPath = new Map<string, Map<string, string>>()
   for (const id of symbolsOfInterest) {
-    const match = pattern.exec(id)
-    if (!match) continue
-    const [, filePath, name] = match
-    const set = byPath.get(filePath) ?? new Set<string>()
-    set.add(name)
+    const parsed = parseDeclarationNodeId(id)
+    if (!parsed) continue
+    const { filePath, symbolName: name } = parsed
+    const set = byPath.get(filePath) ?? new Map<string, string>()
     byPath.set(filePath, set)
+    // An imported name does not establish a lexical member export. The owner
+    // encoded by B02 remains authoritative when display metadata is absent.
+    if (parsed.ownerKey && parsed.ownerKey !== 'jsdoc/typedef') continue
+    const symbols = index.files.find((f) => f.path === filePath)?.symbols ?? []
+    const matches = symbols.filter((s) => s.name === name && s.exported && (!s.qualifiedName || s.qualifiedName === name))
+    if (matches.length === 1 && declarationNodeId(filePath, matches[0]) === id) set.set(name, id)
   }
   return byPath
 }
@@ -276,7 +287,7 @@ function symbolsOfInterestByPath(symbolsOfInterest: string[]): Map<string, Set<s
 function findRelatedTests(options: {
   analyses: TestFileAnalysis[]
   filesOfInterestSet: Set<string>
-  symbolsByPath: Map<string, Set<string>>
+  symbolsByPath: Map<string, Map<string, string>>
 }): RelatedTestMatch[] {
   const { analyses, filesOfInterestSet, symbolsByPath } = options
   const matches: RelatedTestMatch[] = []
@@ -288,7 +299,8 @@ function findRelatedTests(options: {
       const wantedNames = symbolsByPath.get(imp.path)
       if (wantedNames) {
         for (const name of imp.names) {
-          if (wantedNames.has(name)) symbolBasis.add(`symbol:${imp.path}#${name}`)
+          const id = wantedNames.get(name)
+          if (id) symbolBasis.add(id)
         }
       }
       // A file-level match is also evidence in its own right (a symbol-of-interest
@@ -606,7 +618,7 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
   const knownPaths = new Set(symbolIndex.files.map((f) => f.path))
   const analyses = analyzeTestShapedFiles({ repoRoot, sourceRoots: symbolIndex.sourceRoots, knownPaths })
 
-  const relatedMatches = findRelatedTests({ analyses, filesOfInterestSet, symbolsByPath: symbolsOfInterestByPath(symbolsOfInterest) })
+  const relatedMatches = findRelatedTests({ analyses, filesOfInterestSet, symbolsByPath: symbolsOfInterestByPath(symbolsOfInterest, symbolIndex) })
   const relatedTestItems = relatedMatches.map((m) =>
     toEvidenceItem({
       path: m.testPath,

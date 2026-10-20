@@ -25,7 +25,10 @@ export function buildReachabilityEdges(options: BuildReachabilityEdgesOptions): 
   // route-serves-component
   for (const route of routes) {
     for (const componentId of route.componentIds) {
-      addEdge(edges, 'route-serves-component', route.id, componentId, route.confidence, route.sourceRefs)
+      const declarations = route.declarations?.filter((d) => d.componentId === componentId &&
+        (!route.declarations?.some((source) => source.convention) || d.convention === 'app-page'))
+      const evidence = declarations?.length ? declarations.map((d) => d.sourceRef) : route.sourceRefs
+      addEdge(edges, 'route-serves-component', route.id, componentId, route.confidence, evidence)
     }
   }
 

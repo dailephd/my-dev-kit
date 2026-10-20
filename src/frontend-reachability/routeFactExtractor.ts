@@ -14,6 +14,7 @@ import {
   type ReachabilityWarning,
   type RouteFact,
   type RouteFactKind,
+  type RouteSourceDeclaration,
 } from './types.js'
 
 const ROUTE_LIKE = /^\/[a-zA-Z0-9_\-/:*?[\]()]+$/
@@ -27,6 +28,7 @@ interface RouteCandidate {
   componentId: string | null
   sourceRef: FrontendSourceRef
   isDynamic: boolean
+  declaration?: RouteSourceDeclaration
 }
 
 export interface ExtractRouteFactsOptions {
@@ -48,17 +50,46 @@ export function extractRouteFacts(options: ExtractRouteFactsOptions): RouteFact[
   const { frontendArtifact, repoRoot } = options
   const routeMap = new Map<string, RouteFact>()
 
-  for (const file of frontendArtifact.files) {
+  for (const file of [...frontendArtifact.files].sort((a, b) => a.filePath.localeCompare(b.filePath))) {
     for (const candidate of collectRouteCandidates(file, repoRoot)) {
       upsertRouteFact(routeMap, candidate)
     }
   }
 
+  for (const route of routeMap.values()) {
+    const pages = route.declarations?.filter((d) => d.kind === 'page') ?? []
+    if (route.declarations?.some((d) => d.convention)) {
+      const appPages = pages.filter((d) => d.convention === 'app-page' && d.status === 'supported')
+      route.componentIds = !route.declarationsTruncated && appPages.length === 1 && appPages[0].componentId
+        ? [appPages[0].componentId]
+        : []
+    }
+    if (pages.length > 1) {
+      route.warnings.push({ kind: 'ambiguous-component-ownership', factId: route.id, message: `Conflicting page candidates: ${pages.slice(0, 20).map((d) => d.sourceRef.filePath).join(', ')}${pages.length > 20 ? ' (truncated)' : ''}` })
+      route.componentIds = []
+    }
+    const supported = route.declarations?.filter((d) => (d.kind === 'page' || d.kind === 'route-definition') && d.status === 'supported') ?? []
+    route.testEvidenceRefs = []
+    if (supported.length !== 1 || route.declarationsTruncated || pages.length > 1 || /[\[\]:*]/.test(route.path)) continue
+    for (const file of frontendArtifact.files) {
+      for (const rs of file.routeStrings ?? []) {
+        if (rs.evidenceKind !== 'literal-goto' || rs.value !== route.path) continue
+        const block = file.testBlocks.find((b) => b.id === rs.testBlockId && (b.kind === 'test' || b.kind === 'it') && b.framework === 'playwright' && rs.sourceRef.line >= b.sourceRef.line && rs.sourceRef.endLine <= b.sourceRef.endLine)
+        if (!block) continue
+        if (route.testEvidenceRefs.length >= 32) {
+          if (!route.warnings.some((w) => w.kind === 'partial-extraction')) route.warnings.push({ kind: 'partial-extraction', message: 'Route test evidence truncated at 32 references', factId: route.id })
+          break
+        }
+        route.testEvidenceRefs.push({ filePath: file.filePath, line: rs.sourceRef.line, locatorKind: 'goto', locatorValue: rs.value, testBlockId: block.id, testBlockTitle: block.title, testFramework: block.framework })
+      }
+    }
+  }
   return [...routeMap.values()].sort((a, b) => a.path.localeCompare(b.path))
 }
 
 function collectRouteCandidates(file: FrontendFileResult, repoRoot?: string): RouteCandidate[] {
   const candidates: RouteCandidate[] = []
+  if (file.parseError) return candidates
 
   // Source 1: RouteStringCandidate (extracted from test files by frontendAnalyzer)
   for (const rs of file.routeStrings ?? []) {
@@ -81,8 +112,40 @@ function collectRouteCandidates(file: FrontendFileResult, repoRoot?: string): Ro
   if (pageRoute) {
     candidates.push(pageRoute)
   }
+  const appRoute = deriveAppRoute(file)
+  if (appRoute) candidates.push(appRoute)
 
   return candidates
+}
+
+function deriveAppRoute(file: FrontendFileResult): RouteCandidate | null {
+  const path = file.filePath.replace(/\\/g, '/')
+  if (file.isTestFile || path.split('/').some((s) => s === '..' || s === '.') || !/^(?:src\/)?app\//.test(path)) return null
+  const rest = path.replace(/^(?:src\/)?app\//, '')
+  const parts = rest.split('/')
+  const filename = parts.pop()!
+  if (!/^(?:page\.[jt]sx?|route\.[jt]s)$/.test(filename) || parts.some((s) => s.startsWith('_') || s.toLowerCase().startsWith('%5f'))) return null
+  const handler = filename.startsWith('route.')
+  const unsupported = parts.some((s) => s.startsWith('@') || /^\(\./.test(s))
+  const groups = parts.filter((s) => /^\([^.)][^/]*\)$/.test(s))
+  const segments = parts.filter((s) => !groups.includes(s))
+  const segmentKinds: NonNullable<RouteSourceDeclaration['segmentKinds']> = segments.map((s) => /^\[\[\.\.\.[^\]]+\]\]$/.test(s) ? 'optional-catch-all' : /^\[\.\.\.[^\]]+\]$/.test(s) ? 'catch-all' : /^\[[^\]]+\]$/.test(s) ? 'dynamic' : 'static')
+  const raw = '/' + segments.join('/')
+  const partial = raw.length > 256 || segments.length > 32 || groups.length > 32
+  const warnings: ReachabilityWarning[] = []
+  if (unsupported) warnings.push({ kind: 'unsupported-pattern', message: 'Parallel/intercepting directory: lexical pattern only; effective URL composition unresolved' })
+  if (partial) warnings.push({ kind: 'partial-extraction', message: 'App convention evidence truncated; complete route pattern not established' })
+  const defaults = file.components.filter((c) => c.isDefaultExport && c.sourceRef.filePath === file.filePath)
+  const componentId = !handler && !unsupported && !partial && defaults.length === 1 ? defaults[0].id : null
+  const sourceRef = { filePath: file.filePath, line: 1, endLine: 1 }
+  const methods = (file.routeHandlerMethods ?? []).slice(0, 32).map((m) => ({ method: m.method, sourceRef: toEvidenceRef(m.sourceRef) }))
+  if (file.routeHandlerMethodsTruncated || (file.routeHandlerMethods?.length ?? 0) > 32) warnings.push({ kind: 'partial-extraction', message: 'Observed HTTP method declarations truncated at 32' })
+  if (handler && methods.length === 0) warnings.push({ kind: 'partial-extraction', message: 'No supported named exported HTTP implementation established; dynamic exports unresolved' })
+  const isDynamic = segmentKinds.some((s) => s !== 'static')
+  return {
+    rawValue: raw.slice(0, 256), kind: handler ? 'route-definition' : 'page', componentId, sourceRef, isDynamic,
+    declaration: { kind: handler ? 'route-definition' : 'page', sourceRef: toEvidenceRef(sourceRef), pattern: raw.slice(0, 256), convention: handler ? 'app-route-handler' : 'app-page', segmentKinds: segmentKinds.slice(0, 32), routeGroups: groups.slice(0, 32), status: unsupported ? 'unsupported' : warnings.some((w) => w.kind === 'partial-extraction') ? 'partial' : 'supported', componentId, ...(handler ? { methods } : {}), confidence: isDynamic || unsupported || partial ? 'low' : 'medium', warnings },
+  }
 }
 
 function collectJsxRouteAttributes(file: FrontendFileResult, repoRoot: string): RouteCandidate[] {
@@ -185,7 +248,7 @@ function toEvidenceRef(sourceRef: FrontendSourceRef): ReachabilityEvidenceRef {
 
 function upsertRouteFact(map: Map<string, RouteFact>, candidate: RouteCandidate): void {
   const id = `route:${normalizeRoutePath(candidate.rawValue)}`
-  const confidence = confidenceFor(candidate)
+  const confidence = candidate.declaration?.confidence ?? confidenceFor(candidate)
   const evidenceRef = toEvidenceRef(candidate.sourceRef)
   const warning: ReachabilityWarning | null = candidate.isDynamic
     ? {
@@ -196,7 +259,16 @@ function upsertRouteFact(map: Map<string, RouteFact>, candidate: RouteCandidate)
     : null
 
   const existing = map.get(id)
+  const declaration: RouteSourceDeclaration = candidate.declaration ?? { kind: candidate.kind, sourceRef: evidenceRef, pattern: candidate.rawValue.slice(0, 256), status: candidate.isDynamic ? 'partial' : 'supported', componentId: candidate.componentId, confidence, warnings: warning ? [warning] : [] }
   if (existing) {
+    if ((existing.declarations?.length ?? 0) >= 32) {
+      existing.declarationsTruncated = true
+      existing.componentIds = []
+      if (!existing.warnings.some((w) => w.kind === 'partial-extraction')) existing.warnings.push({ kind: 'partial-extraction', message: 'Contributing route declarations truncated at 32', factId: id })
+      return
+    }
+    existing.declarations!.push(declaration)
+    existing.warnings.push(...(candidate.declaration?.warnings ?? []))
     if (candidate.componentId && !existing.componentIds.includes(candidate.componentId)) {
       existing.componentIds.push(candidate.componentId)
     }
@@ -216,5 +288,7 @@ function upsertRouteFact(map: Map<string, RouteFact>, candidate: RouteCandidate)
     sourceRefs: [evidenceRef],
     confidence,
     warnings: warning ? [warning] : [],
+    declarations: [declaration],
   })
+  map.get(id)!.warnings.push(...(candidate.declaration?.warnings ?? []))
 }

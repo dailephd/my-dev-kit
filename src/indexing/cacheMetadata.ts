@@ -189,6 +189,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
+    frontendFrameworkRevision: 'v1.14.0-b07',
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),
     callGraphEnabled: input.callGraphEnabled,
