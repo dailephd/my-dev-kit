@@ -151,6 +151,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
       imports: result.imports,
       ...(result.importBindings ? { importBindings: result.importBindings } : {}),
       ...(result.commonJsExports ? { commonJsExports: result.commonJsExports } : {}),
+      ...(result.rustSyntaxFacts ? { rustSyntaxFacts: result.rustSyntaxFacts } : {}),
       ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
       ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
@@ -255,6 +256,12 @@ export function buildGraphSection(
   const knownFiles = [...indexedFileSet]
 
   for (const { relPath, extraction } of rawExtractions) {
+    for (const fact of extraction.rustSyntaxFacts ?? []) {
+      delete fact.nodeId
+      if (fact.kind !== 'declaration' && fact.kind !== 'module') continue
+      const matches = extraction.symbols.filter(s => s.name === fact.name && s.ownerKey === fact.ownerKey && s.location.line === fact.line)
+      if (matches.length === 1) fact.nodeId = matches[0].nodeId
+    }
     const adapter = registry.adapterForFile(relPath)!
     extraction.warnings = extraction.warnings?.filter(w => !w.startsWith('Configured import unresolved:'))
 

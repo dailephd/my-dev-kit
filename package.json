@@ -60,7 +60,8 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
     "@types/node": "^20.19.25",

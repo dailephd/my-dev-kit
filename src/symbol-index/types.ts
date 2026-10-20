@@ -25,7 +25,7 @@ export const ARTIFACT_MAIN = 'symbol-index.json'
 export const ARTIFACT_CALL_GRAPH = 'symbol-index.call-graph.json'
 
 /** Supported source language labels. */
-export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' | 'java'
+export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' | 'java' | 'rust'
 
 /** Classification of a symbol declaration. */
 export type SymbolKind =
@@ -40,6 +40,12 @@ export type SymbolKind =
   | 'variable'
   /** Kotlin `object`/`companion object` declarations: a singleton/namespace, not cleanly a `class`. */
   | 'object'
+  | 'struct'
+  | 'union'
+  | 'trait'
+  | 'variant'
+  | 'module'
+  | 'macro'
 
 // ---------------------------------------------------------------------------
 // Symbol index types
@@ -66,7 +72,7 @@ export interface SymbolLocation {
  * defined at a specific location in a source file.
  */
 export interface SymbolDefinition {
-  declarationMetadata?: { decorators?: DecoratorMetadata[]; jsdoc?: JSDocMetadata[] }
+  declarationMetadata?: { decorators?: DecoratorMetadata[]; jsdoc?: JSDocMetadata[]; rust?: RustDeclarationMetadata }
   nodeId?: string
   qualifiedName?: string
   ownerKey?: string
@@ -103,6 +109,7 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  rustSyntaxFacts?: RustSyntaxFact[]
   commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: PythonOrmFact[]
   frameworkRouteFacts?: FrameworkRouteFact[]
@@ -131,6 +138,34 @@ export interface FileSummary {
    * False if call-graph was not built or this file has no edges.
    */
   hasCallGraphEntries: boolean
+}
+
+/** Compact parser observations, never Cargo/module resolution or macro expansion. */
+export interface RustDeclarationMetadata {
+  syntaxKind: string
+  visibility: string
+  attributes: string[]
+  declarationOnly: boolean
+  modifiers: string[]
+  shape?: 'named' | 'tuple' | 'unit'
+}
+
+export interface RustSyntaxFact {
+  kind: 'declaration' | 'module' | 'use' | 'impl' | 'macro' | 'attribute' | 'ffi' | 'diagnostic'
+  syntaxKind: string
+  line: number
+  endLine?: number
+  name?: string
+  ownerKey?: string
+  nodeId?: string
+  text?: string
+  attributes?: string[]
+  inline?: boolean
+  implementation?: 'inherent' | 'trait'
+  typePath?: string
+  traitPath?: string
+  forms?: Array<'named' | 'grouped' | 'glob' | 'aliased'>
+  status: 'syntax-only' | 'parser-error'
 }
 
 /** Bounded documentation syntax, never a type-checker result. */

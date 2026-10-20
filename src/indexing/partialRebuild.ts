@@ -176,7 +176,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const unresolvedJsBindings = previous && ['typescript', 'javascript'].includes(previous.language) &&
       previous.importBindings?.some(b => b.resolutionStatus === 'unresolved')
     const missingJsFrameworkEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.frameworkRouteFacts === undefined
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence) {
+    const missingRustEvidence = previous?.language === 'rust' && previous.rustSyntaxFacts === undefined
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence && !missingRustEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
@@ -193,6 +194,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         imports: previousSummary.imports,
         ...(importBindings ? { importBindings } : {}),
         ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
+        ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
         ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
         ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
         ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
@@ -208,6 +210,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           imports: previousSummary.imports,
           ...(importBindings ? { importBindings } : {}),
           ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
+          ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
           ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
           ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
           ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
@@ -249,6 +252,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       imports: extraction.imports,
       ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
       ...(extraction.commonJsExports ? { commonJsExports: extraction.commonJsExports } : {}),
+      ...(extraction.rustSyntaxFacts ? { rustSyntaxFacts: extraction.rustSyntaxFacts } : {}),
       ...(extraction.pythonOrmFacts ? { pythonOrmFacts: extraction.pythonOrmFacts } : {}),
       ...(extraction.frameworkRouteFacts ? { frameworkRouteFacts: extraction.frameworkRouteFacts } : {}),
       ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),

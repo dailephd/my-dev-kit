@@ -1,3 +1,4 @@
+import { prepareRustParser } from '../languages/rust/parser.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
@@ -304,6 +305,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   })
 
   if (options.incremental !== true) {
+    await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
     const built = runFullIndexBuild({
       projectRoot,
       normalizedSourceRoots,
@@ -371,7 +373,7 @@ interface RunIncrementalIndexParams {
   androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
-function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommandIndexResult {
+async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<RunIndexCommandIndexResult> {
   const {
     projectRoot,
     normalizedSourceRoots,
@@ -411,11 +413,12 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   const cacheRead = readCacheMetadata(outputDir)
   const requestedScope: IncrementalRefreshScope = options.refreshScope ?? 'changed-files'
 
-  const fullRebuild = (
+  const fullRebuild = async (
     cacheMode: CacheMode,
     invalidationReason: string | null,
     refreshFallbackReason: string
-  ): RunIndexCommandIndexResult => {
+  ): Promise<RunIndexCommandIndexResult> => {
+    await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
     const built = runFullIndexBuild({
       projectRoot,
       normalizedSourceRoots,
@@ -500,10 +503,11 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
 
     // Full rebuild for a change-detected run whose partial reuse was not possible or trusted.
-    const changeDetectedFullRebuild = (
+    const changeDetectedFullRebuild = async (
       invalidationReason: string | null,
       refreshFallbackReason: string
-    ): RunIndexCommandIndexResult => {
+    ): Promise<RunIndexCommandIndexResult> => {
+      await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
       const built = runFullIndexBuild({
         projectRoot,
         normalizedSourceRoots,
@@ -594,6 +598,11 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       }
 
       const previousCacheEntriesByPath = new Map(cacheRead.metadata.files.map((entry) => [entry.path, entry]))
+      const unchanged = new Set(detailed.unchanged)
+      if (discovery.files.some(file => file.relPath.toLowerCase().endsWith('.rs') &&
+        (!unchanged.has(file.relPath) || forceReextractPaths.has(file.relPath) || eligibility.previousFileSummariesByPath.get(file.relPath)?.rustSyntaxFacts === undefined))) {
+        await prepareRustParser()
+      }
       const partial = buildPartialSymbolIndex({
         repoRoot: projectRoot,
         sourceRoots: normalizedSourceRoots,
@@ -1869,4 +1878,10 @@ function createProgressReporter(enabled: boolean, commandStartTime: number): ((e
     const sourceRoot = 'currentSourceRoot' in event && event.currentSourceRoot ? ` source=${event.currentSourceRoot}` : ''
     process.stderr.write(`[my-dev-kit:index] ${event.message} (${elapsedSeconds}s)${sourceRoot}${counts}\n`)
   }
+}
+
+/** Uses the existing selected-source discovery boundary, never scans for Cargo modules. */
+async function prepareSelectedRust(repoRoot: string, sourceRoots: string[], userExcludes?: string[]): Promise<void> {
+  const discovery = discoverSourceFiles({ repoRoot, sourceRoots, userExcludes })
+  if (discovery.files.some(file => file.relPath.toLowerCase().endsWith('.rs'))) await prepareRustParser()
 }

@@ -31,6 +31,7 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  rustSyntaxFacts?: import('./types.js').RustSyntaxFact[]
   commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: import('./types.js').PythonOrmFact[]
   frameworkRouteFacts?: import('./types.js').FrameworkRouteFact[]

@@ -272,6 +272,7 @@ function incrementLanguageCount(languageCounts: Record<string, number>, relPath:
     ext === '.js' || ext === '.jsx' ? 'javascript' :
     ext === '.kt' ? 'kotlin' :
     ext === '.java' ? 'java' :
+    ext === '.rs' ? 'rust' :
     'unknown'
   languageCounts[language] = (languageCounts[language] ?? 0) + 1
 }

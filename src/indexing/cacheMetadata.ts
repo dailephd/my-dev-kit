@@ -1,3 +1,4 @@
+import { RUST_PARSER_REVISION } from '../languages/rust/parser.js'
 /**
  * Internal incremental-indexing cache metadata.
  *
@@ -187,6 +188,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
   const normalized = {
     // Extractor semantics changed without changing the cache storage format.
     // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
+    rustParserRevision: RUST_PARSER_REVISION,
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
