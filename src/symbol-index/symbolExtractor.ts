@@ -20,6 +20,8 @@ import {
   type SymbolLocation,
   type SourceLanguage,
   type ImportBinding,
+  type JSDocMetadata,
+  type CommonJsExportFact,
 } from './types.js'
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,7 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: import('./types.js').PythonOrmFact[]
   frameworkRouteFacts?: import('./types.js').FrameworkRouteFact[]
   importBindings?: ImportBinding[]
@@ -100,7 +103,16 @@ export function extractFromSource(
     )
   })
 
+  const warnings: string[] = []
+  const importBindings: ImportBinding[] = []
+  const commonJsExports: CommonJsExportFact[] = []
+  extractDocumentation(sourceFile, filePath, symbols, warnings, endLineLimit)
+  extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings)
+
   return {
+    importBindings,
+    commonJsExports,
+    ...(warnings.length ? { warnings } : {}),
     language,
     lineCount,
     imports: dedup(imports),
@@ -334,4 +346,192 @@ function languageOf(filePath: string): SourceLanguage {
  */
 function dedup(arr: string[]): string[] {
   return [...new Set(arr)]
+}
+
+function extractDocumentation(sf: ts.SourceFile, file: string, symbols: SymbolDefinition[], warnings: string[], endLimit: number | null): void {
+  const supported = new Set(['param', 'returns', 'return', 'type', 'typedef', 'property', 'template', 'deprecated'])
+  const seen = new Set<ts.JSDocTag>()
+  function metadata(tags: readonly ts.JSDocTag[]): JSDocMetadata[] {
+    const entries: JSDocMetadata[] = []
+    function add(tag: ts.JSDocTag): void {
+      if (seen.has(tag)) return
+      seen.add(tag)
+      const name = tag.tagName.text
+      const typed = tag as ts.JSDocTag & { name?: ts.Node; typeExpression?: ts.Node; typeParameters?: ts.NodeArray<ts.TypeParameterDeclaration> }
+      let status: JSDocMetadata['status'] = supported.has(name) ? 'syntax-only' : 'unsupported'
+      const cap = (s: string | undefined, limit: number) => {
+        if (s && s.length > limit) { status = 'partial'; return s.slice(0, limit) }
+        return s
+      }
+      const typeNode = typed.typeExpression
+      let type = typeNode && ts.isJSDocTypeExpression(typeNode) ? typeNode.type.getText(sf) : undefined
+      if (typeNode && ts.isJSDocTypeLiteral(typeNode) && typed.name) {
+        // The compiler replaces an Object typedef's type expression with a
+        // JSDocTypeLiteral containing properties. Reparse only its AST-proven
+        // header to retain the original documented spelling and array form.
+        const header = '/** ' + sf.text.slice(tag.getStart(sf), typed.name.end) + ' */'
+        const isolated = ts.createSourceFile('documentation.js', header, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+        const original = ts.getJSDocTags(isolated.endOfFileToken)[0] as ts.JSDocTypedefTag | undefined
+        if (original?.typeExpression && ts.isJSDocTypeExpression(original.typeExpression)) type = original.typeExpression.type.getText(isolated)
+      }
+      if (typeNode && !type?.trim()) status = 'unsupported'
+      if (endLimit === null) status = 'partial'
+      const comment = typeof tag.comment === 'string' ? tag.comment : tag.comment?.map(p => p.text).join('')
+      const parameterName = cap(typed.name?.getText(sf) ?? typed.typeParameters?.map(p => p.name.text).join(', '), 128)
+      const typeExpression = cap(type, 512)
+      const textSummary = cap(comment?.trim(), 160)
+      if (['param', 'property', 'typedef'].includes(name) && !parameterName) status = 'unsupported'
+      const entry: JSDocMetadata = {
+        tagName: cap(name, 128)!,
+        ...(parameterName ? { parameterName } : {}),
+        ...(typeExpression ? { typeExpression } : {}),
+        ...(textSummary ? { textSummary } : {}),
+        startLine: sf.getLineAndCharacterOfPosition(tag.getStart(sf)).line + 1,
+        endLine: sf.getLineAndCharacterOfPosition(Math.max(tag.pos, tag.end - 1)).line + 1,
+        status,
+      }
+      entries.push(entry)
+      if (typeNode && ts.isJSDocTypeLiteral(typeNode)) {
+        for (const property of typeNode.jsDocPropertyTags ?? []) add(property)
+      }
+    }
+    tags.forEach(add)
+    if (entries.length > 24) {
+      entries.length = 24
+      entries[23].status = 'partial'
+      warnings.push('JSDoc entry limit (24) reached; documentation is partial.')
+    }
+    for (const e of entries) if (e.status !== 'syntax-only') warnings.push(`JSDoc @${e.tagName} at line ${e.startLine}: ${e.status}.`)
+    return entries
+  }
+  for (const statement of [...sf.statements, sf.endOfFileToken]) {
+    const tags = ts.getJSDocTags(statement)
+    if (!tags.length) continue
+    const docs = metadata(tags)
+    const line = sf.getLineAndCharacterOfPosition(statement.getStart(sf)).line + 1
+    const targets = ts.isVariableStatement(statement)
+      ? symbols.filter(s => statement.declarationList.declarations.some(d => ts.isIdentifier(d.name) && d.name.text === s.name && s.location.line === sf.getLineAndCharacterOfPosition(d.getStart(sf)).line + 1))
+      : symbols.filter(s => s.location.line === line)
+    for (const target of targets) target.declarationMetadata = { ...target.declarationMetadata, jsdoc: docs }
+    for (const tag of tags) {
+      if (!ts.isJSDocTypedefTag(tag) || !tag.fullName || !ts.isIdentifier(tag.fullName)) continue
+      // The AST name and span establish a documentation declaration, not a runtime binding.
+      const name = tag.fullName.text
+      if (name.length > 128 || endLimit === null) { warnings.push('Unsupported or truncated JSDoc typedef declaration.'); continue }
+      symbols.push({ name, kind: 'type', exported: false,
+        // Documentation declarations occupy a distinct identity scope so a
+        // same-named value keeps its pre-existing legacy or qualified identity.
+        ownerKey: 'jsdoc/typedef',
+        location: locationOf(tag, sf, file, endLimit), signature: tag.getText(sf).slice(0, 120),
+        declarationMetadata: { jsdoc: docs },
+      })
+    }
+  }
+}
+
+/** Conservative file-wide rejection of shadowed or reassigned Node globals. */
+function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[]): void {
+  const shadowed = new Set<string>()
+  const mutated = new Set<string>()
+  let unsupportedExportMutation = false
+  let wholeModuleAssignments = 0
+  const exportReceiver = (n: ts.Node): boolean => ts.isIdentifier(n) && n.text === 'exports' || ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
+  const exportRoot = (n: ts.Node): boolean => exportReceiver(n) || (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && exportRoot(n.expression)
+  const bindNames = (n: ts.BindingName): string[] => ts.isIdentifier(n) ? [n.text] : n.elements.flatMap(e => ts.isOmittedExpression(e) ? [] : bindNames(e.name))
+  function scan(n: ts.Node): void {
+    if (ts.isElementAccessExpression(n) && exportRoot(n.expression)) unsupportedExportMutation = true
+    if (ts.isDeleteExpression(n) && exportRoot(n.expression)) unsupportedExportMutation = true
+    if (ts.isVariableDeclaration(n) && n.initializer && exportReceiver(n.initializer)) unsupportedExportMutation = true
+    if (ts.isCallExpression(n) && n.arguments.some(exportReceiver)) unsupportedExportMutation = true
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && exportReceiver(n.right)) unsupportedExportMutation = true
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && n.operatorToken.kind !== ts.SyntaxKind.EqualsToken && exportRoot(n.left)) unsupportedExportMutation = true
+    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && exportRoot(n.operand)) unsupportedExportMutation = true
+    if (ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isBindingElement(n)) bindNames(n.name).forEach(x => shadowed.add(x))
+    if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name) shadowed.add(n.name.text)
+    if (ts.isImportClause(n) && n.name) shadowed.add(n.name.text)
+    if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n)) shadowed.add(n.name.text)
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) mutated.add(n.left.text)
+    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand)) mutated.add(n.operand.text)
+    ts.forEachChild(n, scan)
+  }
+  scan(sf)
+  const span = (n: ts.Node) => ({ startLine: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1 })
+  const binding = (n: ts.Node, localName: string, importedName: string, sourceSpecifier: string, syntaxKind: 'esm' | 'commonjs', wholeModule = false) => {
+    bindings.push({ localName, importedName, sourceSpecifier, syntaxKind, ...(wholeModule ? { wildcard: true } : {}), ...span(n), resolutionStatus: mutated.has(localName) ? 'unresolved' : 'observed' })
+  }
+  const literalRequire = (n: ts.Node | undefined): string | undefined => {
+    if (!n || !ts.isCallExpression(n) || !ts.isIdentifier(n.expression) || n.expression.text !== 'require') return
+    if (shadowed.has('require') || mutated.has('require') || n.arguments.length !== 1 || !ts.isStringLiteral(n.arguments[0])) {
+      warnings.push(`Unsupported require at line ${span(n).startLine}.`); return
+    }
+    return n.arguments[0].text
+  }
+  for (const n of sf.statements) {
+    if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) {
+      const spec = n.moduleSpecifier.text
+      const clause = n.importClause
+      if (!clause) binding(n, '', '', spec, 'esm')
+      if (clause?.name) binding(n, clause.name.text, 'default', spec, 'esm')
+      const named = clause?.namedBindings
+      if (named && ts.isNamespaceImport(named)) binding(n, named.name.text, '*', spec, 'esm', true)
+      if (named && ts.isNamedImports(named)) for (const el of named.elements) binding(n, el.name.text, el.propertyName?.text ?? el.name.text, spec, 'esm')
+    }
+    if (ts.isVariableStatement(n)) for (const d of n.declarationList.declarations) {
+      const spec = literalRequire(d.initializer)
+      if (spec === undefined) continue
+      imports.push(spec)
+      if (ts.isIdentifier(d.name)) binding(d, d.name.text, '*', spec, 'commonjs', true)
+      else if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) {
+        if (!el.dotDotDotToken && !el.initializer && ts.isIdentifier(el.name) && (!el.propertyName || ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName))) binding(el, el.name.text, el.propertyName?.getText(sf).replace(/^['"]|['"]$/g, '') ?? el.name.text, spec, 'commonjs')
+      }
+    }
+    if (ts.isExpressionStatement(n)) {
+      const spec = literalRequire(n.expression)
+      if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs') }
+    }
+  }
+  const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
+  function visit(n: ts.Node): void {
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      const left = n.left
+      let kind: CommonJsExportFact['assignmentKind'] | undefined
+      let name: string | null = null
+      let global = ''
+      if (isModule(left)) { kind = 'module-exports'; global = 'module' }
+      else if (ts.isPropertyAccessExpression(left)) {
+        if (ts.isIdentifier(left.expression) && left.expression.text === 'exports') { kind = 'exports-member'; global = 'exports'; name = left.name.text }
+        else if (isModule(left.expression)) { kind = 'module-exports-member'; global = 'module'; name = left.name.text }
+      }
+      if (kind) {
+        if (kind === 'module-exports') wholeModuleAssignments++
+        const unconditional = ts.isExpressionStatement(n.parent) && ts.isSourceFile(n.parent.parent)
+        const safe = unconditional && !shadowed.has(global) && !mutated.has(global)
+        const add = (exportedName: string | null, rhs: ts.Node) => facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
+        if (name === null && ts.isObjectLiteralExpression(n.right)) {
+          for (const p of n.right.properties) {
+            if (ts.isShorthandPropertyAssignment(p)) add(p.name.text, p.name)
+            else if (ts.isPropertyAssignment(p) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))) add(p.name.text, p.initializer)
+            else { unsupportedExportMutation = true; warnings.push(`Unsupported CommonJS export member at line ${span(p).startLine}.`) }
+          }
+        } else add(name, n.right)
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  for (const fact of facts) {
+    if (unsupportedExportMutation) { fact.resolutionStatus = 'unresolved'; fact.reason = 'Unsupported CommonJS mutation or alias.'; continue }
+    if (wholeModuleAssignments > 1 || wholeModuleAssignments && facts.some(f => f.assignmentKind === 'exports-member')) {
+      fact.resolutionStatus = 'ambiguous'; fact.reason = 'Competing whole-module assignments or stale exports alias.'; continue
+    }
+    const competing = facts.filter(f => f.exportedName === fact.exportedName || f.exportedName === null || fact.exportedName === null)
+    if (competing.length > 1) { fact.resolutionStatus = 'ambiguous'; fact.reason = 'Competing CommonJS assignments.'; continue }
+    if (fact.resolutionStatus !== 'observed' || !fact.bindingName) continue
+    const matches = symbols.filter(s => s.name === fact.bindingName && s.kind !== 'type' && !s.ownerKey)
+    if (matches.length === 1 && !mutated.has(fact.bindingName)) {
+      fact.resolutionStatus = 'resolved-local'
+      matches[0].exported = true
+      exports.push(fact.exportedName ?? fact.bindingName)
+    } else { fact.resolutionStatus = matches.length > 1 ? 'ambiguous' : 'unresolved'; fact.reason = 'No unique immutable local declaration.' }
+  }
 }

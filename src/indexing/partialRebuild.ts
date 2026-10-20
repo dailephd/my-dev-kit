@@ -169,20 +169,28 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     // Re-extract summaries lacking B03 bindings or either B04 fact array.
     const missingPythonEvidence = input.previousFileSummariesByPath.get(relPath)?.language === 'python' &&
       (input.previousFileSummariesByPath.get(relPath)?.importBindings === undefined || input.previousFileSummariesByPath.get(relPath)?.pythonOrmFacts === undefined || input.previousFileSummariesByPath.get(relPath)?.frameworkRouteFacts === undefined)
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence) {
+    const previous = input.previousFileSummariesByPath.get(relPath)
+    // The configuration fingerprint rejects pre-B05 caches. Re-evaluate
+    // unresolved bindings when the selected target inventory changes; legacy
+    // direct callers without optional B05 evidence retain identity-only reuse.
+    const unresolvedJsBindings = previous && ['typescript', 'javascript'].includes(previous.language) &&
+      previous.importBindings?.some(b => b.resolutionStatus === 'unresolved')
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
       const reExportSpecifiers = previousCacheEntry?.reExportSpecifiers ?? []
       const exportAllSpecifiers = previousCacheEntry?.exportAllSpecifiers ?? []
       const cleanSymbols = previousSummary.symbols.map(cleanSymbol)
+      const importBindings = previousSummary.importBindings?.map(binding => ({ ...binding }))
 
       summaries.push({
         path: relPath,
         language: previousSummary.language,
         lineCount: previousSummary.lineCount,
         imports: previousSummary.imports,
-        ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+        ...(importBindings ? { importBindings } : {}),
+        ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
         ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
         ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
         ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
@@ -196,7 +204,8 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           language: previousSummary.language,
           lineCount: previousSummary.lineCount,
           imports: previousSummary.imports,
-          ...(previousSummary.importBindings ? { importBindings: previousSummary.importBindings } : {}),
+          ...(importBindings ? { importBindings } : {}),
+          ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
           ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
           ...(previousSummary.frameworkRouteFacts ? { frameworkRouteFacts: previousSummary.frameworkRouteFacts } : {}),
           ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
@@ -237,6 +246,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       lineCount: extraction.lineCount,
       imports: extraction.imports,
       ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
+      ...(extraction.commonJsExports ? { commonJsExports: extraction.commonJsExports } : {}),
       ...(extraction.pythonOrmFacts ? { pythonOrmFacts: extraction.pythonOrmFacts } : {}),
       ...(extraction.frameworkRouteFacts ? { frameworkRouteFacts: extraction.frameworkRouteFacts } : {}),
       ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),

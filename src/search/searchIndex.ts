@@ -539,6 +539,11 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   if (symbol.exported) fields.push(field('export', symbol.name, WEIGHTS.export))
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
   if (symbol.qualifiedName) fields.push(field('symbolName', symbol.qualifiedName, WEIGHTS.symbolName))
+  for (const doc of symbol.declarationMetadata?.jsdoc ?? []) {
+    for (const value of [doc.tagName, doc.parameterName, doc.typeExpression, doc.textSummary]) {
+      if (value) fields.push(field('label', value, WEIGHTS.label))
+    }
+  }
   fields.push(...semanticFields(symbol.semanticRoles, symbol.artifactRefs))
   fields.push(...classificationFields(symbol.classificationRoles))
   fields.push(...androidComponentFields(symbol.androidComponentRoles))

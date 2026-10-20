@@ -66,7 +66,7 @@ export interface SymbolLocation {
  * defined at a specific location in a source file.
  */
 export interface SymbolDefinition {
-  declarationMetadata?: { decorators?: DecoratorMetadata[] }
+  declarationMetadata?: { decorators?: DecoratorMetadata[]; jsdoc?: JSDocMetadata[] }
   nodeId?: string
   qualifiedName?: string
   ownerKey?: string
@@ -103,6 +103,7 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: PythonOrmFact[]
   frameworkRouteFacts?: FrameworkRouteFact[]
   warnings?: string[]
@@ -130,6 +131,27 @@ export interface FileSummary {
    * False if call-graph was not built or this file has no edges.
    */
   hasCallGraphEntries: boolean
+}
+
+/** Bounded documentation syntax, never a type-checker result. */
+export interface JSDocMetadata {
+  tagName: string
+  parameterName?: string
+  typeExpression?: string
+  textSummary?: string
+  startLine: number
+  endLine?: number
+  status: 'syntax-only' | 'partial' | 'unsupported'
+}
+
+export interface CommonJsExportFact {
+  exportedName: string | null
+  bindingName?: string
+  assignmentKind: 'exports-member' | 'module-exports-member' | 'module-exports'
+  startLine: number
+  endLine?: number
+  resolutionStatus: 'observed' | 'resolved-local' | 'ambiguous' | 'unresolved'
+  reason?: string
 }
 
 /** Bounded syntax evidence from the isolated Python AST adapter. */

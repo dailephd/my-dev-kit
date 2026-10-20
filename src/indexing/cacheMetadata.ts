@@ -187,6 +187,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     // Extractor semantics changed without changing the cache storage format.
     // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
     pythonExtractionRevision: 'v1.14.0-b04',
+    jsTsExtractionRevision: 'v1.14.0-b05',
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),
     callGraphEnabled: input.callGraphEnabled,

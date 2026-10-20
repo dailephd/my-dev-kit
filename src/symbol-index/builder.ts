@@ -12,6 +12,7 @@
 
 import * as fs from 'fs'
 import { assignDeclarationIdentities } from './declarationIdentity.js'
+import { resolveJsTsCandidates } from '../languages/typescript/adapter.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
@@ -135,6 +136,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
     }
 
     const adapter = registry.adapterForFile(relPath)!
+
     const result = adapter.extractFromSource(relPath, sourceText)
     result.symbols = assignDeclarationIdentities(relPath, result.symbols)
     rawExtractions.push({ relPath, extraction: result })
@@ -148,6 +150,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
       lineCount: result.lineCount,
       imports: result.imports,
       ...(result.importBindings ? { importBindings: result.importBindings } : {}),
+      ...(result.commonJsExports ? { commonJsExports: result.commonJsExports } : {}),
       ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
       ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
@@ -248,6 +251,14 @@ export function buildGraphSection(
 
   for (const { relPath, extraction } of rawExtractions) {
     const adapter = registry.adapterForFile(relPath)!
+
+    if (extraction.language === 'javascript' || extraction.language === 'typescript') {
+      for (const binding of extraction.importBindings ?? []) {
+        const candidates = resolveJsTsCandidates(binding.sourceSpecifier, relPath, knownFiles)
+        if (binding.resolutionStatus === 'unresolved') continue
+        binding.resolutionStatus = candidates.length === 1 ? 'resolved-local' : candidates.length > 1 ? 'ambiguous' : binding.sourceSpecifier.startsWith('.') ? 'unresolved' : 'external'
+      }
+    }
 
     for (const specifier of extraction.imports) {
       const to = adapter.resolveImportToFile(specifier, relPath, knownFiles)
