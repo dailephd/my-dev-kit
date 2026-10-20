@@ -60,6 +60,15 @@ The [v1.14.0 Rust subtrack](ROADMAP.md#rust-language-intelligence--planned-v1140
 The R0/R1 gates must freeze exact IDs, migration/old-reader rules, provenance, ambiguity behavior, and compatibility tests before code changes. Reuse the existing `symbol-index.json`, `code-graph.json`, context capsule, source continuation, incremental-cache, and graph-diff contracts; do not rekey unrelated languages or declare unsupported Rust CLI flags shipped. The current [graph schema](GRAPH_SCHEMA.md) still documents only the implemented v1.13.0 shapes. Neither static Cargo parsing nor observed `cfg`/`use`/trait syntax proves compiler resolution, selected features, test success, or target execution.
 
 
+
+### Planned v1.14.0 configured TypeScript/JavaScript import-resolution contract (not shipped)
+
+The [v1.14.0 configured-import correction](ROADMAP.md#configured-typescriptjavascript-import-resolution--v1140-correction-planned-not-shipped) plans to resolve supported project-local `tsconfig.json`/`jsconfig.json` `compilerOptions.paths` aliases into **existing** index-time `symbolIndex.graph.fileDeps` entries. It does not add a second graph, new CLI, or currently published schema field. The existing TypeScript adapter and `src/symbol-index/builder.ts` own index-time dependency production; the relative-only helper shared with ownership search and test discovery is a separate query-time consumer. A query-time fix alone cannot create missing persisted edges.
+
+A planned local alias edge requires an applicable, safely read project config, a supported literal mapping and a **unique selected indexed file** as its target. A mapping such as `@/*` → `./src/*` is supported even without `baseUrl`; in that case the mapping is relative to the config that defines it. Ambiguous, excluded, external, missing or unsafe targets are not guessed. Config selection, local inheritance and content changes must participate in incremental invalidation. Full/partial parity, conservative old-reader behavior and existing search/lookup/slice/context semantics are mandatory acceptance gates.
+
+This subsection is a **planning contract only**. It must not be read as a statement that released 1.13.0 accepts path aliases, that v1.14.0 is released, or that the current published artifact schema includes configured-resolution provenance. Documentation of implemented command/schema details follows the controlled release-documentation reconciliation after tests pass.
+
 ## Context request contract
 
 The type owner is `ContextRequest` in `src/context/types.ts`, with loading,
