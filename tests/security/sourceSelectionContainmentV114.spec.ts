@@ -178,11 +178,10 @@ describe('B15 indexed selection and physical source containment', () => {
 
   it('uses platform-correct path casing for selected source authority', async () => {
     const p = await project()
-    if (process.platform !== 'win32') put(p.root, 'src/Selected.ts', sentinel)
     const file = process.platform === 'win32' ? p.file.toUpperCase() : 'src/Selected.ts'
     const result = invoke(p.parent, ['--index', p.out, '--file', file, '--start', '1', '--end', '1', '--max-lines', '1', '--json'])
     if (process.platform === 'win32') { expect(result.status, result.stderr).toBe(0); expect(JSON.parse(result.stdout).content).toContain('SELECTED') }
-    else rejected(result)
+    else { rejected(result); expect(result.stderr).toContain('selected source inventory') }
   })
 
   it('detects a file substitution between validation and descriptor open', async () => {
