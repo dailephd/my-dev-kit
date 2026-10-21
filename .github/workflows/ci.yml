@@ -13,6 +13,11 @@ jobs:
   validate:
     name: Validate (${{ matrix.os }}, Node ${{ matrix.node-version }})
     runs-on: ${{ matrix.os }}
+    env:
+      TEMP: ${{ github.workspace }}/.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp
+      TMP: ${{ github.workspace }}/.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp
+      TMPDIR: ${{ github.workspace }}/.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp
+      npm_config_cache: ${{ github.workspace }}/.my-dev-kit-workflow/npm-cache/v1.14.0-b15-20261021
     strategy:
       fail-fast: false
       matrix:
@@ -22,6 +27,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare B15 task environment
+        run: node -e "for (const p of [process.env.TEMP,process.env.npm_config_cache]) require('fs').mkdirSync(p,{recursive:true})"
 
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -36,10 +44,37 @@ jobs:
         run: npm run verify
 
       - name: Test
-        run: npm run test
+        run: npm run test -- --maxWorkers=2 --reporter=dot
+
+      - name: Security tests
+        run: npm run test:security
 
       - name: Package dry run
-        run: npm pack --dry-run --json
+        run: npm pack --dry-run --ignore-scripts --json
+
+      - name: Retrieval regression - core
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/core/run-001 --fail-on-regression
+
+      - name: Retrieval regression - Android
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.13/android.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/android/run-001 --fail-on-regression
+
+      - name: Retrieval regression - Rust
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.14/rust.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/rust/run-001 --fail-on-regression
+
+      - name: Rust installed-package qualification
+        run: node scripts/qualification/v114RustMatrix.mjs
+
+      - name: Upload Rust qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v114-b15-rust-qualification-${{ matrix.os }}
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/qualification.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*.exit.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*-resources.json
 
       - name: CLI help
         run: node dist/cli.js --help
