@@ -4,8 +4,8 @@ import { discoverCargoStructure } from '../languages/rust/cargo.js'
 import { resolveRustModules, rustPackageId, rustTargetId } from '../languages/rust/moduleResolver.js'
 
 /** Additive projection into the existing graph, shared by full and partial builds. */
-export function buildRustStructure(graph: CodeGraph, repoRoot: string, summaries: readonly FileSummary[]): { graph: CodeGraph; warnings: string[]; packageCount: number; workspaceCount: number } {
-  if (!summaries.some(f => f.language === 'rust')) return {graph,warnings:[],packageCount:0,workspaceCount:0}
+export function buildRustStructure(graph: CodeGraph, repoRoot: string, summaries: readonly FileSummary[]) {
+  if (!summaries.some(f => f.language === 'rust')) return {graph,warnings:[],packageCount:0,workspaceCount:0,packages:[],modules:[]}
   const cargo = discoverCargoStructure(repoRoot,summaries.filter(f => f.language === 'rust').map(f => f.path))
   const resolved = resolveRustModules(repoRoot,cargo.packages,summaries)
   const nodes = [...graph.nodes], edges = [...graph.edges]
@@ -35,5 +35,5 @@ export function buildRustStructure(graph: CodeGraph, repoRoot: string, summaries
     if (m.status === 'RESOLVED' && m.resolvedFile) edge(m.id,'rust-module-resolves-to-file',`file:${m.resolvedFile}`)
   }
   nodes.sort((a,b) => a.id.localeCompare(b.id)); edges.sort((a,b) => a.id.localeCompare(b.id))
-  return {graph:{...graph,nodes,edges,summary:{...graph.summary,nodeCount:nodes.length,edgeCount:edges.length}},warnings:[...cargo.warnings,...resolved.warnings],packageCount:cargo.packages.length,workspaceCount:cargo.workspaces.length}
+  return {graph:{...graph,nodes,edges,summary:{...graph.summary,nodeCount:nodes.length,edgeCount:edges.length}},warnings:[...cargo.warnings,...resolved.warnings],packageCount:cargo.packages.length,workspaceCount:cargo.workspaces.length,packages:cargo.packages,modules:resolved.modules}
 }

@@ -40,7 +40,7 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
   if (node.kind === 'framework-route' && node.path && Number.isInteger(node.line) && node.line! > 0) {
     return { mode: 'node', nodeId: node.id, filePath: node.path, startLine: node.line!, endLine: node.line! + Math.max(1, Math.min(maxLines, 12)) - 1, warnings: ['Framework route source is a bounded declaration excerpt; the declaration end is unknown.'] }
   }
-  if ((node.kind === 'rust-module' || node.kind === 'rust-target') && node.path && Number.isInteger(node.line) && node.line! > 0) {
+  if ((node.kind === 'rust-module' || node.kind === 'rust-target' || node.kind === 'rust-impl') && node.path && Number.isInteger(node.line) && node.line! > 0) {
     const startLine = node.line!
     const end = node.rustMetadata?.endLine
     return { mode: 'node', nodeId: node.id, filePath: node.path, startLine, endLine: Math.min(end !== undefined && end >= startLine ? end : startLine + 11, startLine + maxLines - 1), warnings: ['Rust structural source is observed syntax; external module declarations do not prove a module body in this file.'] }

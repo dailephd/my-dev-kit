@@ -151,6 +151,14 @@ export interface RustDeclarationMetadata {
 }
 
 export interface RustSyntaxFact {
+  /** B10 source-grounded observations from the existing CST traversal. */
+  parentOwnerKey?: string
+  visibility?: string
+  genericParameters?: string
+  genericParameterNames?: string[]
+  negative?: boolean
+  useLeaves?: Array<{ path: string; alias?: string; glob: boolean; line: number; sourceIndex: number }>
+  unsupportedUse?: boolean
   /** Parser-owned lexical key and offset for exact module-parent joins (B09). */
   moduleKey?: string
   sourceIndex?: number

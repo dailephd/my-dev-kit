@@ -191,6 +191,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
     rustParserRevision: RUST_PARSER_REVISION,
     rustCargoStructureRevision: 'v1.14.0-b09',
+    rustRelationshipRevision: 'v1.14.0-b10',
     rustCargoFingerprint: input.rustCargoFingerprint ?? null,
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',

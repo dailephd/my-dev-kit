@@ -1,6 +1,7 @@
 import { prepareRustParser } from '../languages/rust/parser.js'
 import { discoverCargoStructure } from '../languages/rust/cargo.js'
 import { buildRustStructure } from '../graph/buildRustStructure.js'
+import { buildRustRelationships } from '../graph/buildRustRelationships.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
@@ -957,8 +958,10 @@ function finishIndexBuild(
   const languages = inferLanguages(index.files.map((file) => file.language), options.language)
   // Reproject from every selected summary, including unchanged cross-file routers.
   const rustStructure = buildRustStructure(buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files), projectRoot, index.files)
-  const codeGraph = rustStructure.graph
+  const rustRelationships = buildRustRelationships(rustStructure.graph, index.files, rustStructure.packages, rustStructure.modules)
+  const codeGraph = rustRelationships.graph
   warnings.push(...rustStructure.warnings)
+  warnings.push(...rustRelationships.warnings)
   const createdAt = new Date().toISOString()
   const baseManifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),

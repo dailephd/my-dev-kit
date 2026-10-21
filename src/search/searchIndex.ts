@@ -443,7 +443,7 @@ function buildFrontendValueFields(fileResult: FrontendFileResult): SearchCandida
 }
 
 function isSearchableNode(node: CodeGraphNode): boolean {
-  return node.kind === 'file' || node.kind === 'symbol' || node.kind === 'framework-route' || node.kind === 'rust-package' || node.kind === 'rust-target' || node.kind === 'rust-module'
+  return node.kind === 'file' || node.kind === 'symbol' || node.kind === 'framework-route' || node.kind === 'rust-package' || node.kind === 'rust-target' || node.kind === 'rust-module' || node.kind === 'rust-impl'
 }
 
 /** `android-*` node kinds are eligible for generic `search --query`/`context` candidate ranking (v1.10.0 Batch 6), reusing the same generic search engine rather than a second retrieval path. */

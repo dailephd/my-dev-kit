@@ -71,7 +71,7 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
     const visibility = text(children(node).find(n => n.type === 'visibility_modifier'))
     const nameNode = node.childForFieldName('name')
     const name = text(nameNode)
-    const base = { ...loc, ...(owner ? { ownerKey: owner } : {}), status: contaminated || node.hasError ? 'parser-error' as const : 'syntax-only' as const }
+    const base = { ...loc, sourceIndex: node.startIndex, ...(owner ? { ownerKey: owner } : {}), status: contaminated || node.hasError ? 'parser-error' as const : 'syntax-only' as const }
     // Inner attributes apply to the containing file/module, not the following item.
     if (node.type === 'inner_attribute_item') addFact({ kind: 'attribute', syntaxKind: node.type, ...base, attributes: [text(node)] })
     const scope = (label: string) => `${owner ? owner + '/' : 'rust:'}${label.replace(/\s+/g, ' ')}@${loc.line}:${node.startIndex}`
@@ -96,9 +96,13 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
     }
     if (node.type === 'impl_item') {
       const typePath = text(node.childForFieldName('type')), traitPath = text(node.childForFieldName('trait'))
+      const genericParameters = node.childForFieldName('type_parameters')
       childOwner = scope(`impl:${typePath}${traitPath ? ':trait:' + traitPath : ''}`)
       childContext = 'impl'
       addFact({ kind: 'impl', syntaxKind: node.type, ...base, ownerKey: childOwner,
+        ...(owner ? { parentOwnerKey: owner } : {}), genericParameters: text(genericParameters),
+        genericParameterNames: (genericParameters ? children(genericParameters) : []).filter(n => n.type === 'type_parameter' || n.type === 'const_parameter').map(n => text(n.childForFieldName('name'))),
+        negative: node.children.some(n => n?.type === '!'),
         implementation: traitPath ? 'trait' : 'inherent', typePath, ...(traitPath ? { traitPath } : {}), attributes,
         text: source.slice(node.startIndex, node.childForFieldName('body')?.startIndex ?? node.endIndex).trim().slice(0, 120) })
     }
@@ -116,7 +120,30 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
         if (part.type === 'identifier' || ['self', 'super', 'crate'].includes(part.type)) forms.push('named')
         useNodes.push(...children(part))
       }
-      addFact({ kind: 'use', syntaxKind: visibility ? 're-export' : 'use', text: observed, forms: [...new Set(forms)], ...base, attributes })
+      const useLeaves: NonNullable<RustSyntaxFact['useLeaves']> = []
+      let unsupportedUse = false
+      const pendingUses: Array<{ part: Node; prefix: string }> = argument ? [{ part: argument, prefix: '' }] : []
+      const join = (prefix: string, value: string) => value === 'self' && prefix ? prefix : prefix ? `${prefix}::${value}` : value
+      while (pendingUses.length) {
+        const { part, prefix } = pendingUses.pop()!
+        if (part.type === 'use_list') {
+          pendingUses.push(...children(part).reverse().map(part => ({ part, prefix })))
+        } else if (part.type === 'scoped_use_list') {
+          const path = part.childForFieldName('path'), list = part.childForFieldName('list')
+          if (list) pendingUses.push({ part: list, prefix: join(prefix, text(path).replace(/\s+/g, '')) })
+          else unsupportedUse = true
+        } else {
+          const aliased = part.type === 'use_as_clause'
+          const glob = part.type === 'use_wildcard'
+          const path = aliased ? part.childForFieldName('path') : glob ? children(part)[0] : part
+          // In a group, `*` has no path child; its exact prefix is the target.
+          const value = glob && !path && prefix ? 'self' : text(path).replace(/\s+/g, '')
+          if (!value || (!aliased && !glob && !['identifier','scoped_identifier','self','super','crate'].includes(part.type))) { unsupportedUse = true; continue }
+          useLeaves.push({ path: join(prefix, value), ...(aliased ? { alias: text(part.childForFieldName('alias')) } : {}), glob,
+            line: part.startPosition.row + 1, sourceIndex: part.startIndex })
+        }
+      }
+      addFact({ kind: 'use', syntaxKind: visibility ? 're-export' : 'use', text: observed, forms: [...new Set(forms)], ...base, attributes, visibility, useLeaves, ...(unsupportedUse ? { unsupportedUse } : {}) })
     }
     if (node.type === 'foreign_mod_item') {
       addFact({ kind: 'ffi', syntaxKind: node.type, text: source.slice(node.startIndex, node.childForFieldName('body')?.startIndex ?? node.endIndex).trim().slice(0, 120), ...base, attributes })

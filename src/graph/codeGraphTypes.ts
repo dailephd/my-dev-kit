@@ -7,6 +7,7 @@ import type { CargoDependency, CargoWorkspace, RustResolutionStatus, RustTargetK
 export const CODE_GRAPH_SCHEMA_VERSION = '1.1.0'
 
 export type CodeGraphNodeKind =
+  | 'rust-impl'
   | 'rust-package'
   | 'rust-target'
   | 'rust-module'
@@ -50,6 +51,12 @@ export type AndroidArtifactId =
   | 'android-test-semantic'
 
 export type CodeGraphEdgeKind =
+  | 'rust-module-defines-symbol'
+  | 'rust-impl-defines-symbol'
+  | 'rust-impl-for-type'
+  | 'rust-impl-of-trait'
+  | 'rust-module-uses-module'
+  | 'rust-module-reexports-symbol'
   | 'rust-package-has-target'
   | 'rust-target-root-file'
   | 'rust-target-contains-module'
@@ -112,8 +119,17 @@ export type CodeGraphEdgeKind =
 
 export interface CodeGraphNode {
   rustMetadata?: {
-    origin: 'manifest' | 'conventional' | 'root' | 'inline' | 'external'
+    origin: 'manifest' | 'conventional' | 'root' | 'inline' | 'external' | 'syntax'
     status: RustResolutionStatus
+    sourceIndex?: number
+    lexicalModuleOwner?: string
+    implementation?: 'inherent' | 'trait'
+    typePath?: string
+    traitPath?: string
+    syntax?: string
+    genericParameters?: string
+    negative?: boolean
+    identityProvenance?: string
     manifest?: string
     edition?: string
     inheritedMetadata?: Record<string, string | string[] | boolean>

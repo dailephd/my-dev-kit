@@ -14,6 +14,8 @@ export interface CargoTarget {
   reason?: string
 }
 export interface CargoDependency {
+  /** Absent for an ordinary runtime dependency (compatible B09 shape). */
+  dependencyKind?: 'dev' | 'build'
   name: string
   packageName: string
   manifest?: string
@@ -30,6 +32,8 @@ export interface CargoWorkspace {
   status: RustResolutionStatus
 }
 export interface CargoPackage {
+  /** Observed external names only; no registry/git body is inspected. */
+  externPreludeNames?: string[]
   manifest: string
   name: string
   edition?: string
@@ -307,23 +311,25 @@ export function discoverCargoStructure(repoRoot: string, selectedPaths: readonly
     for (const t of record.targets) { const k = `${t.kind}#${t.name}`; groups.set(k,[...(groups.get(k) ?? []),t]) }
     for (const group of groups.values()) if (group.length > 1) { for (const t of group) { t.status = 'AMBIGUOUS'; t.reason = 'conflicting target declarations' }; warn(`Conflicting Cargo targets: ${manifest}`) }
     record.targets = record.targets.filter((t,i,a) => a.findIndex(x => x.kind === t.kind && x.name === t.name && x.root === t.root) === i)
-    const dependencyTables: Array<{values:unknown;conditional:boolean}> = ['dependencies','dev-dependencies','build-dependencies'].map(k => ({values:doc[k],conditional:false}))
+    const dependencyTables: Array<{values:unknown;conditional:boolean;dependencyKind?: 'dev' | 'build'}> = ['dependencies','dev-dependencies','build-dependencies'].map(k => ({values:doc[k],conditional:false,...(k === 'dev-dependencies' ? {dependencyKind:'dev' as const} : k === 'build-dependencies' ? {dependencyKind:'build' as const} : {})}))
     if (table(doc.target)) {
       if (Object.keys(doc.target).length > 256) { record.status = 'UNSUPPORTED_SYNTAX'; warn(`Cargo conditional dependency tables truncated at 256: ${manifest}`) }
-      for (const value of Object.values(doc.target).slice(0,256)) if (table(value)) for (const k of ['dependencies','dev-dependencies','build-dependencies']) dependencyTables.push({values:value[k],conditional:true})
+      for (const value of Object.values(doc.target).slice(0,256)) if (table(value)) for (const k of ['dependencies','dev-dependencies','build-dependencies']) dependencyTables.push({values:value[k],conditional:true,...(k === 'dev-dependencies' ? {dependencyKind:'dev' as const} : k === 'build-dependencies' ? {dependencyKind:'build' as const} : {})})
     }
+    let dependencyObservations = 0
     for (const section of dependencyTables) if (table(section.values)) for (const [depName,declared] of Object.entries(section.values)) {
-      if (record.dependencies.length >= 256) { record.status = 'UNSUPPORTED_SYNTAX'; warn(`Cargo dependency observations truncated at 256: ${manifest}`); break }
-      if (!table(declared)) continue
+      if (++dependencyObservations > 256) { record.status = 'UNSUPPORTED_SYNTAX'; warn(`Cargo dependency observations truncated at 256: ${manifest}`); break }
+      if (!literal(depName)) { record.status = 'UNSUPPORTED_SYNTAX'; warn(`Unsupported dependency name: ${manifest}`); continue }
+      if (!table(declared)) { (record.externPreludeNames ??= []).push(depName); continue }
       let value = declared
       if (declared.workspace === true) { const shared = workspaceDocs.get(workspace?.manifest ?? '')?.dependencies; const entry = table(shared) ? shared[depName] : undefined; if (table(entry)) value = {...entry,...declared} }
-      if (value.path === undefined) continue
+      if (value.path === undefined) { (record.externPreludeNames ??= []).push(depName); continue }
       const depBase = declared.workspace === true && workspace ? path.posix.dirname(workspace.manifest) : base
       const dep = literal(value.path) ? safeRustPath(repoRoot,depBase,value.path) : undefined
       const depManifest = dep === undefined ? undefined : path.posix.join(dep,'Cargo.toml')
       const isSelected = depManifest !== undefined && [...owners.values()].includes(depManifest)
       const malformed = value.optional !== undefined && typeof value.optional !== 'boolean' || value.package !== undefined && !literal(value.package)
-      record.dependencies.push({name:depName,packageName:literal(value.package) ? value.package : depName, ...(depManifest ? {manifest:depManifest} : {}), optional:value.optional === true,conditional:section.conditional,selected:isSelected,status: malformed ? 'MALFORMED' : !depManifest ? 'UNSUPPORTED_SYNTAX' : section.conditional || value.optional === true ? 'CONDITIONAL' : isSelected ? 'RESOLVED' : 'UNRESOLVED_SELECTED_ROOTS'})
+      record.dependencies.push({name:depName,packageName:literal(value.package) ? value.package : depName, ...(section.dependencyKind ? {dependencyKind:section.dependencyKind} : {}), ...(depManifest ? {manifest:depManifest} : {}), optional:value.optional === true,conditional:section.conditional,selected:isSelected,status: malformed ? 'MALFORMED' : !depManifest ? 'UNSUPPORTED_SYNTAX' : section.conditional || value.optional === true ? 'CONDITIONAL' : isSelected ? 'RESOLVED' : 'UNRESOLVED_SELECTED_ROOTS'})
       if (malformed) warn(`Malformed local dependency metadata: ${manifest}#${depName}`)
       if (!depManifest) warn(`Unsafe or unsupported local dependency: ${manifest}#${depName}`)
     }
