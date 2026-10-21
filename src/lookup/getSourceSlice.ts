@@ -32,6 +32,9 @@ export function ensureInsideProjectRoot(projectRoot: string, filePath: string): 
     if (!fs.statSync(physicalFile).isFile()) throw new UnsafeSourceError('Source target must be a regular file.')
   } catch (error) {
     if (error instanceof UnsafeSourceError) throw error
+    // Existing index consumers resolve missing paths to emit their own diagnostics.
+    // The actual source reader below always resolves again and fails before any read.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return resolved
     throw new UnsafeSourceError('Source file is missing, unreadable, or has an unresolved symlink. Re-index the selected source.')
   }
   return resolved

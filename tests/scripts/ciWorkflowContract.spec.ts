@@ -22,7 +22,7 @@ describe('cross-platform CI workflow contract', () => {
   })
 
   it('keeps packaging and representative CLI smoke coverage cross-platform', () => {
-    expect(workflow).toContain('run: npm pack --dry-run --json')
+    expect(workflow).toContain('run: npm pack --dry-run --ignore-scripts --json')
     expect(workflow).toContain('node dist/cli.js --version')
     expect(workflow).toContain('node dist/cli.js index ')
     expect(workflow).toContain('node dist/cli.js search ')
