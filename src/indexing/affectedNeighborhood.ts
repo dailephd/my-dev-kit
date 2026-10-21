@@ -19,6 +19,7 @@ import type { ChangedFilePaths } from './cacheMetadata.js'
 import type { TrustedBaselineReason, TrustedBaselineResult } from './trustedBaseline.js'
 
 export type AffectedNeighborhoodUnsafeReason =
+  | 'unsupported-rust-neighborhood'
   | 'malformed-node'
   | 'conflicting-duplicate-node'
   | 'malformed-edge'
@@ -242,6 +243,12 @@ export function selectAffectedNeighborhood(input: SelectAffectedNeighborhoodInpu
     const sourceIsSeed = seedNodeIds.has(edge.source)
     const targetIsSeed = seedNodeIds.has(edge.target)
     if (!sourceIsSeed && !targetIsSeed) continue
+    // N11 maps grounded file/symbol owners only. Rust module/target/impl
+    // contexts require global reprojection; omitting such an endpoint cannot
+    // establish a complete narrow refresh from this one-hop selector.
+    if (model.nodes.get(edge.source)?.kind.startsWith('rust-') || model.nodes.get(edge.target)?.kind.startsWith('rust-')) {
+      return unsafe('unsupported-rust-neighborhood', `Rust structural edge "${edge.id}" has no supported N11 owner mapping.`)
+    }
     affectedEdgeCount += 1
     affectedNodeIds.add(edge.source)
     affectedNodeIds.add(edge.target)

@@ -502,9 +502,18 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
   const hasChanges =
     changedFileSummary.addedCount > 0 || changedFileSummary.changedCount > 0 || changedFileSummary.removedCount > 0
 
+  // Compatibility and source hashes alone cannot establish that persisted
+  // facts still describe the cached build. Validate the existing checksum
+  // baseline before either unchanged-fact reuse or the no-change shortcut.
+  const baseline = loadTrustedBaseline({
+    outputDir,
+    projectRoot,
+    sourceRoots: normalizedSourceRoots,
+    configFingerprint,
+  })
+
   if (hasChanges) {
     const detailed = classifyChangedFilePaths(cacheRead.metadata.files, currentFileEntries)
-    const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
 
     // Full rebuild for a change-detected run whose partial reuse was not possible or trusted.
     const changeDetectedFullRebuild = async (
@@ -552,6 +561,10 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
       }
     }
 
+    if (baseline.status !== 'trusted') {
+      return changeDetectedFullRebuild(`Previous baseline is not trusted (${baseline.reason}): ${baseline.detail}`, baseline.reason)
+    }
+    const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
     if (eligibility.eligible) {
       // Affected-neighborhood: select unchanged neighbors to freshly re-extract, or fall back to full.
       let forceReextractPaths = new Set<string>()
@@ -562,12 +575,6 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
         affectedEdgeCount: number
       } | null = null
       if (requestedScope === 'affected-neighborhood') {
-        const baseline = loadTrustedBaseline({
-          outputDir,
-          projectRoot,
-          sourceRoots: normalizedSourceRoots,
-          configFingerprint,
-        })
         const selection = selectAffectedNeighborhood({
           baseline,
           classification: detailed,
@@ -694,6 +701,13 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
   // existing manifest is missing or unreadable despite a valid cache (a
   // stale/inconsistent output directory), fall back to a safe full rebuild
   // rather than silently returning inconsistent data.
+  if (baseline.status !== 'trusted') {
+    return fullRebuild(
+      'incremental-full-cache-incompatible',
+      `Previous baseline is not trusted (${baseline.reason}): ${baseline.detail}`,
+      baseline.reason
+    )
+  }
   const existingManifest = tryReadExistingManifest(outputDir)
   if (!existingManifest) {
     return fullRebuild(
