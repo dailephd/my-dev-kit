@@ -185,7 +185,7 @@ export async function qualify() {
       const resource = result.measurements.findLast(m => m.label === label && m.maxRSSKiB)
       if (resource) assert(resource.maxRSSKiB <= 512 * 1024, `RSS safety boundary exceeded: ${label}`)
       const graph = read(path.join(out, 'code-graph.json')), symbols = read(path.join(out, 'symbol-index.json'))
-      graphIntegrity(graph); assert.equal(symbols.schemaVersion, 3)
+      graphIntegrity(graph); assert.equal(symbols.schemaVersion, '3')
       const entry = { out, fixture, roots, graph, symbols, payload }
       snapshots.set(label, entry)
       result.measurements.push({ label, durationMs: r.durationMs, cache: payload.cache, incrementalRefresh: payload.incrementalRefresh, files: symbols.files.length, rustFiles: symbols.files.filter(f => f.language === 'rust').length, symbols: symbols.files.reduce((n, f) => n + f.symbols.length, 0), nodes: graph.nodes.length, edges: graph.edges.length, graphBytes: fs.statSync(path.join(out, 'code-graph.json')).size, symbolBytes: fs.statSync(path.join(out, 'symbol-index.json')).size, diagnostics: symbols.files.flatMap(f => (f.rustSyntaxFacts ?? []).filter(x => x.kind === 'diagnostic').map(x => ({ file: f.path, status: x.status, text: x.text }))) })
