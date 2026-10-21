@@ -11,6 +11,9 @@ export const grammarHash = 'd98c6aa1db69cfd204bf07dfefb2451b987160cbb2db95ddac8a
 export const methodId = 'symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0'
 const implId = 'rust-impl:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#0'
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex')
+export function verifyCheckout(root, script) {
+  assert.equal(path.relative(fs.realpathSync(root), fs.realpathSync(path.resolve(path.dirname(script), '../..'))), '', 'Run the committed checkout harness')
+}
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'))
 const write = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2), { flag: 'wx' })
 
@@ -89,7 +92,7 @@ export async function qualify() {
   const rootResult = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', windowsHide: true })
   assert.equal(rootResult.status, 0)
   const root = fs.realpathSync(rootResult.stdout.trim())
-  assert.equal(fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')), root, 'Run the committed checkout harness')
+  verifyCheckout(root, fileURLToPath(import.meta.url))
   const run = newRun(root, 'packed-consumer')
   const evidence = contained(root, path.join(run, 'evidence'))
   fs.mkdirSync(evidence)

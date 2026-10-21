@@ -8,6 +8,12 @@ const harness = await import(pathToFileURL(path.resolve('scripts/qualification/v
 const root = path.resolve('.')
 
 describe('B15 installed-package qualification boundaries', () => {
+  it('accepts its checkout identity and rejects another script root', () => {
+    const script = path.resolve('scripts/qualification/v114RustMatrix.mjs')
+    expect(() => harness.verifyCheckout(root, script)).not.toThrow()
+    if (process.platform === 'win32') expect(() => harness.verifyCheckout(root.toUpperCase(), script)).not.toThrow()
+    expect(() => harness.verifyCheckout(path.resolve('tests'), script)).toThrow('committed checkout harness')
+  })
   it('rejects lexical escape and owner root aliases', () => {
     expect(() => harness.contained(root, path.join(root, '..', 'outside'))).toThrow('outside task owner')
     expect(() => harness.contained(root, root)).toThrow('outside task owner')
