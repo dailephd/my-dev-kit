@@ -8,6 +8,29 @@ const harness = await import(pathToFileURL(path.resolve('scripts/qualification/v
 const root = path.resolve('.')
 
 describe('B15 installed-package qualification boundaries', () => {
+  it('uses a short task-contained TEMP alias without overwriting an existing owner', () => {
+    const workflow = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8')
+    const script = workflow.match(/- name: Prepare B15 task environment\s+run: node -e "([^\r\n]+)"/)?.[1]
+    expect(script).toBeDefined()
+    const run = harness.newRun(root, 'tests'), checkout = path.join(run, 'checkout'), envFile = path.join(run, 'github-env')
+    fs.mkdirSync(checkout)
+    const invoke = () => spawnSync(process.execPath, ['--eval', script!], {
+      cwd: checkout, windowsHide: true, encoding: 'utf8', env: { ...process.env, GITHUB_ENV: envFile },
+    })
+    const result = invoke()
+    expect(result.status, result.stderr).toBe(0)
+    const alias = path.join(checkout, '.my-dev-kit-workflow/b15-tmp')
+    const target = path.join(checkout, harness.taskRoot, 'tests/temp')
+    expect(fs.realpathSync(alias)).toBe(fs.realpathSync(target))
+    const environment = fs.readFileSync(envFile, 'utf8')
+    for (const name of ['TEMP', 'TMP', 'TMPDIR']) expect(environment).toContain(`${name}=${alias}\n`)
+    expect(invoke().status).not.toBe(0)
+    expect(fs.realpathSync(alias)).toBe(fs.realpathSync(target))
+    for (const prefix of ['/home/runner/work/my-dev-kit/my-dev-kit', '/Users/runner/work/my-dev-kit/my-dev-kit']) {
+      expect(Buffer.byteLength(path.posix.join(prefix, '.my-dev-kit-workflow/b15-tmp/tsx-1001/123456.pipe'))).toBeLessThan(100)
+    }
+  })
+
   it('does not accept argument rejection as source-containment evidence', () => {
     expect(() => harness.assertSourceRejected({ status: 2, stderr: '--start is required when --end is provided.' }, 'escape')).toThrow('did not exercise containment')
     expect(() => harness.assertSourceRejected({ status: 0, stdout: 'excluded source', stderr: '' }, 'escape')).toThrow('returned excluded content')

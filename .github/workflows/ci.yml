@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare B15 task environment
-        run: node -e "const fs=require('fs'),p=require('path');const t=p.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp'),c=p.resolve('.my-dev-kit-workflow/npm-cache/v1.14.0-b15-20261021');for(const d of [t,c])fs.mkdirSync(d,{recursive:true});fs.appendFileSync(process.env.GITHUB_ENV,'TEMP='+t+'\nTMP='+t+'\nTMPDIR='+t+'\nnpm_config_cache='+c+'\n')"
+        run: node -e "const fs=require('fs'),p=require('path');const t=p.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp'),c=p.resolve('.my-dev-kit-workflow/npm-cache/v1.14.0-b15-20261021'),a=p.resolve('.my-dev-kit-workflow/b15-tmp');for(const d of [t,c])fs.mkdirSync(d,{recursive:true});if(fs.existsSync(a))throw Error('B15 TEMP alias already exists');fs.symlinkSync(t,a,process.platform==='win32'?'junction':'dir');fs.appendFileSync(process.env.GITHUB_ENV,'TEMP='+a+'\nTMP='+a+'\nTMPDIR='+a+'\nnpm_config_cache='+c+'\n')"
 
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
