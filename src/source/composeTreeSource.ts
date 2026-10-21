@@ -18,8 +18,7 @@
  * pseudo-target for the unresolved call.
  */
 
-import * as fs from 'node:fs'
-import { ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
+import { ensureInsideProjectRoot, readSourceText } from '../lookup/getSourceSlice.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { AndroidGraphData } from '../android/index.js'
 import type { CodeGraphNode } from '../graph/codeGraphTypes.js'
@@ -154,7 +153,7 @@ export function buildComposeTreeSource(options: BuildComposeTreeSourceOptions): 
   }
 
   const absolutePath = ensureInsideProjectRoot(projectRoot, root.path!)
-  const lines = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+  const lines = readSourceText(projectRoot, root.path!).split(/\r?\n/)
   const selected = selectBlocks(candidates, lines, maxLines)
 
   return {

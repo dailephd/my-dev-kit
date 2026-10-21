@@ -1,6 +1,5 @@
-import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { assertSymbolSpanPresent, ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
+import { assertSymbolSpanPresent, ensureInsideProjectRoot, readSourceText } from '../lookup/getSourceSlice.js'
 import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
 import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 import { toForwardSlash } from '../io/pathUtils.js'
@@ -58,13 +57,13 @@ interface ResolvedPrimaryTarget {
 
 // ---------- File utilities ----------
 
-function readFileLineCount(absolutePath: string): number {
-  const raw = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+function readFileLineCount(projectRoot: string, absolutePath: string): number {
+  const raw = readSourceText(projectRoot, absolutePath).split(/\r?\n/)
   return raw.length > 0 && raw[raw.length - 1] === '' ? raw.length - 1 : raw.length
 }
 
-function readFileLines(absolutePath: string): string[] {
-  const raw = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+function readFileLines(projectRoot: string, absolutePath: string): string[] {
+  const raw = readSourceText(projectRoot, absolutePath).split(/\r?\n/)
   if (raw.length > 0 && raw[raw.length - 1] === '') return raw.slice(0, -1)
   return raw
 }
@@ -257,7 +256,7 @@ function resolvePrimaryTarget(options: SourceBundleOptions): ResolvedPrimaryTarg
     // File node
     const filePath = normalizeFilePath(nodeTarget.filePath)
     const absolutePath = ensureInsideProjectRoot(options.projectRoot, nodeTarget.filePath)
-    const fileLineCount = readFileLineCount(toForwardSlash(absolutePath))
+    const fileLineCount = readFileLineCount(options.projectRoot, toForwardSlash(absolutePath))
     const startLine = nodeTarget.startLine ?? 1
     const knownEnd = nodeTarget.symbolEndLine
     if (knownEnd !== undefined) assertSymbolSpanPresent(filePath, knownEnd, fileLineCount)
@@ -298,7 +297,7 @@ function resolveSymbolPrimary(
   if (!symbol) throw new Error(`Symbol not found in ${filePath}: ${symbolName}`)
 
   const absolutePath = ensureInsideProjectRoot(options.projectRoot, filePath)
-  const fileLineCount = readFileLineCount(toForwardSlash(absolutePath))
+  const fileLineCount = readFileLineCount(options.projectRoot, toForwardSlash(absolutePath))
   const normalizedFilePath = normalizeFilePath(filePath)
   const fileResult = findFileResult(options.frontendArtifact, normalizedFilePath)
 
@@ -872,7 +871,7 @@ export function buildSourceBundle(options: SourceBundleOptions): SourceBundle {
   bundleWarnings.push(...primary.warnings)
 
   // 2. Read file
-  const fileLines = readFileLines(primary.absolutePath)
+  const fileLines = readFileLines(options.projectRoot, primary.absolutePath)
   const fileLineCount = fileLines.length
 
   // 3. Find FileSummary + FrontendFileResult

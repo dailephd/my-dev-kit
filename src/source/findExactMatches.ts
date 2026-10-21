@@ -1,5 +1,4 @@
-import * as fs from 'node:fs'
-import * as nodePath from 'node:path'
+import { readSourceText } from '../lookup/getSourceSlice.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
@@ -99,14 +98,7 @@ export function findExactMatches(options: {
 
     const forwardPath = toForwardSlash(file.path)
     if (pathFilter && !forwardPath.startsWith(pathFilter)) continue
-    const absPath = nodePath.resolve(projectRoot, file.path)
-
-    let rawContent: string
-    try {
-      rawContent = fs.readFileSync(absPath, 'utf8')
-    } catch {
-      continue
-    }
+    const rawContent = readSourceText(projectRoot, file.path)
 
     const lines = rawContent.split(/\r?\n/)
     if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()

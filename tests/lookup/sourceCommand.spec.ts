@@ -46,7 +46,7 @@ describe('source command', () => {
   it('fails clearly for missing file', () => {
     const result = runCli(['source', '--index', outDir, '--file', 'src/missing.ts', '--start', '1', '--end', '1'])
     expect(result.status).toBe(2)
-    expect(result.stderr).toContain('Source file does not exist')
+    expect(result.stderr).toContain('selected source inventory')
   })
 
   it('retrieves by file node with capped preview warning', () => {

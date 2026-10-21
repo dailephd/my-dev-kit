@@ -1,7 +1,8 @@
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import type { Command } from 'commander'
 import { loadSourceArtifacts } from '../indexing/loadIndexArtifacts.js'
-import { assertSymbolSpanPresent, buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice } from '../lookup/getSourceSlice.js'
+import { assertSymbolSpanPresent, buildContinuationCursor, ensureInsideProjectRoot, getSourceSlice, readSourceText, withSourceAuthority, UnsafeSourceError } from '../lookup/getSourceSlice.js'
 import { AmbiguousSymbolError, resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
 import { declarationNodeId, legacyDeclarationId } from '../symbol-index/declarationIdentity.js'
 import type { SourceSlice, SourceSliceMode, SourceTarget } from '../lookup/sourceSliceTypes.js'
@@ -96,6 +97,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
     .action(function (this: Command, options: SourceCommandOptions) {
+      return withSourceAuthority(createSourceAuthority(options), () => {
       try {
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
@@ -222,7 +224,51 @@ export function registerSourceCommand(program: Command): void {
         }
         throw error
       }
+      })
     })
+}
+
+function createSourceAuthority(options: SourceCommandOptions): (root: string, file: string) => void {
+  let current: ReturnType<typeof loadSourceArtifacts> | undefined
+  return (root, file) => {
+    current ??= loadSourceArtifacts({ indexDir: options.index, loadSymbolIndex: true,
+      loadCodeGraph: !!options.node || options.resource !== undefined || options.androidRoute !== undefined || options.androidUi !== undefined })
+    if (path.relative(path.resolve(current.resolved.manifest.projectRoot), root) !== '' ||
+        path.relative(path.resolve(current.symbolIndex!.repoRoot), root) !== '') {
+      throw new UnsafeSourceError('Incompatible indexed source root. Re-run the index.')
+    }
+    const key = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
+    const identity = (value: string) => key(toForwardSlash(path.relative(root, path.resolve(root, value))))
+    if (current.symbolIndex!.files.some(record => identity(record.path) === key(file))) return
+
+    // Configuration evidence is available only through its actual persisted selector,
+    // never as a blanket permit for direct paths or manifest-like extensions.
+    const graph = current.codeGraph ?? { nodes: [], edges: [] }
+    const node = options.node ? graph.nodes.find(value => value.id === options.node) : undefined
+    const testKinds = new Set(['android-test-file', 'android-test-class', 'android-test-method', 'android-test-fact'])
+    if (node && testKinds.has(node.kind) && node.path === file &&
+        node.androidArtifactId === 'android-test-semantic' && node.androidEntityId === node.id &&
+        graph.nodes.some(value => value.kind === 'android-test-file' && value.path === file &&
+          value.androidArtifactId === 'android-test-semantic' && value.androidEntityId === value.id) &&
+        (node.kind === 'android-test-file' || graph.edges.some(edge => edge.target === node.id &&
+          ['defines-test-class', 'test-class-defines-method', 'test-method-has-fact'].includes(edge.kind) &&
+          graph.nodes.some(owner => owner.id === edge.source && owner.path === file && owner.androidArtifactId === 'android-test-semantic')))) return
+    if (node?.kind === 'rust-package' && path.basename(file) === 'Cargo.toml' && node.rustMetadata?.origin === 'manifest' && node.rustMetadata.manifest === file &&
+        node.id === `rust-package:${encodeURIComponent(file)}` &&
+        current.symbolIndex!.files.some(record => {
+          const relative = path.relative(path.resolve(root, path.dirname(file)), path.resolve(root, record.path))
+          return record.language === 'rust' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+        }) &&
+        graph.edges.some(edge => edge.source === node.id && edge.kind === 'rust-package-has-target' &&
+          graph.nodes.some(target => target.id === edge.target && target.kind === 'rust-target' && target.rustMetadata?.manifest === file))) return
+    const configKinds = new Set(['android-manifest-file', 'android-manifest-component', 'android-intent-filter', 'android-resource-file', 'android-resource-definition', 'android-navigation-graph', 'android-navigation-destination', 'android-navigation-action', 'android-navigation-deep-link'])
+    const androidSelector = options.resource !== undefined || options.androidRoute !== undefined || options.androidUi !== undefined
+    if (graph.nodes.some(value => configKinds.has(value.kind) && value.path === file &&
+        (value.id === node?.id || androidSelector) && value.androidEntityId === value.id &&
+        value.androidArtifactId === (value.kind.startsWith('android-resource-') ? 'android-resources' :
+          value.kind.startsWith('android-navigation-') ? 'android-navigation' : 'android-manifest'))) return
+    throw new UnsafeSourceError('File is absent from the selected source inventory or lacks a current trusted artifact source reference. Re-index with the intended source selection.')
+  }
 }
 
 function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
@@ -386,7 +432,7 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
 
   const projectRoot = artifacts.resolved.manifest.projectRoot
   const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
-  const fileLineCount = readFileLineCount(absolutePath)
+  const fileLineCount = readFileLineCount(projectRoot, absolutePath)
   const normalizedFilePath = toForwardSlash(filePath)
 
   let symTarget: SourceTarget | undefined
@@ -541,7 +587,7 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
   }
 
   const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
-  const fileLineCount = readFileLineCount(absolutePath)
+  const fileLineCount = readFileLineCount(projectRoot, absolutePath)
   const normalizedFilePath = toForwardSlash(filePath)
 
   if (symEndLine !== undefined) {
@@ -651,7 +697,7 @@ function handleSymbolContinue(options: SourceCommandOptions, format: SourceOutpu
 
   const projectRoot = artifacts.resolved.manifest.projectRoot
   const absolutePath = ensureInsideProjectRoot(projectRoot, options.file!)
-  const fileLineCount = readFileLineCount(absolutePath)
+  const fileLineCount = readFileLineCount(projectRoot, absolutePath)
   const normalizedFilePath = toForwardSlash(symTarget.filePath)
 
   if (knownEnd !== undefined) {
@@ -1128,6 +1174,7 @@ function buildAndroidSourceResultItem(
     })
     return { ...base, binary: false, slice, warnings: [] }
   } catch (error) {
+    if (error instanceof UnsafeSourceError) throw error
     return { ...base, binary: false, warnings: [(error as Error).message] }
   }
 }
@@ -1250,8 +1297,8 @@ function renderReachabilitySourceText(result: ReachabilitySourceResult): string 
   return lines.join('\n') + '\n'
 }
 
-function readFileLineCount(absolutePath: string): number {
-  const raw = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+function readFileLineCount(projectRoot: string, absolutePath: string): number {
+  const raw = readSourceText(projectRoot, absolutePath).split(/\r?\n/)
   return raw.length > 0 && raw[raw.length - 1] === '' ? raw.length - 1 : raw.length
 }
 
