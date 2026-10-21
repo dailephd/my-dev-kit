@@ -64,16 +64,22 @@ export function verifyPinned(root, document = fs.readFileSync(path.join(root, 'S
 // even if a consumer catches the guard exception. syncBuiltinESMExports covers named imports.
 export const guardSource = `
 const fs = require('node:fs');
+let blockedProvenanceProbes = 0;
 const deny = name => function () { fs.appendFileSync(process.env.B15_ATTEMPTS, name+'\\n'); throw Error('B15 forbidden '+name); };
 for (const mod of ['child_process','http','https','http2','net','tls','dns','dgram']) {
  const api = require('node:'+mod);
- for (const key of ['exec','execFile','spawn','fork','execSync','execFileSync','spawnSync','request','get','connect','createConnection','createServer','createSocket','lookup','resolve','resolve4','resolve6']) if(typeof api[key]==='function') api[key]=deny(mod+'.'+key);
+ for (const key of ['exec','execFile','spawn','fork','execSync','execFileSync','spawnSync','request','get','connect','createConnection','createServer','createSocket','lookup','resolve','resolve4','resolve6']) if(typeof api[key]==='function') api[key]=function(...args) {
+   // Existing optional freshness probe: deliberately unavailable, never executed.
+   // Record it separately from target execution/network attempts. No Git response is fabricated.
+   if(mod==='child_process' && key==='execFileSync' && args[0]==='git' && JSON.stringify(args[1])==='["rev-parse","HEAD"]') { blockedProvenanceProbes++; throw Error('B15 optional Git provenance unavailable'); }
+   return deny(mod+'.'+key)();
+ };
  if(api.promises) for(const key of Object.keys(api.promises)) if(typeof api.promises[key]==='function') api.promises[key]=deny(mod+'.promises.'+key);
 }
 globalThis.fetch = deny('fetch');
 if(globalThis.WebSocket) globalThis.WebSocket = deny('WebSocket');
 require('node:module').syncBuiltinESMExports();
-process.on('exit', () => fs.writeFileSync(process.env.B15_TELEMETRY, JSON.stringify({ maxRSSKiB:process.resourceUsage().maxRSS, rssAtExit:process.memoryUsage().rss, cpu:process.cpuUsage() })));
+process.on('exit', () => fs.writeFileSync(process.env.B15_TELEMETRY, JSON.stringify({ maxRSSKiB:process.resourceUsage().maxRSS, rssAtExit:process.memoryUsage().rss, cpu:process.cpuUsage(), blockedProvenanceProbes })));
 `
 
 export function graphIntegrity(graph) {
@@ -192,6 +198,8 @@ export async function qualify() {
       return entry
     }
     const f13 = copyFixture('F13-retrieval'), exact = index('f13-cold', f13, ['src', 'tests'])
+    const discovery = JSON.parse(cli('f13-discovery', ['index', '--root', f13, '--src', 'src', '--src', 'tests', '--out', path.join(tests, 'f13-discovery'), '--dry-run', '--json']).stdout)
+    assert(JSON.stringify(discovery).includes('rust'), 'Rust source discovery label missing')
     const warm = index('f13-warm', f13, ['src', 'tests'], true, exact.out)
     assert.equal(warm.payload.cache.mode, 'incremental-no-change'); assert.deepEqual(warm.graph.nodes, exact.graph.nodes); assert.deepEqual(warm.graph.edges, exact.graph.edges)
     assert(exact.graph.edges.some(e => e.source === implId && e.target === methodId && e.kind === 'rust-impl-defines-symbol'))

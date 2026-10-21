@@ -54,6 +54,7 @@ describe('B15 installed-package qualification boundaries', () => {
 
   it.each([
     "require('node:child_process').spawnSync('cargo', ['--version'])",
+    "require('node:child_process').execFileSync('git', ['status'])",
     "require('node:https').get('https://example.invalid')",
     "fetch('https://example.invalid')",
   ])('guards the actual Node child before forbidden operation: %s', expression => {
@@ -66,5 +67,17 @@ describe('B15 installed-package qualification boundaries', () => {
     expect(result.status).not.toBe(0)
     expect(fs.readFileSync(attempts, 'utf8')).toMatch(/child_process|https|fetch/)
     expect(JSON.parse(fs.readFileSync(telemetry, 'utf8')).maxRSSKiB).toBeGreaterThan(0)
+  })
+
+  it('keeps only the exact optional Git freshness probe unavailable without executing it', () => {
+    const run = harness.newRun(root, 'tests'), guard = path.join(run, 'guard.cjs'), attempts = path.join(run, 'attempts.txt'), telemetry = path.join(run, 'resources.json')
+    fs.writeFileSync(guard, harness.guardSource, { flag: 'wx' })
+    const result = spawnSync(process.execPath, ['--require', guard, '--eval', "require('node:child_process').execFileSync('git',['rev-parse','HEAD'])"], {
+      windowsHide: true, encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '', B15_ATTEMPTS: attempts, B15_TELEMETRY: telemetry, TEMP: run, TMP: run, TMPDIR: run },
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('optional Git provenance unavailable')
+    expect(fs.existsSync(attempts)).toBe(false)
+    expect(JSON.parse(fs.readFileSync(telemetry, 'utf8')).blockedProvenanceProbes).toBe(1)
   })
 })
