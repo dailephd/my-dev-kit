@@ -47,11 +47,22 @@ const EDGE_WEIGHTS = {
 
 export function searchIndex(input: SearchIndexInput): SearchIndexResult {
   validateArtifacts(input.symbolIndex, input.codeGraph)
+  const graphNodeIds = new Set(input.codeGraph.nodes.map(node => node.id))
+  if (graphNodeIds.size !== input.codeGraph.nodes.length) throw new Error('Ambiguous graph node identity: duplicate node IDs.')
+  for (const edge of input.codeGraph.edges) {
+    if (edge.kind.startsWith('rust-') && (!graphNodeIds.has(edge.source) || !graphNodeIds.has(edge.target))) throw new Error(`Missing graph endpoint reference: ${edge.id}`)
+  }
   const normalizedTerms = normalizeSearchQuery(input.query)
   if (normalizedTerms.length === 0) throw new Error('Search query must include at least one non-empty term.')
 
   const limit = input.limit ?? DEFAULT_LIMIT
-  const candidates = buildCandidates(input.symbolIndex, input.codeGraph, input.frontendArtifact ?? null)
+  const allCandidates = buildCandidates(input.symbolIndex, input.codeGraph, input.frontendArtifact ?? null)
+  const exactCandidates = allCandidates.filter(candidate => candidate.item.id === input.query.trim())
+  const explicitPaths = new Set(input.query.split(/\s+/).map(value => value.replace(/^["']|["',;]$/g, '').replace(/\\/g, '/')).filter(value => input.symbolIndex.files.some(file => file.path === value)))
+  const selectedNodeIds = new Set(input.codeGraph.nodes.filter(node => node.path !== undefined && explicitPaths.has(node.path)).map(node => node.id))
+  const candidates = exactCandidates.length > 0 ? exactCandidates : explicitPaths.size > 0
+    ? allCandidates.filter(candidate => candidate.item.path !== undefined && explicitPaths.has(candidate.item.path) || candidate.item.edge !== undefined && (selectedNodeIds.has(candidate.item.edge.source) || selectedNodeIds.has(candidate.item.edge.target)))
+    : allCandidates
   const ownershipMode = input.intent === 'ownership'
   // Ownership mode ranks the complete relevant pool (same scoring, no new weights) and applies `limit` only after tiering.
   const rankedResults = rankSearchResults({
@@ -90,7 +101,7 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
       symbolIndex: input.resolved.artifactPaths.symbolIndex,
       codeGraph: input.resolved.artifactPaths.codeGraph,
     },
-    warnings: recovery?.warnings ?? [],
+    warnings: [...(recovery?.warnings ?? []), ...(candidates.some(candidate => candidate.item.rustContext?.edgeIds.length === 16) ? ['Rust ownership witnesses are bounded to 16 persisted relationships per declaration; additional contexts may be omitted.'] : [])],
     ...(ownershipMode ? { intent: 'ownership' as const } : {}),
   }
 }
@@ -394,6 +405,56 @@ function buildCandidates(symbolIndex: SymbolIndex, codeGraph: CodeGraph, fronten
     mergeCandidate(candidates, edgeCandidate(edge, nodesById))
   }
 
+  const modulesByFile = new Map<string, CodeGraphEdge[]>()
+  const qualifiedModuleNames = new Map<string, Set<string>>()
+  for (const edge of codeGraph.edges) {
+    if (edge.kind !== 'rust-module-resolves-to-file' && !(edge.kind === 'rust-module-defined-in-file' && nodesById.get(edge.source)?.rustMetadata?.origin === 'root')) continue
+    const list = modulesByFile.get(edge.target) ?? []
+    list.push(edge)
+    modulesByFile.set(edge.target, list)
+  }
+  // Retrieval aliases describe observed declarations/owners only. No path or import resolution.
+  for (const edge of codeGraph.edges) {
+    if (edge.kind !== 'rust-module-defines-symbol' && edge.kind !== 'rust-impl-defines-symbol') continue
+    const owner = nodesById.get(edge.source)
+    const member = nodesById.get(edge.target)
+    const candidate = member && candidates.get(`${member.kind}:${member.id}`)
+    if (!owner || !member || !candidate) continue
+    const context = candidate.item.rustContext ?? { ownerNodeIds: [], edgeIds: [] }
+    if (context.edgeIds.length >= 16) continue
+    context.ownerNodeIds.push(owner.id)
+    context.edgeIds.push(edge.id)
+    candidate.item.rustContext = context
+    for (const fileEdge of modulesByFile.get(fileNodeId(member.path ?? '')) ?? []) {
+      if (context.edgeIds.length >= 16 || context.edgeIds.includes(fileEdge.id)) continue
+      if (!context.ownerNodeIds.includes(fileEdge.source)) context.ownerNodeIds.push(fileEdge.source)
+      context.edgeIds.push(fileEdge.id)
+      const modulePath = nodesById.get(fileEdge.source)?.rustMetadata?.modulePath
+      if (modulePath) candidate.fields.push(field('neighbor', modulePath, WEIGHTS.neighbor))
+    }
+    const name = member.symbolName ?? member.label
+    const metadata = owner.rustMetadata
+    const modulePath = metadata?.modulePath
+    if (modulePath) {
+      const qualified = `${modulePath}::${name}`
+      candidate.fields.push(field('symbolName', qualified, WEIGHTS.symbolName))
+      const names = qualifiedModuleNames.get(member.id) ?? new Set<string>()
+      names.add(qualified)
+      qualifiedModuleNames.set(member.id, names)
+    }
+    if (owner.kind === 'rust-impl') {
+      const type = metadata?.typePath
+      const trait = metadata?.traitPath
+      if (type) candidate.fields.push(field('symbolName', `${type}::${name}`, WEIGHTS.symbolName))
+      if (type && trait) candidate.fields.push(field('symbolName', `${trait}::${name} for ${type}`, WEIGHTS.symbolName))
+      if (metadata?.syntax) candidate.fields.push(field('label', metadata.syntax, WEIGHTS.label))
+    }
+  }
+  for (const [id, names] of qualifiedModuleNames) {
+    const candidate = candidates.get(`symbol:${id}`)
+    if (candidate && !candidate.item.ownerKey && names.size === 1) candidate.item.qualifiedName = [...names][0]
+  }
+
   // Enrich with frontend semantic facts when available
   if (frontendArtifact) {
     for (const c of frontendFileCandidates(frontendArtifact)) {
@@ -459,6 +520,10 @@ function nodeCandidate(node: CodeGraphNode): SearchCandidate {
   if (node.path) fields.push(field('path', node.path, WEIGHTS.path))
   if (node.symbolName) fields.push(field('symbolName', node.symbolName, WEIGHTS.symbolName))
   if (node.symbolKind) fields.push(field('symbolKind', node.symbolKind, WEIGHTS.symbolKind))
+  if (node.qualifiedName) fields.push(field('symbolName', node.qualifiedName, WEIGHTS.symbolName))
+  for (const value of Object.values(node.rustMetadata ?? {})) {
+    if (typeof value === 'string') fields.push(field('label', value, WEIGHTS.label))
+  }
   if (node.exported && node.symbolName) fields.push(field('export', node.symbolName, WEIGHTS.export))
   for (const value of Object.values(node.routeMetadata ?? {})) if (typeof value === 'string') fields.push(field('label', value, WEIGHTS.label))
   fields.push(...semanticFields(node.semanticRoles, node.artifactRefs))
@@ -472,6 +537,10 @@ function nodeCandidate(node: CodeGraphNode): SearchCandidate {
       label: node.label,
       path: node.path,
       nodeId: node.id,
+      ...(node.language === 'rust' || node.kind.startsWith('rust-') ? {
+        qualifiedName: node.qualifiedName, ownerKey: node.ownerKey, language: node.language,
+        line: node.line, endLine: node.rustMetadata?.endLine, rustMetadata: node.rustMetadata,
+      } : {}),
       semanticRoles: node.semanticRoles,
       artifactRefs: node.artifactRefs,
       classificationRoles: node.classificationRoles,
@@ -539,6 +608,11 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
   if (symbol.exported) fields.push(field('export', symbol.name, WEIGHTS.export))
   if (symbol.signature) fields.push(field('label', symbol.signature, WEIGHTS.label))
   if (symbol.qualifiedName) fields.push(field('symbolName', symbol.qualifiedName, WEIGHTS.symbolName))
+  if (file.language === 'rust' && symbol.ownerKey) {
+    const trait = /(?:^rust:|\/)trait_item:([^@]+)@\d+:\d+$/.exec(symbol.ownerKey)?.[1]
+    if (trait) fields.push(field('symbolName', `${trait}::${symbol.name}`, WEIGHTS.symbolName))
+  }
+  for (const attribute of symbol.declarationMetadata?.rust?.attributes ?? []) fields.push(field('label', attribute, WEIGHTS.label))
   for (const doc of symbol.declarationMetadata?.jsdoc ?? []) {
     for (const value of [doc.tagName, doc.parameterName, doc.typeExpression, doc.textSummary]) {
       if (value) fields.push(field('label', value, WEIGHTS.label))
@@ -555,6 +629,10 @@ function symbolCandidate(file: FileSummary, symbol: SymbolDefinition): SearchCan
       label: symbol.name,
       path: file.path,
       nodeId: declarationNodeId(file.path, symbol),
+      ...(file.language === 'rust' ? {
+        qualifiedName: symbol.qualifiedName ?? symbol.name, ownerKey: symbol.ownerKey,
+        language: file.language, line: symbol.location.line, endLine: symbol.location.endLine,
+      } : {}),
       semanticRoles: symbol.semanticRoles,
       artifactRefs: symbol.artifactRefs,
       classificationRoles: symbol.classificationRoles,
@@ -609,6 +687,9 @@ function mergeCandidate(candidates: Map<string, SearchCandidate>, candidate: Sea
   existing.item.path = existing.item.path ?? candidate.item.path
   existing.item.nodeId = existing.item.nodeId ?? candidate.item.nodeId
   existing.item.edge = existing.item.edge ?? candidate.item.edge
+  for (const key of ['qualifiedName', 'ownerKey', 'language', 'line', 'endLine', 'rustMetadata'] as const) {
+    if (existing.item[key] === undefined && candidate.item[key] !== undefined) Object.assign(existing.item, { [key]: candidate.item[key] })
+  }
 }
 
 function field(fieldName: SearchCandidateField['field'], text: string, weight: number): SearchCandidateField {

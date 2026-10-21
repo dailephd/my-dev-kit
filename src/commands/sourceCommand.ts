@@ -69,7 +69,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--file <path>', 'file path')
     .option('--start <n>', 'start line', parseInteger)
     .option('--end <n>', 'end line', parseInteger)
-    .option('--symbol <name>', 'symbol name')
+    .option('--symbol <name>', 'symbol name, qualified declaration name, or exact declaration ID')
     .option('--include-local-component-tree', 'include a bounded local React component-tree source bundle for --symbol')
     .option('--prop <name>', 'highlight a prop name inside --include-local-component-tree output')
     .option('--contains <string>', 'exact string to search for across indexed source files')
@@ -394,11 +394,12 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
     try {
       symTarget = resolveSymbolTarget(artifacts.symbolIndex, filePath, options.symbol, options.maxLines)
     } catch (error) {
-      if (error instanceof AmbiguousSymbolError) throw error
+      if (error instanceof AmbiguousSymbolError || options.symbol.startsWith('symbol:') || options.symbol.startsWith('symbolq:')) throw error
       // symbol metadata is optional in continue-from mode
     }
   }
   const knownEnd = symTarget?.symbolEndLine
+  const symbolBoundaryKnown = options.symbol === undefined || knownEnd !== undefined
   if (symTarget && knownEnd !== undefined) {
     assertSymbolSpanPresent(normalizedFilePath, knownEnd, fileLineCount)
     if (continueFrom < symTarget.startLine!) {
@@ -435,7 +436,8 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
       targetKind: 'line-range',
       symbolName: options.symbol ?? null,
       maxLines: options.maxLines,
-      symbolBoundaryKnown: true,
+      symbolBoundaryKnown,
+      targetId: symTarget?.nodeId,
       warnings,
     })
     const eofResult: SourceSlice = {
@@ -467,7 +469,8 @@ function handleContinueFrom(options: SourceCommandOptions, format: SourceOutputF
     maxLines: options.maxLines,
     mode: 'line-range',
     symbolName: symTarget?.symbolName ?? null,
-    symbolBoundaryKnown: true,
+    symbolBoundaryKnown,
+    targetId: symTarget?.nodeId,
     symbolEndLine: knownEnd,
     semanticRoles: symTarget?.semanticRoles,
     artifactRefs: symTarget?.artifactRefs,
@@ -531,6 +534,10 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
     evidenceRefs = symTarget.evidenceRefs
   } else {
     filePath = nodeTarget.filePath
+    if (nodeTarget.nodeId?.startsWith('rust-')) {
+      symStartLine = nodeTarget.startLine ?? null
+      symEndLine = nodeTarget.symbolEndLine
+    }
   }
 
   const absolutePath = ensureInsideProjectRoot(projectRoot, filePath)
@@ -544,7 +551,9 @@ function handleNodeContinue(options: SourceCommandOptions, format: SourceOutputF
   // Known symbol nodes: first window is startLine..min(symbolEnd, startLine+maxLines-1)
   // Unknown symbol nodes: first window is startLine..startLine+min(maxLines,20)-1
   // File nodes: first window is 1..min(maxLines,fileLineCount)
-  const continueFrom = symStartLine !== null
+  const continueFrom = nodeTarget.mode !== 'symbol' && nodeTarget.nodeId?.startsWith('rust-')
+    ? Math.min(nodeTarget.endLine!, fileLineCount) + 1
+    : symStartLine !== null
     ? symEndLine !== undefined
       ? Math.min(symEndLine, symStartLine + options.maxLines - 1) + 1
       : symStartLine + Math.min(options.maxLines, 20)

@@ -27,6 +27,14 @@ function trustedEnd(symbol: SymbolDefinition, lineCount: number): number | undef
 export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines: number): SourceTarget {
   if (nodeId.startsWith('symbolq:')) parseDeclarationNodeId(nodeId)
   const node = findNode(graph, nodeId)
+  if (node.kind === 'rust-package' && node.rustMetadata?.manifest) {
+    return { mode: 'node', nodeId: node.id, filePath: node.rustMetadata.manifest, startLine: 1, endLine: maxLines, warnings: ['Cargo manifest evidence is not a parser-proven Rust declaration.'] }
+  }
+  if (node.kind === 'rust-module' && node.rustMetadata?.origin === 'external' && node.rustMetadata.status === 'RESOLVED' && node.rustMetadata.resolvedFile) {
+    const resolvedFile = node.rustMetadata.resolvedFile
+    if (!graph.nodes.some(candidate => candidate.kind === 'file' && candidate.path === resolvedFile)) throw new Error(`Missing selected Rust source reference: ${resolvedFile}`)
+    return { mode: 'node', nodeId: node.id, filePath: resolvedFile, startLine: 1, endLine: maxLines, warnings: ['Selected external module file; no parser-proven complete file boundary.'] }
+  }
   if (node.kind === 'file') {
     if (!node.path) throw new Error(`File node does not include a source path: ${nodeId}`)
     return {
@@ -43,7 +51,8 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
   if ((node.kind === 'rust-module' || node.kind === 'rust-target' || node.kind === 'rust-impl') && node.path && Number.isInteger(node.line) && node.line! > 0) {
     const startLine = node.line!
     const end = node.rustMetadata?.endLine
-    return { mode: 'node', nodeId: node.id, filePath: node.path, startLine, endLine: Math.min(end !== undefined && end >= startLine ? end : startLine + 11, startLine + maxLines - 1), warnings: ['Rust structural source is observed syntax; external module declarations do not prove a module body in this file.'] }
+    const trusted = (node.kind === 'rust-impl' || node.rustMetadata?.origin === 'inline') && typeof end === 'number' && Number.isInteger(end) && end >= startLine
+    return { mode: 'node', nodeId: node.id, filePath: node.path, startLine, endLine: Math.min(trusted ? end : startLine + 11, startLine + maxLines - 1), ...(trusted ? { symbolEndLine: end } : {}), warnings: ['Rust structural source is observed syntax; external module declarations do not prove a module body in this file.'] }
   }
   if (node.kind === 'symbol') {
     const filePath = node.path ?? parseSymbolNodeId(node.id).filePath
@@ -114,10 +123,13 @@ const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
 const ANDROID_DEFAULT_WINDOW = 12
 
 export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, symbolName: string, maxLines: number, nodeId?: string): SourceTarget {
-  if (nodeId?.startsWith('symbolq:')) parseDeclarationNodeId(nodeId)
+  const exactId = nodeId ?? (symbolName.startsWith('symbol:') || symbolName.startsWith('symbolq:') ? symbolName : undefined)
+  if (exactId !== undefined) parseDeclarationNodeId(exactId)
   const file = symbolIndex.files.find((candidate) => candidate.path === normalize(filePath))
   if (!file) throw new Error(`File is not present in the current symbol index: ${filePath}`)
-  const matches = file.symbols.filter((candidate) => candidate.name === symbolName && (nodeId === undefined || declarationNodeId(file.path, candidate) === nodeId))
+  const matches = file.symbols.filter((candidate) => exactId !== undefined
+    ? declarationNodeId(file.path, candidate) === exactId
+    : candidate.name === symbolName || candidate.qualifiedName === symbolName)
   if (matches.length > 1) throw new AmbiguousSymbolError(file.path, matches, file.lineCount)
   const symbol = matches[0]
   if (!symbol) throw new Error(`Symbol not found in ${filePath}: ${symbolName}`)

@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { assertSymbolSpanPresent, ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
 import { resolveFileNodeTarget, resolveSymbolTarget } from '../lookup/resolveSourceTarget.js'
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex, SymbolDefinition, FileSummary } from '../symbol-index/types.js'
@@ -119,7 +120,7 @@ function trustedGenericEnd(
   physicalLineCount: number,
 ): number | undefined {
   try {
-    const target = resolveSymbolTarget(symbolIndex, filePath, sym.name, Number.MAX_SAFE_INTEGER)
+    const target = resolveSymbolTarget(symbolIndex, filePath, sym.name, Number.MAX_SAFE_INTEGER, declarationNodeId(filePath, sym))
     const end = target.symbolEndLine
     if (end === undefined || target.startLine !== sym.location.line) return undefined
     return end <= physicalLineCount ? end : undefined
@@ -257,17 +258,21 @@ function resolvePrimaryTarget(options: SourceBundleOptions): ResolvedPrimaryTarg
     const filePath = normalizeFilePath(nodeTarget.filePath)
     const absolutePath = ensureInsideProjectRoot(options.projectRoot, nodeTarget.filePath)
     const fileLineCount = readFileLineCount(toForwardSlash(absolutePath))
-    const endLine = Math.min(options.maxLinesPerBlock, fileLineCount)
+    const startLine = nodeTarget.startLine ?? 1
+    const knownEnd = nodeTarget.symbolEndLine
+    if (knownEnd !== undefined) assertSymbolSpanPresent(filePath, knownEnd, fileLineCount)
+    const endLine = Math.min(nodeTarget.endLine ?? startLine + options.maxLinesPerBlock - 1, fileLineCount, knownEnd ?? fileLineCount)
     return {
       filePath,
       absolutePath: toForwardSlash(absolutePath),
       symbolName: null,
-      startLine: 1,
+      startLine,
       endLine,
-      symbolBoundaryKnown: false,
+      symbolBoundaryKnown: knownEnd !== undefined,
+      symbolEndLine: knownEnd,
       targetKind: 'node',
       nodeId: options.nodeId,
-      warnings: ['File node retrieval returns a capped preview, not the whole file.'],
+      warnings: nodeTarget.warnings,
     }
   }
 
@@ -276,14 +281,6 @@ function resolvePrimaryTarget(options: SourceBundleOptions): ResolvedPrimaryTarg
   }
 
   throw new Error('SourceBundle requires --file --symbol, --node, or --file --start --end.')
-}
-
-function resolveKnownSymbolEnd(symbolIndex: SymbolIndex, filePath: string, symbolName: string): number | undefined {
-  try {
-    return resolveSymbolTarget(symbolIndex, normalizeFilePath(filePath), symbolName, Number.MAX_SAFE_INTEGER).symbolEndLine
-  } catch {
-    return undefined
-  }
 }
 
 function resolveSymbolPrimary(
@@ -296,7 +293,8 @@ function resolveSymbolPrimary(
 ): ResolvedPrimaryTarget {
   const fileSummary = options.symbolIndex.files.find((f) => normalize(f.path) === normalize(filePath))
   if (!fileSummary) throw new Error(`File not found in symbol index: ${filePath}`)
-  const symbol = fileSummary.symbols.find((s) => s.name === symbolName)
+  const resolved = resolveSymbolTarget(options.symbolIndex, filePath, symbolName, options.maxLinesPerBlock, nodeId)
+  const symbol = fileSummary.symbols.find((s) => declarationNodeId(fileSummary.path, s) === resolved.nodeId)
   if (!symbol) throw new Error(`Symbol not found in ${filePath}: ${symbolName}`)
 
   const absolutePath = ensureInsideProjectRoot(options.projectRoot, filePath)
@@ -305,8 +303,8 @@ function resolveSymbolPrimary(
   const fileResult = findFileResult(options.frontendArtifact, normalizedFilePath)
 
   // Precedence: validated generic symbol endLine, then frontend-semantic range, then the legacy bounded preview.
-  const feRef = findFrontendSourceRef(fileResult, symbolName)
-  const knownEnd = resolveKnownSymbolEnd(options.symbolIndex, filePath, symbolName)
+  const feRef = findFrontendSourceRef(fileResult, symbol.name)
+  const knownEnd = resolved.symbolEndLine
   let endLine: number
   let symbolBoundaryKnown: boolean
   let symbolEndLine: number | undefined
@@ -338,7 +336,7 @@ function resolveSymbolPrimary(
   return {
     filePath: normalizedFilePath,
     absolutePath: toForwardSlash(absolutePath),
-    symbolName,
+    symbolName: symbol.name,
     startLine: symbol.location.line,
     endLine,
     symbolBoundaryKnown,

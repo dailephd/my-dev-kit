@@ -21,6 +21,7 @@ import { resolveRelativeSpecifier } from '../languages/typescript/resolveRelativ
 import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
 import { DEFAULT_IGNORED_DIRECTORY_NAMES, DEFAULT_IGNORED_DIRECTORY_PREFIXES } from '../indexing/discoverSourceFiles.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import { declarationNodeId, parseDeclarationNodeId } from '../symbol-index/declarationIdentity.js'
 import { isFactoryLike, isFixtureLike, isMockLike, isSetupLike, isTestLike } from './evidenceClassification.js'
 import type {
@@ -73,6 +74,7 @@ export const DEFAULT_TEST_INFRA_LIMITS = {
 export type TestInfraLimits = typeof DEFAULT_TEST_INFRA_LIMITS
 
 export interface DiscoverTestInfrastructureOptions {
+  codeGraph?: CodeGraph
   role: ContextRole | null
   symbolIndex: SymbolIndex
   /** Production file paths (project-relative, forward-slash) the caller wants related evidence for. */
@@ -637,6 +639,7 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
       provenance: m.relationship === 'references-selected-production-symbol' ? 'import-specifier-scan:named-import' : 'import-specifier-scan:import',
     })
   )
+  relatedTestItems.push(...rustRelatedTests(options, warnings))
   const relatedTests = bound(relatedTestItems, limits.relatedTests)
   const relatedTestPaths = relatedMatches.map((m) => m.testPath)
   const relatedTestPathsSet = new Set(relatedTestPaths)
@@ -814,4 +817,53 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
     unresolved,
     warnings,
   }
+}
+
+/** Consume indexed Rust declarations and exact persisted relationships, never reparse `use`. */
+function rustRelatedTests(options: DiscoverTestInfrastructureOptions, warnings: string[]): EvidenceItemRef[] {
+  const result: EvidenceItemRef[] = []
+  const files = new Set(options.filesOfInterest)
+  const symbols = new Set(options.symbolsOfInterest)
+  for (const id of symbols) {
+    const parsed = parseDeclarationNodeId(id)
+    if (parsed) files.add(parsed.filePath)
+  }
+  const graph = options.codeGraph
+  const nodes = new Map(graph?.nodes.map(n => [n.id, n]) ?? [])
+  const testFiles = options.symbolIndex.files.filter(file => file.language === 'rust' && file.symbols.some(symbol => symbol.declarationMetadata?.rust?.attributes.includes('#[test]')))
+  if (testFiles.length > MAX_SCANNED_TEST_FILES) warnings.push(`Rust test discovery omitted ${testFiles.length - MAX_SCANNED_TEST_FILES} files beyond the ${MAX_SCANNED_TEST_FILES}-file discovery bound.`)
+  for (const file of testFiles.slice(0, MAX_SCANNED_TEST_FILES)) {
+    for (const test of file.symbols) {
+      const attributes = test.declarationMetadata?.rust?.attributes ?? []
+      if (!attributes.some(a => /^#\[test\]$/.test(a))) continue
+      const testId = declarationNodeId(file.path, test)
+      const lexicalTest = file.symbols.some(s => s.ownerKey !== test.ownerKey && s.declarationMetadata?.rust?.attributes.some(a => /cfg\s*\(\s*test\s*\)/.test(a)) && test.ownerKey && s.name && test.ownerKey.includes(`:${s.name}@`))
+      if (lexicalTest && files.has(file.path)) {
+        result.push({ id: testId, itemKind: 'test-file', path: file.path,
+          sourceLocation: { filePath: file.path, line: test.location.line },
+          relationship: 'rust-lexical-test-context', basis: file.path,
+          provenance: 'indexed-rust-test:lexical-cfg-test-module',
+          metadata: { conditional: true, testDeclarationId: testId, association: 'file-only', endLine: test.location.endLine ?? null } })
+      }
+      if (!graph) continue
+      // Only the module that directly owns this test supplies its observed imports.
+      const owners = graph.edges.filter(e => e.kind === 'rust-module-defines-symbol' && e.target === testId).map(e => e.source)
+      for (const edge of graph.edges) {
+        if (edge.kind !== 'rust-module-uses-module' || !owners.includes(edge.source) || edge.metadata?.glob === true || edge.metadata?.conditional === true || edge.metadata?.resolutionStatus !== 'RESOLVED') continue
+        const referenced = typeof edge.metadata?.resolvedTargetSymbolId === 'string' ? edge.metadata.resolvedTargetSymbolId : ''
+        const target = nodes.get(referenced || edge.target)
+        if (!target || !nodes.has(edge.source) || !nodes.has(edge.target)) continue
+        const targetPath = target.rustMetadata?.resolvedFile ?? target.path
+        if (!targetPath || !options.symbolIndex.files.some(file => file.path === targetPath)) continue
+        const exact = referenced && symbols.has(referenced)
+        if (!exact && !files.has(targetPath)) continue
+        result.push({ id: `${testId}#${edge.id}`, itemKind: 'test-file', path: file.path,
+          sourceLocation: { filePath: file.path, line: test.location.line },
+          relationship: exact ? 'references-selected-production-symbol' : 'imports-selected-production-file',
+          basis: exact ? referenced : targetPath, provenance: 'indexed-rust-module-use',
+          metadata: { edgeId: edge.id, testDeclarationId: testId, cargoTargetId: typeof edge.metadata?.targetId === 'string' ? edge.metadata.targetId : null, conditional: attributes.some(a => a.includes('cfg')), association: exact ? 'symbol-import' : 'file-only' } })
+      }
+    }
+  }
+  return result.sort((a, b) => a.id.localeCompare(b.id))
 }

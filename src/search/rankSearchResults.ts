@@ -23,7 +23,15 @@ export function rankSearchResults(options: {
   const ranked = options.candidates
     .map((candidate) => scoreCandidate(candidate, phrase, options.normalizedTerms))
     .filter((item): item is SearchResultItem => item !== null)
-    .sort(compareResults)
+  if (/^(?:[\p{L}\p{N}_]+::)*[\p{L}\p{N}_]+$/u.test(phrase)) {
+    const exactIds = new Set(options.candidates.filter(candidate => candidate.item.language === 'rust' && candidate.fields.some(field => field.field === 'symbolName' && (field.text.toLowerCase() === phrase || field.text.toLowerCase().endsWith(`::${phrase}`)))).map(candidate => candidate.item.id))
+    const exactScores = ranked.filter(item => exactIds.has(item.id)).map(item => item.score)
+    if (exactScores.length > 0) {
+      const ceiling = exactScores.reduce((minimum, score) => Math.min(minimum, score), Infinity) - 1
+      for (const item of ranked) if (item.language === 'rust' && !exactIds.has(item.id)) item.score = Math.min(item.score, ceiling)
+    }
+  }
+  ranked.sort(compareResults)
 
   return ranked.slice(0, options.limit)
 }
@@ -32,7 +40,13 @@ function scoreCandidate(candidate: SearchCandidate, phrase: string, terms: strin
   const reasons: SearchMatchReason[] = []
   const matchedTerms = new Set<string>()
 
-  for (const field of candidate.fields) {
+  // Repeated owner aliases are useful vocabulary, not independent proof that one
+  // physical Rust method owns an otherwise ambiguous simple/qualified name.
+  const exactRustNames = candidate.item.language === 'rust' && candidate.item.kind === 'symbol' && /^(?:[\p{L}\p{N}_]+::)*[\p{L}\p{N}_]+$/u.test(phrase)
+    ? candidate.fields.filter(field => field.field === 'symbolName' && (field.text.toLowerCase() === phrase || field.text.toLowerCase().endsWith(`::${phrase}`)))
+    : []
+  const fields = exactRustNames.length > 0 ? [exactRustNames.sort((a, b) => a.text.length - b.text.length || a.text.localeCompare(b.text))[0]] : candidate.fields
+  for (const field of fields) {
     const normalizedText = field.text.toLowerCase()
     if (phrase && normalizedText.includes(phrase)) {
       reasons.push({

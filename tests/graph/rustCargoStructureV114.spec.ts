@@ -194,7 +194,8 @@ describe('B09 conservative structure in the existing graph', () => {
     expect(search.results.some((r:{id:string}) => r.id === node.id)).toBe(true)
     expect(cli('lookup','--index',out,'--node',node.id,'--json')).toContain(node.id)
     expect(cli('slice','--index',out,'--node',node.id,'--depth','1','--json')).toContain('rust-module-resolves-to-file')
-    expect(cli('source','--index',out,'--node',node.id,'--format','numbered')).toContain('mod child;')
+    expect(cli('source','--index',out,'--node',node.id,'--format','numbered')).toContain('pub fn child() {}')
+    expect(cli('source','--index',out,'--file','src/lib.rs','--start','1','--end','2','--format','numbered')).toContain('mod child;')
     expect(cli('source','--index',out,'--node','symbol:src/lib.rs#run','--format','numbered')).toContain('pub fn run() {}')
   })
   it('reconstructs all structure during partial reuse, invalidates Cargo-only changes and removes stale edges', async () => {
