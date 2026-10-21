@@ -64,11 +64,17 @@ export function searchIndex(input: SearchIndexInput): SearchIndexResult {
     ? allCandidates.filter(candidate => candidate.item.path !== undefined && explicitPaths.has(candidate.item.path) || candidate.item.edge !== undefined && (selectedNodeIds.has(candidate.item.edge.source) || selectedNodeIds.has(candidate.item.edge.target)))
     : allCandidates
   const ownershipMode = input.intent === 'ownership'
+  // An indexed Rust path already scopes the candidate pool. Do not let its
+  // extension/directory fragments become competing declaration-name evidence.
+  const ownerQuery = ownershipMode && explicitPaths.size > 0 && [...explicitPaths].every(path => path.endsWith('.rs'))
+    ? input.query.split(/\s+/).filter(value => !explicitPaths.has(value.replace(/^["']|["',;]$/g, '').replace(/\\/g, '/'))).join(' ').trim()
+    : ''
+  const rankingQuery = ownerQuery || input.query
   // Ownership mode ranks the complete relevant pool (same scoring, no new weights) and applies `limit` only after tiering.
   const rankedResults = rankSearchResults({
     candidates,
-    query: input.query,
-    normalizedTerms,
+    query: rankingQuery,
+    normalizedTerms: ownerQuery ? normalizeSearchQuery(ownerQuery) : normalizedTerms,
     limit: ownershipMode ? Math.max(candidates.length, 1) : limit,
   })
   const recovery = ownershipMode ? recoverOwnerCandidates(rankedResults, candidates, input.symbolIndex, input.codeGraph) : null

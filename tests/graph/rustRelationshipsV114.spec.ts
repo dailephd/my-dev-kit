@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import childProcess from 'node:child_process'
 import { buildRustRelationships } from '../../src/graph/buildRustRelationships.js'
-import { resolveRustUses } from '../../src/languages/rust/useResolver.js'
+import { resolveRustUses, rustEvidenceStatus } from '../../src/languages/rust/useResolver.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import { resolveFileNodeTarget } from '../../src/lookup/resolveSourceTarget.js'
@@ -35,6 +35,78 @@ function build(root: string, sourceRoots = ['src']) {
 const mid = (module: string, manifest='Cargo.toml', name='sample', root='src/lib.rs') => `rust-module:${encodeURIComponent(`rust-target:${encodeURIComponent(manifest)}#lib#${name}#${encodeURIComponent(root)}`)}#${encodeURIComponent(module)}`
 const claims = (graph: CodeGraph) => graph.edges.filter(e => ['rust-module-uses-module','rust-module-reexports-symbol','rust-impl-for-type','rust-impl-of-trait'].includes(e.kind))
 const read = (root: string, file: string) => JSON.parse(fs.readFileSync(path.join(root,file),'utf8'))
+
+describe('B14 Rust documentation evidence', () => {
+  beforeAll(async () => { await prepareRustParser() })
+  const docs = ['/// owner', '//! crate docs', '/// owner\n///\n    /// details\n', '//! crate\n//! details\n', '/** owner */', '/*! crate docs */', '/** one */\n/** two */', '/// one\n/** two */', '/** one */\n/// two\n', '#[doc = "owner"]', '#![doc = "crate docs"]']
+  it.each(docs)('treats parser-grounded documentation as neutral: %s', doc => {
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: [doc] })).toBe('RESOLVED')
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: [doc, '#[cfg(feature="extra")]'] })).toBe('CONDITIONAL')
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: [doc, '#[cfg_attr(feature="extra", custom)]'] })).toBe('CONDITIONAL')
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: [doc, '#[custom]'] })).toBe('UNSUPPORTED_SYNTAX')
+    expect(rustEvidenceStatus({ status: 'parser-error', attributes: [doc, '#[doc ='] })).toBe('MALFORMED')
+  })
+  it.each(['//// ordinary', '// ordinary', '/*** ordinary */', '/**/', '/***/', '/** unfinished', '/// bad\rtext', '/// bad\r', '/// doc\npub fn injected() {}', '/// doc\n//// ordinary', '//! doc\n// ordinary', '#[doc::custom]', '#[doc :: custom]'])('does not accept a non-doc or malformed lookalike: %s', text => {
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: [text] })).not.toBe('RESOLVED')
+  })
+  it('keeps the most restrictive non-documentation condition and preserves malformed precedence', () => {
+    expect(rustEvidenceStatus({ status: 'syntax-only', endLine: 4, attributes: ['/// docs', '#[custom]', '#[cfg(test)]'] })).toBe('UNSUPPORTED_SYNTAX')
+    expect(rustEvidenceStatus({ status: 'parser-error', attributes: ['/// docs', '#[cfg(test)]'] })).toBe('MALFORMED')
+  })
+  it.each(['//! crate docs\n', '/*! crate docs */\n', '#![doc = "crate docs"]\n'])('keeps real inner documentation neutral to nominal ownership: %s', doc => {
+    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    fs.mkdirSync(temp, { recursive: true })
+    let ordinal = 1
+    while (fs.existsSync(path.join(temp, `044-inner-${ordinal}`))) ordinal++
+    const root = path.join(temp, `044-inner-${ordinal}`)
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'Cargo.toml'), cargo)
+    fs.writeFileSync(path.join(root, 'src/lib.rs'), `${doc}pub struct Worker;\nimpl Worker { pub fn run(&self) {} }\n`)
+    const { graph } = build(root)
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-for-type').map(e => e.target)).toEqual(['symbol:src/lib.rs#Worker'])
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-defines-symbol')).toHaveLength(1)
+  })
+  it.each(['#[cfg(feature="optional")]', '#[custom]', '#[doc =]'])('does not promote a documented conditional, unknown or malformed nominal type: %s', attribute => {
+    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    fs.mkdirSync(temp, { recursive: true })
+    let ordinal = 1
+    while (fs.existsSync(path.join(temp, `044-nominal-${ordinal}`))) ordinal++
+    const root = path.join(temp, `044-nominal-${ordinal}`)
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'Cargo.toml'), cargo)
+    fs.writeFileSync(path.join(root, 'src/lib.rs'), `/// nominal docs\n${attribute}\npub struct Worker;\nimpl Worker { pub fn run(&self) {} }\n`)
+    const { graph } = build(root)
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-for-type')).toEqual([])
+    expect(graph.edges.some(e => e.kind === 'rust-module-defines-symbol' && e.target === 'symbol:src/lib.rs#Worker')).toBe(false)
+  })
+  it.each(['/// docs\n', '/// docs\n///\n/// More cfg and #[custom] examples.\n', '/** docs */\n/** more docs */\n', '/// docs\n/** more docs */\n', '/** docs */\n/// more docs\n', '/** docs with /* nested */ text */\n', '#[doc = "docs"]\n'])('preserves actual documented type/impl/member relationships: %s', doc => {
+    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    fs.mkdirSync(temp, { recursive: true })
+    const root = fs.mkdtempSync(path.join(temp, '031-doc-'))
+    const source = `${doc}pub struct Worker;\n${doc}impl Worker {\n${doc}pub fn run(&self) {}\n}\n${doc}pub struct Other;\nimpl Other {\n${doc}pub fn run(&self) {}\n}\n`
+    fs.mkdirSync(path.join(root, 'src'))
+    fs.writeFileSync(path.join(root, 'Cargo.toml'), cargo)
+    fs.writeFileSync(path.join(root, 'src/lib.rs'), source)
+    const { graph, index } = build(root)
+    const members = graph.edges.filter(e => e.kind === 'rust-impl-defines-symbol')
+    expect(members).toHaveLength(2)
+    expect(new Set(members.map(e => e.target)).size).toBe(2)
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-for-type').map(e => e.target).sort()).toEqual(['symbol:src/lib.rs#Other', 'symbol:src/lib.rs#Worker'])
+    expect(index.files[0].symbols.filter(s => s.name === 'run').every(s => s.declarationMetadata?.rust?.attributes?.some(a => a.includes('docs')))).toBe(true)
+    expect(graph.edges.filter(e => e.kind === 'calls')).toEqual([])
+  })
+  it.each(['#[cfg(feature="optional")]', '#[custom]'])('documentation cannot neutralize a restrictive method attribute: %s', attribute => {
+    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    fs.mkdirSync(temp, { recursive: true })
+    const root = fs.mkdtempSync(path.join(temp, '031-negative-'))
+    fs.mkdirSync(path.join(root, 'src'))
+    fs.writeFileSync(path.join(root, 'Cargo.toml'), cargo)
+    fs.writeFileSync(path.join(root, 'src/lib.rs'), `/// owner\npub struct Worker;\nimpl Worker {\n/// docs\n${attribute}\npub fn run(&self) {}\n}\n`)
+    const { graph } = build(root)
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-defines-symbol')).toEqual([])
+    expect(graph.edges.filter(e => e.kind === 'rust-impl-for-type').map(e => e.target)).toEqual(['symbol:src/lib.rs#Worker'])
+  })
+})
 
 describe('B10 Rust relationship producer contracts', () => {
   beforeAll(async () => { await prepareRustParser() })
@@ -294,7 +366,7 @@ describe('B10 generic consumers, complete reconstruction and cache', () => {
   })
   it('fingerprints the B10 relationship revision while retaining every previous semantic revision', () => {
     const input={sourceRoots:['src'],excludePatterns:[],callGraphEnabled:false,language:null,defaultIgnoredDirectoryNames:[],defaultIgnoredDirectoryPrefixes:[],defaultFileExcludePatterns:[],androidEvidenceFingerprint:'none',androidGradleEvidenceFingerprint:'none',androidManifestEvidenceFingerprint:'none',androidResourcesEvidenceFingerprint:'none',androidNavigationXmlEvidenceFingerprint:'none',androidTestEvidenceFingerprint:'none'}
-    const expected={rustParserRevision:RUST_PARSER_REVISION,rustCargoStructureRevision:'v1.14.0-b09',rustRelationshipRevision:'v1.14.0-b10',rustCargoFingerprint:null,pythonExtractionRevision:'v1.14.0-b04',jsTsExtractionRevision:'v1.14.0-b05',jsFrameworkExtractionRevision:'v1.14.0-b06',frontendFrameworkRevision:'v1.14.0-b07',configuredImportsRevision:'v1.14.0-configured-imports',configuredImportsFingerprint:null,...input}
+    const expected={rustParserRevision:RUST_PARSER_REVISION,rustCargoStructureRevision:'v1.14.0-b09',rustRelationshipRevision:'v1.14.0-b14-doc-comments',rustCargoFingerprint:null,pythonExtractionRevision:'v1.14.0-b04',jsTsExtractionRevision:'v1.14.0-b05',jsFrameworkExtractionRevision:'v1.14.0-b06',frontendFrameworkRevision:'v1.14.0-b07',configuredImportsRevision:'v1.14.0-configured-imports',configuredImportsFingerprint:null,...input}
     expect(computeConfigFingerprint(input)).toBe(createHash('sha256').update(JSON.stringify(expected)).digest('hex'))
   })
   it('matches serialized full/partial graphs after every relationship, selection and Cargo edit', async () => {

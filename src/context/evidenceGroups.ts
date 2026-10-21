@@ -24,6 +24,7 @@ import {
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import { rustEvidenceStatus } from '../languages/rust/useResolver.js'
 import type {
   CandidateFile,
   CandidateNode,
@@ -556,6 +557,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
 
   const seedNodeIds = computeSeedNodeIds({ codeGraph, focusIntake, changedSurface })
   const structuralContractIds = new Set<string>()
+  const rustGraphContractItems: EvidenceItemRef[] = []
   const structuralContractFilePaths = new Set<string>()
   const contractDeclarationKinds = new Set(['class', 'interface', 'type', 'enum', 'const', 'variable'])
   const pathByNodeId = new Map(codeGraph.nodes.map((n) => [n.id, n.path]))
@@ -579,7 +581,20 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   for (const edge of selectedGraph.edges) {
     if (!['rust-impl-for-type', 'rust-impl-of-trait'].includes(edge.kind)) continue
     const target = nodeGraphById.get(edge.to)
-    if (target?.path?.endsWith('.rs') && !isForbiddenOwnerPath(target.path)) structuralContractIds.add(target.id)
+    if (target?.path?.endsWith('.rs') && target.kind === 'symbol' && ['struct', 'trait', 'enum', 'union'].includes(target.symbolKind ?? '') && !isForbiddenOwnerPath(target.path)) {
+      structuralContractIds.add(target.id)
+      // Exact focus queries need not lexically rank the impl's type/trait.
+      // Preserve that already-selected persisted contract witness independently.
+      rustGraphContractItems.push({ id: target.id, itemKind: 'symbol', nodeId: target.id, symbolId: target.id, path: target.path,
+        sourceLocation: { filePath: target.path, line: target.line }, relationship: 'selected Rust impl contract',
+        basis: `${edge.from}--${edge.kind}-->${edge.to}`, provenance: `graph-edge:${edge.kind}` })
+    }
+  }
+  for (const focus of focusIntake.focusSymbols.filter(f => f.resolved && !f.ambiguous)) {
+    for (const id of focus.matchedNodeIds) {
+      const node = nodeGraphById.get(id)
+      if (node?.path?.endsWith('.rs') && !isForbiddenOwnerPath(node.path) && ['struct', 'trait', 'enum', 'union', 'type'].includes(node.symbolKind ?? '') && codeGraph.edges.some(e => e.kind === 'rust-module-defines-symbol' && e.target === id)) structuralContractIds.add(id)
+    }
   }
 
   const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralContractNode(n, structuralContractIds)))
@@ -587,6 +602,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const contractItems = [
     ...contractNodes.map((n) => nodeToItem(n, 'contract-like candidate', isContractLike(n) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
     ...contractFiles.map((f) => fileToItem(f, 'contract-like candidate', isContractLike({ filePath: f.path, label: f.path }) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
+    ...rustGraphContractItems,
   ]
 
   const closestTestNodes = sortByScoreThenPath(retainedNodes.filter((n) => isTestLike(n.filePath)))
@@ -636,8 +652,8 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     const fact = nodeGraphById.get(rustFocus.nodeId)
     const declaration = fact && symbolIndex.files.find(file => file.path === fact.path)?.symbols.find(symbol => symbol.nodeId === fact.id)
     const physicalFile = symbolIndex.files.find(file => file.path === fact?.path)
-    const conditionalAncestor = physicalFile?.symbols.some(symbol => symbol.declarationMetadata?.rust?.attributes.some(attribute => /cfg/.test(attribute)) && declaration?.ownerKey?.includes(`:${symbol.name}@${symbol.location.line}:`))
-    const uncertain = declaration && (conditionalAncestor || declaration.location.endLine === undefined || declaration.declarationMetadata?.rust?.attributes.some(attribute => /cfg|#\[(?!derive\b|allow\b|doc\b|repr\b|inline\b)/.test(attribute)))
+    const conditionalAncestor = physicalFile?.symbols.some(symbol => declaration?.ownerKey?.includes(`:${symbol.name}@${symbol.location.line}:`) && rustEvidenceStatus({ endLine: symbol.location.endLine, attributes: symbol.declarationMetadata?.rust?.attributes }) !== 'RESOLVED')
+    const uncertain = declaration && (conditionalAncestor || rustEvidenceStatus({ endLine: declaration.location.endLine, attributes: declaration.declarationMetadata?.rust?.attributes }) !== 'RESOLVED')
     if (fact && !uncertain && (!fact.rustMetadata || fact.rustMetadata.status === 'RESOLVED')) rustOwnerIds.add(fact.id)
     for (const edge of codeGraph.edges) {
       if (edge.target !== rustFocus.nodeId || !['rust-impl-defines-symbol', 'rust-module-defines-symbol'].includes(edge.kind)) continue

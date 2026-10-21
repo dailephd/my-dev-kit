@@ -31,11 +31,45 @@ const clean = (name: string) => name.replace(/^r#/, '')
 const identifier = /^(?:r#)?[_\p{ID_Start}][_\p{ID_Continue}]*$/u
 const within = (child: string, parent: string) => child === parent || child.startsWith(parent + '::')
 
-/** Activation is never evaluated. Unknown macro attributes cannot establish targets. */
+/** Recognize only doc-comment tokens already observed by the Rust parser. */
+function isDocumentationComment(observed: string): boolean {
+  const normalized = observed.replace(/\r\n/g, '\n')
+  if (normalized.includes('\r')) return false
+  const text = normalized.trim()
+  // The parser may retain consecutive documentation tokens in one entry.
+  let offset = 0, sawDocumentation = false
+  while (offset < text.length) {
+    if (/\s/.test(text[offset])) { offset++; continue }
+    const remaining = text.slice(offset)
+    if (/^\/\/(?:\/(?!\/)|!)/.test(remaining)) {
+      const newline = text.indexOf('\n', offset)
+      offset = newline === -1 ? text.length : newline + 1
+      sawDocumentation = true
+      continue
+    }
+    // /**/, /***/ and /*** ... */ are ordinary block comments in Rust.
+    if (!remaining.startsWith('/*!') && !/^\/\*\*(?![*/])/.test(remaining)) return false
+    let depth = 1
+    offset += 2
+    while (offset < text.length - 1 && depth > 0) {
+      const pair = text.slice(offset, offset + 2)
+      if (pair === '/*') { depth++; offset += 2 }
+      else if (pair === '*/') { depth--; offset += 2 }
+      else offset++
+    }
+    if (depth !== 0) return false
+    sawDocumentation = true
+  }
+  return sawDocumentation
+}
+
+/** Activation is never evaluated. Documentation does not neutralize restrictive attributes. */
 export function rustEvidenceStatus(fact: { status?: string; endLine?: number; attributes?: string[] }): RustResolutionStatus {
   if (fact.status === 'parser-error' || fact.endLine === undefined) return 'MALFORMED'
-  if (fact.attributes?.some(a => /^#!?\s*\[\s*cfg(?:_attr)?\b/.test(a))) return 'CONDITIONAL'
-  if (fact.attributes?.some(a => !/^#!?\s*\[\s*(?:doc|allow|warn|deny|forbid|expect|deprecated|derive|repr|inline|must_use|non_exhaustive|test|path)\b/.test(a))) return 'UNSUPPORTED_SYNTAX'
+  const attributes = (fact.attributes ?? []).filter(a => !isDocumentationComment(a)).map(a => a.trim())
+  const conditional = (a: string) => /^#!?\s*\[\s*cfg(?:_attr)?\b[\s\S]*\]$/.test(a)
+  if (attributes.some(a => !conditional(a) && !/^#!?\s*\[\s*(?:doc(?=\s*(?:=|\(|\]))|allow\b|warn\b|deny\b|forbid\b|expect\b|deprecated\b|derive\b|repr\b|inline\b|must_use\b|non_exhaustive\b|test\b|path\b)[\s\S]*\]$/.test(a))) return 'UNSUPPORTED_SYNTAX'
+  if (attributes.some(conditional)) return 'CONDITIONAL'
   return 'RESOLVED'
 }
 
