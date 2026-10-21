@@ -185,8 +185,8 @@ export async function qualify() {
       return destination
     }
     const snapshots = new Map()
-    function index(label, fixture, roots, incremental = true, out = path.join(tests, label + '-index')) {
-      const args = ['index', '--root', fixture, ...roots.flatMap(r => ['--src', r]), '--out', out, '--json', ...(incremental ? ['--incremental'] : [])]
+    function index(label, fixture, roots, incremental = true, out = path.join(tests, label + '-index'), extra = []) {
+      const args = ['index', '--root', fixture, ...roots.flatMap(r => ['--src', r]), '--out', out, '--json', ...(incremental ? ['--incremental'] : []), ...extra]
       const r = cli(label, args), payload = JSON.parse(r.stdout)
       const resource = result.measurements.findLast(m => m.label === label && m.maxRSSKiB)
       if (resource) assert(resource.maxRSSKiB <= 512 * 1024, `RSS safety boundary exceeded: ${label}`)
@@ -273,7 +273,7 @@ export async function qualify() {
       const capsule = read(out)
       result.measurements.push({ label: 'f14-' + name + '-bounds', sourceLines: source.lineCount, sourceContinuation: source.continuationCursor ?? null, contextAdequacy: capsule.contextAdequacy, contextTruncation: capsule.truncation })
     }
-    const mixed = index('f10', copyFixture('F10-mixed-language'), ['src/worker.rs', 'src/worker.ts'])
+    const mixed = index('f10', copyFixture('F10-mixed-language'), ['src'], true, path.join(tests, 'f10-index'), ['--exclude', 'src/worker.py'])
     assert(mixed.symbols.files.some(f => f.language === 'rust')); assert(mixed.symbols.files.some(f => f.language === 'typescript'))
     const conditional = index('f06', copyFixture('F06-conditional'), ['src'])
     assert(conditional.graph.nodes.some(n => n.rustMetadata?.status === 'CONDITIONAL'))
