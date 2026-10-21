@@ -151,6 +151,9 @@ export interface RustDeclarationMetadata {
 }
 
 export interface RustSyntaxFact {
+  /** Parser-owned lexical key and offset for exact module-parent joins (B09). */
+  moduleKey?: string
+  sourceIndex?: number
   kind: 'declaration' | 'module' | 'use' | 'impl' | 'macro' | 'attribute' | 'ffi' | 'diagnostic'
   syntaxKind: string
   line: number

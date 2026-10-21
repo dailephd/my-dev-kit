@@ -72,6 +72,8 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
     const nameNode = node.childForFieldName('name')
     const name = text(nameNode)
     const base = { ...loc, ...(owner ? { ownerKey: owner } : {}), status: contaminated || node.hasError ? 'parser-error' as const : 'syntax-only' as const }
+    // Inner attributes apply to the containing file/module, not the following item.
+    if (node.type === 'inner_attribute_item') addFact({ kind: 'attribute', syntaxKind: node.type, ...base, attributes: [text(node)] })
     const scope = (label: string) => `${owner ? owner + '/' : 'rust:'}${label.replace(/\s+/g, ' ')}@${loc.line}:${node.startIndex}`
     let childOwner = owner, childContext = context
     const declaredKind = kinds[node.type]
@@ -88,7 +90,7 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
         declarationMetadata: { rust: { syntaxKind: node.type, visibility, attributes, declarationOnly: !body, modifiers, ...(shape ? { shape } : {}) } },
       })
       addFact({ kind: node.type === 'mod_item' ? 'module' : 'declaration', syntaxKind: node.type, name, ...base,
-        ...(attributes.length ? { attributes } : {}), ...(node.type === 'mod_item' ? { inline: !!body } : {}) })
+        ...(attributes.length ? { attributes } : {}), ...(node.type === 'mod_item' ? { inline: !!body, moduleKey: scope(`${node.type}:${name}`), sourceIndex: node.startIndex } : {}) })
       childOwner = scope(`${node.type}:${name}`)
       childContext = node.type === 'trait_item' ? 'trait' : node.type === 'mod_item' ? 'module' : kind === 'function' || kind === 'method' ? 'function' : context
     }

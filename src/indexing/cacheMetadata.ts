@@ -106,6 +106,7 @@ export type CacheMode =
   | 'incremental-partial-with-artifact-fallback'
 
 export interface ConfigFingerprintInput {
+  rustCargoFingerprint?: string
   configuredImportsFingerprint?: string
   sourceRoots: string[]
   excludePatterns: string[]
@@ -189,6 +190,8 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     // Extractor semantics changed without changing the cache storage format.
     // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
     rustParserRevision: RUST_PARSER_REVISION,
+    rustCargoStructureRevision: 'v1.14.0-b09',
+    rustCargoFingerprint: input.rustCargoFingerprint ?? null,
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',
     jsFrameworkExtractionRevision: 'v1.14.0-b06',

@@ -442,8 +442,8 @@ function buildFrontendValueFields(fileResult: FrontendFileResult): SearchCandida
   return fields
 }
 
-function isSearchableNode(node: CodeGraphNode): node is CodeGraphNode & { kind: 'file' | 'symbol' | 'framework-route' } {
-  return node.kind === 'file' || node.kind === 'symbol' || node.kind === 'framework-route'
+function isSearchableNode(node: CodeGraphNode): boolean {
+  return node.kind === 'file' || node.kind === 'symbol' || node.kind === 'framework-route' || node.kind === 'rust-package' || node.kind === 'rust-target' || node.kind === 'rust-module'
 }
 
 /** `android-*` node kinds are eligible for generic `search --query`/`context` candidate ranking (v1.10.0 Batch 6), reusing the same generic search engine rather than a second retrieval path. */
@@ -451,7 +451,7 @@ function isAndroidGraphNode(node: CodeGraphNode): boolean {
   return node.kind.startsWith('android-')
 }
 
-function nodeCandidate(node: CodeGraphNode & { kind: 'file' | 'symbol' | 'framework-route' }): SearchCandidate {
+function nodeCandidate(node: CodeGraphNode): SearchCandidate {
   const fields: SearchCandidateField[] = [
     field('nodeId', node.id, WEIGHTS.nodeId),
     field('label', node.label, WEIGHTS.label),

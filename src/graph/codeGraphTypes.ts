@@ -2,10 +2,14 @@ import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { FrontendSourceRef, ReactFlowRelationshipKind } from '../frontend/index.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
+import type { CargoDependency, CargoWorkspace, RustResolutionStatus, RustTargetKind } from '../languages/rust/cargo.js'
 
 export const CODE_GRAPH_SCHEMA_VERSION = '1.1.0'
 
 export type CodeGraphNodeKind =
+  | 'rust-package'
+  | 'rust-target'
+  | 'rust-module'
   | 'framework-route'
   | 'file'
   | 'symbol'
@@ -46,6 +50,12 @@ export type AndroidArtifactId =
   | 'android-test-semantic'
 
 export type CodeGraphEdgeKind =
+  | 'rust-package-has-target'
+  | 'rust-target-root-file'
+  | 'rust-target-contains-module'
+  | 'rust-module-contains-module'
+  | 'rust-module-defined-in-file'
+  | 'rust-module-resolves-to-file'
   | 'framework-route-defined-in-file'
   | 'framework-route-handled-by-symbol'
   | 'framework-router-mounts-route'
@@ -101,6 +111,24 @@ export type CodeGraphEdgeKind =
   | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
+  rustMetadata?: {
+    origin: 'manifest' | 'conventional' | 'root' | 'inline' | 'external'
+    status: RustResolutionStatus
+    manifest?: string
+    edition?: string
+    inheritedMetadata?: Record<string, string | string[] | boolean>
+    workspace?: CargoWorkspace
+    dependencies?: CargoDependency[]
+    targetKind?: RustTargetKind
+    targetName?: string
+    root?: string
+    modulePath?: string
+    endLine?: number
+    declarationId?: string
+    resolvedFile?: string
+    candidates?: string[]
+    reason?: string
+  }
   routeMetadata?: Record<string, string | number | boolean | null>
   qualifiedName?: string
   ownerKey?: string

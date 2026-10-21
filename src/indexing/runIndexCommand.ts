@@ -1,4 +1,6 @@
 import { prepareRustParser } from '../languages/rust/parser.js'
+import { discoverCargoStructure } from '../languages/rust/cargo.js'
+import { buildRustStructure } from '../graph/buildRustStructure.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
@@ -391,6 +393,7 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
 
   const configFiles = discoverSourceFiles({ repoRoot: projectRoot, sourceRoots: normalizedSourceRoots, userExcludes: options.exclude }).files
   const configFingerprint = computeConfigFingerprint({
+    rustCargoFingerprint: discoverCargoStructure(projectRoot, configFiles.filter(f => f.relPath.endsWith('.rs')).map(f => f.relPath)).fingerprint,
     configuredImportsFingerprint: new ConfiguredImportResolver(projectRoot).fingerprint(configFiles.filter(f => /\.(?:ts|tsx|js|jsx|cjs)$/.test(f.relPath)).map(f => f.relPath), resolveJsTsCandidates),
     sourceRoots: normalizedSourceRoots,
     excludePatterns: options.exclude ?? [],
@@ -953,7 +956,9 @@ function finishIndexBuild(
 
   const languages = inferLanguages(index.files.map((file) => file.language), options.language)
   // Reproject from every selected summary, including unchanged cross-file routers.
-  const codeGraph = buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files)
+  const rustStructure = buildRustStructure(buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files), projectRoot, index.files)
+  const codeGraph = rustStructure.graph
+  warnings.push(...rustStructure.warnings)
   const createdAt = new Date().toISOString()
   const baseManifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
@@ -1218,6 +1223,7 @@ function finishIndexBuild(
     analyzers: replaceAnalyzerStatuses(
       [
         ...(baseManifest.analyzers ?? []),
+        ...(index.files.some(f => f.language === 'rust') ? [{ id: 'rust-structure', status: rustStructure.warnings.length ? 'partial' as const : 'complete' as const, version: 'v1.14.0-b09', warningCount: rustStructure.warnings.length, errorCount: 0, summary: { packageCount: rustStructure.packageCount, workspaceCount: rustStructure.workspaceCount } }] : []),
         finalClassificationAnalyzerStatus,
         androidAnalyzerStatus,
         androidComponentsAnalyzerStatus,
