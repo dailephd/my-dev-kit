@@ -94,6 +94,11 @@ export function graphIntegrity(graph) {
   }
 }
 
+export function assertSourceRejected(response, label) {
+  assert.notEqual(response.status, 0, `${label}: installed source returned excluded content`)
+  assert(!/--start is required|--end is required|unknown option|invalid.*option|cannot combine/i.test(response.stderr ?? ''), `${label}: argument validation did not exercise containment`)
+}
+
 export async function qualify() {
   const rootResult = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', windowsHide: true })
   assert.equal(rootResult.status, 0)
@@ -184,7 +189,18 @@ export async function qualify() {
       }
       return destination
     }
-    const snapshots = new Map()
+    const snapshots = new Map(), containmentFailures = []
+    result.sourceContainmentChecks = []
+    function rejectedSource(label, indexDir, file, end = '1') {
+      const response = cli(label, ['source', '--index', indexDir, '--file', file, '--start', '1', '--end', end, '--max-lines', end, '--format', 'json'], true)
+      try {
+        assertSourceRejected(response, label)
+        result.sourceContainmentChecks.push({ label, exit: response.status, verdict: 'PASS' })
+      } catch (error) {
+        result.sourceContainmentChecks.push({ label, exit: response.status, verdict: 'FAIL', reason: error.message })
+        containmentFailures.push(error.message)
+      }
+    }
     function index(label, fixture, roots, incremental = true, out = path.join(tests, label + '-index'), extra = []) {
       const args = ['index', '--root', fixture, ...roots.flatMap(r => ['--src', r]), '--out', out, '--json', ...(incremental ? ['--incremental'] : []), ...extra]
       const r = cli(label, args), payload = JSON.parse(r.stdout)
@@ -237,6 +253,8 @@ export async function qualify() {
     const f07 = index('f07', workspace, ['crates/core/src'])
     assert(f07.graph.nodes.some(n => n.kind === 'rust-package')); assert(f07.graph.nodes.some(n => n.kind === 'rust-target'))
     assert(f07.symbols.files.every(f => f.path.startsWith('crates/core/src/')))
+    assert(fs.existsSync(path.join(workspace, 'crates/cli/src/main.rs')))
+    rejectedSource('source-unselected-workspace', f07.out, 'crates/cli/src/main.rs')
     const f11 = copyFixture('F11-incremental'), beforeIndex = index('f11-before', f11, ['src', 'crates/worker/src'])
     const changedIndex = path.join(tests, 'f11-changed-index'); fs.cpSync(beforeIndex.out, changedIndex, { recursive: true, errorOnExist: true, force: false })
     // Prepare the Cargo-only changed scenario before indexing its changed source.
@@ -288,11 +306,12 @@ export async function qualify() {
     const safety = index('security', safe, ['src'])
     assert.deepEqual(safety.symbols.files.map(f => f.path), ['src/lib.rs'])
     assert(!safety.symbols.files.flatMap(f => f.symbols).some(s => ['expanded', 'escaped'].includes(s.name)))
-    const escape = cli('source-escape', ['source', '--index', safety.out, '--file', '../outside/escape.rs', '--format', 'json'], true)
-    assert.notEqual(escape.status, 0); assert(!escape.stdout.includes('pub fn escaped'))
+    rejectedSource('source-escape', safety.out, '../outside/escape.rs')
+    rejectedSource('source-symlink-escape', safety.out, 'src/linked/escape.rs')
     for (const [f, hash] of Object.entries(fixtureHashes)) assert.equal(sha(fs.readFileSync(path.join(root, f))), hash, `Fixture modified: ${f}`)
     for (const [f, hash] of Object.entries(copiedSources)) assert.equal(sha(fs.readFileSync(f)), hash, `Indexed Rust source modified: ${f}`)
     assert.deepEqual(Object.fromEntries(packageFiles.map(f => [f, sha(fs.readFileSync(path.join(root, f)))])), before)
+    assert.equal(containmentFailures.length, 0, `Source containment qualification failed: ${containmentFailures.join('; ')}`)
     result.verdict = 'PASS'
   } catch (error) {
     result.failures.push(error.stack ?? String(error)); process.exitCode = 1

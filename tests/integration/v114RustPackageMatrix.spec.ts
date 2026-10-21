@@ -8,6 +8,11 @@ const harness = await import(pathToFileURL(path.resolve('scripts/qualification/v
 const root = path.resolve('.')
 
 describe('B15 installed-package qualification boundaries', () => {
+  it('does not accept argument rejection as source-containment evidence', () => {
+    expect(() => harness.assertSourceRejected({ status: 2, stderr: '--start is required when --end is provided.' }, 'escape')).toThrow('did not exercise containment')
+    expect(() => harness.assertSourceRejected({ status: 0, stdout: 'excluded source', stderr: '' }, 'escape')).toThrow('returned excluded content')
+    expect(() => harness.assertSourceRejected({ status: 2, stderr: 'File path escapes the indexed project root' }, 'escape')).not.toThrow()
+  })
   it('accepts its checkout identity and rejects another script root', () => {
     const script = path.resolve('scripts/qualification/v114RustMatrix.mjs')
     expect(() => harness.verifyCheckout(root, script)).not.toThrow()
