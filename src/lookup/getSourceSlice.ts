@@ -24,7 +24,8 @@ export function ensureInsideProjectRoot(projectRoot: string, filePath: string): 
   if (!contained(root, resolved) || filePath.includes('\0')) {
     throw new UnsafeSourceError('File path escapes the indexed project root.')
   }
-  sourceAuthority.getStore()?.(root, toForwardSlash(relative))
+  // A POSIX backslash is a filename character, not an indexed path separator.
+  sourceAuthority.getStore()?.(root, process.platform === 'win32' ? toForwardSlash(relative) : relative)
   try {
     const physicalRoot = fs.realpathSync(root)
     const physicalFile = fs.realpathSync(resolved)
