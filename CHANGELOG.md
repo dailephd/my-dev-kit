@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+Implemented on the v1.14.0 feature branch and not yet published; the latest release remains 1.13.0.
+
+- Python: AST-based extraction of nested classes and methods, decorators and structured import bindings; exact cross-module and method-call attribution where uniquely grounded; Django and SQLAlchemy model facts; FastAPI route and handler facts. Target code and frameworks are never executed.
+- JavaScript and TypeScript: JSDoc syntax evidence, CommonJS and `.cjs` support, and `tsconfig.json`/`jsconfig.json` path-alias resolution into the existing file-dependency edges, with configuration-aware incremental invalidation.
+- Frameworks: Express and NestJS routes, Next.js App Router conventions with Pages Router compatibility, and static Playwright and Vitest test associations, shown as source evidence rather than runtime behavior.
+- Rust: packaged Tree-sitter WebAssembly parser, Cargo package, workspace and target discovery, module and unique local import resolution, qualified same-name method identity, trait and impl ownership, retrieval through the existing commands, cache and graph-diff support, source and symlink containment, and parser size, time and memory bounds. No Rust toolchain is required and nothing is executed.
+- Qualified symbol identity is additive: legacy `symbol:` IDs are unchanged and collisions receive `symbolq:` IDs. Schema versions are unchanged.
+- Added the public `examples/basic-rust-workspace` example and test-output isolation for the v1.14 test suites.
+- Deferred: optional Rust direct-call inference and Prisma support.
+
 ## 1.13.0 - 2026-10-17
 
 - Added twelve deterministic Android retrieval benchmark tasks with 52 assertions while preserving the fourteen-task core suite and its 64 assertions. Added typed lookup/slice regression assertions and packaged the public Android/Kotlin example with Android retrieval workflow documentation.

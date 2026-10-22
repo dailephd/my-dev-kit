@@ -37,14 +37,23 @@ export function newRun(root, family) {
   }
 }
 
+// The eight approved public example files (52 baseline entries + these eight = 60). Only these exact paths are exempt from the private-name check below.
+export const publicRustExample = [
+  'examples/basic-rust-workspace/Cargo.toml', 'examples/basic-rust-workspace/README.md',
+  'examples/basic-rust-workspace/crates/cli/Cargo.toml', 'examples/basic-rust-workspace/crates/cli/src/main.rs',
+  'examples/basic-rust-workspace/crates/core/Cargo.toml', 'examples/basic-rust-workspace/crates/core/src/lib.rs',
+  'examples/basic-rust-workspace/crates/core/src/tasks.rs', 'examples/basic-rust-workspace/crates/core/tests/worker_tests.rs',
+]
 export function verifyInventory(files) {
-  assert.equal(files.length, 52, 'Frozen npm inventory count changed')
+  assert.equal(files.length, 60, 'Frozen npm inventory count changed')
   for (const { path: name } of files) {
     assert(!name.includes('..') && !name.includes('\\'), 'Unsafe package entry')
     assert(/^(?:dist\/|docs\/|examples\/|package\.json$|README\.md$|CHANGELOG\.md$|LICENSE$)/.test(name), `Private package entry: ${name}`)
+    if (publicRustExample.includes(name)) continue
     assert(!/(?:^|\/)(?:node_modules|\.my-dev-kit[^/]*|reports|tests|manifest\.txt|AGENTS\.md|agents\.txt|CLAUDE\.md|claude\.txt)(?:\/|$)/.test(name), `Private package entry: ${name}`)
   }
   for (const name of ['dist/cli.js', 'dist/assets/tree-sitter-rust-orchard.wasm', 'dist/assets/tree-sitter-rust-orchard.LICENSE']) assert(files.some(f => f.path === name), `Missing ${name}`)
+  for (const name of publicRustExample) assert.equal(files.filter(f => f.path === name).length, 1, `Expected exactly one ${name}`)
 }
 
 export function verifyPinned(root, document = fs.readFileSync(path.join(root, 'SOURCE.md'), 'utf8'), load = fs.readFileSync) {

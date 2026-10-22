@@ -105,9 +105,12 @@
       "1.12.3",
       "1.12.4",
       "1.12.5",
-      "1.12.6"
+      "1.12.6",
+      "1.13.0"
     ],
-    "implementedUnreleasedVersions": [],
+    "implementedUnreleasedVersions": [
+      "1.14.0"
+    ],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",
@@ -132,7 +135,11 @@
         "workflow documentation"
       ],
       "1.14.0": [
-        "non-Android language and framework coverage"
+        "non-Android language and framework coverage",
+        "Rust language intelligence",
+        "R7",
+        "Prisma",
+        "Configured TypeScript/JavaScript import resolution"
       ],
       "2.0.0": [
         "Plugin architecture",
@@ -245,7 +252,9 @@
       "Classification artifact",
       "Frontend semantic artifact",
       "Data-model layer",
-      "Model-to-view lineage layer"
+      "Model-to-view lineage layer",
+      "v1.14.0 language and framework coverage (implemented; unreleased)",
+      "Qualified symbol identity"
     ]
   },
   "artifacts": {
@@ -316,7 +325,8 @@
       "Compose semantic retrieval",
       "Android test-evidence retrieval",
       "Compose and Android-test graph views",
-      "ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md"
+      "ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md",
+      "Python, JavaScript/TypeScript, framework and Rust retrieval"
     ]
   },
   "statusBoundaries": {
@@ -325,7 +335,8 @@
         "Latest release: v1.13.0",
         "@dailephd/my-dev-kit@1.13.0",
         "planned scopes",
-        "v1.12.6 bounded retrieval precision"
+        "v1.12.6 bounded retrieval precision",
+        "## Implemented but unreleased: v1.14.0"
       ],
       "docs/ROADMAP.md": [
         "## Version 1.12.5",
@@ -337,11 +348,17 @@
         "Area of Improvements 1 (15 entries)",
         "Area of Improvements 2 (1 entry)",
         "Area of Improvements 3 (2 entries)",
-        "Area of Improvements 4 (1 entry)"
+        "Area of Improvements 4 (1 entry)",
+        "**Status: implemented; unreleased; documentation and release gates pending.**",
+        "### Rust language intelligence — v1.14.0 subtrack (implemented; unreleased)",
+        "R7 — Optional conservative call evidence",
+        "**Status: deferred for separate future authorization; not implemented.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
         "Version 1.13.0 is the current release",
-        "### v1.12.6 bounded retrieval precision"
+        "### v1.12.6 bounded retrieval precision",
+        "Version 1.12.6 was the current release before v1.13.0",
+        "### Implemented, unreleased: v1.14.0 language and framework coverage"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -357,12 +374,14 @@
       ],
       "docs/DEVELOPMENT.md": [
         "# Development",
-        "## Prerequisites"
+        "## Prerequisites",
+        "## v1.14.0 language, framework and Rust validation (unreleased)"
       ],
       "docs/CI_CD.md": [
         "# CI/CD",
         "## Workflow file",
-        "Each platform runs on Node.js 24.x."
+        "Each platform runs on Node.js 24.x.",
+        "## v1.14.0 candidate validation (unreleased)"
       ],
       "docs/QUICKSTART.md": [
         "# Quickstart",
@@ -384,7 +403,8 @@
         "## Shipped: v1.10.3",
         "## Shipped: v1.10.4",
         "### Readiness history",
-        "INCONCLUSIVE_SUPPLEMENTAL"
+        "INCONCLUSIVE_SUPPLEMENTAL",
+        "## Implemented, unreleased: v1.14.0"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",
@@ -544,7 +564,8 @@
       "Graph-diff security notes",
       "Android, Kotlin, and Java security notes",
       "android-compose-semantic.json",
-      "android-test-semantic.json"
+      "android-test-semantic.json",
+      "Rust and v1.14.0 static-analysis security notes"
     ]
   }
 }

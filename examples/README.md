@@ -9,6 +9,7 @@ Run the commands from the repository root with Node.js and npm available. Python
 - `basic-data-model-ts` — a small TypeScript and TSX project for data-model extraction, exact entity and field inspection, conservative static `trace-view` behavior, and (v1.5.0) conservative static classification of its `User` interface.
 - `basic-react-tsx` — a small React/TSX project for frontend semantic indexing, exact string retrieval, React region retrieval, local component-tree retrieval, frontend graph views, and v1.3.0 frontend-reachability retrieval (route, browser-storage, UI markers).
 - `basic-android-kotlin` — a small Kotlin, Compose, Room, and Retrofit Android project for static Android retrieval (Compose screens, ViewModel, repository, manifest, navigation, resources, unit and instrumented tests). It is a static retrieval sample; Gradle, the Android SDK, and an emulator are not required and it has not been compiled or run.
+- `basic-rust-workspace` — a small two-crate Cargo workspace for static Rust retrieval (packages and targets, modules, a trait with a type and impl, and a test target). It is **unreleased v1.14.0 content**: the published v1.13.0 CLI does not index Rust, so use it from a source checkout (see its README). It is not compiled or run and needs no Rust toolchain.
 
 Normal users should run `npx @dailephd/my-dev-kit` inside their own project:
 

@@ -37,7 +37,15 @@
     "examples/basic-android-kotlin/settings.gradle.kts",
     "examples/basic-android-kotlin/build.gradle.kts",
     "examples/basic-android-kotlin/app/build.gradle.kts",
-    "examples/basic-android-kotlin/app/src"
+    "examples/basic-android-kotlin/app/src",
+    "examples/basic-rust-workspace/README.md",
+    "examples/basic-rust-workspace/Cargo.toml",
+    "examples/basic-rust-workspace/crates/core/Cargo.toml",
+    "examples/basic-rust-workspace/crates/core/src/lib.rs",
+    "examples/basic-rust-workspace/crates/core/src/tasks.rs",
+    "examples/basic-rust-workspace/crates/core/tests/worker_tests.rs",
+    "examples/basic-rust-workspace/crates/cli/Cargo.toml",
+    "examples/basic-rust-workspace/crates/cli/src/main.rs"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",

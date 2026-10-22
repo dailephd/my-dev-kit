@@ -31,6 +31,19 @@ describe('B15 installed-package qualification boundaries', () => {
     }
   })
 
+  it('accepts exactly the eight approved public Rust example files in the 60-file inventory and nothing else private', () => {
+    const base = ['dist/cli.js', 'dist/assets/tree-sitter-rust-orchard.wasm', 'dist/assets/tree-sitter-rust-orchard.LICENSE', ...Array.from({ length: 49 }, (_, n) => `docs/f${n}.md`)]
+    const inventory = (names: string[]) => names.map(path => ({ path }))
+    const example = harness.publicRustExample as string[]
+    expect(example).toHaveLength(8)
+    expect(() => harness.verifyInventory(inventory([...base, ...example]))).not.toThrow()
+    // A missing approved file, a duplicate, an unapproved sibling under the same tests/ directory and a Cargo.lock are all rejected.
+    expect(() => harness.verifyInventory(inventory([...base, ...example.slice(1), 'docs/extra.md']))).toThrow('Expected exactly one')
+    expect(() => harness.verifyInventory(inventory([...base.slice(0, -1), ...example, example[0]]))).toThrow('Expected exactly one')
+    expect(() => harness.verifyInventory(inventory([...base, ...example.slice(0, 7), 'examples/basic-rust-workspace/crates/core/tests/other.rs']))).toThrow('Private package entry')
+    expect(() => harness.verifyInventory(inventory([...base, ...example.slice(0, 7), 'tests/private.rs']))).toThrow('Private package entry')
+  })
+
   it('does not accept argument rejection as source-containment evidence', () => {
     expect(() => harness.assertSourceRejected({ status: 2, stderr: '--start is required when --end is provided.' }, 'escape')).toThrow('did not exercise containment')
     expect(() => harness.assertSourceRejected({ status: 0, stdout: 'excluded source', stderr: '' }, 'escape')).toThrow('returned excluded content')
@@ -68,8 +81,8 @@ describe('B15 installed-package qualification boundaries', () => {
   })
 
   it('rejects private package data and missing assets', () => {
-    expect(() => harness.verifyInventory(Array.from({ length: 52 }, () => ({ path: 'reports/private.md' })))).toThrow('Private package entry')
-    expect(() => harness.verifyInventory(Array.from({ length: 52 }, () => ({ path: 'README.md' })))).toThrow('Missing dist/cli.js')
+    expect(() => harness.verifyInventory(Array.from({ length: 60 }, () => ({ path: 'reports/private.md' })))).toThrow('Private package entry')
+    expect(() => harness.verifyInventory(Array.from({ length: 60 }, () => ({ path: 'README.md' })))).toThrow('Missing dist/cli.js')
   })
 
   it('rejects duplicate identities, dangling endpoints and deferred calls', () => {

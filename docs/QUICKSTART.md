@@ -289,7 +289,7 @@ node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main -
 node -e "const m=require('./examples/basic-android-kotlin/.my-dev-kit/manifest.json');console.log(m.sourceRoots.join(', '));console.log(m.analyzers.map(a=>a.id+': '+a.status).join('\n'))"
 ```
 
-The `android-gradle` and `classification` analyzers report `partial` for this example. That is expected static-analysis coverage, not a failed index; see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v1100).
+The `android-gradle` and `classification` analyzers report `partial` for this example. That is expected static-analysis coverage, not a failed index; see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects).
 
 Search for a known composable, look it up by the exact `graphNodeId` the search returns, then take a bounded slice and bounded source:
 
@@ -302,7 +302,18 @@ node dist/cli.js source --index examples/basic-android-kotlin/.my-dev-kit --comp
 
 The slice reports the `composable-references-viewmodel`, `compose-state-reads-viewmodel`, and `viewmodel-uses-repository` edges plus the `android-test-references-composable` edges for the instrumented test. To find tests, run `search --android-role android-unit-test` or `--android-role instrumented-test`. These are static results: no test is executed and no screen is rendered.
 
-Continue with the [detailed example walkthrough](../examples/basic-android-kotlin/README.md) for routes, resources, Room and Retrofit relationships, and test retrieval, and with the Android coding-agent workflow in [WORKFLOWS.md](WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130-candidate).
+Continue with the [detailed example walkthrough](../examples/basic-android-kotlin/README.md) for routes, resources, Room and Retrofit relationships, and test retrieval, and with the Android coding-agent workflow in [WORKFLOWS.md](WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130).
+
+### Rust workspace example (unreleased v1.14.0; source checkout only)
+
+The published `@dailephd/my-dev-kit@1.13.0` package does not index Rust, so `npx @dailephd/my-dev-kit` cannot run this example yet. It works from a source checkout of the v1.14.0 feature branch after `npm install` and `npm run build`, and needs no Rust toolchain:
+
+```sh
+node dist/cli.js index --root examples/basic-rust-workspace --src crates/core/src --src crates/core/tests --src crates/cli/src --out .my-dev-kit-rust-demo
+node dist/cli.js search --index examples/basic-rust-workspace/.my-dev-kit-rust-demo --query "impl Runner for Worker run" --intent ownership --limit 5
+```
+
+Copy the returned method ID into `lookup`, `source` and `slice`. The [example README](../examples/basic-rust-workspace/README.md) has the full walkthrough and its limits. The generated `.my-dev-kit-rust-demo` directory is ignored by Git.
 
 ## Clean up generated artifacts
 
@@ -338,11 +349,11 @@ The steps above cover the core `index` -> `search`/`lookup`/`slice`/`source` -> 
 
 - **Data-model and lineage** (`data-model --entity`/`--field`/`--trace-view`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-7-data-model-and-model-to-view-lineage-inspection)
 - **Classification** (`classification.json`, surfaced through `search`/`lookup`/`slice`/`source`) — see [COMMANDS.md](COMMANDS.md)
-- **Context capsules and retrieval audits** (`context --mode ... --out ... --audit-out ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-8-context-capsule-and-retrieval-audit-v160)
-- **Role-aware context** (`context --role architecture|implementation|test-implementation` or `context --request <path>`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-11-stage-role-context-refresh-v1101)
-- **Read-only comparison of two index snapshots** (`graph-diff --before ... --after ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-9-compare-two-index-snapshots-with-graph-diff-v180)
-- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects-v1100)
-- **Source continuation and local dependency expansion** (`--continue`, `--include-local-deps`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-6-source-continuation-and-local-dependency-expansion-v140)
+- **Context capsules and retrieval audits** (`context --mode ... --out ... --audit-out ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-8-context-capsule-and-retrieval-audit)
+- **Role-aware context** (`context --role architecture|implementation|test-implementation` or `context --request <path>`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-11-stage-role-context-refresh)
+- **Read-only comparison of two index snapshots** (`graph-diff --before ... --after ...`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-9-compare-two-index-snapshots-with-graph-diff)
+- **Android/Kotlin/Java indexing** (`.kt`/`.java` files under `--src`, `android-project.json`, `android-components.json`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-10-index-and-retrieve-androidkotlinjava-projects)
+- **Source continuation and local dependency expansion** (`--continue`, `--include-local-deps`) — see [WORKFLOWS.md](WORKFLOWS.md#workflow-6-source-continuation-and-local-dependency-expansion)
 
 ## Next steps
 

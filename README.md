@@ -612,9 +612,20 @@ npm run verify
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [docs/RELEASE.md](docs/RELEASE.md) for the maintainer release checklist.
 
+## Implemented but unreleased: v1.14.0
+
+The published package is v1.13.0 and does not contain the work below; it is available only from a source checkout of the v1.14.0 feature branch until a release is authorized. It adds, as static analysis that never executes target code:
+
+- Python: nested classes and methods, decorators, structured imports, grounded local calls, Django and SQLAlchemy model facts, and FastAPI routes.
+- JavaScript and TypeScript: JSDoc, CommonJS and `.cjs`, and `tsconfig.json`/`jsconfig.json` path aliases.
+- Frameworks: Express and NestJS routes, Next.js App Router, and Playwright and Vitest test associations.
+- Rust: Cargo packages and targets, modules, traits and impls, unique local imports, qualified same-name methods, and the usual search, lookup, slice, source, context and graph-diff retrieval, using a packaged parser with no Rust toolchain needed.
+
+Rust call inference and Prisma are not implemented. Try it with the [Rust workspace example](examples/basic-rust-workspace/README.md); details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md) and [docs/SECURITY.md](docs/SECURITY.md).
+
 ## Roadmap
 
-Version 1.13.0 is the latest release represented by this package. The planned scopes from v1.14.0 through v2.0.0 remain in place. Within v1.14.0, language/framework expansion now includes an explicitly planned, **unimplemented** Rust static-retrieval subtrack; existing Python, JavaScript, framework, and other-language commitments remain unchanged. No Rust parser or Rust-specific CLI capability ships in this version. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--planned-v1140-subtrack-not-implemented) and [changelog](CHANGELOG.md) for planned scope and release history.
+Version 1.13.0 is the latest release represented by this package. The planned scopes from v1.14.0 through v2.0.0 remain in place. Within v1.14.0, the Python, JavaScript, framework, configured-import and Rust structural work is implemented on the feature branch but **not released**; optional Rust direct-call inference and Prisma remain deferred, and the other planned commitments are unchanged. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack-implemented-unreleased) and [changelog](CHANGELOG.md) for planned scope and release history.
 
 ## Support the project
 

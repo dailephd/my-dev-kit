@@ -71,7 +71,7 @@ These reads are bounded by the indexed project root or the selected artifact dir
 
 The tool uses static parsing and artifact processing. It does not execute indexed TypeScript, JavaScript, JSX, TSX, or Python application code.
 
-Python indexing uses a Python subprocess with static `ast` parsing and does not import or execute user modules.
+Python indexing uses a Python subprocess with static `ast` parsing and does not import or execute user modules. The unreleased v1.14.0 Rust indexing is likewise static; see "Rust and v1.14.0 static-analysis security notes" below.
 
 The data-model and lineage layers also use static analysis only. They do not execute user code, connect to databases, or evaluate runtime framework behavior.
 
@@ -130,6 +130,16 @@ The `context` command reads only artifacts already present in the selected index
 
 `index --incremental --refresh-scope affected-neighborhood` treats the previous index's `cache-metadata.json`, `manifest.json`, and manifest-referenced `symbol-index.json`/`code-graph.json` as untrusted input, the same posture `graph-diff` already applies to artifacts it reads. `loadTrustedBaseline` (`src/indexing/trustedBaseline.ts`) resolves manifest-referenced artifact paths through the existing containment check (`isInsideRoot`) before reading them — a manifest-referenced path that escapes the index directory is rejected rather than read. It then hashes the exact on-disk manifest, symbol-index, and code-graph bytes and compares them against the SHA-256 identities cache schema `1.2.0` recorded when that baseline was written; a mismatch (a mixed, tampered, or independently edited artifact) is treated as untrustworthy. Any missing, unreadable, schema-incompatible, or hash-mismatched evidence fails closed to a full rebuild rather than being silently trusted or partially used as a graph seed source. This adds a stronger trust check ahead of an existing internal code path; it does not add network access, subprocess execution, or a new artifact write surface.
 
+### Rust and v1.14.0 static-analysis security notes (unreleased)
+
+These notes apply to the unreleased v1.14.0 work; published v1.13.0 does not index Rust.
+
+- **No target execution.** Rust sources and `Cargo.toml` files are parsed as text: the grammar is a packaged WebAssembly file whose SHA-256 is checked before use, and TOML is parsed in process. `cargo`, `rustc`, `rust-analyzer`, `build.rs`, procedural or ordinary macros, Rust binaries and tests, and package managers are never run, and nothing is downloaded. Python is parsed by `ast` in an isolated subprocess without importing modules; JavaScript, TypeScript, configuration files and framework code (FastAPI, Django, SQLAlchemy, Express, NestJS, Next.js) are likewise only read.
+- **Selected inventory and real paths.** Only files under the roots chosen with `--src` are read. A `mod` file, a literal `#[path]` target, a Cargo manifest, a configured import alias target or a symlink is accepted only if it is in the selected inventory and its real path stays inside the project. Otherwise it is reported as unresolved and its bytes are never read, indexed, searched or returned by `source`; this covers `..` traversal, absolute paths, symlink and junction escapes and unselected workspaces. On POSIX a backslash is an ordinary file-name character, so a name containing one is neither treated as a separator nor allowed to escape.
+- **Resource bounds.** A Rust source file larger than 65,536 bytes is refused, a parse is limited to one second, and the parser refuses to continue if the process exceeds 512 MiB resident memory. Cargo manifests are limited to 1 MiB and 512 manifests per index; module, diagnostic and edge counts are capped, with truncation reported rather than silent.
+- **Nothing is fabricated.** Conditional (`cfg`), macro-generated, unsupported, malformed and missing Rust source is reported as such; an unresolved module gets no file edge and no relationship is inferred from a similar file name.
+- **Static evidence is not runtime truth.** Framework routes, decorators, guards, test associations and model facts are source syntax. They do not show that a route is reachable, a user is authenticated, dependency injection succeeds, a test ran or passed, or a database exists.
+
 ### Android, Kotlin, and Java security notes (v1.9.0)
 
 Android project detection (`android-project.json`) uses file existence and conservative text-substring evidence only. Per the detector's own design boundary: it "executes Gradle" — never; "resolves dependencies" — never; "parses Kotlin/Java symbols" — never. It never invokes the Gradle wrapper, a Gradle daemon, or any build tooling, and it never executes arbitrary Groovy/Kotlin-DSL code found in `build.gradle(.kts)`/`settings.gradle(.kts)` files — those files are read as plain text with regex-based substring matching, not parsed or evaluated as code.
@@ -175,6 +185,8 @@ Security tests in `tests/security/` cover:
 - DOT escaping
 - output path behavior
 - graph traversal limits
+- selected-inventory and real-path source containment, including symlink and junction escapes and POSIX backslash file names (v1.14.0, unreleased)
+- Rust parser size, time and memory bounds and the no-execution, no-network guards (v1.14.0, unreleased)
 
 The data-model and lineage suites also cover:
 

@@ -27,9 +27,13 @@ Version 1.13.0 is the current release. It retains v1.12.6 ownership-oriented sea
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 
+### Implemented, unreleased: v1.14.0 language and framework coverage
+
+The published package is v1.13.0. The v1.14.0 feature branch additionally implements richer Python extraction (structured imports, nested owners, decorators, grounded local calls), Django, SQLAlchemy and FastAPI static evidence, JSDoc and CommonJS handling, configured `tsconfig.json`/`jsconfig.json` path aliases, Express and NestJS routes, Next.js App Router and Playwright/Vitest static associations, and Rust structural indexing and retrieval (Cargo packages and targets, modules, traits, impls, unique local imports, qualified same-name methods, bounded source and context). It is static analysis only: nothing is executed, and Rust call inference and Prisma are deferred. None of it is available from the published npm package yet; see [ROADMAP.md](ROADMAP.md#version-1140), [ARCHITECTURE.md](ARCHITECTURE.md) and [the public Rust example](../examples/basic-rust-workspace/README.md).
+
 ### v1.12.6 bounded retrieval precision
 
-Version 1.12.6 is the current release. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
+Version 1.12.6 was the current release before v1.13.0. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
 
 The current repository and package metadata contain these shipped implementation capabilities:
 
