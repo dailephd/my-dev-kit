@@ -38,15 +38,16 @@ jobs:
       - name: Verify
         run: npm run verify
 
-      - name: Rust corpus isolated process comparison
-        env:
-          B15_RSS_CONTEXT: isolated-corpus
-        run: node node_modules/vitest/vitest.mjs run tests/retrievalRegression/rustCorpusV114.spec.ts --maxWorkers=2 --reporter=dot
-
       - name: Test
         env:
           B15_RSS_CONTEXT: full-suite
         run: npm run test -- --maxWorkers=2 --reporter=dot
+
+      - name: Rust corpus isolated process comparison
+        if: always()
+        env:
+          B15_RSS_CONTEXT: isolated-corpus
+        run: node node_modules/vitest/vitest.mjs run tests/retrievalRegression/rustCorpusV114.spec.ts --maxWorkers=2 --reporter=dot
 
       - name: Security tests
         run: npm run test:security
