@@ -5,9 +5,10 @@ import { execFileSync } from 'node:child_process'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { readIndexManifest } from '../../src/indexing/readIndexManifest.js'
 import { searchIndex } from '../../src/search/searchIndex.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 it('retains relevance and ownership candidates and verifies public CLI lookup/slice/source/context/diff', async () => {
-  const task = resolve('.my-dev-kit-workflow/tmp/v1.14.0-configured-imports-20261020/tests')
+  const task = allocateV114OutputDir('configured-import-ownership-v114')
   mkdirSync(task, { recursive: true })
   const out = mkdtempSync(join(task, 'retrieval-'))
   const root = mkdtempSync(join(task, 'retrieval-project-'))

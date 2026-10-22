@@ -15,9 +15,10 @@ import { buildCodeGraphDiff } from '../../src/graph-diff/buildCodeGraphDiff.js'
 import { buildSymbolIndexDiff } from '../../src/graph-diff/buildSymbolIndexDiff.js'
 import { spawnSync } from 'node:child_process'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const adapter = new PythonAdapter()
-const taskRoot = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b04-20261019/tests')
+const taskRoot = allocateV114OutputDir('python-v114')
 function fixture(files: Record<string, string>) {
   mkdirSync(taskRoot, { recursive: true })
   const root = mkdtempSync(join(taskRoot, 'python-'))

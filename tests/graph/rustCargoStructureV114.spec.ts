@@ -12,8 +12,9 @@ import { resolveFileNodeTarget } from '../../src/lookup/resolveSourceTarget.js'
 import { adaptCodeGraph } from '../../src/graph/adaptGraphArtifact.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b09-20261020/tests')
+const task = allocateV114OutputDir('rust-cargo-structure-v114')
 const fixtures = path.resolve('tests/fixtures/v114-language/rust')
 const manifest = '[package]\nname="sample"\nversion="0.1.0"\nedition="2024"\n'
 function project(files: Record<string,string>): string {

@@ -7,8 +7,9 @@ import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { getSourceSlice } from '../../src/lookup/getSourceSlice.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests')
+const task = allocateV114OutputDir('source-containment-v114')
 const cli = process.env.B15_SOURCE_CLI ?? path.resolve('dist/cli.js')
 const sentinel = 'ESCAPED_SOURCE_SENTINEL'
 const harness = await import(pathToFileURL(path.resolve('scripts/qualification/v114RustMatrix.mjs')).href)

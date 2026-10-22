@@ -10,8 +10,9 @@ import { declarationNodeId, qualifiedDeclarationId } from '../../src/symbol-inde
 import { buildReachabilityLookupResult } from '../../src/frontend-reachability/buildReachabilityLookupResult.js'
 import { buildReachabilitySliceResult } from '../../src/frontend-reachability/buildReachabilitySliceResult.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const base = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b07-20261020/tests')
+const base = allocateV114OutputDir('test-association-v114')
 function fixture(files: Record<string, string>) {
   fs.mkdirSync(base, { recursive: true })
   const root = fs.mkdtempSync(path.join(base, 'association-'))

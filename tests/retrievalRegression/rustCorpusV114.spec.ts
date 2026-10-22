@@ -15,6 +15,7 @@ import { resolveFileNodeTarget, resolveSymbolTarget } from '../../src/lookup/res
 import { getSourceSlice } from '../../src/lookup/getSourceSlice.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { V114_OUTPUT_ROOT_ENV, allocateV114OutputDir, resolveV114OutputRoot } from '../helpers/v114OutputRoot.js'
 
 const beforeParserImport = vi.hoisted(() => ({ phase: 'before-parser-import', pid: process.pid,
   worker: process.env.VITEST_WORKER_ID, ...process.memoryUsage(), maxRSSKiB: process.resourceUsage().maxRSS }))
@@ -23,7 +24,7 @@ let telemetryFile = ''
 afterAll(() => restoreTelemetry())
 // Process-wide diagnostics retain actual guard values; they never alter the 512 MiB policy.
 beforeAll(() => {
-  const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests')
+  const task = allocateV114OutputDir('rust-corpus-v114')
   fs.mkdirSync(task, { recursive: true })
   let out = ''
   for (let n = 1; ; n++) {
@@ -131,7 +132,7 @@ function registerCorpusCase(title: string, body: CorpusBody): void {
     const result = childProcess.spawnSync(process.execPath, [path.resolve('node_modules/vitest/vitest.mjs'), 'run',
       'tests/retrievalRegression/rustCorpusV114.spec.ts', '--testNamePattern', `^${exactName}$`, '--maxWorkers=1', '--cache=false', '--reporter=dot'], {
       encoding: 'utf8', windowsHide: true, timeout: 25_000, maxBuffer: 4 * 1024 * 1024,
-      env: { ...process.env, B15_RUST_CORPUS_ISOLATED: '1', B15_RSS_CONTEXT: `${process.env.B15_RSS_CONTEXT ?? 'focused'}:case:${title}` },
+      env: { ...process.env, [V114_OUTPUT_ROOT_ENV]: resolveV114OutputRoot(), B15_RUST_CORPUS_ISOLATED: '1', B15_RSS_CONTEXT: `${process.env.B15_RSS_CONTEXT ?? 'focused'}:case:${title}` },
     })
     expect(result.error, result.stdout + result.stderr).toBeUndefined()
     expect(result.status, result.stdout + result.stderr).toBe(0)

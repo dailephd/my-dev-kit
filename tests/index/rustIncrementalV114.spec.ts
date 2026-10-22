@@ -8,8 +8,9 @@ import { computeBaselineArtifactIdentity, computeConfigFingerprint } from '../..
 import { runGraphDiff } from '../../src/graph-diff/runGraphDiff.js'
 import * as parser from '../../src/languages/rust/parser.js'
 import { RustAdapter } from '../../src/languages/rust/adapter.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const base = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b12-20261021/tests')
+const base = allocateV114OutputDir('rust-incremental-v114')
 const fixture = path.resolve('tests/fixtures/v114-language/rust/F11-incremental')
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex')
 const json = (dir: string, file: string) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'))

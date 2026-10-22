@@ -16,6 +16,7 @@ import { buildPartialSymbolIndex } from '../../src/indexing/partialRebuild.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import type { FileSummary, SymbolIndex } from '../../src/symbol-index/types.js'
 import type { ContextFocus } from '../../src/context/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const adapter = new PythonAdapter()
 const routeSource = `from fastapi import APIRouter as Router
@@ -40,7 +41,7 @@ function graph(sources: Record<string, string>) {
   return buildFrameworkRoutes(buildCodeGraph({ symbolIndex: idx }), idx.files)
 }
 function fixture(sources: Record<string, string>) {
-  const base = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b04-20261019/tests')
+  const base = allocateV114OutputDir('framework-routes-v114')
   mkdirSync(base, { recursive: true })
   const root = mkdtempSync(join(base, 'framework-'))
   for (const [file, text] of Object.entries(sources)) { mkdirSync(dirname(join(root, file)), { recursive: true }); writeFileSync(join(root, file), text) }

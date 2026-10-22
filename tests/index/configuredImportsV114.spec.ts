@@ -4,8 +4,9 @@ import { resolve, join, dirname } from 'node:path'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = resolve('.my-dev-kit-workflow/tmp/v1.14.0-configured-imports-20261020/tests')
+const task = allocateV114OutputDir('configured-imports-v114')
 function fixture(files: Record<string, string>) {
   fs.mkdirSync(task, { recursive: true })
   const root = fs.mkdtempSync(join(task, 'config-'))

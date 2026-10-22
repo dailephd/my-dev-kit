@@ -16,8 +16,9 @@ import { selectGraphNeighborhood } from '../../src/context/graphSelection.js'
 import { buildEvidenceGroups } from '../../src/context/evidenceGroups.js'
 import { computeConfigFingerprint } from '../../src/indexing/cacheMetadata.js'
 import type { ContextFocus } from '../../src/context/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const base = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b06-20261020/tests')
+const base = allocateV114OutputDir('js-framework-routes-v114')
 function fixture(sources: Record<string, string>) {
   mkdirSync(base, { recursive: true })
   const root = mkdtempSync(join(base, 'js-framework-'))

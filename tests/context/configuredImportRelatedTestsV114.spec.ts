@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { discoverTestInfrastructure } from '../../src/context/testInfrastructureDiscovery.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 it('uses configured imports for related tests, preserving exact named ownership and unrelated-name negatives', () => {
-  const task = resolve('.my-dev-kit-workflow/tmp/v1.14.0-configured-imports-20261020/tests')
+  const task = allocateV114OutputDir('configured-import-related-tests-v114')
   mkdirSync(task, { recursive: true })
   const root = mkdtempSync(join(task, 'related-'))
   mkdirSync(join(root, 'src'))

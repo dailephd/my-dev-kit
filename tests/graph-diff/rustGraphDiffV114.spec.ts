@@ -8,8 +8,9 @@ import { buildCodeGraphDiff } from '../../src/graph-diff/buildCodeGraphDiff.js'
 import { buildSymbolIndexDiff } from '../../src/graph-diff/buildSymbolIndexDiff.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const base = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b12-20261021/tests')
+const base = allocateV114OutputDir('rust-graph-diff-v114')
 const read = (dir: string, file: string) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'))
 const put = (root: string, file: string, text: string) => fs.writeFileSync(path.join(root, file), text)
 const fixture = path.resolve('tests/fixtures/v114-language/rust/F11-incremental')

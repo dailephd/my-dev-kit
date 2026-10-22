@@ -16,6 +16,7 @@ import { selectSourceSlices } from '../../src/context/sourceSelection.js'
 import { discoverTestInfrastructure } from '../../src/context/testInfrastructureDiscovery.js'
 import { selectGraphNeighborhood } from '../../src/context/graphSelection.js'
 import type { ResolvedIndexManifest } from '../../src/indexing/readIndexManifest.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const root = path.resolve('tests/fixtures/v114-language/rust/F13-retrieval')
 const inherent = 'symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%401%3A0#run#0'
@@ -34,7 +35,7 @@ function build(projectRoot: string, sourceRoots = ['src', 'tests']) {
 }
 
 function synthetic(source: string, extra: Record<string, string> = {}) {
-  const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b11-20261021/tests')
+  const temp = allocateV114OutputDir('rust-retrieval-v114')
   fs.mkdirSync(temp, { recursive: true })
   const project = fs.mkdtempSync(path.join(temp, 'synthetic-'))
   for (const [file, text] of Object.entries({ 'Cargo.toml': '[package]\nname="synthetic"\nversion="0.1.0"\nedition="2021"\n', 'src/lib.rs': source, ...extra })) {
@@ -253,7 +254,7 @@ describe('B11 current CLI integration', () => {
   const cli = (...args: string[]) => JSON.parse(execFileSync(process.execPath, [path.resolve('node_modules/tsx/dist/cli.mjs'), path.resolve('src/cli.ts'), ...args], { encoding: 'utf8', windowsHide: true }))
   beforeAll(async () => {
     await prepareRustParser()
-    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b11-20261021/tests')
+    const temp = allocateV114OutputDir('rust-retrieval-v114')
     fs.mkdirSync(temp, { recursive: true })
     output = fs.mkdtempSync(path.join(temp, 'retrieval-'))
     cli('index', '--root', root, '--src', 'src', '--src', 'tests', '--out', path.join(output, 'index'), '--json')

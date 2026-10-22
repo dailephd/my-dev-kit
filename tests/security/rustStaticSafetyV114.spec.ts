@@ -6,8 +6,9 @@ import { pathToFileURL } from 'node:url'
 import { RustAdapter } from '../../src/languages/rust/adapter.js'
 import { prepareRustParser } from '../../src/languages/rust/parser.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b08-20261020/tests')
+const task = allocateV114OutputDir('rust-static-safety-v114')
 const adapter = new RustAdapter()
 const temporary = (name: string) => fs.mkdtempSync(path.join(task, name + '-'))
 const moduleUrl = (file: string) => pathToFileURL(path.resolve(file)).href

@@ -5,6 +5,7 @@ import { loadRetrievalRegressionConfig } from '../../src/retrievalRegression/con
 import { executeTask } from '../../src/retrievalRegression/taskExecutor.js'
 import { evaluateTaskAssertions, loadAssertionEvidence } from '../../src/retrievalRegression/assertions.js'
 import { computeTaskVerdict } from '../../src/retrievalRegression/verdict.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const configPath = path.resolve('benchmarks/retrieval/v1.14/rust.json')
 const config = loadRetrievalRegressionConfig(configPath)
@@ -14,7 +15,7 @@ const expectedIds = [
   'f13-ambiguous-name', 'f13-unresolved-import', 'f10-mixed-language',
   'f14-async-service', 'f14-cli', 'f14-multi-crate', 'f14-partial-selection',
 ].map(id => `rust-v114-${id}`)
-const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+const temp = allocateV114OutputDir('rust-suite-v114')
 
 describe('B14 existing-runner Rust suite', () => {
   it('freezes all fourteen tasks and existing execution/expectation contracts', () => {

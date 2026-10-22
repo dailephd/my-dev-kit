@@ -1,16 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCommandArgs, executeTask } from '../../src/retrievalRegression/taskExecutor.js'
 import type { RetrievalRegressionSuiteConfig, RetrievalRegressionTask } from '../../src/retrievalRegression/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const tempDirs: string[] = []
 
 describe('B14 actual role-aware context dispatch', () => {
   const method = 'symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0'
   it.each(['architecture', 'implementation', 'test-implementation'] as const)('writes and dispatches a bounded task-owned %s request', async role => {
-    const base = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    const base = allocateV114OutputDir('task-executor-v114')
     mkdirSync(base, { recursive: true })
     let ordinal = 1
     while (existsSync(join(base, `035-role-${ordinal}`))) ordinal++
@@ -46,7 +46,7 @@ afterEach(() => {
 })
 
 function tmpRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-task-executor-'))
+  const dir = allocateV114OutputDir('task-executor-fixture-v114')
   tempDirs.push(dir)
   return dir
 }

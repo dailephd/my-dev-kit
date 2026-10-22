@@ -13,9 +13,10 @@ import { searchIndex } from '../../src/search/searchIndex.js'
 import { buildSymbolIndexDiff } from '../../src/graph-diff/buildSymbolIndexDiff.js'
 import { readIndexManifest } from '../../src/indexing/readIndexManifest.js'
 import * as cacheMetadata from '../../src/indexing/cacheMetadata.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const adapter = new TypeScriptAdapter()
-const taskRoot = resolve('.my-dev-kit-workflow/tmp/v1.14.0-b05-20261019/tests')
+const taskRoot = allocateV114OutputDir('ts-js-v114')
 function fixture(files: Record<string, string>) {
   mkdirSync(taskRoot, { recursive: true })
   const root = mkdtempSync(join(taskRoot, 'jsts-'))

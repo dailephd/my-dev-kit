@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { discoverCargoStructure, safeRustPath } from '../../src/languages/rust/cargo.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b09-20261020/tests')
+const task = allocateV114OutputDir('rust-cargo-v114')
 const fixtures = path.resolve('tests/fixtures/v114-language/rust')
 function project(files: Record<string,string>): string {
   fs.mkdirSync(task,{recursive:true})

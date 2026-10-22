@@ -5,8 +5,9 @@ import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { runFrontendAnalyzer } from '../../src/frontend/frontendAnalyzer.js'
 import { runFrontendReachabilityAnalyzer } from '../../src/frontend-reachability/runFrontendReachabilityAnalyzer.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const base = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b07-20261020/tests')
+const base = allocateV114OutputDir('next-app-router-v114')
 function fixture(files: Record<string, string>) {
   fs.mkdirSync(base, { recursive: true })
   const root = fs.mkdtempSync(path.join(base, 'next-'))

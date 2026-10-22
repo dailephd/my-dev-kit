@@ -11,9 +11,10 @@ import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { resolveSymbolTarget } from '../../src/lookup/resolveSourceTarget.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
 import { createHash } from 'node:crypto'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const root = path.resolve('tests/fixtures/v114-language/rust')
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b08-20261020/tests')
+const task = allocateV114OutputDir('rust-syntax-v114')
 const adapter = new RustAdapter()
 const fixture = (family: string, file = 'lib.rs') => fs.readFileSync(path.join(root, family, 'src', file), 'utf8')
 const readIndex = (out: string): SymbolIndex => JSON.parse(fs.readFileSync(path.join(out, 'symbol-index.json'), 'utf8'))

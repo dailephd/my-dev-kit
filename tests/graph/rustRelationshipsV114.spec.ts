@@ -16,8 +16,9 @@ import { adaptCodeGraph } from '../../src/graph/adaptGraphArtifact.js'
 import { computeConfigFingerprint } from '../../src/indexing/cacheMetadata.js'
 import { RUST_PARSER_REVISION } from '../../src/languages/rust/parser.js'
 import { createHash } from 'node:crypto'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
-const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b10-20261021/tests')
+const task = allocateV114OutputDir('rust-relationships-v114')
 const fixture = path.resolve('tests/fixtures/v114-language/rust/F03-import-trees')
 const cargo = '[package]\nname="sample"\nversion="0.1.0"\nedition="2021"\n'
 function project(files: Record<string,string>) {
@@ -54,7 +55,7 @@ describe('B14 Rust documentation evidence', () => {
     expect(rustEvidenceStatus({ status: 'parser-error', attributes: ['/// docs', '#[cfg(test)]'] })).toBe('MALFORMED')
   })
   it.each(['//! crate docs\n', '/*! crate docs */\n', '#![doc = "crate docs"]\n'])('keeps real inner documentation neutral to nominal ownership: %s', doc => {
-    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    const temp = allocateV114OutputDir('rust-relationships-v114')
     fs.mkdirSync(temp, { recursive: true })
     let ordinal = 1
     while (fs.existsSync(path.join(temp, `044-inner-${ordinal}`))) ordinal++
@@ -67,7 +68,7 @@ describe('B14 Rust documentation evidence', () => {
     expect(graph.edges.filter(e => e.kind === 'rust-impl-defines-symbol')).toHaveLength(1)
   })
   it.each(['#[cfg(feature="optional")]', '#[custom]', '#[doc =]'])('does not promote a documented conditional, unknown or malformed nominal type: %s', attribute => {
-    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    const temp = allocateV114OutputDir('rust-relationships-v114')
     fs.mkdirSync(temp, { recursive: true })
     let ordinal = 1
     while (fs.existsSync(path.join(temp, `044-nominal-${ordinal}`))) ordinal++
@@ -80,7 +81,7 @@ describe('B14 Rust documentation evidence', () => {
     expect(graph.edges.some(e => e.kind === 'rust-module-defines-symbol' && e.target === 'symbol:src/lib.rs#Worker')).toBe(false)
   })
   it.each(['/// docs\n', '/// docs\n///\n/// More cfg and #[custom] examples.\n', '/** docs */\n/** more docs */\n', '/// docs\n/** more docs */\n', '/** docs */\n/// more docs\n', '/** docs with /* nested */ text */\n', '#[doc = "docs"]\n'])('preserves actual documented type/impl/member relationships: %s', doc => {
-    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    const temp = allocateV114OutputDir('rust-relationships-v114')
     fs.mkdirSync(temp, { recursive: true })
     const root = fs.mkdtempSync(path.join(temp, '031-doc-'))
     const source = `${doc}pub struct Worker;\n${doc}impl Worker {\n${doc}pub fn run(&self) {}\n}\n${doc}pub struct Other;\nimpl Other {\n${doc}pub fn run(&self) {}\n}\n`
@@ -96,7 +97,7 @@ describe('B14 Rust documentation evidence', () => {
     expect(graph.edges.filter(e => e.kind === 'calls')).toEqual([])
   })
   it.each(['#[cfg(feature="optional")]', '#[custom]'])('documentation cannot neutralize a restrictive method attribute: %s', attribute => {
-    const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+    const temp = allocateV114OutputDir('rust-relationships-v114')
     fs.mkdirSync(temp, { recursive: true })
     const root = fs.mkdtempSync(path.join(temp, '031-negative-'))
     fs.mkdirSync(path.join(root, 'src'))
