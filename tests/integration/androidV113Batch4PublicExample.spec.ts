@@ -13,6 +13,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runCli } from '../lookup/testCli.js'
 
 const EXAMPLE_REL = 'examples/basic-android-kotlin'
+// The one public Rust workspace example test file that the package intentionally ships (approved for v1.14.0).
+// Only this exact path is exempt from the private-path policy; every other entry is checked unchanged.
+const approvedRustExampleTest = 'examples/basic-rust-workspace/crates/core/tests/worker_tests.rs'
+const forbiddenPackagePath = /tests|benchmarks|fixtures|\.my-dev-kit|reports/
+const forbiddenPackageEntries = (files: string[]) => files.filter((f) => f !== approvedRustExampleTest && forbiddenPackagePath.test(f))
 const EXAMPLE_ROOT = join(process.cwd(), 'examples', 'basic-android-kotlin')
 const KP = 'app/src/main/kotlin/com/example/kitdemo/'
 
@@ -321,8 +326,29 @@ describe('v1.13.0 Batch 4: README commands and package allowlist', () => {
     }
     expect(files).not.toContain(EXAMPLE_REL)
     expect(files).not.toContain(`${EXAMPLE_REL}/`)
-    expect(files.some((f) => /tests|benchmarks|fixtures|\.my-dev-kit|reports/.test(f))).toBe(false)
+    expect(files.filter((f) => f === approvedRustExampleTest)).toHaveLength(1)
+    expect(forbiddenPackageEntries(files)).toEqual([])
     expect(files).toContain('examples/basic-react-tsx/src')
+  })
+
+  it('still forbids every other private-looking package entry', () => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+    const files: string[] = pkg.files
+    for (const unapproved of [
+      'examples/basic-rust-workspace/crates/core/tests/unapproved.rs',
+      'tests/private.spec.ts',
+      'benchmarks/private.json',
+      'tests/fixtures/v114-language/rust',
+      'examples/basic-rust-workspace/.my-dev-kit-rust-demo',
+      'reports/private.md',
+    ]) {
+      expect(forbiddenPackageEntries([...files, unapproved]), unapproved).toEqual([unapproved])
+    }
+    // The exemption is exact: the approved file itself is allowed, near-miss paths are not.
+    expect(forbiddenPackageEntries([...files, approvedRustExampleTest])).toEqual([])
+    for (const nearMiss of [approvedRustExampleTest + '.bak', 'x/' + approvedRustExampleTest, approvedRustExampleTest.replace('worker_tests', 'other_tests')]) {
+      expect(forbiddenPackageEntries([...files, nearMiss]), nearMiss).toEqual([nearMiss])
+    }
   })
 
   it('registers the example in examples/README.md', () => {
