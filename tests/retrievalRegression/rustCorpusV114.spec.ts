@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it as corpusIt, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import childProcess from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 import { threadId } from 'node:worker_threads'
 import { Parser, Tree } from 'web-tree-sitter'
 import { RustAdapter } from '../../src/languages/rust/adapter.js'
@@ -18,16 +19,22 @@ import type { SymbolIndex } from '../../src/symbol-index/types.js'
 const beforeParserImport = vi.hoisted(() => ({ phase: 'before-parser-import', pid: process.pid,
   worker: process.env.VITEST_WORKER_ID, ...process.memoryUsage(), maxRSSKiB: process.resourceUsage().maxRSS }))
 let restoreTelemetry = () => {}
+let telemetryFile = ''
 afterAll(() => restoreTelemetry())
 // Process-wide diagnostics retain actual guard values; they never alter the 512 MiB policy.
 beforeAll(() => {
   const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests')
   fs.mkdirSync(task, { recursive: true })
-  let n = 1
-  while (fs.existsSync(path.join(task, `run-${String(n).padStart(3, '0')}`))) n++
-  const out = path.join(task, `run-${String(n).padStart(3, '0')}`)
-  fs.mkdirSync(out)
+  let out = ''
+  for (let n = 1; ; n++) {
+    out = path.join(task, `run-${String(n).padStart(3, '0')}`)
+    try { fs.mkdirSync(out); break } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+  temp = path.join(out, 'corpus')
   const file = path.join(out, 'rust-rss.jsonl')
+  telemetryFile = file
   fs.writeFileSync(file, JSON.stringify(beforeParserImport) + '\n', { flag: 'wx' })
   const memory = process.memoryUsage.bind(process)
   let order = 0, sourceFile = '', sourceBytes = 0
@@ -63,7 +70,7 @@ beforeAll(() => {
 })
 
 const corpus = path.resolve('tests/fixtures/v114-language/rust/F14-licensed-corpus')
-const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
+let temp = ''
 function nextOutput(prefix: string): string {
   fs.mkdirSync(temp, { recursive: true })
   let n = 1
@@ -112,8 +119,34 @@ type Snapshot = { graph: CodeGraph; index: SymbolIndex; out: string }
 const snapshots = new Map<string, Snapshot>()
 const read = <T,>(file: string): T => JSON.parse(fs.readFileSync(file, 'utf8')) as T
 
+const isolatedCase = process.env.B15_RUST_CORPUS_ISOLATED === '1'
+type CorpusBody = () => unknown
+// Each original oracle runs unchanged in a fresh test-owned Node/Vitest process.
+// This also preserves its in-process cache and nonexecution spies. Full-suite workers stay unchanged.
+function registerCorpusCase(title: string, body: CorpusBody): void {
+  corpusIt(title, async () => {
+    const completion = 'B15_CORPUS_CASE_PASS:' + JSON.stringify(title)
+    if (isolatedCase) { await body(); console.info(completion); return }
+    const exactName = `B14 pinned licensed corpus and structural evidence ${title}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const result = childProcess.spawnSync(process.execPath, [path.resolve('node_modules/vitest/vitest.mjs'), 'run',
+      'tests/retrievalRegression/rustCorpusV114.spec.ts', '--testNamePattern', `^${exactName}$`, '--maxWorkers=1', '--cache=false', '--reporter=dot'], {
+      encoding: 'utf8', windowsHide: true, timeout: 25_000, maxBuffer: 4 * 1024 * 1024,
+      env: { ...process.env, B15_RUST_CORPUS_ISOLATED: '1', B15_RSS_CONTEXT: `${process.env.B15_RSS_CONTEXT ?? 'focused'}:case:${title}` },
+    })
+    expect(result.error, result.stdout + result.stderr).toBeUndefined()
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    expect(result.stdout, 'The exact child oracle must execute, not merely match zero tests').toContain(completion)
+  })
+}
+const it = Object.assign(registerCorpusCase, {
+  each: <T extends Record<string, unknown>>(values: readonly T[]) => (pattern: string, body: (value: T) => unknown) => {
+    for (const value of values) registerCorpusCase(pattern.replace(/\$(\w+)/g, (_, key: string) => String(value[key])), () => body(value))
+  },
+})
+
 describe('B14 pinned licensed corpus and structural evidence', () => {
   beforeAll(async () => {
+    if (!isolatedCase) return
     fs.mkdirSync(temp, { recursive: true })
     for (const p of projects) {
       const out = nextOutput('corpus-')
@@ -366,5 +399,62 @@ describe('B14 pinned licensed corpus and structural evidence', () => {
     const result = read<{ selectedOwners: { id: string }[]; roleAdequacy: { status: string } }>(capsule)
     expect(result.selectedOwners.some(o => o.id === method.id)).toBe(true)
     expect(result.roleAdequacy.status).toBe('context sufficient for implementation')
+  })
+
+  it('enforces the real 512 MiB process boundary and releases parser resources on every exit', () => {
+    const moduleUrl = (file: string) => pathToFileURL(path.resolve(file)).href
+    const out = path.join(path.dirname(telemetryFile), 'rejected-index')
+    const script = `
+      import assert from 'node:assert/strict'; import fs from 'node:fs';
+      import {createHash} from 'node:crypto';
+      const samples=[]; const sample=phase=>samples.push({phase,...process.memoryUsage(),maxRSSKiB:process.resourceUsage().maxRSS});
+      sample('before-parser-import');
+      const {Parser,Tree}=await import('web-tree-sitter');
+      const {withRustTree,prepareRustParser}=await import(${JSON.stringify(moduleUrl('src/languages/rust/parser.ts'))});
+      await prepareRustParser(); sample('after-grammar-initialization');
+      let parsers=0,trees=0,disposedParsers=0,disposedTrees=0;
+      const set=Parser.prototype.setLanguage,parse=Parser.prototype.parse,del=Parser.prototype.delete,tdel=Tree.prototype.delete;
+      Parser.prototype.setLanguage=function(...a){parsers++;return set.apply(this,a)};
+      Parser.prototype.parse=function(...a){const t=parse.apply(this,a);if(t)trees++;return t};
+      Parser.prototype.delete=function(...a){try{return del.apply(this,a)}finally{parsers--;disposedParsers++}};
+      Tree.prototype.delete=function(...a){try{return tdel.apply(this,a)}finally{trees--;disposedTrees++}};
+      const clean=()=>assert.deepEqual([parsers,trees],[0,0]);
+      for(let n=0;n<1000;n++){
+        assert.equal(withRustTree('repeat.rs','pub fn repeat() {}',t=>t.rootNode.hasError),false);clean();
+        if(n%100===0)sample('repeat-'+n);
+      }
+      assert.throws(()=>withRustTree('invalid.rs','\\uD800',()=>{}),/Unicode encoding/);clean();
+      assert.throws(()=>withRustTree('consumer.rs','fn safe() {}',()=>{throw Error('controlled consumer error')}),/controlled consumer error/);clean();
+      const wrappedParse=Parser.prototype.parse;
+      try {
+        Parser.prototype.parse=function(){throw Error('controlled parser error')};
+        assert.throws(()=>withRustTree('throw.rs','fn safe() {}',()=>{}),/controlled parser error/);clean();
+        Parser.prototype.parse=function(){return null};
+        assert.throws(()=>withRustTree('timeout.rs','fn safe() {}',()=>{}),/one-second budget/);clean();
+      } finally {Parser.prototype.parse=wrappedParse}
+      withRustTree('malformed.rs','fn broken( {',t=>assert.equal(t.rootNode.hasError,true));clean();
+      sample('after-cleanup');
+      const {runIndexCommand}=await import(${JSON.stringify(moduleUrl('src/indexing/runIndexCommand.ts'))});
+      const retained=Buffer.alloc(540*1024*1024,1);sample('real-over-limit');
+      assert.ok(process.memoryUsage.rss()>512*1024*1024);
+      let consumed=false;
+      assert.throws(()=>withRustTree('over-limit.rs','pub fn safe() {}',()=>{consumed=true}),/RSS envelope exceeded/);
+      assert.equal(consumed,false);clean();
+      await assert.rejects(runIndexCommand({root:${JSON.stringify(path.resolve('tests/fixtures/v114-language/rust/F13-retrieval'))},src:['src'],out:${JSON.stringify(out)}}),/RSS envelope exceeded/);
+      for(const file of ['manifest.json','symbol-index.json'])assert.equal(fs.existsSync(${JSON.stringify(out)}+'/'+file),false);
+      assert.equal(retained.at(-1),1);
+      const grammarSHA256=createHash('sha256').update(fs.readFileSync(${JSON.stringify(path.resolve('src/languages/rust/assets/tree-sitter-rust-orchard.wasm'))})).digest('hex');
+      assert.equal(grammarSHA256,'d98c6aa1db69cfd204bf07dfefb2451b987160cbb2db95ddac8ac04b5f1eb1d0');
+      console.log(JSON.stringify({phase:'isolated-resource-contract',pid:process.pid,node:process.version,platform:process.platform,arch:process.arch,
+        parsers,trees,disposedParsers,disposedTrees,grammarSHA256,samples}));
+    `
+    const result = childProcess.spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', script], {
+      encoding: 'utf8', windowsHide: true, timeout: 20_000, maxBuffer: 1024 * 1024,
+    })
+    expect(result.error, result.stderr).toBeUndefined()
+    expect(result.status, result.stdout + result.stderr).toBe(0)
+    const evidence = JSON.parse(result.stdout)
+    expect(evidence).toMatchObject({ parsers: 0, trees: 0, disposedParsers: 1004, disposedTrees: 1002 })
+    fs.appendFileSync(telemetryFile, JSON.stringify(evidence) + '\n')
   })
 })
