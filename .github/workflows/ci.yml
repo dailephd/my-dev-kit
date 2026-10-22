@@ -38,7 +38,14 @@ jobs:
       - name: Verify
         run: npm run verify
 
+      - name: Rust corpus isolated process comparison
+        env:
+          B15_RSS_CONTEXT: isolated-corpus
+        run: node node_modules/vitest/vitest.mjs run tests/retrievalRegression/rustCorpusV114.spec.ts --maxWorkers=2 --reporter=dot
+
       - name: Test
+        env:
+          B15_RSS_CONTEXT: full-suite
         run: npm run test -- --maxWorkers=2 --reporter=dot
 
       - name: Security tests
@@ -70,6 +77,7 @@ jobs:
             .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/qualification.json
             .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*.exit.json
             .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*-resources.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/run-*/rust-rss.jsonl
 
       - name: CLI help
         run: node dist/cli.js --help

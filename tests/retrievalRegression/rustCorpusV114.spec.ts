@@ -1,8 +1,11 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import childProcess from 'node:child_process'
+import { threadId } from 'node:worker_threads'
+import { Parser, Tree } from 'web-tree-sitter'
+import { RustAdapter } from '../../src/languages/rust/adapter.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import * as cacheMetadata from '../../src/indexing/cacheMetadata.js'
 import type { ConfigFingerprintInput } from '../../src/indexing/cacheMetadata.js'
@@ -11,6 +14,53 @@ import { resolveFileNodeTarget, resolveSymbolTarget } from '../../src/lookup/res
 import { getSourceSlice } from '../../src/lookup/getSourceSlice.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+
+const beforeParserImport = vi.hoisted(() => ({ phase: 'before-parser-import', pid: process.pid,
+  worker: process.env.VITEST_WORKER_ID, ...process.memoryUsage(), maxRSSKiB: process.resourceUsage().maxRSS }))
+let restoreTelemetry = () => {}
+afterAll(() => restoreTelemetry())
+// Process-wide diagnostics retain actual guard values; they never alter the 512 MiB policy.
+beforeAll(() => {
+  const task = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests')
+  fs.mkdirSync(task, { recursive: true })
+  let n = 1
+  while (fs.existsSync(path.join(task, `run-${String(n).padStart(3, '0')}`))) n++
+  const out = path.join(task, `run-${String(n).padStart(3, '0')}`)
+  fs.mkdirSync(out)
+  const file = path.join(out, 'rust-rss.jsonl')
+  fs.writeFileSync(file, JSON.stringify(beforeParserImport) + '\n', { flag: 'wx' })
+  const memory = process.memoryUsage.bind(process)
+  let order = 0, sourceFile = '', sourceBytes = 0
+  const record = (phase: string, reason?: string) => fs.appendFileSync(file, JSON.stringify({
+    phase, pid: process.pid, threadId, worker: process.env.VITEST_WORKER_ID, pool: process.env.VITEST_POOL_ID,
+    node: process.version, platform: process.platform, arch: process.arch, invocation: process.env.B15_RSS_CONTEXT,
+    order, sourceFile, sourceBytes,
+    ...memory(), maxRSSKiB: process.resourceUsage().maxRSS, reason,
+  }) + '\n')
+  const extract = RustAdapter.prototype.extractFromSource, parse = Parser.prototype.parse
+  const treeDelete = Tree.prototype.delete, parserDelete = Parser.prototype.delete, setLanguage = Parser.prototype.setLanguage
+  const spies = [
+    vi.spyOn(RustAdapter.prototype, 'extractFromSource').mockImplementation(function (this: RustAdapter, file, source) {
+      order++; sourceFile = file; sourceBytes = Buffer.byteLength(source, 'utf8'); record('before-withRustTree')
+      try { return extract.call(this, file, source) } catch (error) { record('parser-rejection', (error as Error).message); throw error }
+      finally { record('after-extraction') }
+    }),
+    vi.spyOn(Parser.prototype, 'setLanguage').mockImplementation(function (this: Parser, ...args) {
+      const result = setLanguage.apply(this, args); record('after-grammar-runtime-initialization'); return result
+    }),
+    vi.spyOn(Parser.prototype, 'parse').mockImplementation(function (this: Parser, ...args) {
+      record('before-parse'); try { return parse.apply(this, args) } finally { record('after-parse') }
+    }),
+    vi.spyOn(Tree.prototype, 'delete').mockImplementation(function (this: Tree) {
+      try { return treeDelete.call(this) } finally { record('after-tree-disposal') }
+    }),
+    vi.spyOn(Parser.prototype, 'delete').mockImplementation(function (this: Parser) {
+      try { return parserDelete.call(this) } finally { record('after-parser-disposal') }
+    }),
+  ]
+  record('before-corpus-initialization')
+  restoreTelemetry = () => { record('worker-final'); for (const spy of spies) spy.mockRestore() }
+})
 
 const corpus = path.resolve('tests/fixtures/v114-language/rust/F14-licensed-corpus')
 const temp = path.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b14-20261021/tests')
