@@ -353,7 +353,7 @@ The published v1.12.5 schema records symbol start lines without complete generic
 
 Artifact kind: `code-graph`
 
-Schema version: `1.0.0`
+Schema version: `1.0.0` in the published v1.13.0; `1.1.0` in the unreleased v1.14.0 candidate (see the [v1.14.0 additive schema](#v1140-additive-schema-implemented-unreleased)).
 
 Top-level fields:
 
@@ -1250,7 +1250,7 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## v1.14.0 additive schema (implemented; unreleased)
 
-This section describes additive shapes implemented on the v1.14.0 feature branch. They are **not** in the published v1.13.0 package. No schema version changed: the symbol index remains `3`, the code graph `1.1.0` and the internal cache `1.3.0`. Every field below is optional, older v1 artifacts without them remain valid, and no new artifact file or Rust-specific artifact family exists; the shapes live in `symbol-index.json` and `code-graph.json`. See the [roadmap](ROADMAP.md#rust-language-intelligence--v1140-subtrack-implemented-unreleased) for scope and the explicitly deferred work (optional Rust call inference R7, Prisma).
+This section describes additive shapes implemented on the v1.14.0 feature branch. They are **not** in the published v1.13.0 package. Persisted schema versions advance from the published v1.13.0 (symbol index `2` → `3`, code graph `1.0.0` → `1.1.0`, internal cache `1.2.0` → `1.3.0`). Users upgrading from v1.13.0 should rebuild their index with v1.14.0 (`index`, without `--incremental`) before relying on exact qualified ownership, particularly when an older index contains duplicate graph node IDs: such an index can make `search`, `lookup` and `slice` fail with an ambiguous-node-identity error until it is rebuilt. Many operations on a v1.13.0 index still work, so this is not a claim that every older index is unreadable. Every field below is optional, older v1 artifacts without them remain valid, and no new artifact file or Rust-specific artifact family exists; the shapes live in `symbol-index.json` and `code-graph.json`. See the [roadmap](ROADMAP.md#rust-language-intelligence--v1140-subtrack-implemented-unreleased) for scope and the explicitly deferred work (optional Rust call inference R7, Prisma).
 
 ### Symbol index additions
 

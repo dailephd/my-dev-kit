@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { loadLookupArtifacts, loadSourceArtifacts, loadViewGraphArtifact, readRequiredJson } from '../../src/indexing/loadIndexArtifacts.js'
 import { loadGraphDiffArtifacts } from '../../src/graph-diff/loadGraphDiffArtifacts.js'
@@ -16,13 +16,13 @@ import { buildChangedSurface } from '../../src/context/changedSurface.js'
 
 let baseline: string
 beforeAll(async () => {
-  const root = mkdtempSync(join(tmpdir(), 'mdk-qualified-reader-base-')); mkdirSync(join(root, 'src'))
+  const root = allocateV114OutputDir('qualified-reader-base-v114'); mkdirSync(join(root, 'src'))
   writeFileSync(join(root, 'src', 'sample.ts'), 'export function run() {}\n')
   await runIndexCommand({ root, src: ['src'], out: 'index' }); baseline = join(root, 'index')
 })
 
 function fixture(symbolVersion: unknown = '3', graphVersion: unknown = '1.1.0', optional: 'present' | 'missing' | 'unreadable' = 'present') {
-  const dir = mkdtempSync(join(tmpdir(), 'mdk-qualified-reader-'))
+  const dir = allocateV114OutputDir('qualified-reader-v114')
   const index = JSON.parse(readFileSync(join(baseline, 'symbol-index.json'), 'utf8'))
   const graph = JSON.parse(readFileSync(join(baseline, 'code-graph.json'), 'utf8'))
   index.schemaVersion = symbolVersion; graph.schemaVersion = graphVersion

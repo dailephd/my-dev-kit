@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 import { runCli } from '../lookup/testCli.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
@@ -13,7 +13,7 @@ let root: string; let out: string; let index: SymbolIndex
 const aId = 'symbolq:src%2Fsample.ts#class%3AA#run#0'
 const bId = 'symbolq:src%2Fsample.ts#class%3AB#run#0'
 beforeAll(async () => {
-  root = mkdtempSync(join(tmpdir(), 'mdk-qualified-source-')); mkdirSync(join(root, 'src'))
+  root = allocateV114OutputDir('qualified-source-v114'); mkdirSync(join(root, 'src'))
   writeFileSync(join(root, 'src', 'sample.ts'), [
     'class A {', '  run() {', "    const a = 'alpha'", '    return a', '  }', '}',
     'class B {', '  run() {', "    const b = 'beta'", '    return b', '  }', '}', "const tail = 'adjacent'", '',

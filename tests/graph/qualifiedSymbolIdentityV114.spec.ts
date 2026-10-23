@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 import { assignDeclarationIdentities, parseDeclarationNodeId, qualifiedDeclarationId } from '../../src/symbol-index/declarationIdentity.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import type { SymbolDefinition, SymbolIndex } from '../../src/symbol-index/types.js'
@@ -59,7 +59,7 @@ describe('v1.14 qualified declaration identity', () => {
   })
 
   it('preserves real existing TS, JS, Python, Kotlin and Java top-level IDs', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mdk-qualified-languages-'))
+    const root = allocateV114OutputDir('qualified-languages-v114')
     mkdirSync(join(root, 'src'))
     const fixtures = { 'a.ts': 'export function run() {}', 'b.js': 'export function run() {}', 'c.py': 'def run():\n    pass\n', 'd.kt': 'fun run() {}', 'Plain.java': 'public class Plain {}' }
     for (const [file, text] of Object.entries(fixtures)) writeFileSync(join(root, 'src', file), text)
@@ -109,7 +109,7 @@ describe('v1.14 qualified declaration identity', () => {
   })
 
   it('fully rebuilds cache 1.2.0 truthfully and keeps full/incremental duplicate graphs equivalent', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mdk-qualified-incremental-')); mkdirSync(join(root, 'src'))
+    const root = allocateV114OutputDir('qualified-incremental-v114'); mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'src', 'sample.ts'), 'export function run() {}\nexport function run() {}\n')
     const options = { root, src: ['src'], out: 'index', incremental: true }
     const first = await runIndexCommand(options)
@@ -131,7 +131,7 @@ describe('v1.14 qualified declaration identity', () => {
     expect(new Set(graph.nodes.map((n: { id: string }) => n.id)).size).toBe(graph.nodes.length)
   })
   it('does not publish conflicting artifacts or replace an authoritative manifest on graph failure', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mdk-qualified-publication-')); mkdirSync(join(root, 'src'))
+    const root = allocateV114OutputDir('qualified-publication-v114'); mkdirSync(join(root, 'src'))
     writeFileSync(join(root, 'src', 'sample.ts'), 'function first() {}\nfunction second() {}\n')
     const options = { root, src: ['src'], out: 'index' }
     await runIndexCommand(options)
