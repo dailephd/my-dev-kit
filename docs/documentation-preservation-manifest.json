@@ -141,7 +141,12 @@
       "1.15.0": [
         "KIT-API-01",
         "UI/client/API/schema/data relationships",
-        "contract-oriented change evidence"
+        "contract-oriented change evidence",
+        "KIT-FACTS-01",
+        "LAB-KIT-01",
+        "TypeScript, JavaScript, Python, Java and Kotlin",
+        "Rust reuse",
+        "Complete selected source inventory"
       ],
       "1.16.0": [
         "KIT-OPS-01",
@@ -353,7 +358,19 @@
         "Status: ECO-00 ADOPTED",
         "Kit 1.13.0 remains Android retrieval benchmarks, examples, and workflows.",
         "Kit v1.12.6",
-        "Post-ECO-00 Kit v1.17.0"
+        "Post-ECO-00 Kit v1.17.0",
+        "### 7.9 Kit-backed Lab source audits — 2026-10-27",
+        "ECO-SOURCE-01",
+        "KIT-FACTS-01",
+        "LAB-KIT-01",
+        "Six ordered migration gates",
+        "QUALIFIED_NO_CHANGE"
+      ],
+      "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
+        "## 9.22 Planned Kit-backed Lab source-audit migration",
+        "ECO-SOURCE-01",
+        "Retire duplicate production analysis",
+        "Prove Rust reuse"
       ],
       "docs/DEVELOPMENT.md": [
         "# Development",

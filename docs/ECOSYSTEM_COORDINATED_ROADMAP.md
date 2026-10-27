@@ -5,9 +5,11 @@ Status: ECO-00 ADOPTED — the contract and roadmap freeze is now the authoritat
 Authority: cross-repository sequencing, contract governance, dependency logic, and adopted version reservations; each repository retains authority over its own normative implementation scope.
 Scope: four independently versioned programs; shared reference/compatibility contracts; bounded software/web assurance additions.
 
+Planning amendment: **2026-10-27, ECO-SOURCE-01 adopted; implementation pending.** Section 7.9 adds Kit-backed Lab source audits to the earliest suitable planned releases. The ECO-00 baseline and earlier reservations below remain historical coordination records; the dated amendment governs this new dependency and migration scope.
+
 ## 1. Decision
 
-Keep the four programs independent. Coordinate development by stable ecosystem milestone IDs, explicit producer/consumer contracts, and immutable tested bundle manifests. Package versions are release identifiers, not evidence of compatibility. There is no fifth application, mandatory shared npm package, automatic cross-tool executor, or requirement that every normal edit run all four programs.
+Keep the four programs independently versioned and usable for their own purposes. Coordinate development by stable ecosystem milestone IDs, explicit producer/consumer contracts, and immutable tested bundle manifests. Package versions are release identifiers, not evidence of compatibility. There is no fifth application, new shared analysis package, automatic cross-tool executor, or requirement that every normal edit run all four programs. The 2026-10-27 decision deliberately adds a managed Kit dependency for Lab's source audits after migration; it does not require Orchestrator or Observer for those audits or Kit for unrelated Lab checks.
 
 Separate four things:
 - Package version: identifies a shipped implementation.
@@ -15,7 +17,7 @@ Separate four things:
 - Capability/policy/metric version: identifies what a check actually measures or requires.
 - Certified bundle identity: identifies exact package artifacts, environments, fixtures, and compatibility results tested together.
 
-Use contract dependencies for architecture, package dependencies only for genuine runtime imports, and development/test dependencies for certification. A Lab test consuming an Orchestrator report is not an Orchestrator runtime dependency on Lab.
+Use contract dependencies for architecture, package dependencies for genuine supported runtime imports or execution, and development/test dependencies for certification. A Lab test consuming an Orchestrator report is not an Orchestrator runtime dependency on Lab. Lab's planned managed Kit provider is a genuine source-analysis dependency, not a new common library shared by all four programs.
 
 ## 2. Inspected baseline and existing commitments
 
@@ -39,41 +41,23 @@ Existing commitments preserved by ECO-00:
 
 ### 2.1 Current ecosystem architecture
 
-The four programs already form a layered evidence and workflow system. The coordinated roadmap extends this architecture rather than creating a fifth application or collapsing ownership into one monolith.
+The four programs form a layered evidence and workflow system. The following diagram distinguishes current paths inspected for the 2026-10-27 amendment from the future Lab evidence path. At this inspection, ordinary Lab audits still use Lab-owned source analyzers; selected experiments already invoke Kit. Kit-backed ordinary source audits are the planned change in section 7.9. Orchestrator v1.7.0 has native Kit/Observer adapters; a Lab-specific adapter is future ECO-01 work.
 
 ```mermaid
-flowchart LR
-  HUMAN[Developer / planner / coding agent]
-  TARGET[Target repository and local application]
-
-  subgraph ECOSYSTEM[my-dev-kit ecosystem]
-    KIT[my-dev-kit
-static repository intelligence]
-    ORC[my-dev-kit-orchestrator
-workflow and lifecycle authority]
-    LAB[my-dev-kit-lab
-validation, audit, experiments]
-    OBS[my-frontend-observer
-browser/runtime frontend evidence]
-  end
-
-  HUMAN --> ORC
-  HUMAN --> KIT
-  HUMAN --> LAB
-  HUMAN --> OBS
-
-  TARGET --> KIT
-  TARGET --> LAB
-  TARGET --> OBS
-
-  KIT -->|static evidence / context| ORC
-  OBS -->|runtime / visual evidence| ORC
-  LAB -->|verification / assurance evidence| ORC
-
-  KIT -. optional static enrichment .-> LAB
-  OBS -. compatibility and runtime artifacts .-> LAB
-
-  ORC -->|requirements / lifecycle decisions| HUMAN
+flowchart TD
+  TARGET["Target repository and local application"]
+  KIT["Kit: static repository evidence"]
+  LAB["Lab: native analyzers, audits and experiments"]
+  OBS["Observer: browser evidence"]
+  ORC["Orchestrator: stages and readiness"]
+  TARGET -->|source| KIT
+  TARGET -->|source and validation inputs| LAB
+  TARGET -->|selected local application| OBS
+  KIT -->|selected experiments| LAB
+  KIT -->|context and evidence| ORC
+  KIT -->|caller-supplied static correlation| OBS
+  OBS -->|runtime artifacts| ORC
+  LAB -.->|future ECO-01 evidence adapter| ORC
 ```
 
 The durable responsibility split is:
@@ -83,7 +67,7 @@ The durable responsibility split is:
 - **Lab answers:** what did an authorized validator, audit, experiment, or imported verification report establish for a defined target and policy?
 - **Orchestrator answers:** given the selected workflow requirements and accepted evidence, may the workflow proceed or complete?
 
-No arrow in the diagram means automatic runtime invocation unless a future milestone explicitly adds it. Most integration should remain artifact- and contract-based.
+The arrows show evidence relationships, not a universal automatic execution sequence. Lab's selected experiments can execute Kit today; ordinary workflow composition remains the responsibility of a developer or coding agent using the planner's templates. Orchestrator supplies stages, prompts and readiness decisions, and does not edit source or launch the other tools. Lack of an automatic all-tool runner is not an integration defect.
 
 ### 2.2 Current gap map and destination ownership
 
@@ -413,6 +397,8 @@ Every cross-repository relationship must be labeled as one of these classes:
 
 Do not convert a contract dependency into an npm dependency merely for convenience.
 
+**ECO-SOURCE-01 exception by explicit design:** Lab's source audits will use a managed compatible Kit package because Kit becomes their sole source-analysis/retrieval provider. This is a scoped runtime package dependency. Browser-only Observer usage, Orchestrator's own workflow operation and Lab checks that do not require source evidence retain their respective standalone paths. A supplied Kit snapshot must pass the same identity, coverage and compatibility checks as evidence from Lab-managed execution. The exact supported transport and acquisition policy are frozen at migration Gate 1; no undocumented CLI or package-internal import is implied.
+
 ### 6.2 Compatibility vocabulary
 
 Use these terms consistently:
@@ -477,12 +463,13 @@ If a producer change is truly backward-compatible under the existing reader cont
 
 ## 7. Adopted package-version reservations
 
-These reservations were adopted by ECO-00 on 2026-09-25. Published history does not change, and adoption does not imply implementation. Stable milestone IDs remain the coordination identity if a later explicit planning decision moves an unimplemented target.
+These reservations were adopted by ECO-00 on 2026-09-25 and extended by the dated decisions below. Published history does not change, and adoption does not imply implementation. Stable milestone IDs remain the coordination identity if a later explicit planning decision moves an unimplemented target. The 2026-10-27 amendment adds a first workstream to Kit v1.15.0 and Lab v0.10.0 without removing their existing scopes.
 
 ### 7.1 Kit
 - 1.13.0: existing Android proof/example scope unchanged.
 - 1.14.0: existing framework expansion, with explicit facts needed by future full-stack contracts; preserve all existing planned framework work.
 - 1.15.0 / KIT-API-01: supported UI/client/API/schema/data relationships and contract-oriented change evidence, building on 1.14.0. No complete static proof of authorization or migrations.
+- 1.15.0 / KIT-FACTS-01: first workstream, exact source facts required by Lab's existing detectors, extending Kit's existing indexer; see ECO-SOURCE-01 in section 7.9. The existing KIT-API-01 reservation above remains part of this release.
 - 1.16.0 / KIT-OPS-01: bounded configuration/instrumentation/deployment-source facts where real consumer needs justify them; not required for the initial rollout.
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
@@ -523,10 +510,12 @@ This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or creat
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.
 - 1.7.0 / ORC-EVIDENCE-01: next planned feature; typed evidence-plan/reference intake, adapters for existing native artifacts, cross-tool freshness/compatibility enforcement through canonical integrity/judge owners, structured status/check output, and preservation across prompt/mark/check/status/export/correction paths.
+- 1.7.1: planned bounded producer-compatibility qualification for ECO-SOURCE-01, including the exact Kit candidate and legacy/generic reader paths. The earlier 1.7.0 planning entry above is retained history; 1.7.0 is the current package at the 2026-10-27 inspection. Qualification may conclude `QUALIFIED_NO_CHANGE`; no release is required solely to record passing evidence.
 - Further Orchestrator releases are not automatically required for each new Lab check. Versioned generic requirement/evidence interfaces should allow new externally evaluated profiles without duplicating their policy. A genuinely new mandatory lifecycle semantic requires a separately scoped minor.
 
 ### 7.3 Observer
 - 0.10.0: published full visual workflow, unchanged.
+- 0.10.2: planned bounded static-evidence compatibility qualification for ECO-SOURCE-01 after the current 0.10.1 package. Preserve browser-only operation and caller-mediated correlation. Qualification may conclude `QUALIFIED_NO_CHANGE`; diagnostics and all later reservations remain unchanged.
 - 0.11.0 / OBS-DIAG-01: bounded/redacted console, page-error, request-failure and HTTP-response evidence; distinguish network transport failure from an expected HTTP error; explicit observation windows and optional diagnostic contracts.
 - 0.12.0 / OBS-STATE-01: governed project-supplied test-state/session setup contract with achieved-state evidence. Reuse ownership boundaries; do not turn Observer into a general journey runner or authentication platform.
 - 0.13.0 / OBS-PERF-01: versioned local performance capture, browser/environment provenance, comparable baseline/candidate samples, unavailable metrics explicit.
@@ -542,6 +531,7 @@ ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0
 - 0.8.0-0.8.2: retrieval precision/recall, query-strategy comparison, and context-pack experiments, unchanged.
 - 0.9.0-0.9.2: agent-success, provider telemetry/scheduler, and hardened prompt/report/gallery work, unchanged.
 - 0.10.0 / LAB-EVIDENCE-01: authorized verification capture/import, evidence identity/integrity, pure adapter contracts, controlled target boundary, and isolated ecosystem certification harness. Reuse existing process/browser/report infrastructure; not an unrestricted task runner.
+- 0.10.0 / LAB-KIT-01: first workstream, managed Kit source-evidence consumption, five-language comparison, gated retirement of duplicate analysis and required Rust reuse proof. LAB-EVIDENCE-01 remains in this release; no 0.11.0 or later assignment is moved.
 - 0.11.0 / LAB-A11Y-01: quality-audit substrate and bounded live accessibility adapters, manual-review requirements, explicit target-state provenance.
 - 0.12.0 / LAB-WEBSEC-01: bounded local web-app security profile through the existing security-validation owner; no remote or manual pentesting by default.
 - 0.13.0 / LAB-PERF-01: performance budget/regression adapters, statistical comparison and applicability rules.
@@ -561,6 +551,7 @@ This table describes *capability prerequisites*, not permanent package pins.
 | Milestone | Producer capability required | Consumer capability required | Packages expected to change | Packages not required to change |
 | --- | --- | --- | --- | --- |
 | ECO-00 | none; documentation/fixtures only | none | none necessarily | all runtime packages |
+| ECO-SOURCE-01 | KIT-FACTS-01 exact source facts and complete selected coverage | LAB-KIT-01 bridge, parity, retirement and Rust reuse | Kit, Lab | Orchestrator/Observer unless separate compatibility qualification finds an affected contract |
 | ECO-01 | Lab verification/evidence capture; adapters for current native artifacts | Orchestrator generic evidence intake | Lab, Orchestrator | Kit, Observer unless missing provenance is demonstrated |
 | ECO-02 | Observer diagnostics/state evidence | generic evidence intake already shipped | Observer | Kit; Lab optional for certification only; Orchestrator unless lifecycle semantics change |
 | ECO-03 | Lab accessibility/security evaluators | generic evidence intake | Lab | Kit/Observer not mandatory for first profile |
@@ -629,6 +620,84 @@ Use stable bundle/profile IDs independent of package version:
 
 A bundle is created as `proposed` at milestone start, becomes `candidate` when exact package artifacts and fixtures are locked, and becomes `certified` only after the profile matrix passes.
 
+### 7.9 Kit-backed Lab source audits — 2026-10-27
+
+**Status: adopted plan; not implemented or certified by this documentation change.** The explicit user decision is to make additional programming languages inexpensive to support across the ecosystem: Kit owns source analysis and source retrieval; Lab consumes that evidence and owns audit decisions. Keep the four repositories. Do not create a fifth repository or extract a shared parser/analysis package. Lab may manage its compatible Kit dependency so adopting Lab does not require a separate Kit workflow.
+
+This amendment is **ECO-SOURCE-01**. It supersedes the earlier optional-Kit-enrichment assumption only for Lab's source-code audits after cutover. It does not supersede the frozen common ecosystem contracts, the existing LAB-EVIDENCE-01 capture/import work or the external planner/coding-agent workflow templates. Future language support belongs in Kit adapters and facts; a new audit policy or validation module belongs in Lab when it changes the question being evaluated.
+
+#### Earliest implementation and release placement
+
+| Repository | Planned work | Version and ordering |
+| --- | --- | --- |
+| Kit | `KIT-FACTS-01`: detector-driven source facts through the existing indexer | First workstream of v1.15.0; preserve the active v1.14.0 candidate and all existing v1.15.0 `KIT-API-01` scope |
+| Lab | `LAB-KIT-01`: managed provider, comparison, retirement and Rust reuse | First workstream of v0.10.0; preserve all existing v0.10.0 `LAB-EVIDENCE-01` and v0.11.0+ scope |
+| Orchestrator | `ORC-KIT-COMPAT`: qualify affected legacy and generic Kit evidence readers | Bounded v1.7.1 maintenance target; `QUALIFIED_NO_CHANGE` allowed on the current consumer |
+| Observer | `OBS-KIT-COMPAT`: qualify caller-supplied static correlation | Bounded v0.10.2 maintenance target; `QUALIFIED_NO_CHANGE` allowed; preserve v0.11.0–v0.14.0 assignments |
+
+Start the contract inventory and fixture design immediately. Stage producer work after reconciling the active Kit v1.14.0 candidate, then hand Lab an exact content-hashed Kit candidate as soon as the required facts are available. Lab can develop and compare against that candidate before npm publication or unrelated KIT-API-01 work finishes. Normal release gates still apply; candidate use is not a release claim. Do not wait for Kit v2.0.0, create a large feature patch, or move later reservations to obtain an earlier version number.
+
+Orchestrator and Observer qualification may proceed in parallel. Neither is a prerequisite for initial Kit-to-Lab implementation or cutover unless an actually consumed shared contract changes. A passing qualification on existing code does not require a package bump or runtime edits. Independent versioning means explicit compatibility, not four synchronized releases.
+
+#### Target relationship after the migration
+
+```mermaid
+flowchart TD
+  SOURCE["Target source"]
+  KIT["Kit: source facts and retrieval"]
+  LAB["Lab: audit rules and validation"]
+  OBS["Observer: browser evidence"]
+  ORC["Orchestrator: stages and readiness"]
+  SOURCE --> KIT
+  KIT -->|required facts for source audits| LAB
+  KIT -->|context and evidence| ORC
+  KIT -->|optional caller-supplied correlation| OBS
+  OBS -->|runtime evidence| ORC
+  LAB -.->|separately planned ECO-01 intake| ORC
+```
+
+This diagram shows evidence flow. Lab may invoke its managed Kit provider; it must select detector evidence requirements before acquiring source facts. Non-source Lab paths must not initialize Kit or require an index. Lab still inspects package/configuration/documentation inputs and runs authorized validators. Executed validator reports and audit policy remain Lab concerns; moving source scans into another Lab utility or calling them validation does not satisfy source-analysis retirement. Observer's browser-only workflow remains independent, and static correlation remains caller-mediated. The developer or coding agent executes the selected workflow; Orchestrator supplies prompts and readiness decisions rather than editing source or executing all four tools.
+
+#### Gate 1 inventory: existing detectors and their evidence
+
+Inspection basis: Lab `893e433fbd2d0a51a6fcde8b940e7beb0417434a` (v0.9.5), Kit main `b1523d2288693124d163e0f87e1fb90443cbbc68` (v1.13.0), and the separate Kit v1.14.0 candidate `dac8cd5c4dc5e3a0845859113ea6b474e9099adc`. This is a source-inspection inventory, not a parity test result. The ten implementations are registered in Lab's [codeRotDetectors.ts](https://github.com/dailephd/my-dev-kit-lab/blob/893e433fbd2d0a51a6fcde8b940e7beb0417434a/src/audits/codeRot/codeRotDetectors.ts). Gate 1 must recheck the selected implementation heads and freeze exact wire fields, enums, required/optional semantics, transport, artifact ownership and fixture paths before producer work.
+
+| Existing detector | Required Kit source evidence | Lab-owned interpretation and other inputs |
+| --- | --- | --- |
+| `stale-command-reference` | None for its existing metadata/document-only checks | Document command mentions, package scripts, curated public-command policy and planned/current labels |
+| `docs-code-mismatch` | Source/path existence with coverage certainty; Java/Kotlin declaration names, kinds and nested scope; relevant static build/source-set facts | Documentation claim classification, wrappers/configuration and mismatch policy |
+| `package-release-rot` | None for its existing metadata/release checks | Package/lock versions, package files, script self-references, changelog and release claims |
+| `duplicate-implementation-candidate` | Inventory roles/roots/basenames, exported declarations with explicit visibility and semantic comparison group, detector/registry identifier observations with provenance | Duplicate-candidate grouping, thresholds, low-signal suppression and package-script comparisons |
+| `dead-code-candidate` | Import kind/bindings/locations, conservative resolution, explicit export origin, declaration visibility/scope, file roles and fixture-reference occurrences | Weak-candidate policy, bins/scripts/document labels and exclusions; no automatic deletion or proof of dead code |
+| `test-rot` | Test inventory/roles, resolved and missing import targets, source-set roots, skip/only modifiers, test titles and embedded command occurrences | Test-rot decisions, historical-title exceptions and script/path policy |
+| `architecture-drift` | Complete selected source membership/topology and path-existence facts, with exclusions and unindexed paths explicit | Documentation path/layout/capability comparisons; this is not a general dependency-layer checker |
+| `dependency-environment-rot` | None for its existing package/configuration/document checks | Engines, lockfiles, workflow runtime/package-manager choices and documented environment policy |
+| `cross-platform-rot` | Bounded source observations for newline/backslash splitting and process-call/literal/option patterns, with lexical versus parsed method declared | Shell-command portability, Windows claims, path exemptions and risk interpretation |
+| `security-validation-assumption-rot` | Source-owner/path existence with scope certainty | Documentation security/run claims, package versions and unavailable-versus-passed policy |
+
+The inventory also includes shared collectors, direct detector source reads and other production audit paths: language/role classification, raw import scans, Python/JVM import resolution, registry identifier extraction, test text scans, fixture searches and source patterns in Android/security audit helpers. Each source-derived input must have a Kit owner or an explicit blocking disposition. Removing only the four analyzer implementations is insufficient. Third-party executed validators and their reports remain distinct from Lab's own duplicated source analysis.
+
+Freeze a versioned, manifest-linked source-evidence contract within Kit's current artifact pipeline. It must include selected roots/exclusions and completeness, per-file identity/content digest/status, declaration/import/observation provenance, producer/analyzer/schema/capability versions and target/index/configuration identity. An audit must enumerate the complete selected inventory through bounded pages/continuation; top-k search hits or a context capsule alone cannot establish coverage. Missing, unsupported, failed, stale and truncated evidence must remain distinguishable. Do not invent a second graph, rely on package-internal imports, or advertise an unimplemented command.
+
+Known semantics to resolve at this gate: Kit's non-private Java/Kotlin export flags differ from Lab's public/internal/protected rules; Python explicit `__all__` differs from inferred public names; nested declarations and `.kts`/`.mts`/`.cts` coverage differ; TypeScript/JavaScript share a duplicate-comparison group while other languages do not. Producer identity must not replace that group. Language-specific interpretation and import resolution belong in Kit facts; Lab applies audit policy to declared facts without source parsing. Full control/data flow, exhaustive references and semantic clone detection are not prerequisites for the existing ten detectors.
+
+#### Six ordered migration gates
+
+| Gate | Owner and work | Required exit evidence |
+| --- | --- | --- |
+| 1. Define exact evidence | Kit + Lab: freeze the detector/reader-to-fact matrix and selected contracts | Every required field and semantic difference has an owner, version, positive/negative fixture and completeness/applicability rule; non-source paths are identified |
+| 2. Extend Kit | Kit: add missing facts through existing indexer/adapters/artifacts | Required facts and source continuation work through an exact packed Kit candidate, with deterministic identity/invalidation and honest partial/error states |
+| 3. Add Kit-backed Lab analysis | Lab: introduce the general provider bridge and managed compatible dependency | Existing analyzers remain temporarily available only through an explicitly selected comparison path; installed Lab works without a sibling checkout/manual Kit operation; non-source checks work without Kit evidence |
+| 4. Compare five languages | Lab + Kit: compare TypeScript, JavaScript, Python, Java and Kotlin on immutable target inputs | Compare applicability, coverage, facts, normalized findings, severity/confidence, exclusions, source spans and error states; classify every difference as parity, intended correction/scope change or unresolved regression |
+| 5. Retire duplicate analysis | Lab: remove old production analyzers and scattered parsers/scans/resolvers only after gates 1–4 pass | No unresolved regression or required missing fact; no silent legacy fallback; audit rules/policy/reports and executed validators remain; required evidence failure is explicit |
+| 6. Prove Rust reuse | Kit + Lab: run applicable existing audit policies on Rust evidence through the same bridge | Positive, negative and unsupported Rust cases pass without a Lab Rust parser/resolver or language-specific core branch; this gate is required before declaring the migration complete |
+
+Comparison is semantic, not blanket finding-count equality. Preserve intentional weak-candidate behavior and document each approved correction or scope change with before/after evidence. Do not treat missing facts as a clean report, mark every unsupported detector passed, or broaden a rule merely to make counts agree. Lab's planned required-source-evidence failure uses its runtime-failure exit `2`, including when `--fail-on none` is selected; optional unsupported checks may be skipped only under their frozen applicability contract and must show omissions.
+
+Retain exact old/new consumer and producer artifacts, fixture hashes, selected policy/capability versions and comparison results. After Gate 5, the old implementation is historical evidence rather than a shipped fallback. Gate 6 then tests the intended benefit: future language adapters supply reusable facts once in Kit. A newly proposed audit question may still require a new fact family or Lab rule; supporting another language for existing applicable rules must not require another Lab analyzer.
+
+The local [Kit v1.15.0 scope](ROADMAP.md#version-1150) and [Lab v0.10.0 scope](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md) remain the normative implementation plans. [Orchestrator's roadmap](https://github.com/dailephd/my-dev-kit-orchestrator/blob/main/docs/ROADMAP.md) and [Observer's roadmap](https://github.com/dailephd/my-frontend-observer/blob/master/docs/ROADMAP.md) own their bounded compatibility qualifications. The [migration workflow](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#922-planned-kit-backed-lab-source-audit-migration) governs execution and evidence recording without adding automatic cross-tool orchestration.
+
 ## 8. Cross-repository milestone dependency graph
 
 ECO-00 — contract and roadmap freeze
@@ -642,6 +711,8 @@ Kit 1.12.5 -> Lab 0.6.3 — real affected-neighborhood partial-refresh treatment
 Kit 1.13 -> Kit 1.14 -> KIT-API-01
                          + ECO-01 -> ECO-05 — full-stack contract assurance
 
+ECO-SOURCE-01 adds a separate dependency: KIT-FACTS-01 / Kit 1.15.0 supplies the candidate consumed by LAB-KIT-01 / Lab 0.10.0. Five-language parity precedes duplicate-analysis retirement, followed by Rust reuse proof under the six gates in section 7.9. Orchestrator 1.7.1 and Observer 0.10.2 qualification can use the selected Kit candidate in parallel; neither waits for Lab's Rust proof or gates the initial bridge unless an actually consumed shared contract changes.
+
 These arrows indicate actual prerequisite capabilities. Unrelated research, visual workflow completion, and native tool maintenance can continue independently.
 
 ### 8.1 ECO-00: contract/planning freeze
@@ -654,6 +725,7 @@ These arrows indicate actual prerequisite capabilities. Unrelated research, visu
 - Producer work: LAB-EVIDENCE-01 / Lab 0.10.0, plus bounded adapters over existing Kit/Observer artifacts.
 - Consumer work: ORC-EVIDENCE-01 / Orchestrator 1.7.0, following the published 1.5.0 semantic-continuity contract and published 1.6.0 telemetry substrate.
 - Kit and Observer production changes are not required unless adapter tests demonstrate genuinely missing provenance that cannot be honestly represented as unknown.
+- That ECO-01 statement describes generic capture/import, not the separate ECO-SOURCE-01 source-audit migration added on 2026-10-27. LAB-KIT-01 does require the Kit producer capability in section 7.9; neither workstream removes the other's v0.10.0 scope.
 - ECO-00 baseline proof tuple: Kit 1.12.4 + Observer 0.10.0 + Lab 0.10.0 candidate + Orchestrator 1.7.0 candidate. This is a future test target, NOT certified compatibility. If upstreams advance before execution, preserve this tuple as the ECO-00 baseline and certify any newer tuple separately rather than silently changing the lock.
 - Fixture: one small local full-stack app plus a small CLI project, frozen source and deterministic data. Use the CLI to prove that no browser is required for ordinary software verification.
 - Exit: final eligibility passes only with current required native evidence. A deliberately failed project test prevents completion even when visual evidence passes. No core retrieval-engine rewrite.

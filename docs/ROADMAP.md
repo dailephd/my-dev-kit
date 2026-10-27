@@ -1867,7 +1867,39 @@ Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/
 
 **Status: planned.**
 
-Version 1.15.0 is reserved as **KIT-API-01**.
+Version 1.15.0 retains **KIT-API-01** and adds **KIT-FACTS-01** as its first workstream under the explicit 2026-10-27 ecosystem migration decision. Both remain planned. The active v1.14.0 candidate and the v1.16.0, v1.17.0 and v2.0.0 reservations keep their existing scope.
+
+### KIT-FACTS-01: source evidence for Lab audits
+
+The first priority is to make Kit the source-code analysis and source-retrieval provider for Lab's source audits. Extend the existing language adapters, indexer, manifest-linked artifacts and bounded retrieval owners. Do not extract a fifth repository, introduce a shared analysis engine/package, or build a second graph or retrieval system. Lab keeps audit rules, severity, policy, reports, metadata/document/configuration inspection and executed validation.
+
+This is the producer half of **ECO-SOURCE-01**; **LAB-KIT-01** in Lab v0.10.0 owns consumption, comparison and retirement. The [coordinated migration](ECOSYSTEM_COORDINATED_ROADMAP.md#79-kit-backed-lab-source-audits--2026-10-27) records the detector input inventory and six ordered gates. Freeze the exact field names, types, required/optional rules, artifact location, supported transport and positive/negative fixtures at Gate 1 before implementation. The requirements below are planned contract obligations, not an existing command or published schema.
+
+Required producer scope:
+
+- Complete selected source inventory, file language and role, selected roots and exclusions, per-file analysis/capability status, content digest and source ranges. Distinguish parsed, file-level-only, unsupported, failed, skipped and truncated evidence. An unindexed path is not evidence that a path is absent.
+- Declarations with owner/scope, kind, explicit visibility, export status and export origin. Cover the nested declarations and file extensions consumed by current Lab rules, including `.kts`, `.mts` and `.cts`, or record a blocking gap. Preserve opaque symbol identifiers, including qualified identifiers, without consumers reconstructing them.
+- Import observations with kind, bindings, location and conservative resolution outcomes; distinguish resolved, unresolved, external and genuinely absent targets. Kit owns language-specific module/source-set resolution and static build/source-root metadata needed for that resolution.
+- Only the additional lexical or parsed observations required by existing detectors: constant/registry identifier values, fixture-reference occurrences, test modifiers/titles and embedded script commands, and bounded process-call/literal/option patterns. Record the extraction method, applicability and provenance. Existing weak heuristics must not become claims of complete semantic analysis.
+- Producer/package, analyzer, schema and capability versions; immutable target/index/configuration identity; relevant input hashes; deterministic ordering and incremental invalidation. Keep actual producer identity separate from the semantic comparison group used by a consumer policy.
+- A complete audit-facing enumeration path over the selected inventory. Ranked top-k search and a bounded context capsule cannot prove that every required file or fact was examined. Preserve bounded pages, explicit omissions and continuation for complete traversal; exact source retrieval must retain source identity and truncation status.
+
+Specific parity cases include Java public-only versus non-private export behavior, Kotlin internal/protected visibility, Python explicit `__all__` versus inferred public names, nested declarations and the existing shared TypeScript/JavaScript comparison group. Supply facts that let Lab apply its chosen policy without re-parsing source. Do not copy a single Kit `exported` boolean into an incompatible Lab meaning.
+
+Acceptance and sequencing:
+
+1. Freeze every current Lab detector and shared source-reader requirement against exact inspected commits; classify non-source inputs separately and give each missing source fact one existing Kit owner.
+2. Extend that owner, with positive, negative, unsupported and partial-evidence fixtures and packed-package verification. Do not add complete data/control-flow analysis, semantic clone detection or other unrelated future scope merely because an unused model field exists.
+3. Supply an exact commit and content-hashed package candidate to Lab v0.10.0 as soon as the necessary producer facts are usable. Lab development and parity work need not wait for npm publication or completion of unrelated KIT-API-01 work. Pin the candidate for each run; never substitute a moving latest version.
+4. Support Lab's side-by-side comparisons across TypeScript, JavaScript, Python, Java and Kotlin. Every difference must be preserved parity, a documented intended correction/scope change, or an unresolved regression. A regression or missing required fact blocks retirement.
+5. After those gates pass, support removal of Lab's duplicate analyzers and scattered source scans/resolvers; retain Lab policy and validation ownership. Missing required evidence must produce an explicit unavailable/error outcome, not a silent old-analyzer fallback or a clean audit.
+6. Prove Rust reuse through the same evidence contract using Kit's Rust adapter. Applicable Lab rules must work without a Lab Rust parser, Rust source resolver or language switch. Record unsupported capabilities honestly. This is a required migration acceptance gate, not a new optional research milestone.
+
+Lab will manage a compatible Kit dependency for these source audits; a user should not need a separately installed or separately operated Kit. Kit must also remain usable by itself and by other consumers. Lab must acquire Kit evidence only when selected rules require it; non-source checks must retain their declared standalone behavior. Orchestrator/Observer compatibility qualification can run in parallel and is not a prerequisite for the initial Kit-to-Lab bridge unless an actually shared contract changes.
+
+The minimal audit observations above do not replace v1.17.0's broader frontend retrieval work or v2.0.0's plugin initiative. They reuse the same owners so those later milestones can build on them.
+
+### KIT-API-01: API and data relationships
 
 The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change evidence after the broader framework evidence planned for v1.14.0 is in place.
 
