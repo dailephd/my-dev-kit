@@ -1,7 +1,7 @@
 {
   "name": "@dailephd/my-dev-kit",
   "version": "1.14.0",
-  "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, conservative static lineage, and conservative static Android project/component detection for TypeScript, JavaScript, Python, Kotlin, and Java projects.",
+  "description": "Local-first codebase graph indexing and graph-guided bounded retrieval, with conservative static language, framework, frontend, Android and data-model evidence for TypeScript, JavaScript, Python, Kotlin, Java and Rust projects.",
   "type": "module",
   "bin": {
     "my-dev-kit": "dist/cli.js"
@@ -13,12 +13,14 @@
     "CHANGELOG.md",
     "docs/ARCHITECTURE.md",
     "docs/CI_CD.md",
+    "docs/CONTRACTS.md",
     "docs/COMMANDS.md",
     "docs/DEVELOPMENT.md",
     "docs/ECOSYSTEM_COORDINATED_ROADMAP.md",
     "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md",
     "docs/GRAPH_SCHEMA.md",
     "docs/PROJECT_OVERVIEW.md",
+    "docs/PROJECT_PROGRESS.md",
     "docs/QUICKSTART.md",
     "docs/RELEASE.md",
     "docs/ROADMAP.md",
