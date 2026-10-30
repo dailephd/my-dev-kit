@@ -183,7 +183,7 @@ export async function qualify() {
       return r
     }
     assert(cli('help', ['--help']).stdout.includes('Usage:'))
-    assert.equal(cli('version', ['--version']).stdout.trim(), '1.13.0')
+    assert.equal(cli('version', ['--version']).stdout.trim(), '1.14.0')
     const tracked = command('fixture-inventory', 'git', ['ls-files', '-z', 'tests/fixtures/v114-language/rust']).stdout.split('\0').filter(Boolean)
     const fixtureHashes = Object.fromEntries(tracked.map(f => [f, sha(fs.readFileSync(path.join(root, f)))]))
     result.fixtureHashes = fixtureHashes
