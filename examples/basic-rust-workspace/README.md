@@ -1,6 +1,6 @@
 # Basic Rust workspace example
 
-A tiny Cargo workspace for trying my-dev-kit's Rust retrieval from a source checkout of the unreleased v1.14.0 work. The published `@dailephd/my-dev-kit@1.13.0` package does not index Rust; these commands apply once a release that includes Rust support is installed.
+A tiny Cargo workspace demonstrating static Rust retrieval in my-dev-kit v1.14.0. The v1.13.0 CLI does not index Rust. The commands below use a built v1.14.0 source checkout; an installed v1.14.0 CLI can run equivalent commands against this example when the package is available.
 
 my-dev-kit reads the files in this directory as text. It does not run `cargo`, `rustc`, build scripts or the example program, and it does not need a Rust toolchain.
 
