@@ -182,7 +182,7 @@ Source retrieval never modifies source files. The `--max-lines` limit is enforce
 
 ### v1.11.0 Compose retrieval
 
-This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.13.0`. The examples below may also be run from a source checkout built with `npm run build`.
+This Compose retrieval surface shipped in `@dailephd/my-dev-kit@1.11.0` and remains available in the current release, `@dailephd/my-dev-kit@1.14.0`. The examples below may also be run from a source checkout built with `npm run build`.
 
 ```sh
 node dist/cli.js source --index .my-dev-kit --composable HomeScreen --include-compose-tree --format numbered
@@ -304,9 +304,9 @@ The slice reports the `composable-references-viewmodel`, `compose-state-reads-vi
 
 Continue with the [detailed example walkthrough](../examples/basic-android-kotlin/README.md) for routes, resources, Room and Retrofit relationships, and test retrieval, and with the Android coding-agent workflow in [WORKFLOWS.md](WORKFLOWS.md#workflow-18-android-coding-agent-workflow-v1130).
 
-### Rust workspace example (unreleased v1.14.0; source checkout only)
+### Rust workspace example (v1.14.0)
 
-The published `@dailephd/my-dev-kit@1.13.0` package does not index Rust, so `npx @dailephd/my-dev-kit` cannot run this example yet. It works from a source checkout of the v1.14.0 feature branch after `npm install` and `npm run build`, and needs no Rust toolchain:
+Rust indexing requires v1.14.0 or later and no Rust toolchain. The commands below use a v1.14.0 source checkout after `npm ci` and `npm run build`; an installed v1.14.0 CLI can run equivalent commands against the packaged example.
 
 ```sh
 node dist/cli.js index --root examples/basic-rust-workspace --src crates/core/src --src crates/core/tests --src crates/cli/src --out .my-dev-kit-rust-demo

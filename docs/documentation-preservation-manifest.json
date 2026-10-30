@@ -106,11 +106,10 @@
       "1.12.4",
       "1.12.5",
       "1.12.6",
-      "1.13.0"
-    ],
-    "implementedUnreleasedVersions": [
+      "1.13.0",
       "1.14.0"
     ],
+    "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",
@@ -253,7 +252,7 @@
       "Frontend semantic artifact",
       "Data-model layer",
       "Model-to-view lineage layer",
-      "v1.14.0 language and framework coverage (implemented; unreleased)",
+      "v1.14.0 language and framework coverage",
       "Qualified symbol identity"
     ]
   },
@@ -332,11 +331,11 @@
   "statusBoundaries": {
     "documentKeywords": {
       "README.md": [
-        "Latest release: v1.13.0",
-        "@dailephd/my-dev-kit@1.13.0",
+        "Latest release: v1.14.0",
+        "@dailephd/my-dev-kit@1.14.0",
         "planned scopes",
         "v1.12.6 bounded retrieval precision",
-        "## Implemented but unreleased: v1.14.0"
+        "## v1.14.0 language, framework and Rust coverage"
       ],
       "docs/ROADMAP.md": [
         "## Version 1.12.5",
@@ -349,16 +348,16 @@
         "Area of Improvements 2 (1 entry)",
         "Area of Improvements 3 (2 entries)",
         "Area of Improvements 4 (1 entry)",
-        "**Status: implemented; unreleased; documentation and release gates pending.**",
-        "### Rust language intelligence — v1.14.0 subtrack (implemented; unreleased)",
+        "**Status: published.**",
+        "### Rust language intelligence — v1.14.0 subtrack",
         "R7 — Optional conservative call evidence",
         "**Status: deferred for separate future authorization; not implemented.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.13.0 is the current release",
+        "Version 1.14.0 is the current release",
         "### v1.12.6 bounded retrieval precision",
         "Version 1.12.6 was the current release before v1.13.0",
-        "### Implemented, unreleased: v1.14.0 language and framework coverage"
+        "### v1.14.0 language and framework coverage"
       ],
       "docs/CONTRACTS.md": [
         "# Contracts",
@@ -375,13 +374,13 @@
       "docs/DEVELOPMENT.md": [
         "# Development",
         "## Prerequisites",
-        "## v1.14.0 language, framework and Rust validation (unreleased)"
+        "## v1.14.0 language, framework and Rust validation"
       ],
       "docs/CI_CD.md": [
         "# CI/CD",
         "## Workflow file",
         "Each platform runs on Node.js 24.x.",
-        "## v1.14.0 candidate validation (unreleased)"
+        "## v1.14.0 release validation"
       ],
       "docs/QUICKSTART.md": [
         "# Quickstart",
@@ -404,7 +403,7 @@
         "## Shipped: v1.10.4",
         "### Readiness history",
         "INCONCLUSIVE_SUPPLEMENTAL",
-        "## Implemented, unreleased: v1.14.0"
+        "## Shipped: v1.14.0"
       ],
       "docs/ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md": [
         "my-dev-kit-orchestrator",
@@ -550,7 +549,8 @@
       "## 1.12.3",
       "## 1.12.4",
       "## 1.12.6",
-      "## 1.13.0 - 2026-10-17"
+      "## 1.13.0 - 2026-10-17",
+      "## 1.14.0 - 2026-10-30"
     ],
     "requiredUnreleasedVersionHeadings": [
       "## Unreleased"

@@ -464,9 +464,9 @@ What is **not** solved, and stays a verification duty:
 
 Keep verifying the production owner with the exact selectors above, confirm the actual edit target from source, and treat a conflict or unresolved adequacy status as a decision for the person approving the change.
 
-## Workflow 19: Python, JavaScript/TypeScript, framework and Rust retrieval (v1.14.0, unreleased)
+## Workflow 19: Python, JavaScript/TypeScript, framework and Rust retrieval (v1.14.0)
 
-These workflows use the unreleased v1.14.0 feature branch from a source checkout (`node dist/cli.js ...`); published v1.13.0 does not include them. They add no commands. Results are static source evidence: nothing is executed, and routes, models and tests are not proof of runtime behavior. Always take node IDs from `search` output.
+These workflows require v1.14.0 or later. Use the installed CLI, or `node dist/cli.js ...` from a built v1.14.0 checkout. They add no commands. Results are static source evidence: nothing is executed, and routes, models and tests are not proof of runtime behavior. Always take node IDs from `search` output.
 
 **Python model and route ownership.** Index the Python source root, then search for the model or route and follow the result.
 

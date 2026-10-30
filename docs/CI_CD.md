@@ -52,9 +52,9 @@ CI validates the following:
 - the Python example can be indexed when Python is available
 - temporary example artifacts are removed after the smoke checks
 
-## v1.14.0 candidate validation (unreleased)
+## v1.14.0 release validation
 
-For the unreleased v1.14.0 work, the same workflow additionally runs these steps on every platform in the matrix (Windows, Ubuntu and macOS, each on Node.js 24.x), in this order:
+For v1.14.0, the same workflow additionally runs these steps on every platform in the matrix (Windows, Ubuntu and macOS, each on Node.js 24.x), in this order:
 
 1. Prepare a short, repository-contained temporary directory and npm cache for the run (a `TEMP`/`TMP`/`TMPDIR` alias), so long Windows paths and test output stay inside the workspace.
 2. `npm ci`, then `npm run verify` (type checking, build and the documentation preservation check).

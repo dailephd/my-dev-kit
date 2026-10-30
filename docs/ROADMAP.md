@@ -1718,13 +1718,13 @@ Example projects or fixtures:
 
 ## Version 1.14.0
 
-**Status: implemented; unreleased; documentation and release gates pending.**
+**Status: published.**
 
 Version 1.14.0 broadens non-Android language and framework coverage after the Android foundation is in place.
 
 The goal is to expand support while keeping static analysis conservative and adapter-based.
 
-**Implementation state.** The Python, JavaScript, framework, configured-import and Rust structural work below is implemented on the v1.14.0 feature branch and has passed local implementation-completeness validation. The published release remains v1.13.0; v1.14.0 is not published. Optional Rust direct-call evidence (R7) is deferred for separate future authorization, and Prisma remains an unimplemented candidate. Persisted schema versions advance from the published v1.13.0 (symbol index `2` → `3`, code graph `1.0.0` → `1.1.0`, internal cache `1.2.0` → `1.3.0`), and users upgrading should rebuild their index with v1.14.0 (see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#v1140-additive-schema-implemented-unreleased)). Documentation reconciliation and the public Rust workspace example are complete on the feature branch. The independent pre-release audit, release preparation and publication have not been performed and each requires separate authorization. The planned-feature lists below are retained as the approved scope record.
+**Release scope.** v1.14.0 includes the Python, JavaScript, framework, configured-import and Rust structural capabilities below. Optional Rust direct-call evidence (R7) and Prisma remain deferred. Persisted schemas are symbol index `3`, code graph `1.1.0` and internal cache `1.3.0`; legacy duplicate-ID ambiguity can require a full index rebuild (see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#v1140-additive-schema)). The lists below preserve the approved scope and acceptance criteria.
 
 ### Python improvements
 
@@ -1750,13 +1750,13 @@ Planned features:
 - better NestJS decorator extraction where useful
 
 
-#### Configured TypeScript/JavaScript import resolution — v1.14.0 correction (implemented; unreleased)
+#### Configured TypeScript/JavaScript import resolution — v1.14.0 correction
 
-**Implementation status.** Implemented on the v1.14.0 feature branch and not published. Configured `paths` aliases from `tsconfig.json`/`jsconfig.json` (including bounded local `extends`, nested configurations and configurations without `baseUrl`) now produce the existing file-dependency edges, with configuration-aware incremental invalidation. Ambiguous, excluded, external or unsafe targets still produce no edge. The contract below is retained as the approved scope record; the current behavior is described in the architecture, contracts and graph-schema documents.
+**Release scope.** Included in v1.14.0. Configured `paths` aliases from `tsconfig.json`/`jsconfig.json` (including bounded local `extends`, nested configurations and configurations without `baseUrl`) now produce the existing file-dependency edges, with configuration-aware incremental invalidation. Ambiguous, excluded, external or unsafe targets still produce no edge. The contract below is retained as the approved scope record; the current behavior is described in the architecture, contracts and graph-schema documents.
 
-**Placement and status.** The October 20, 2026 iworkhere.space v0.4.3 discovery using published my-dev-kit 1.13.0 exposed missing graph dependencies for configured `@/` imports. This is a high-priority missing capability, not a confirmed regression of a previously supported alias contract. Treat it as a bounded **v1.14.0 stabilization correction after the already-authorized frontend integration batch and before subsequent Rust implementation gates**. It does not create a separate release, change the earlier JavaScript/Python/framework work, or renumber the existing Rust R0–R10 subtrack. Completed local batches do not establish publication.
+**Placement.** The October 20, 2026 iworkhere.space v0.4.3 discovery using published my-dev-kit 1.13.0 exposed missing dependencies for configured `@/` imports. The bounded correction belongs to v1.14.0 and does not create a separate release, change the Python/JavaScript/framework scope, or renumber the approved Rust subtrack.
 
-**Verified current boundary and architectural owners.** The TypeScript adapter's index-time `resolveImportToFile` rejects non-relative imports. `src/symbol-index/builder.ts` uses adapter resolution to populate `symbolIndex.graph.fileDeps`; `src/graph/buildCodeGraph.ts` projects those existing dependencies as `imports`/`depends-on` edges. Separately, `src/languages/typescript/resolveRelativeSpecifier.ts` supports query-time relative imports for ownership search and `src/context/testInfrastructureDiscovery.ts`. Editing that query-time helper alone cannot repair missing persisted graph edges. Recheck these interfaces against the latest unpushed v1.14 implementation branch before the correction is implemented.
+**Historical boundary and architectural owners.** The pre-correction TypeScript adapter rejected non-relative imports. The released index-time configured-import resolver supplies supported aliases to the existing `symbolIndex.graph.fileDeps` producer and ordinary `imports`/`depends-on` edges. The query-time relative-specifier helper remains a separate consumer; changing it alone cannot repair persisted graph dependencies.
 
 **Frozen bounded correction contract:**
 
@@ -1797,18 +1797,18 @@ Candidate framework targets:
 Candidate future languages:
 
 - Go
-- Rust — implemented as the unreleased v1.14.0 subtrack detailed below; not released (optional call evidence R7 deferred)
+- Rust — structural language intelligence included in v1.14.0 as detailed below (optional call evidence R7 deferred)
 - Java beyond Android use cases
 - C#
 - Kotlin beyond Android use cases
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
 
-### Rust language intelligence — v1.14.0 subtrack (implemented; unreleased)
+### Rust language intelligence — v1.14.0 subtrack
 
-**Implementation status.** Batches R0–R6 and R8–R9 are implemented on the v1.14.0 feature branch; R7 (optional conservative call evidence) is deferred for separate future authorization; R10 documentation reconciliation is complete on the feature branch. Nothing here is published: the latest release is v1.13.0. Resolved decisions: the parser is the packaged, checksum-verified Tree-sitter Rust WebAssembly grammar (D02); qualified identity reuses the generic symbol and graph with additive Rust owner nodes (D03, D06); Cargo is read in-process and never executed (D05); no `--language rust` selector was added, because Rust files are detected by extension (D08). The text below is the approved plan and gate record and is retained unchanged except where marked.
+**Release scope.** Rust structural intelligence ships in v1.14.0; optional conservative direct-call evidence (R7) remains deferred for separate authorization. The packaged checksum-verified Tree-sitter WebAssembly grammar, generic qualified identity and additive Rust owner nodes, in-process Cargo parsing and extension-based `.rs` discovery are the resolved choices. The following historical plan and acceptance requirements preserve the agreed scope; current contracts are in the architecture and graph-schema documents.
 
-**Decision and scope.** Rust is promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
+**Original decision and scope.** Rust was promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
 
 **Completion definition.** The existing `index → search → lookup → slice → source → context → graph-diff` loop must retrieve exact, noncolliding crate/module/trait/impl/function/test ownership and bounded source ranges for supported Rust syntax, including multiple same-named methods. Cargo metadata and code graph edges must be conservative; unknown feature activation, unresolved imports, macro expansion, trait dispatch, runtime behavior, and excluded roots must remain explicit unknowns. An indexed `.rs` file count alone is **not** evidence of completed Rust support.
 
@@ -1867,7 +1867,7 @@ These are **Rust workstream batches within v1.14.0**, not eleven new release ver
 - **R7 — Optional conservative call evidence.** Allow exact local direct-call links only when uniquely justified; leave method dispatch and generics unresolved. **Gate:** no false-positive edges on F04/F05/F06; may follow the core structural release if separately approved, rather than blocking it. **Status: deferred for separate future authorization; not implemented.**
 - **R8 — Retrieval regressions and real-world validation.** Exercise ownership-intent retrieval, test mapping, source/continuation, mixed-language noninterference and independently checked licensed Rust fixtures. **Gate:** F13/F14 and inherited retrieval/Android/frontend regressions pass; downstream Orchestrator consumes real emitted existing-schema context without a new mode.
 - **R9 — Packaging, performance and security qualification.** Test the exact packed CLI on supported Node and Windows/Linux/macOS; parser assets shipped, clean consumer requires no Rust toolchain and no runtime download, bounded malformed-input/path/security cases, benchmark budget. **Gate:** actual installed-package acceptance plus matrix CI, no hidden target execution or broken binary/WASM assets.
-- **R10 — Documentation and separate release transitions.** Reconcile implementation against planned scope, examples and the existing public docs, schemas and preservation manifest. **Gate:** docs checks and protected-plan inventory pass, implementation-completeness validates what shipped; pre-release audit, release preparation and publication remain **separate user-authorized procedures**. **Status: documentation reconciliation and the public `examples/basic-rust-workspace/` example are complete on the feature branch; the pre-release audit, release preparation and publication have not started.**
+- **R10 — Documentation and separate release transitions.** Reconcile implementation against planned scope, examples and the existing public docs, schemas and preservation manifest. **Gate:** docs checks and protected-plan inventory pass, implementation-completeness validates what shipped; pre-release audit, release preparation and publication remain **separate user-authorized procedures**.
 
 #### Fixture and proof inventory (planned, exact filenames awaiting planner path freeze)
 
@@ -1880,9 +1880,9 @@ Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/
 
 **Acceptance invariants:** zero silently dropped duplicate-named declarations; zero identity collisions; all `RESOLVED` graph edges grounded in unique local selected targets; every `AMBIGUOUS` source/lookup preserving bounded candidates; precise or honestly unknown method boundaries; frozen snapshots never overwritten; equivalent timestamp-normalized full/incremental graphs; no regressions in existing language/Android/frontend consumers; bounded performance and deterministic portable packaging.
 
-#### Planner decision ledger and prerequisites (not all resolved)
+#### Historical planner decision ledger and prerequisites
 
-- **D01 placement:** **planned** v1.14.0 Rust subtrack; existing scope in every other v1.14 section and future version remains intact. **Not** an implementation-complete or released commitment. *Status update: the subtrack is now implemented and unreleased, as stated in the implementation status above; the original decision text is retained.*
+- **D01 placement:** **planned** v1.14.0 Rust subtrack; existing scope in every other v1.14 section and future version remains intact. **Not** an implementation-complete or released commitment. *Release status: the structural subtrack ships in v1.14.0; R7 remains deferred. The original planning decision text is retained.*
 - **D02 parser:** Tree-sitter grammar as design direction; native Node vs packaged WASM is **UNRESOLVED until R0 cross-platform installed-package evidence**.
 - **D03 identity:** reuse generic symbol/graph with qualified Rust ownership and deterministic collision-free IDs; **exact field names, disambiguation algorithm, schema version and reader migration are UNRESOLVED until R0/R1**.
 - **D04 declarations:** nested trait/`impl` associated items are required for first substantive support; no regex-only top-level substitute.

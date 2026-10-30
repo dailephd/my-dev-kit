@@ -1,6 +1,6 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The current published public surface is `1.13.0`: nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The v1.14.0 public surface has nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
@@ -66,7 +66,7 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 
 - `--root <path>`: project root.
 - `--src <path>`: required source root relative to the project root. Repeat for additional source/test roots. Supported `.test.`/`.spec.` files beneath a selected root are indexed like other supported files; `.d.ts` declaration files are excluded.
-- `--language <language>`: `typescript`, `javascript`, or `python`. Kotlin and Java are discovered by extension, not `--language kotlin` or `--language java`. Rust (v1.14.0, unreleased) is likewise discovered by extension; `--language rust` is not accepted.
+- `--language <language>`: `typescript`, `javascript`, or `python`. Kotlin and Java are discovered by extension, not `--language kotlin` or `--language java`. Rust (v1.14.0) is likewise discovered by extension; `--language rust` is not accepted.
 - `--out <dir>`: output directory, default `.my-dev-kit`, relative to `--root` when not absolute.
 - `--exclude <path-or-name>`: additional directory name or relative path prefix. Repeat as needed. This is not a glob expression.
 - `--dry-run`: discover/report inputs without writing index artifacts.
@@ -79,15 +79,15 @@ npx @dailephd/my-dev-kit index --root <project-root> --src <source-root> --out <
 
 ### Languages and source-root boundaries
 
-Supported extensions are `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.kt`, and `.java`; the unreleased v1.14.0 work adds `.cjs` and `.rs`. Python analysis requires an available supported Python interpreter. Missing interpreter evidence is reported rather than treated as successfully analyzed Python.
+Supported extensions are `.ts`, `.tsx`, `.js`, `.jsx`, `.cjs`, `.py`, `.kt`, `.java` and `.rs`. Python analysis requires an available supported Python interpreter. Missing interpreter evidence is reported rather than treated as successfully analyzed Python.
 
 Kotlin and Java structural extraction is conservative and line/regular-expression based, not compiler parsing. It records supported top-level declarations, imports, and signatures. It does not create general member-symbol or type/classpath resolution, execute Gradle/Maven, or resolve dynamic calls. Kotlin/Java files do not acquire a complete call graph from `--call-graph`. Other supported languages in the same run retain their call-graph behavior.
 
 Android detection examines project evidence under `--root`, but does not expand the user's explicitly selected structural `--src` roots. Android test evidence uses detected `test` and `androidTest` roots under its documented analyzer contract.
 
-### Python, JavaScript/TypeScript, framework and Rust retrieval (v1.14.0, unreleased)
+### Python, JavaScript/TypeScript, framework and Rust retrieval (v1.14.0)
 
-These capabilities are implemented on the v1.14.0 feature branch and are **not** in the published v1.13.0 CLI. They add no command and no flag: every example below uses the existing command families (`index`, `search`, `lookup`, `source`, `slice`, `context`, `graph-diff`, `view`). Rust files (`.rs`) are discovered by extension under the selected `--src` roots; `--language rust` is not accepted.
+These capabilities are included in v1.14.0. They add no command and no flag: every example below uses the existing command families (`index`, `search`, `lookup`, `source`, `slice`, `context`, `graph-diff`, `view`). Rust files (`.rs`) are discovered by extension under the selected `--src` roots; `--language rust` is not accepted.
 
 ```sh
 # Index the public Rust workspace example from a source checkout (writes to examples/basic-rust-workspace/.my-dev-kit-rust-demo)
@@ -104,7 +104,7 @@ node dist/cli.js context --index $IDX --query "impl Runner for Worker run" --out
 
 - **Identity.** Same-named members get qualified `symbolq:` IDs that embed the owner and position; always copy IDs from `search` output rather than composing them. Unqualified `symbol:<file>#<name>` IDs still work where the name is unique.
 - **Selected roots.** Only files under the selected `--src` roots are read. A Cargo `Cargo.toml` is found from the selected `.rs` files; modules, `#[path]` targets and imports that point outside the selection are reported as `UNRESOLVED_SELECTED_ROOTS` and their source is never read.
-- **Nodes you can look up.** `rust-package`, `rust-target`, `rust-module` and `rust-impl` nodes and `framework-route` nodes (FastAPI, Express, NestJS) are ordinary graph nodes: `lookup`, `slice` and `source --node` accept their IDs. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#v1140-additive-schema-implemented-unreleased).
+- **Nodes you can look up.** `rust-package`, `rust-target`, `rust-module` and `rust-impl` nodes and `framework-route` nodes (FastAPI, Express, NestJS) are ordinary graph nodes: `lookup`, `slice` and `source --node` accept their IDs. See [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#v1140-additive-schema).
 - **Incremental and diff.** `index --incremental` rebuilds when the parser, a `Cargo.toml` or a `tsconfig.json`/`jsconfig.json` changes, and `graph-diff` compares Rust and framework nodes by exact ID. Behavior otherwise follows the incremental-refresh rules in this document.
 - **Limits.** A Rust source over 65,536 bytes is not parsed. Static syntax and uniquely resolved local structure only: no macro expansion, `cfg`/feature evaluation, trait dispatch, type checking, Cargo dependency resolution, build scripts or Rust program execution, and no Rust call edges.
 

@@ -135,7 +135,7 @@ release-readiness, dependency/package, and security validation workflows.
 
 The v1.7.0 section above is the historical description of the core suite when
 it shipped; lookup and slice execution were added later and are described
-here as current state of the v1.13.0 release. Nothing in
+here as the historical v1.13.0 release baseline. Nothing in
 this section is a public CLI command or part of the published package.
 
 Two configurations share the one runner in `src/retrievalRegression/`:
@@ -210,9 +210,9 @@ allowlisted in `package.json` `files`, while `benchmarks/`, `tests/`, and
 reports are not packaged. The benchmark README and configuration remain
 maintainer-only.
 
-## v1.14.0 language, framework and Rust validation (unreleased)
+## v1.14.0 language, framework and Rust validation
 
-The v1.14.0 feature branch adds Python, JavaScript/TypeScript, framework and Rust support. Develop and validate it with Node.js 24.x (the version CI uses). **No Rust toolchain, Cargo or `rustc` is needed**: Rust files are parsed as text and `Cargo.toml` is read by an in-process TOML parser.
+v1.14.0 adds Python, JavaScript/TypeScript, framework and Rust support. Develop and validate it with Node.js 24.x (the version CI uses). **No Rust toolchain, Cargo or `rustc` is needed**: Rust files are parsed as text and `Cargo.toml` is read by an in-process TOML parser.
 
 ### Rust parser asset lifecycle
 
@@ -692,7 +692,7 @@ Included examples:
   Public Android/Kotlin/Compose static retrieval example packaged in v1.13.0. It is a public example, not an internal test fixture; the Android fixtures under tests/fixtures/ remain internal.
 
 - examples/basic-rust-workspace/
-  Public two-crate Rust workspace for static retrieval. Part of the unreleased v1.14.0 package inventory (eight explicit files in the package `files` allowlist); it is never built or run.
+  Public two-crate Rust workspace for static retrieval. Part of the v1.14.0 package inventory (eight explicit files in the package `files` allowlist); it is never built or run.
 
 The package may include selected example source folders for public smoke tests. Development-only generated artifacts under examples should not be committed or published.
 
@@ -723,7 +723,7 @@ The published npm package should include:
 - LICENSE
 - CHANGELOG.md
 - public documentation files
-- public examples intended for users (the unreleased v1.14.0 candidate adds the eight `examples/basic-rust-workspace/` files, for a 60-file inventory)
+- public examples intended for users (v1.14.0 includes the eight `examples/basic-rust-workspace/` files, for a 60-file inventory)
 - package.json
 
 The published npm package should not include:
