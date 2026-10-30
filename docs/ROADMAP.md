@@ -1808,7 +1808,7 @@ Additional language support should be added through language adapters rather tha
 
 **Release scope.** Rust structural intelligence ships in v1.14.0; optional conservative direct-call evidence (R7) remains deferred for separate authorization. The packaged checksum-verified Tree-sitter WebAssembly grammar, generic qualified identity and additive Rust owner nodes, in-process Cargo parsing and extension-based `.rs` discovery are the resolved choices. The following historical plan and acceptance requirements preserve the agreed scope; current contracts are in the architecture and graph-schema documents.
 
-**Original decision and scope.** Rust was promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
+**Original decision and scope (historical planning decision).** Rust was promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
 
 **Completion definition.** The existing `index → search → lookup → slice → source → context → graph-diff` loop must retrieve exact, noncolliding crate/module/trait/impl/function/test ownership and bounded source ranges for supported Rust syntax, including multiple same-named methods. Cargo metadata and code graph edges must be conservative; unknown feature activation, unresolved imports, macro expansion, trait dispatch, runtime behavior, and excluded roots must remain explicit unknowns. An indexed `.rs` file count alone is **not** evidence of completed Rust support.
 
@@ -1903,7 +1903,7 @@ Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/
 
 Version 1.15.0 is reserved as **KIT-API-01**.
 
-The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change evidence after the broader framework evidence planned for v1.14.0 is in place.
+The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change evidence after the broader framework evidence introduced in v1.14.0.
 
 Planned boundaries:
 
