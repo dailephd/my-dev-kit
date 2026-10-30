@@ -10,12 +10,12 @@ export function applySemanticRolesToSymbolIndex(
     files: symbolIndex.files.map((file) => ({
       ...file,
       symbols: file.symbols.map((symbol) => {
-        const metadata = metadataBySymbolId.get(buildSymbolId(file.path, symbol.name))
+        const metadata = metadataBySymbolId.get(symbol.nodeId ?? buildSymbolId(file.path, symbol.name))
         return metadata
           ? {
               ...symbol,
-              semanticRoles: metadata.semanticRoles,
-              artifactRefs: metadata.artifactRefs,
+              semanticRoles: [...(symbol.semanticRoles ?? []).filter(role => role.source !== 'python-orm-analyzer' && role.source !== 'typescript-model-analyzer'), ...metadata.semanticRoles],
+              artifactRefs: [...new Map([...(symbol.artifactRefs ?? []), ...metadata.artifactRefs].map(ref => [`${ref.artifact}#${ref.id}`, ref])).values()],
             }
           : symbol
       }),
@@ -24,12 +24,12 @@ export function applySemanticRolesToSymbolIndex(
       ? {
           ...symbolIndex.graph,
           symbols: symbolIndex.graph.symbols.map((symbol) => {
-            const metadata = metadataBySymbolId.get(buildSymbolId(symbol.file, symbol.name))
+            const metadata = metadataBySymbolId.get(symbol.nodeId ?? buildSymbolId(symbol.file, symbol.name))
             return metadata
               ? {
                   ...symbol,
-                  semanticRoles: metadata.semanticRoles,
-                  artifactRefs: metadata.artifactRefs,
+                  semanticRoles: [...(symbol.semanticRoles ?? []).filter(role => role.source !== 'python-orm-analyzer' && role.source !== 'typescript-model-analyzer'), ...metadata.semanticRoles],
+                  artifactRefs: [...new Map([...(symbol.artifactRefs ?? []), ...metadata.artifactRefs].map(ref => [`${ref.artifact}#${ref.id}`, ref])).values()],
                 }
               : symbol
           }),

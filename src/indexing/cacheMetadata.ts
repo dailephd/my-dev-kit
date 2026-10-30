@@ -1,3 +1,4 @@
+import { RUST_PARSER_REVISION } from '../languages/rust/parser.js'
 /**
  * Internal incremental-indexing cache metadata.
  *
@@ -36,7 +37,7 @@ import { VERSION } from '../version.js'
 import { readIndexManifest } from './readIndexManifest.js'
 
 export const CACHE_METADATA_FILENAME = 'cache-metadata.json'
-export const CACHE_SCHEMA_VERSION = '1.2.0'
+export const CACHE_SCHEMA_VERSION = '1.3.0'
 export const INDEX_ARTIFACT_SCHEMA_VERSION = '1.0.0'
 
 const SAMPLE_LIMIT = 20
@@ -105,6 +106,8 @@ export type CacheMode =
   | 'incremental-partial-with-artifact-fallback'
 
 export interface ConfigFingerprintInput {
+  rustCargoFingerprint?: string
+  configuredImportsFingerprint?: string
   sourceRoots: string[]
   excludePatterns: string[]
   callGraphEnabled: boolean
@@ -184,6 +187,18 @@ export interface ConfigFingerprintInput {
  */
 export function computeConfigFingerprint(input: ConfigFingerprintInput): string {
   const normalized = {
+    // Extractor semantics changed without changing the cache storage format.
+    // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
+    rustParserRevision: RUST_PARSER_REVISION,
+    rustCargoStructureRevision: 'v1.14.0-b09',
+    rustRelationshipRevision: 'v1.14.0-b14-doc-comments',
+    rustCargoFingerprint: input.rustCargoFingerprint ?? null,
+    pythonExtractionRevision: 'v1.14.0-b04',
+    jsTsExtractionRevision: 'v1.14.0-b05',
+    jsFrameworkExtractionRevision: 'v1.14.0-b06',
+    frontendFrameworkRevision: 'v1.14.0-b07',
+    configuredImportsRevision: 'v1.14.0-configured-imports',
+    configuredImportsFingerprint: input.configuredImportsFingerprint ?? null,
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),
     callGraphEnabled: input.callGraphEnabled,

@@ -1,0 +1,3 @@
+class Worker {
+    fun run() {}
+}

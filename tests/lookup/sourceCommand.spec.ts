@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -37,16 +37,41 @@ describe('source command', () => {
     expect(result.stderr).toContain('Start line must be less than or equal to end line.')
   })
 
-  it('rejects path traversal outside project root', () => {
-    const result = runCli(['source', '--index', outDir, '--file', '..\\secret.txt', '--start', '1', '--end', '1'])
+  it('rejects native parent traversal without returning source bytes', () => {
+    const result = runCli(['source', '--index', outDir, '--file', join('..', 'secret.txt'), '--start', '1', '--end', '1'])
     expect(result.status).toBe(2)
     expect(result.stderr).toContain('escapes the indexed project root')
+    expect(result.stdout).toBe('')
+  })
+
+  it('uses native filename and selection rules for Windows-style paths', () => {
+    const root = join(outDir, 'portable-project'), index = join(outDir, 'portable-index')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, 'src/selected.ts'), 'export const selected = "SELECTED_SOURCE";\n', { flag: 'wx' })
+    writeFileSync(join(outDir, 'secret.txt'), 'OUTSIDE_SOURCE_SENTINEL\n', { flag: 'wx' })
+    expect(runCli(['index', '--root', root, '--src', 'src', '--out', index]).status).toBe(0)
+    if (process.platform !== 'win32') {
+      // These are literal filenames on POSIX, created after indexing. Neither is selected.
+      writeFileSync(join(root, '..\\secret.txt'), 'UNSELECTED_BACKSLASH_SENTINEL\n', { flag: 'wx' })
+      writeFileSync(join(root, 'src\\selected.ts'), 'UNSELECTED_BACKSLASH_SENTINEL\n', { flag: 'wx' })
+    }
+    for (const file of [join('..', 'secret.txt'), '..\\secret.txt', ...(process.platform === 'win32' ? [] : ['src\\selected.ts'])]) {
+      const result = runCli(['source', '--index', index, '--file', file, '--start', '1', '--end', '1', '--format', 'json'])
+      expect(result.status, file).toBe(2)
+      expect(result.stdout, file).toBe('')
+      expect(result.stdout + result.stderr).not.toMatch(/OUTSIDE_SOURCE_SENTINEL|UNSELECTED_BACKSLASH_SENTINEL|SELECTED_SOURCE/)
+      expect(result.stderr).toContain(file === join('..', 'secret.txt') || process.platform === 'win32'
+        ? 'escapes the indexed project root' : 'selected source inventory')
+    }
+    const selected = runCli(['source', '--index', index, '--file', join('src', 'selected.ts'), '--start', '1', '--end', '1', '--format', 'json'])
+    expect(selected.status).toBe(0)
+    expect(JSON.parse(selected.stdout).content).toContain('SELECTED_SOURCE')
   })
 
   it('fails clearly for missing file', () => {
     const result = runCli(['source', '--index', outDir, '--file', 'src/missing.ts', '--start', '1', '--end', '1'])
     expect(result.status).toBe(2)
-    expect(result.stderr).toContain('Source file does not exist')
+    expect(result.stderr).toContain('selected source inventory')
   })
 
   it('retrieves by file node with capped preview warning', () => {

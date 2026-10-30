@@ -150,7 +150,7 @@ function toCandidateFile(entry: PenalizedResult, retained: boolean, droppedReaso
 
 /** Node kinds eligible for the generic node-candidate pool: source-backed `file`/`symbol` plus Batch 5's compact `android-*` artifact-backed graph nodes (v1.10.0 Batch 6) - reuses the exact same scoring/penalty/mode-adjustment pipeline as file/symbol candidates, never a separate ranking model. */
 function isEligibleNodeKind(kind: string): boolean {
-  return kind === 'file' || kind === 'symbol' || kind.startsWith('android-')
+  return kind === 'file' || kind === 'symbol' || kind === 'framework-route' || kind.startsWith('android-')
 }
 
 export function rankCandidateNodes(input: RankingInput, mode: ContextCapsuleMode = 'general'): CandidateNode[] {
@@ -165,7 +165,7 @@ export function rankCandidateNodes(input: RankingInput, mode: ContextCapsuleMode
 
 function toCandidateNode(entry: PenalizedResult): CandidateNode {
   const { result, score, penaltyReasons } = entry
-  const kind = result.kind === 'symbol' ? 'symbol' : result.kind.startsWith('android-') ? result.kind : 'file'
+  const kind = result.kind === 'framework-route' ? 'framework-route' : result.kind === 'symbol' ? 'symbol' : result.kind.startsWith('android-') ? result.kind : 'file'
   return {
     nodeId: result.nodeId ?? result.id,
     kind,

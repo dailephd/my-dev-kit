@@ -1718,9 +1718,13 @@ Example projects or fixtures:
 
 ## Version 1.14.0
 
+**Status: published.**
+
 Version 1.14.0 broadens non-Android language and framework coverage after the Android foundation is in place.
 
 The goal is to expand support while keeping static analysis conservative and adapter-based.
+
+**Release scope.** v1.14.0 includes the Python, JavaScript, framework, configured-import and Rust structural capabilities below. Optional Rust direct-call evidence (R7) and Prisma remain deferred. Persisted schemas are symbol index `3`, code graph `1.1.0` and internal cache `1.3.0`; legacy duplicate-ID ambiguity can require a full index rebuild (see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#v1140-additive-schema)). The lists below preserve the approved scope and acceptance criteria.
 
 ### Python improvements
 
@@ -1745,6 +1749,34 @@ Planned features:
 - better Express route extraction
 - better NestJS decorator extraction where useful
 
+
+#### Configured TypeScript/JavaScript import resolution — v1.14.0 correction
+
+**Release scope.** Included in v1.14.0. Configured `paths` aliases from `tsconfig.json`/`jsconfig.json` (including bounded local `extends`, nested configurations and configurations without `baseUrl`) now produce the existing file-dependency edges, with configuration-aware incremental invalidation. Ambiguous, excluded, external or unsafe targets still produce no edge. The contract below is retained as the approved scope record; the current behavior is described in the architecture, contracts and graph-schema documents.
+
+**Placement.** The October 20, 2026 iworkhere.space v0.4.3 discovery using published my-dev-kit 1.13.0 exposed missing dependencies for configured `@/` imports. The bounded correction belongs to v1.14.0 and does not create a separate release, change the Python/JavaScript/framework scope, or renumber the approved Rust subtrack.
+
+**Historical boundary and architectural owners.** The pre-correction TypeScript adapter rejected non-relative imports. The released index-time configured-import resolver supplies supported aliases to the existing `symbolIndex.graph.fileDeps` producer and ordinary `imports`/`depends-on` edges. The query-time relative-specifier helper remains a separate consumer; changing it alone cannot repair persisted graph dependencies.
+
+**Frozen bounded correction contract:**
+
+1. **Config selection and safety.** Identify applicable project-local `tsconfig.json`/`jsconfig.json` for each selected TypeScript/JavaScript source file, including bounded local `extends` inheritance, nested configurations and config-file changes. Use TypeScript configuration parsing semantics for supported configuration forms; never execute target configuration code, import project modules, fetch dependencies, follow symlinks outside the approved repository or expand indexed source roots. For conflicting or unverified applicable configs, report the ambiguity instead of choosing arbitrarily. Only authorized in-repository config files may supply static resolution evidence.
+2. **Mapping semantics.** Resolve supported literal `compilerOptions.paths` exact and single-wildcard mappings with documented specificity and ordered target substitution. With `baseUrl`, mapping targets are relative to it; **without `baseUrl`**, targets are relative to the configuration file defining that mapping. Preserve nested/inherited configuration origins and ordinary relative/NodeNext imports. The source file must already be in the selected index inventory. Honor B05's conservative explicit-extension and ambiguous JS/TS candidate behavior; do not resolve unrelated bare packages or assume bundler runtime reachability.
+3. **One producer of dependency evidence.** Extend the existing TypeScript adapter and shared index-time dependency builder, passing only needed project/config context through their existing contracts. A uniquely established local alias target becomes a `FileDependencyEdge` and the usual existing `file:<path>` → `file:<path>` graph edge. A missing, ambiguous, external, excluded, unsupported or unsafe target yields **no fabricated edge** and bounded diagnostic evidence. Do not introduce a second graph, alias-specific artifact, CLI family or independently guessed import resolver.
+4. **Incremental correctness.** Fingerprint relevant config contents, local inheritance and per-file config association when they affect resolution, independently of source-file hashes. Changing `tsconfig.json`/`jsconfig.json`, a supported inherited config, an importer or a selected target must invalidate the appropriate dependency evidence. Full and incremental index outputs must agree after normalizing timestamps, and stale edges must disappear. When sound partial reuse cannot be established, use a truthful full rebuild. Preserve manifest/cache checksum trust and unrelated language behavior.
+5. **Consumer tests before consumer edits.** Once the persisted `fileDeps` edges are correct, compare default relevance search, `--intent ownership`, exact lookup, depth-bounded slice, related-test discovery and role-aware context on identical fixtures. Patch `src/search/`, `src/context/` or the shared query-time helper only for **reproduced** residual failures, preserving existing test-discovery semantics. Do not add a new ranking algorithm or globally demote tests.
+6. **Measure fallback burden.** Compare the number of searches, lookups, graph slices and bounded source reads needed to establish the same known relationships before and after the fix. Correctness, complete source evidence and conservative uncertainty are primary; fewer reads are a secondary observation, not an arbitrary pass threshold.
+
+**Planned numbered correction steps and required proof:**
+
+1. **Step 1 — Reproduce and freeze resolution contracts.** Independently reproduce the `@/*` → `./src/*` failure (with `moduleResolution: "bundler"` and no `baseUrl`) using a pinned released-tool baseline, then check the current local v1.14 branch. Inspect actual index-time adapter/builder, configuration and cache owners; freeze the exact source/test/output paths and before/after CLI oracle. Record what is a new capability versus an actual failing existing contract.
+2. **Step 2 — Implement configured dependency resolution.** Implement the bounded static `paths` resolver in existing language/indexing owners; ensure selected-root containment, correct config precedence, no guessed imports, deterministic file dependency and code-graph projection, config-dependent incremental invalidation and old-reader compatibility. Do not change public schema versions or introduce new persistent fields without a separately approved migration.
+3. **Step 3 — Verify retrieval and finalize.** Validate query-time owner/related-test consumption against real new edges, fix only proven residual issues, and run the old/new fixture comparison plus full/incremental, graph, context, security, packaging and existing core/Android retrieval-regression suites. Perform cross-platform acceptance at the existing pre-release gate. Do not claim publication or update current-state contracts until implementation passes.
+
+**Planner-owned test locations:** Extend `tests/index/` import/index/incremental tests, `tests/search/` ownership results, `tests/context/` related-test/owner selection, and existing `tests/graph/`/CLI retrieval tests. Use a deliberately scoped fixture rooted at `tests/fixtures/v114-path-alias/`; reserve `tsconfig.json`, `src/app/tool/[slug]/page.tsx`, `src/component/tool/ToolPageTemplate.tsx`, and `src/module/tool/registry.ts` for the incident reproduction. Additional nested-config/ambiguous/relative-import fixtures need exact paths frozen at Step 1 before writes. Required cases: multiple aliases, literal/extensionless/index/NodeNext relative imports, conflicting selected candidates, missing/out-of-root targets, no-`baseUrl` and `baseUrl` configs, `jsconfig` and bounded `extends`, config-only changes, target edits/moves, stale-edge removal and complete CLI ownership/slice/source/context evidence. Expected incident edges are `file:src/app/tool/[slug]/page.tsx` → `file:src/component/tool/ToolPageTemplate.tsx` and → `file:src/module/tool/registry.ts`, both `imports` when uniquely selected.
+
+**Explicit exclusions and follow-up classifications.** No generic CSS, YAML, Dockerfile, JSON or Markdown symbol parser is part of this correction: lack of symbol-level retrieval for those inputs is a capability boundary, not a broken TypeScript index. Search noise/test-heavy results are an investigation, not a confirmed ranking defect; retain relevant test retrieval. Approximately 60 bounded source reads in the incident are not by themselves a failure. Do not modify iworkhere.space, add network services, execute target code, or rewrite Android/other language analyzers. After implementation, reconcile shipped behavior in `ARCHITECTURE.md`, `CONTRACTS.md`, `GRAPH_SCHEMA.md`, `COMMANDS.md`, `DEVELOPMENT.md` and regression/testing owners under the existing documentation-preservation policy; until then these remain planned requirements.
+
 ### Framework improvements
 
 Candidate framework targets:
@@ -1765,16 +1797,18 @@ Candidate framework targets:
 Candidate future languages:
 
 - Go
-- Rust — now detailed as a planned v1.14.0 subtrack below; not implemented or released
+- Rust — structural language intelligence included in v1.14.0 as detailed below (optional call evidence R7 deferred)
 - Java beyond Android use cases
 - C#
 - Kotlin beyond Android use cases
 
 Additional language support should be added through language adapters rather than hardcoded into one scanner.
 
-### Rust language intelligence — planned v1.14.0 subtrack (not implemented)
+### Rust language intelligence — v1.14.0 subtrack
 
-**Decision and scope.** Rust is promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
+**Release scope.** Rust structural intelligence ships in v1.14.0; optional conservative direct-call evidence (R7) remains deferred for separate authorization. The packaged checksum-verified Tree-sitter WebAssembly grammar, generic qualified identity and additive Rust owner nodes, in-process Cargo parsing and extension-based `.rs` discovery are the resolved choices. The following historical plan and acceptance requirements preserve the agreed scope; current contracts are in the architecture and graph-schema documents.
+
+**Original decision and scope.** Rust was promoted from an additional-language candidate to a **planned first-class static retrieval subtrack inside v1.14.0**, without moving or narrowing the Python, JavaScript, framework, Go, Java, C#, Kotlin, v1.15.0–v1.17.0, or v2.0.0 commitments. This is a planning/design decision, **not evidence of implementation, a parser selection, a finalized additive JSON contract, or release authorization**. Rust should work for general Cargo projects and mixed-language repositories, not for one consumer application. The [architecture](ARCHITECTURE.md), [cross-cutting contracts](CONTRACTS.md), and [artifact schema](GRAPH_SCHEMA.md) identify the present owners and distinguish this planned work from published behavior.
 
 **Completion definition.** The existing `index → search → lookup → slice → source → context → graph-diff` loop must retrieve exact, noncolliding crate/module/trait/impl/function/test ownership and bounded source ranges for supported Rust syntax, including multiple same-named methods. Cargo metadata and code graph edges must be conservative; unknown feature activation, unresolved imports, macro expansion, trait dispatch, runtime behavior, and excluded roots must remain explicit unknowns. An indexed `.rs` file count alone is **not** evidence of completed Rust support.
 
@@ -1830,7 +1864,7 @@ These are **Rust workstream batches within v1.14.0**, not eleven new release ver
 - **R4 — Imports/reexports and graph.** Map uniquely resolved module and `use` paths into existing graph nodes/edges with explicit provenance. **Gate:** F03 exact-target oracle, no invented edges, no duplicate IDs and old reader compatibility.
 - **R5 — End-to-end retrieval.** Extend existing search/lookup/slice/source/context for qualified Rust identity, precise method source and related test evidence. **Gate:** F10/F13 mixed-language retrieval and exact ambiguity/source/capsule tests pass.
 - **R6 — Incremental and diff correctness.** Add Rust parser/Cargo/module/config fingerprints, dependency invalidation, trusted partial refresh and graph-diff parity. **Gate:** F11 semantic full/incremental equivalence under controlled source, manifest and grammar changes.
-- **R7 — Optional conservative call evidence.** Allow exact local direct-call links only when uniquely justified; leave method dispatch and generics unresolved. **Gate:** no false-positive edges on F04/F05/F06; may follow the core structural release if separately approved, rather than blocking it.
+- **R7 — Optional conservative call evidence.** Allow exact local direct-call links only when uniquely justified; leave method dispatch and generics unresolved. **Gate:** no false-positive edges on F04/F05/F06; may follow the core structural release if separately approved, rather than blocking it. **Status: deferred for separate future authorization; not implemented.**
 - **R8 — Retrieval regressions and real-world validation.** Exercise ownership-intent retrieval, test mapping, source/continuation, mixed-language noninterference and independently checked licensed Rust fixtures. **Gate:** F13/F14 and inherited retrieval/Android/frontend regressions pass; downstream Orchestrator consumes real emitted existing-schema context without a new mode.
 - **R9 — Packaging, performance and security qualification.** Test the exact packed CLI on supported Node and Windows/Linux/macOS; parser assets shipped, clean consumer requires no Rust toolchain and no runtime download, bounded malformed-input/path/security cases, benchmark budget. **Gate:** actual installed-package acceptance plus matrix CI, no hidden target execution or broken binary/WASM assets.
 - **R10 — Documentation and separate release transitions.** Reconcile implementation against planned scope, examples and the existing public docs, schemas and preservation manifest. **Gate:** docs checks and protected-plan inventory pass, implementation-completeness validates what shipped; pre-release audit, release preparation and publication remain **separate user-authorized procedures**.
@@ -1846,9 +1880,9 @@ Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/
 
 **Acceptance invariants:** zero silently dropped duplicate-named declarations; zero identity collisions; all `RESOLVED` graph edges grounded in unique local selected targets; every `AMBIGUOUS` source/lookup preserving bounded candidates; precise or honestly unknown method boundaries; frozen snapshots never overwritten; equivalent timestamp-normalized full/incremental graphs; no regressions in existing language/Android/frontend consumers; bounded performance and deterministic portable packaging.
 
-#### Planner decision ledger and prerequisites (not all resolved)
+#### Historical planner decision ledger and prerequisites
 
-- **D01 placement:** **planned** v1.14.0 Rust subtrack; existing scope in every other v1.14 section and future version remains intact. **Not** an implementation-complete or released commitment.
+- **D01 placement:** **planned** v1.14.0 Rust subtrack; existing scope in every other v1.14 section and future version remains intact. **Not** an implementation-complete or released commitment. *Release status: the structural subtrack ships in v1.14.0; R7 remains deferred. The original planning decision text is retained.*
 - **D02 parser:** Tree-sitter grammar as design direction; native Node vs packaged WASM is **UNRESOLVED until R0 cross-platform installed-package evidence**.
 - **D03 identity:** reuse generic symbol/graph with qualified Rust ownership and deterministic collision-free IDs; **exact field names, disambiguation algorithm, schema version and reader migration are UNRESOLVED until R0/R1**.
 - **D04 declarations:** nested trait/`impl` associated items are required for first substantive support; no regex-only top-level substitute.

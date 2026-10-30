@@ -6,6 +6,27 @@ import { normalizeSearchQuery } from '../../src/search/rankSearchResults.js'
 import { searchIndex } from '../../src/search/searchIndex.js'
 import type { SearchIndexResult } from '../../src/search/searchTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
+import * as path from 'node:path'
+import { prepareRustParser } from '../../src/languages/rust/parser.js'
+import { buildIndex } from '../../src/symbol-index/builder.js'
+import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
+import { buildRustStructure } from '../../src/graph/buildRustStructure.js'
+import { buildRustRelationships } from '../../src/graph/buildRustRelationships.js'
+
+describe('B14 independently qualified Rust owner ranking', () => {
+  it('ranks the exact Config declaration before fields matching path-extension fragments', async () => {
+    await prepareRustParser()
+    const root = path.resolve('tests/fixtures/v114-language/rust/F14-licensed-corpus/cli')
+    const index = buildIndex({ repoRoot: root, sourceRoots: ['src'] }).index
+    const structure = buildRustStructure(buildCodeGraph({ symbolIndex: index }), root, index.files)
+    const { graph } = buildRustRelationships(structure.graph, index.files, structure.packages, structure.modules)
+    const resolved = { indexDir: 'test', manifestPath: 'manifest.json', artifactPaths: {}, manifest: { projectRoot: root } } as unknown as ResolvedIndexManifest
+    const result = searchIndex({ symbolIndex: index, codeGraph: graph, resolved, query: 'src/config.rs Config', intent: 'ownership', limit: 100 })
+    expect(result.results[0]?.id).toBe('symbol:src/config.rs#Config')
+    expect(result.results.some(r => r.id.endsWith('#ls_colors#0'))).toBe(true)
+    expect(searchIndex({ symbolIndex: index, codeGraph: graph, resolved, query: 'src/config.rs ls_colors', intent: 'ownership', limit: 8 }).results[0]?.id).toBe('symbolq:src%2Fconfig.rs#rust%3Astruct_item%3AConfig%4013%3A292#ls_colors#0')
+  })
+})
 
 describe('searchIndex', () => {
   it('normalizes query terms deterministically', () => {

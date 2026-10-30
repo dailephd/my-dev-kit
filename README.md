@@ -1,6 +1,6 @@
 # my-dev-kit
 
-my-dev-kit is a local-first CLI for indexing a codebase, exploring its graph, and retrieving bounded source evidence. It supports TypeScript, JavaScript, Python, Kotlin, Java, and supported Android project structures without editing source files or sending project data to an external service.
+my-dev-kit is a local-first CLI for indexing a codebase, exploring its graph, and retrieving bounded source evidence. It supports TypeScript, JavaScript, Python, Kotlin, Java, Rust, and supported Android project structures without editing source files or sending project data to an external service.
 
 ## Overview
 
@@ -132,9 +132,9 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.13.0
+## Latest release: v1.14.0
 
-`@dailephd/my-dev-kit@1.13.0` is the latest release represented by this package. It adds twelve Android retrieval benchmarks, lookup and slice regression assertions, and the packaged Android/Kotlin example with Android workflow documentation. It also corrects context owner ranking, Android test ownership, symbol-local component-role detection, and single-layer owner conflicts while preserving genuine ambiguity and static-analysis limits. Earlier releases, including v1.12.6, remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1130).
+`@dailephd/my-dev-kit@1.14.0` is the release represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence, and adds Rust structural indexing and bounded retrieval. It retains the existing Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
 
 The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 
@@ -514,7 +514,7 @@ Supported inspection behavior:
 
 The `data-model` command is available for focused inspection and regeneration of data-model artifacts. It reads index artifacts from `--index` and can regenerate or inspect without re-running `index`.
 
-Unsupported or ambiguous patterns are reported as warnings or omitted conservatively. The current release does not claim Prisma, SQL, Django, SQLAlchemy, TypeORM, or Sequelize support.
+Unsupported or ambiguous patterns are reported as warnings or omitted conservatively. The TypeScript patterns described here do not claim Prisma, SQL, TypeORM or Sequelize support. v1.14.0 also records bounded Django and SQLAlchemy model facts from Python source; it never connects to a database or executes an ORM.
 
 ## Conservative model-to-view lineage
 
@@ -588,9 +588,9 @@ All React/TSX and frontend-test analysis is conservative static extraction from 
 
 - v1.12.6 stores an optional parser-derived `endLine` for TypeScript-family and Python symbols; Kotlin, Java, old indexes, and uncertain cases keep unknown boundaries. When a boundary is unknown, symbol source retrieval returns a capped preview from the symbol's start line. v1.4 uses the `frontend-semantic.json` artifact (when available) or a next-symbol heuristic to estimate end lines; confidence is reported per block. Use `--continue-from <n>` or `--continue` to retrieve subsequent windows.
 - Call-graph extraction is best-effort static syntactic analysis and may miss dynamic dispatch, computed calls, monkey-patching, decorator effects, and runtime behavior.
-- Data-model extraction is conservative and currently focused on supported TypeScript patterns.
+- Data-model extraction is conservative, covering supported TypeScript patterns and bounded Django/SQLAlchemy model facts.
 - Frontend semantic extraction is conservative. Dynamic component registrations, runtime-composed JSX, and computed prop names may not be extracted or may be partially extracted with warnings.
-- Semantic roles currently produced: `data-entity` and `data-field` from the TypeScript model analyzer. Frontend facts are in `frontend-semantic.json`, not embedded as `semanticRoles` in the code graph.
+- Semantic roles currently produced: `data-entity` and `data-field` for supported models. Frontend facts are in `frontend-semantic.json`, not embedded as `semanticRoles` in the code graph.
 - Lookup is exact only. There is no fuzzy entity, field, or component lookup.
 - `trace-view` is conservative static analysis only. Unsupported dynamic or ambiguous patterns are warned or omitted.
 - Route-aware retrieval, browser-storage tracing, and UI reachability analysis (v1.3.0) record static evidence only. They do not execute the app, run the browser, prove a route is reachable by any user, or prove a UI element is visible at runtime.
@@ -612,9 +612,20 @@ npm run verify
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the development guide and [docs/RELEASE.md](docs/RELEASE.md) for the maintainer release checklist.
 
+## v1.14.0 language, framework and Rust coverage
+
+v1.14.0 adds the following conservative static analysis without executing target code:
+
+- Python: nested classes and methods, decorators, structured imports, grounded local calls, Django and SQLAlchemy model facts, and FastAPI routes.
+- JavaScript and TypeScript: JSDoc, CommonJS and `.cjs`, and `tsconfig.json`/`jsconfig.json` path aliases.
+- Frameworks: Express and NestJS routes, Next.js App Router, and Playwright and Vitest test associations.
+- Rust: Cargo packages and targets, modules, traits and impls, unique local imports, qualified same-name methods, and the usual search, lookup, slice, source, context and graph-diff retrieval, using a packaged parser with no Rust toolchain needed.
+
+Rust call inference and Prisma are not implemented. Try it with the [Rust workspace example](examples/basic-rust-workspace/README.md); details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/GRAPH_SCHEMA.md](docs/GRAPH_SCHEMA.md) and [docs/SECURITY.md](docs/SECURITY.md).
+
 ## Roadmap
 
-Version 1.13.0 is the latest release represented by this package. The planned scopes from v1.14.0 through v2.0.0 remain in place. Within v1.14.0, language/framework expansion now includes an explicitly planned, **unimplemented** Rust static-retrieval subtrack; existing Python, JavaScript, framework, and other-language commitments remain unchanged. No Rust parser or Rust-specific CLI capability ships in this version. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--planned-v1140-subtrack-not-implemented) and [changelog](CHANGELOG.md) for planned scope and release history.
+Version 1.14.0 is the current release represented by this package. The planned scopes and ordering for v1.15.0, v1.16.0, v1.17.0 and v2.0.0 remain unchanged. Optional Rust direct-call inference (R7) and Prisma remain deferred. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack) and [changelog](CHANGELOG.md) for scope and release history.
 
 ## Support the project
 

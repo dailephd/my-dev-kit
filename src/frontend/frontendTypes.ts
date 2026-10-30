@@ -169,6 +169,7 @@ export interface LocatorCandidate {
 export interface RouteStringCandidate {
   id: string
   value: string
+  evidenceKind?: 'literal-goto'
   /** Test block this route string belongs to. */
   testBlockId?: string | null
   sourceRef: FrontendSourceRef
@@ -209,6 +210,9 @@ export interface FrontendFileResult {
   isTestFile: boolean
   /** Whether the file had a parse error during extraction. */
   parseError: boolean
+  /** Named exported HTTP implementations observed by the existing compiler AST. */
+  routeHandlerMethods?: Array<{ method: string; sourceRef: FrontendSourceRef }>
+  routeHandlerMethodsTruncated?: boolean
   components: ReactComponentCandidate[]
   localComponents: LocalComponentCandidate[]
   propTypes: PropTypeCandidate[]

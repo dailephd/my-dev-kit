@@ -1,6 +1,6 @@
 {
   "name": "@dailephd/my-dev-kit",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Local codebase graph indexing, semantic enrichment, bounded source retrieval, React/TSX frontend indexing, data-model extraction, conservative static lineage, and conservative static Android project/component detection for TypeScript, JavaScript, Python, Kotlin, and Java projects.",
   "type": "module",
   "bin": {
@@ -37,7 +37,15 @@
     "examples/basic-android-kotlin/settings.gradle.kts",
     "examples/basic-android-kotlin/build.gradle.kts",
     "examples/basic-android-kotlin/app/build.gradle.kts",
-    "examples/basic-android-kotlin/app/src"
+    "examples/basic-android-kotlin/app/src",
+    "examples/basic-rust-workspace/README.md",
+    "examples/basic-rust-workspace/Cargo.toml",
+    "examples/basic-rust-workspace/crates/core/Cargo.toml",
+    "examples/basic-rust-workspace/crates/core/src/lib.rs",
+    "examples/basic-rust-workspace/crates/core/src/tasks.rs",
+    "examples/basic-rust-workspace/crates/core/tests/worker_tests.rs",
+    "examples/basic-rust-workspace/crates/cli/Cargo.toml",
+    "examples/basic-rust-workspace/crates/cli/src/main.rs"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",
@@ -60,14 +68,16 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
-    "typescript": "^5.9.3"
+    "smol-toml": "1.9.1",
+    "typescript": "^5.9.3",
+    "web-tree-sitter": "0.25.10"
   },
   "devDependencies": {
     "@types/node": "^20.19.25",
     "esbuild": "^0.28.1",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",
-    "vitest": "^4.1.11"
+    "vitest": "4.1.12"
   },
   "overrides": {
     "esbuild": "^0.28.1"

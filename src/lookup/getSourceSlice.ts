@@ -1,16 +1,70 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { ContinuationCursor, SourceSlice, SourceSliceMode } from './sourceSliceTypes.js'
+
+export class UnsafeSourceError extends Error {}
+
+// The command supplies the current persisted inventory lazily, after option validation.
+const sourceAuthority = new AsyncLocalStorage<(root: string, file: string) => void>()
+export function withSourceAuthority<T>(authorize: (root: string, file: string) => void, action: () => T): T {
+  return sourceAuthority.run(authorize, action)
+}
+
+function contained(root: string, file: string): boolean {
+  const relative = path.relative(root, file)
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+}
 
 export function ensureInsideProjectRoot(projectRoot: string, filePath: string): string {
   const root = path.resolve(projectRoot)
   const resolved = path.resolve(root, filePath)
   const relative = path.relative(root, resolved)
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`File path escapes the indexed project root: ${filePath}`)
+  if (!contained(root, resolved) || filePath.includes('\0')) {
+    throw new UnsafeSourceError('File path escapes the indexed project root.')
+  }
+  // A POSIX backslash is a filename character, not an indexed path separator.
+  sourceAuthority.getStore()?.(root, process.platform === 'win32' ? toForwardSlash(relative) : relative)
+  try {
+    const physicalRoot = fs.realpathSync(root)
+    const physicalFile = fs.realpathSync(resolved)
+    if (!contained(physicalRoot, physicalFile)) throw new UnsafeSourceError('Physical source path is outside the indexed project root; unsafe symlink or junction.')
+    if (!fs.statSync(physicalFile).isFile()) throw new UnsafeSourceError('Source target must be a regular file.')
+  } catch (error) {
+    if (error instanceof UnsafeSourceError) throw error
+    // Existing index consumers resolve missing paths to emit their own diagnostics.
+    // The actual source reader below always resolves again and fails before any read.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return resolved
+    throw new UnsafeSourceError('Source file is missing, unreadable, or has an unresolved symlink. Re-index the selected source.')
   }
   return resolved
+}
+
+/** Read the verified physical file through a descriptor, checking identity before releasing bytes.
+ * These checks detect substitutions; they are not an atomic filesystem sandbox.
+ */
+export function readSourceText(projectRoot: string, filePath: string): string {
+  const lexical = ensureInsideProjectRoot(projectRoot, filePath)
+  let descriptor: number | undefined
+  try {
+    const root = fs.realpathSync(projectRoot)
+    const physical = fs.realpathSync(lexical)
+    if (!contained(root, physical)) throw new UnsafeSourceError('Physical source path is outside the indexed project root.')
+    const expected = fs.statSync(physical)
+    descriptor = fs.openSync(physical, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0))
+    const before = fs.fstatSync(descriptor)
+    const same = (a: fs.Stats, b: fs.Stats) => a.isFile() && b.isFile() && a.ino !== 0 && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs
+    if (!same(expected, before) || fs.realpathSync(lexical) !== physical || fs.realpathSync(projectRoot) !== root) throw new UnsafeSourceError('Unsafe source substitution; retry after re-indexing.')
+    const text = fs.readFileSync(descriptor, 'utf8')
+    if (!same(before, fs.fstatSync(descriptor)) || !same(before, fs.statSync(physical)) || fs.realpathSync(lexical) !== physical || fs.realpathSync(projectRoot) !== root) throw new UnsafeSourceError('Unsafe source substitution; retry after re-indexing.')
+    return text
+  } catch (error) {
+    if (error instanceof UnsafeSourceError) throw error
+    throw new UnsafeSourceError('Source file is missing, unreadable, or has an unsafe unresolved symlink. Re-index the selected source.')
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor)
+  }
 }
 
 export function getSourceSlice(options: {
@@ -38,11 +92,7 @@ export function getSourceSlice(options: {
 }): SourceSlice {
   validateLineRange(options.startLine, options.endLine, options.maxLines)
   const absolutePath = ensureInsideProjectRoot(options.projectRoot, options.filePath)
-  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
-    throw new Error(`Source file does not exist: ${options.filePath}`)
-  }
-
-  const rawLines = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+  const rawLines = readSourceText(options.projectRoot, options.filePath).split(/\r?\n/)
   // Standard text files end with \n, which produces a trailing empty string — don't count it as a line.
   const lines = rawLines.length > 0 && rawLines[rawLines.length - 1] === '' ? rawLines.slice(0, -1) : rawLines
   if (options.symbolEndLine !== undefined) assertSymbolSpanPresent(options.filePath, options.symbolEndLine, lines.length)

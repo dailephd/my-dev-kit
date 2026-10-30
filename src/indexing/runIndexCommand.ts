@@ -1,6 +1,11 @@
+import { prepareRustParser } from '../languages/rust/parser.js'
+import { discoverCargoStructure } from '../languages/rust/cargo.js'
+import { buildRustStructure } from '../graph/buildRustStructure.js'
+import { buildRustRelationships } from '../graph/buildRustRelationships.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { buildCodeGraph } from '../graph/buildCodeGraph.js'
+import { buildFrameworkRoutes } from '../graph/buildFrameworkRoutes.js'
 import { addFrontendRelationshipsToCodeGraph } from '../graph/addFrontendRelationshipsToCodeGraph.js'
 import { addAndroidRelationshipsToCodeGraph } from '../graph/addAndroidRelationshipsToCodeGraph.js'
 import { toForwardSlash } from '../io/pathUtils.js'
@@ -36,6 +41,8 @@ import {
   type ChangedFileSummary,
 } from './cacheMetadata.js'
 import { checkPartialRebuildEligibility, buildPartialSymbolIndex } from './partialRebuild.js'
+import { ConfiguredImportResolver } from '../languages/typescript/configuredImportResolver.js'
+import { resolveJsTsCandidates } from '../languages/typescript/adapter.js'
 import { loadTrustedBaseline } from './trustedBaseline.js'
 import { selectAffectedNeighborhood } from './affectedNeighborhood.js'
 import {
@@ -301,6 +308,7 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
   })
 
   if (options.incremental !== true) {
+    await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
     const built = runFullIndexBuild({
       projectRoot,
       normalizedSourceRoots,
@@ -368,7 +376,7 @@ interface RunIncrementalIndexParams {
   androidResourcesResult: BuildAndroidResourceProjectResult
 }
 
-function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommandIndexResult {
+async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<RunIndexCommandIndexResult> {
   const {
     projectRoot,
     normalizedSourceRoots,
@@ -384,7 +392,10 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
     androidResourcesResult,
   } = params
 
+  const configFiles = discoverSourceFiles({ repoRoot: projectRoot, sourceRoots: normalizedSourceRoots, userExcludes: options.exclude }).files
   const configFingerprint = computeConfigFingerprint({
+    rustCargoFingerprint: discoverCargoStructure(projectRoot, configFiles.filter(f => f.relPath.endsWith('.rs')).map(f => f.relPath)).fingerprint,
+    configuredImportsFingerprint: new ConfiguredImportResolver(projectRoot).fingerprint(configFiles.filter(f => /\.(?:ts|tsx|js|jsx|cjs)$/.test(f.relPath)).map(f => f.relPath), resolveJsTsCandidates),
     sourceRoots: normalizedSourceRoots,
     excludePatterns: options.exclude ?? [],
     callGraphEnabled: options.callGraph === true,
@@ -406,11 +417,12 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   const cacheRead = readCacheMetadata(outputDir)
   const requestedScope: IncrementalRefreshScope = options.refreshScope ?? 'changed-files'
 
-  const fullRebuild = (
+  const fullRebuild = async (
     cacheMode: CacheMode,
     invalidationReason: string | null,
     refreshFallbackReason: string
-  ): RunIndexCommandIndexResult => {
+  ): Promise<RunIndexCommandIndexResult> => {
+    await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
     const built = runFullIndexBuild({
       projectRoot,
       normalizedSourceRoots,
@@ -490,15 +502,25 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   const hasChanges =
     changedFileSummary.addedCount > 0 || changedFileSummary.changedCount > 0 || changedFileSummary.removedCount > 0
 
+  // Compatibility and source hashes alone cannot establish that persisted
+  // facts still describe the cached build. Validate the existing checksum
+  // baseline before either unchanged-fact reuse or the no-change shortcut.
+  const baseline = loadTrustedBaseline({
+    outputDir,
+    projectRoot,
+    sourceRoots: normalizedSourceRoots,
+    configFingerprint,
+  })
+
   if (hasChanges) {
     const detailed = classifyChangedFilePaths(cacheRead.metadata.files, currentFileEntries)
-    const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
 
     // Full rebuild for a change-detected run whose partial reuse was not possible or trusted.
-    const changeDetectedFullRebuild = (
+    const changeDetectedFullRebuild = async (
       invalidationReason: string | null,
       refreshFallbackReason: string
-    ): RunIndexCommandIndexResult => {
+    ): Promise<RunIndexCommandIndexResult> => {
+      await prepareSelectedRust(projectRoot, normalizedSourceRoots, options.exclude)
       const built = runFullIndexBuild({
         projectRoot,
         normalizedSourceRoots,
@@ -539,6 +561,10 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       }
     }
 
+    if (baseline.status !== 'trusted') {
+      return changeDetectedFullRebuild(`Previous baseline is not trusted (${baseline.reason}): ${baseline.detail}`, baseline.reason)
+    }
+    const eligibility = checkPartialRebuildEligibility(outputDir, detailed.unchanged)
     if (eligibility.eligible) {
       // Affected-neighborhood: select unchanged neighbors to freshly re-extract, or fall back to full.
       let forceReextractPaths = new Set<string>()
@@ -549,12 +575,6 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
         affectedEdgeCount: number
       } | null = null
       if (requestedScope === 'affected-neighborhood') {
-        const baseline = loadTrustedBaseline({
-          outputDir,
-          projectRoot,
-          sourceRoots: normalizedSourceRoots,
-          configFingerprint,
-        })
         const selection = selectAffectedNeighborhood({
           baseline,
           classification: detailed,
@@ -589,6 +609,11 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
       }
 
       const previousCacheEntriesByPath = new Map(cacheRead.metadata.files.map((entry) => [entry.path, entry]))
+      const unchanged = new Set(detailed.unchanged)
+      if (discovery.files.some(file => file.relPath.toLowerCase().endsWith('.rs') &&
+        (!unchanged.has(file.relPath) || forceReextractPaths.has(file.relPath) || eligibility.previousFileSummariesByPath.get(file.relPath)?.rustSyntaxFacts === undefined))) {
+        await prepareRustParser()
+      }
       const partial = buildPartialSymbolIndex({
         repoRoot: projectRoot,
         sourceRoots: normalizedSourceRoots,
@@ -676,6 +701,13 @@ function runIncrementalIndex(params: RunIncrementalIndexParams): RunIndexCommand
   // existing manifest is missing or unreadable despite a valid cache (a
   // stale/inconsistent output directory), fall back to a safe full rebuild
   // rather than silently returning inconsistent data.
+  if (baseline.status !== 'trusted') {
+    return fullRebuild(
+      'incremental-full-cache-incompatible',
+      `Previous baseline is not trusted (${baseline.reason}): ${baseline.detail}`,
+      baseline.reason
+    )
+  }
   const existingManifest = tryReadExistingManifest(outputDir)
   if (!existingManifest) {
     return fullRebuild(
@@ -938,7 +970,12 @@ function finishIndexBuild(
   const errors: string[] = []
 
   const languages = inferLanguages(index.files.map((file) => file.language), options.language)
-  const codeGraph = buildCodeGraph({ symbolIndex: index, callGraph })
+  // Reproject from every selected summary, including unchanged cross-file routers.
+  const rustStructure = buildRustStructure(buildFrameworkRoutes(buildCodeGraph({ symbolIndex: index, callGraph }), index.files), projectRoot, index.files)
+  const rustRelationships = buildRustRelationships(rustStructure.graph, index.files, rustStructure.packages, rustStructure.modules)
+  const codeGraph = rustRelationships.graph
+  warnings.push(...rustStructure.warnings)
+  warnings.push(...rustRelationships.warnings)
   const createdAt = new Date().toISOString()
   const baseManifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
@@ -1203,6 +1240,7 @@ function finishIndexBuild(
     analyzers: replaceAnalyzerStatuses(
       [
         ...(baseManifest.analyzers ?? []),
+        ...(index.files.some(f => f.language === 'rust') ? [{ id: 'rust-structure', status: rustStructure.warnings.length ? 'partial' as const : 'complete' as const, version: 'v1.14.0-b09', warningCount: rustStructure.warnings.length, errorCount: 0, summary: { packageCount: rustStructure.packageCount, workspaceCount: rustStructure.workspaceCount } }] : []),
         finalClassificationAnalyzerStatus,
         androidAnalyzerStatus,
         androidComponentsAnalyzerStatus,
@@ -1863,4 +1901,10 @@ function createProgressReporter(enabled: boolean, commandStartTime: number): ((e
     const sourceRoot = 'currentSourceRoot' in event && event.currentSourceRoot ? ` source=${event.currentSourceRoot}` : ''
     process.stderr.write(`[my-dev-kit:index] ${event.message} (${elapsedSeconds}s)${sourceRoot}${counts}\n`)
   }
+}
+
+/** Uses the existing selected-source discovery boundary, never scans for Cargo modules. */
+async function prepareSelectedRust(repoRoot: string, sourceRoots: string[], userExcludes?: string[]): Promise<void> {
+  const discovery = discoverSourceFiles({ repoRoot, sourceRoots, userExcludes })
+  if (discovery.files.some(file => file.relPath.toLowerCase().endsWith('.rs'))) await prepareRustParser()
 }

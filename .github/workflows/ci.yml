@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare B15 task environment
+        run: node -e "const fs=require('fs'),p=require('path');const t=p.resolve('.my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/temp'),c=p.resolve('.my-dev-kit-workflow/npm-cache/v1.14.0-b15-20261021'),a=p.resolve('.my-dev-kit-workflow/b15-tmp');for(const d of [t,c])fs.mkdirSync(d,{recursive:true});if(fs.existsSync(a))throw Error('B15 TEMP alias already exists');fs.symlinkSync(t,a,process.platform==='win32'?'junction':'dir');fs.appendFileSync(process.env.GITHUB_ENV,'TEMP='+a+'\nTMP='+a+'\nTMPDIR='+a+'\nnpm_config_cache='+c+'\n')"
+
       - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
@@ -36,10 +39,46 @@ jobs:
         run: npm run verify
 
       - name: Test
-        run: npm run test
+        env:
+          B15_RSS_CONTEXT: full-suite
+        run: npm run test -- --maxWorkers=2 --reporter=dot
+
+      - name: Rust corpus isolated process comparison
+        if: always()
+        env:
+          B15_RSS_CONTEXT: isolated-corpus
+        run: node node_modules/vitest/vitest.mjs run tests/retrievalRegression/rustCorpusV114.spec.ts --maxWorkers=2 --reporter=dot
+
+      - name: Security tests
+        run: npm run test:security
 
       - name: Package dry run
-        run: npm pack --dry-run --json
+        run: npm pack --dry-run --ignore-scripts --json
+
+      - name: Retrieval regression - core
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/core/run-001 --fail-on-regression
+
+      - name: Retrieval regression - Android
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.13/android.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/android/run-001 --fail-on-regression
+
+      - name: Retrieval regression - Rust
+        run: node node_modules/tsx/dist/cli.mjs src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.14/rust.json --out .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/benchmarks/rust/run-001 --fail-on-regression
+
+      - name: Rust installed-package qualification
+        run: node scripts/qualification/v114RustMatrix.mjs
+
+      - name: Upload Rust qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v114-b15-rust-qualification-${{ matrix.os }}
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/qualification.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*.exit.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/packed-consumer/run-*/evidence/*-resources.json
+            .my-dev-kit-workflow/tmp/v1.14.0-b15-20261021/tests/run-*/rust-rss.jsonl
 
       - name: CLI help
         run: node dist/cli.js --help

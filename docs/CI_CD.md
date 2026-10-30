@@ -52,6 +52,21 @@ CI validates the following:
 - the Python example can be indexed when Python is available
 - temporary example artifacts are removed after the smoke checks
 
+## v1.14.0 release validation
+
+For v1.14.0, the same workflow additionally runs these steps on every platform in the matrix (Windows, Ubuntu and macOS, each on Node.js 24.x), in this order:
+
+1. Prepare a short, repository-contained temporary directory and npm cache for the run (a `TEMP`/`TMP`/`TMPDIR` alias), so long Windows paths and test output stay inside the workspace.
+2. `npm ci`, then `npm run verify` (type checking, build and the documentation preservation check).
+3. The complete test suite with `--maxWorkers=2 --reporter=dot`, followed by an isolated-process run of the licensed Rust corpus tests for comparison.
+4. `npm run test:security`.
+5. `npm pack --dry-run --ignore-scripts --json`.
+6. The three retrieval-regression suites (core, Android and Rust) with `--fail-on-regression`.
+7. Installed Rust qualification: `node scripts/qualification/v114RustMatrix.mjs` packs the repository, installs the tarball into an independent consumer, checks the exact package inventory and grammar hash, and runs the installed CLI against Rust fixtures and the pinned corpus with no Rust toolchain.
+8. Upload of source-free qualification evidence, then the legacy CLI smoke checks described above.
+
+A queued, running, skipped or failed required job is not a pass. Qualification applies to the exact commit that ran; a later commit needs its own run. Everything here is **validation CI**: it does not publish to npm, create tags or releases, or bump versions, and release automation remains not implemented (see "Release automation" below).
+
 ## CI command sequence
 
 The CI workflow runs the equivalent of the following commands from the repository root:

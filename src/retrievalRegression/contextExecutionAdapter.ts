@@ -2,6 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { toForwardSlash } from '../io/pathUtils.js'
+import { CONTEXT_REQUEST_SCHEMA_VERSION, type ContextRequest } from '../context/types.js'
 import type { RetrievalRegressionCaps, RetrievalRegressionMode, RetrievalRegressionSuiteConfig, RetrievalRegressionTask } from './types.js'
 
 export interface ContextExecutionResult {
@@ -36,6 +37,7 @@ export function buildContextArgs(options: {
   config: RetrievalRegressionSuiteConfig
   capsulePath: string
   auditPath: string
+  requestPath?: string
 }): string[] {
   const { indexDir, task, config, capsulePath, auditPath } = options
   const mode: RetrievalRegressionMode = task.mode ?? config.defaultMode ?? 'general'
@@ -46,8 +48,7 @@ export function buildContextArgs(options: {
     'context',
     '--index',
     indexDir,
-    '--query',
-    task.query ?? '',
+    ...(options.requestPath ? ['--request', options.requestPath] : ['--query', task.query ?? '']),
     '--out',
     capsulePath,
     '--audit-out',
@@ -79,7 +80,18 @@ export function runContextForTask(options: {
 
   fs.mkdirSync(taskOutputDir, { recursive: true })
 
-  const cliArgs = buildContextArgs({ indexDir, task, config, capsulePath, auditPath })
+  let requestPath: string | undefined
+  const execution = task.execution
+  if (execution?.kind === 'context' && Object.keys(execution).some(key => key !== 'kind')) {
+    requestPath = toForwardSlash(path.join(taskOutputDir, 'context-request.json'))
+    const request: ContextRequest = { schemaVersion: CONTEXT_REQUEST_SCHEMA_VERSION, query: task.query ?? '' }
+    if (execution.role !== undefined) request.role = execution.role
+    for (const key of ['focusFiles', 'focusSymbols', 'changedFiles', 'changedSymbols', 'requestedEvidenceKinds'] as const) {
+      if (execution[key] !== undefined) Object.assign(request, { [key]: execution[key] })
+    }
+    fs.writeFileSync(requestPath, `${JSON.stringify(request, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
+  }
+  const cliArgs = buildContextArgs({ indexDir, task, config, capsulePath, auditPath, requestPath })
 
   const startedAt = Date.now()
   const result = spawnSync(process.execPath, [tsxCliPath(repoRoot), ...cliArgs], {

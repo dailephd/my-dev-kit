@@ -2,10 +2,16 @@ import type { SemanticArtifactRef, SemanticRole } from '../semantics/index.js'
 import type { FrontendSourceRef, ReactFlowRelationshipKind } from '../frontend/index.js'
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.js'
+import type { CargoDependency, CargoWorkspace, RustResolutionStatus, RustTargetKind } from '../languages/rust/cargo.js'
 
-export const CODE_GRAPH_SCHEMA_VERSION = '1.0.0'
+export const CODE_GRAPH_SCHEMA_VERSION = '1.1.0'
 
 export type CodeGraphNodeKind =
+  | 'rust-impl'
+  | 'rust-package'
+  | 'rust-target'
+  | 'rust-module'
+  | 'framework-route'
   | 'file'
   | 'symbol'
   | 'frontend-fact'
@@ -45,6 +51,21 @@ export type AndroidArtifactId =
   | 'android-test-semantic'
 
 export type CodeGraphEdgeKind =
+  | 'rust-module-defines-symbol'
+  | 'rust-impl-defines-symbol'
+  | 'rust-impl-for-type'
+  | 'rust-impl-of-trait'
+  | 'rust-module-uses-module'
+  | 'rust-module-reexports-symbol'
+  | 'rust-package-has-target'
+  | 'rust-target-root-file'
+  | 'rust-target-contains-module'
+  | 'rust-module-contains-module'
+  | 'rust-module-defined-in-file'
+  | 'rust-module-resolves-to-file'
+  | 'framework-route-defined-in-file'
+  | 'framework-route-handled-by-symbol'
+  | 'framework-router-mounts-route'
   | 'defines'
   | 'imports'
   | 'exports'
@@ -97,6 +118,36 @@ export type CodeGraphEdgeKind =
   | 'activity-hosts-composable'
 
 export interface CodeGraphNode {
+  rustMetadata?: {
+    origin: 'manifest' | 'conventional' | 'root' | 'inline' | 'external' | 'syntax'
+    status: RustResolutionStatus
+    sourceIndex?: number
+    lexicalModuleOwner?: string
+    implementation?: 'inherent' | 'trait'
+    typePath?: string
+    traitPath?: string
+    syntax?: string
+    genericParameters?: string
+    negative?: boolean
+    identityProvenance?: string
+    manifest?: string
+    edition?: string
+    inheritedMetadata?: Record<string, string | string[] | boolean>
+    workspace?: CargoWorkspace
+    dependencies?: CargoDependency[]
+    targetKind?: RustTargetKind
+    targetName?: string
+    root?: string
+    modulePath?: string
+    endLine?: number
+    declarationId?: string
+    resolvedFile?: string
+    candidates?: string[]
+    reason?: string
+  }
+  routeMetadata?: Record<string, string | number | boolean | null>
+  qualifiedName?: string
+  ownerKey?: string
   id: string
   kind: CodeGraphNodeKind
   label: string

@@ -11,9 +11,10 @@
  */
 
 import * as ts from 'typescript'
-import * as path from 'path'
+import { extractFromSource } from './symbolExtractor.js'
+import { assignDeclarationIdentities } from './declarationIdentity.js'
+import { resolveJsTsCandidates } from '../languages/typescript/adapter.js'
 import { type CallGraph, type CallGraphEdge, SCHEMA_VERSION } from './types.js'
-import { toForwardSlash as normalizePath } from '../io/pathUtils.js'
 import type { SourceFileInput } from '../languages/types.js'
 
 // ---------------------------------------------------------------------------
@@ -51,22 +52,62 @@ export function extractTypeScriptCallGraphEdges(
 ): CallGraphEdge[] {
   const edges: CallGraphEdge[] = []
 
-  // Build a name → file map from all known top-level exported names so we
-  // can resolve local callees to their source files.
-  const exportMap = buildExportMap(files)
+  // Resolve declarations within each selected module; names are never global.
+  const extractions = new Map(files.map(f => {
+    const result = extractFromSource(f.filePath, f.sourceText)
+    result.symbols = assignDeclarationIdentities(f.filePath, result.symbols)
+    return [f.filePath, result] as const
+  }))
 
   for (const { filePath, sourceText } of files) {
     const sourceFile = ts.createSourceFile(
       filePath,
       sourceText,
       ts.ScriptTarget.Latest,
-      true
+      true,
+      /\.tsx$/i.test(filePath) ? ts.ScriptKind.TSX : /\.jsx$/i.test(filePath) ? ts.ScriptKind.JSX : /\.(js|cjs)$/i.test(filePath) ? ts.ScriptKind.JS : ts.ScriptKind.TS
     )
 
-    // Build an import specifier → absolute-ish file path map for this file
-    const importedNames = buildImportedNameMap(sourceFile, filePath, exportMap)
-
-    extractEdges(sourceFile, filePath, importedNames, edges)
+    // Every candidate starts with the importing file's observed binding.
+    const extraction = extractions.get(filePath)!
+    const importedNames = new Map<string, { file: string; name: string; nodeId?: string }>()
+    for (const binding of extraction.importBindings ?? []) {
+      if (!binding.localName || binding.resolutionStatus === 'unresolved') continue
+      const targets = resolveJsTsCandidates(binding.sourceSpecifier, filePath, [...extractions.keys()])
+      if (targets.length !== 1) continue
+      const target = extractions.get(targets[0])!
+      const names = binding.wildcard === true ? [binding.localName, ...target.exports.map(n => binding.localName + '.' + n)] : [binding.localName]
+      const targetSf = ts.createSourceFile(targets[0], files.find(f => f.filePath === targets[0])!.sourceText, ts.ScriptTarget.Latest, true)
+      for (const local of names) {
+        const exported = local.includes('.') ? local.slice(local.indexOf('.') + 1) : binding.wildcard === true ? null : binding.importedName
+        const cjs = target.commonJsExports?.filter(f => (f.exportedName === exported || exported === 'default' && f.exportedName === null) && f.resolutionStatus === 'resolved-local') ?? []
+        let name = cjs.length === 1 ? cjs[0].bindingName : exported
+        let localExport = false
+        for (const statement of targetSf.statements) {
+          if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+            const alias = statement.exportClause.elements.filter(e => e.name.text === exported && !e.isTypeOnly)
+            if (alias.length === 1) { name = alias[0].propertyName?.text ?? alias[0].name.text; localExport = true }
+          }
+        }
+        const directExport = (s: import('./types.js').SymbolDefinition) => targetSf.statements.some(statement =>
+          ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some(m => m.kind === ts.SyntaxKind.ExportKeyword) &&
+          !ts.isExportDeclaration(statement) && (ts.isVariableStatement(statement)
+            ? statement.declarationList.declarations.some(d => ts.isIdentifier(d.name) && d.name.text === s.name && targetSf.getLineAndCharacterOfPosition(d.getStart(targetSf)).line + 1 === s.location.line)
+            : targetSf.getLineAndCharacterOfPosition(statement.getStart(targetSf)).line + 1 === s.location.line))
+        let matches = target.symbols.filter(s => s.name === name && s.kind !== 'type' && s.kind !== 'interface' && (cjs.length === 1 || localExport || directExport(s)))
+        if (exported === 'default' && cjs.length === 0) {
+          const defaults = targetSf.statements.filter(n => ts.canHaveModifiers(n) && ts.getModifiers(n)?.some(m => m.kind === ts.SyntaxKind.DefaultKeyword))
+          if (defaults.length === 1) matches = target.symbols.filter(s => s.exported && s.location.line === targetSf.getLineAndCharacterOfPosition(defaults[0].getStart(targetSf)).line + 1)
+          const assignments = targetSf.statements.filter((n): n is ts.ExportAssignment => ts.isExportAssignment(n) && !n.isExportEquals)
+          if (defaults.length === 0 && assignments.length === 1 && ts.isIdentifier(assignments[0].expression)) {
+            const defaultName = assignments[0].expression.text
+            matches = target.symbols.filter(s => s.name === defaultName && s.kind !== 'type' && s.kind !== 'interface')
+          }
+        }
+        if (matches.length === 1) importedNames.set(local, { file: targets[0], name: matches[0].name, nodeId: matches[0].nodeId })
+      }
+    }
+    extractEdges(sourceFile, filePath, importedNames, edges, extraction.symbols)
   }
 
   return edges
@@ -83,8 +124,9 @@ export function extractTypeScriptCallGraphEdges(
 function extractEdges(
   sourceFile: ts.SourceFile,
   filePath: string,
-  importedNames: Map<string, string | null>,
-  edges: CallGraphEdge[]
+  importedNames: Map<string, { file: string; name: string; nodeId?: string }>,
+  edges: CallGraphEdge[],
+  symbols: import('./types.js').SymbolDefinition[]
 ): void {
   function walk(node: ts.Node, currentCaller: CallerContext | null): void {
     // Entering a new named function — update caller context
@@ -98,13 +140,19 @@ function extractEdges(
         const callLine =
           sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
             .line + 1
-        const calleeFile = resolveCalleeFile(calleeName, importedNames)
+        const base = calleeName.split('.')[0]
+        const shadowed = hasLocalShadow(node, base, sourceFile)
+        const target = shadowed ? undefined : importedNames.get(calleeName)
+        const calleeFile = target?.file ?? null
+        const callers = symbols.filter(s => s.name === activeCaller.name && s.location.line === activeCaller.line && (!activeCaller.qualifiedName || s.qualifiedName === activeCaller.qualifiedName))
         edges.push({
           caller: {
             file: activeCaller.file,
             name: activeCaller.name,
             line: activeCaller.line,
           },
+          ...(callers.length === 1 ? { callerNodeId: callers[0].nodeId } : {}),
+          ...(target?.nodeId ? { calleeNodeId: target.nodeId } : {}),
           callee: { file: calleeFile, name: calleeName },
           callLine,
         })
@@ -121,6 +169,7 @@ interface CallerContext {
   file: string
   name: string
   line: number
+  qualifiedName?: string
 }
 
 /** If `node` is a named function/method/arrow-with-name, returns a new CallerContext. */
@@ -141,7 +190,8 @@ function resolveCaller(
     const ownerName = parent?.name
       ? `${parent.name}.${node.name.text}`
       : node.name.text
-    return { file: filePath, name: ownerName, line: lineOf(node) }
+    const cls = node.parent
+    return { file: filePath, name: ownerName, line: lineOf(node), ...(ts.isClassDeclaration(cls) && cls.name ? { qualifiedName: `${cls.name.text}.${node.name.text}` } : {}) }
   }
 
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
@@ -174,129 +224,38 @@ function calleeNameOf(expr: ts.LeftHandSideExpression): string {
   return '<computed>'
 }
 
-/**
- * Looks up the callee name in the import-name map.
- * Returns the file path of the callee's definition, or null if unresolvable.
- */
-function resolveCalleeFile(
-  calleeName: string,
-  importedNames: Map<string, string | null>
-): string | null {
-  // Direct match
-  if (importedNames.has(calleeName)) return importedNames.get(calleeName)!
-  // Match by first segment (e.g. "obj.method" → look up "obj")
-  const base = calleeName.split('.')[0]
-  if (importedNames.has(base)) return importedNames.get(base)!
-  return null
-}
-
-// ---------------------------------------------------------------------------
-// Export map and import-name map builders
-// ---------------------------------------------------------------------------
-
-/**
- * Builds a map from exported name → source file path across all input files.
- * Used to resolve local callees to their defining files.
- */
-function buildExportMap(files: readonly SourceFileInput[]): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const { filePath, sourceText } of files) {
-    const sf = ts.createSourceFile(
-      filePath,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true
-    )
-    ts.forEachChild(sf, (node) => {
-      if (hasExportKeyword(node)) {
-        const name = declaredName(node)
-        if (name) map.set(name, filePath)
+/** A conservative lexical guard: declarations or writes in any enclosing scope block imported resolution. */
+function hasLocalShadow(call: ts.Node, name: string, sf: ts.SourceFile): boolean {
+  const hasName = (n: ts.BindingName): boolean => ts.isIdentifier(n) ? n.text === name : n.elements.some(e => !ts.isOmittedExpression(e) && hasName(e.name))
+  for (let scope: ts.Node | undefined = call.parent; scope; scope = scope.parent) {
+    if (!ts.isBlock(scope) && !ts.isSourceFile(scope) && !ts.isFunctionLike(scope) && !ts.isCatchClause(scope)) continue
+    let blocked = false
+    function scan(n: ts.Node): void {
+      if (n !== scope && ts.isFunctionLike(n)) {
+        if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n)) && n.name?.text === name) blocked = true
+        return
       }
-      if (
-        ts.isExportDeclaration(node) &&
-        node.exportClause &&
-        ts.isNamedExports(node.exportClause)
-      ) {
-        for (const el of node.exportClause.elements) {
-          map.set(el.name.text, filePath)
-        }
+      if ((ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isBindingElement(n)) && hasName(n.name)) {
+        // The original require declaration is the binding, rather than a shadow.
+        const originalRequire = scope === sf && ts.isVariableDeclaration(n) && n.initializer && ts.isCallExpression(n.initializer) && ts.isIdentifier(n.initializer.expression) && n.initializer.expression.text === 'require'
+        if (originalRequire) return
+        if (!originalRequire) blocked = true
       }
-    })
-  }
-  return map
-}
-
-/**
- * Builds a map from imported name → resolved file path for one source file.
- * For relative imports, resolves against the file's own path.
- * For non-relative imports (packages), maps to null.
- */
-function buildImportedNameMap(
-  sourceFile: ts.SourceFile,
-  filePath: string,
-  exportMap: Map<string, string>
-): Map<string, string | null> {
-  const map = new Map<string, string | null>()
-  const fileDir = path.dirname(filePath)
-
-  ts.forEachChild(sourceFile, (node) => {
-    if (!ts.isImportDeclaration(node)) return
-    const specifier = (node.moduleSpecifier as ts.StringLiteral).text
-
-    // Only handle relative imports for file resolution
-    const resolvedPath = specifier.startsWith('.')
-      ? normalizePath(path.join(fileDir, specifier))
-      : null
-
-    if (!node.importClause) return
-    const clause = node.importClause
-
-    // Default import: import Foo from './foo'
-    if (clause.name) {
-      map.set(clause.name.text, resolvedPath ?? null)
+      if (ts.isVariableDeclaration(n) && n.initializer && ts.isIdentifier(n.initializer) && n.initializer.text === name) blocked = true
+      if (ts.isClassDeclaration(n) && n.name?.text === name) blocked = true
+      if (ts.isImportClause(n) && n.isTypeOnly && (n.name?.text === name || n.namedBindings?.getText(sf).includes(name))) blocked = true
+      if (ts.isImportSpecifier(n) && n.isTypeOnly && n.name.text === name) blocked = true
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left) && n.left.text === name) blocked = true
+      const rootName = (e: ts.Node): string | undefined => ts.isIdentifier(e) ? e.text : ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e) ? rootName(e.expression) : undefined
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && rootName(n.left) === name) blocked = true
+      if (ts.isDeleteExpression(n) && rootName(n.expression) === name) blocked = true
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.right) && n.right.text === name) blocked = true
+      if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && rootName(n.operand) === name) blocked = true
+      if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand) && n.operand.text === name) blocked = true
+      ts.forEachChild(n, scan)
     }
-
-    // Named imports: import { Foo, Bar } from './foo'
-    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      for (const el of clause.namedBindings.elements) {
-        // Try to resolve via export map first
-        const resolvedViaExport =
-          exportMap.get(el.name.text) ?? resolvedPath ?? null
-        map.set(el.name.text, resolvedViaExport)
-      }
-    }
-
-    // Namespace import: import * as ts from 'typescript'
-    if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
-      map.set(clause.namedBindings.name.text, resolvedPath ?? null)
-    }
-  })
-
-  return map
-}
-
-// ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
-
-function hasExportKeyword(node: ts.Node): boolean {
-  const mods = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined
-  return mods?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false
-}
-
-function declaredName(node: ts.Node): string | null {
-  if (
-    ts.isFunctionDeclaration(node) ||
-    ts.isClassDeclaration(node) ||
-    ts.isInterfaceDeclaration(node) ||
-    ts.isTypeAliasDeclaration(node) ||
-    ts.isEnumDeclaration(node)
-  ) {
-    return node.name?.text ?? null
+    scan(scope)
+    if (blocked) return true
   }
-  if (ts.isVariableStatement(node)) {
-    const first = node.declarationList.declarations[0]
-    if (first && ts.isIdentifier(first.name)) return first.name.text
-  }
-  return null
+  return false
 }

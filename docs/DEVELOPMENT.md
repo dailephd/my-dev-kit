@@ -10,8 +10,10 @@ For CI behavior, see CI_CD.md.
 
 Required:
 
-- Node.js 18 or later
+- Node.js 18 or later (CI, the Rust qualification and release-equivalent validation use Node.js 24.x)
 - npm
+
+No Rust toolchain is required for the v1.14.0 Rust support.
 
 Required only for Python indexing tests or manual Python indexing:
 
@@ -133,7 +135,7 @@ release-readiness, dependency/package, and security validation workflows.
 
 The v1.7.0 section above is the historical description of the core suite when
 it shipped; lookup and slice execution were added later and are described
-here as current state of the v1.13.0 release. Nothing in
+here as the historical v1.13.0 release baseline. Nothing in
 this section is a public CLI command or part of the published package.
 
 Two configurations share the one runner in `src/retrievalRegression/`:
@@ -208,8 +210,42 @@ allowlisted in `package.json` `files`, while `benchmarks/`, `tests/`, and
 reports are not packaged. The benchmark README and configuration remain
 maintainer-only.
 
-## Build
+## v1.14.0 language, framework and Rust validation
 
+v1.14.0 adds Python, JavaScript/TypeScript, framework and Rust support. Develop and validate it with Node.js 24.x (the version CI uses). **No Rust toolchain, Cargo or `rustc` is needed**: Rust files are parsed as text and `Cargo.toml` is read by an in-process TOML parser.
+
+### Rust parser asset lifecycle
+
+- The Rust grammar is a pinned, prebuilt WebAssembly file, `src/languages/rust/assets/tree-sitter-rust-orchard.wasm`, with its license beside it. It is loaded through the existing `web-tree-sitter` dependency; nothing is downloaded or compiled at run time.
+- `src/languages/rust/parser.ts` verifies the file's SHA-256 before use and refuses to parse on a mismatch, so replacing the grammar is a deliberate change that must update the pinned checksum and the licensed asset together.
+- The build copies the grammar and license to `dist/assets/`, and both are in the npm package. Parser limits are 65,536 bytes per source file, one second per parse and 512 MiB of resident memory.
+
+### Validation commands
+
+In addition to the checks in "Full validation", run the three retrieval-regression configurations (each passes `--fail-on-regression`) and the installed-package qualification:
+
+    npx tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.7/core.json --out <output-dir> --fail-on-regression
+    npx tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.13/android.json --out <output-dir> --fail-on-regression
+    npx tsx src/retrievalRegression/runRetrievalRegression.ts --config benchmarks/retrieval/v1.14/rust.json --out <output-dir> --fail-on-regression
+    node scripts/qualification/v114RustMatrix.mjs
+
+`scripts/qualification/v114RustMatrix.mjs` requires a clean Git checkout. It packs the repository, installs the tarball into a separate consumer project with no development tools and no Rust toolchain, then runs the installed CLI against the Rust fixtures, the pinned licensed corpus and the source-containment cases while blocking process and network access. It also checks the exact npm file inventory (60 files, including the eight public Rust example files), the grammar hash and the parser memory bound. Its outputs go under `.my-dev-kit-workflow/`.
+
+### Test-output allocator
+
+v1.14.0 tests write generated fixtures and indexes through `tests/helpers/v114OutputRoot.ts` (`allocateV114OutputDir(suite)`), which returns a new unique directory for each suite and never reuses an older task's directory. By default the root is `.my-dev-kit-workflow/tmp/test-runs/v114/`. To place output elsewhere, set `MY_DEV_KIT_TEST_OUTPUT_ROOT` for the test process only, to an absolute path inside the repository:
+
+    # bash (Git Bash on Windows uses pwd -W)
+    export MY_DEV_KIT_TEST_OUTPUT_ROOT="$(pwd)/.my-dev-kit-workflow/tmp/my-task/tests"
+    npm run test -- --maxWorkers=2 --reporter=dot
+
+    # PowerShell
+    $env:MY_DEV_KIT_TEST_OUTPUT_ROOT = "$PWD\.my-dev-kit-workflow\tmp\my-task\tests"
+    npm run test -- --maxWorkers=2 --reporter=dot
+
+The allocator rejects a relative path, a path outside the repository, a symlink escape and a path under an earlier v1.14.0 task directory. Set the variable per run; do not commit it. The installed-package qualification script keeps its own fixed output directory.
+
+## Build
 Build the distributable CLI:
 
     npm run build
@@ -655,6 +691,9 @@ Included examples:
 - examples/basic-android-kotlin/
   Public Android/Kotlin/Compose static retrieval example packaged in v1.13.0. It is a public example, not an internal test fixture; the Android fixtures under tests/fixtures/ remain internal.
 
+- examples/basic-rust-workspace/
+  Public two-crate Rust workspace for static retrieval. Part of the v1.14.0 package inventory (eight explicit files in the package `files` allowlist); it is never built or run.
+
 The package may include selected example source folders for public smoke tests. Development-only generated artifacts under examples should not be committed or published.
 
 ## Generated files
@@ -684,7 +723,7 @@ The published npm package should include:
 - LICENSE
 - CHANGELOG.md
 - public documentation files
-- public examples intended for users
+- public examples intended for users (v1.14.0 includes the eight `examples/basic-rust-workspace/` files, for a 60-file inventory)
 - package.json
 
 The published npm package should not include:

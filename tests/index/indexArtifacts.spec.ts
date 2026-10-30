@@ -60,7 +60,7 @@ describe('index artifacts', () => {
   it('symbol-index.json has the expected top-level shape', () => {
     const symbolIndex = readJson('symbol-index.json')
 
-    expect(symbolIndex.schemaVersion).toBe('2')
+    expect(symbolIndex.schemaVersion).toBe('3')
     expect(symbolIndex.fileCount).toBeGreaterThanOrEqual(2)
     expect(Array.isArray(symbolIndex.files)).toBe(true)
     expect(symbolIndex.graph).toBeDefined()

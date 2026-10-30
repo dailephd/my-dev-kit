@@ -2,7 +2,7 @@
 
 ## What this project is
 
-my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, Python, Kotlin, Java, and supported Android projects; inspecting their structure; retrieving bounded source context; generating semantic and data-model artifacts; tracing supported static model-to-view lineage; and producing conservative Android Gradle, manifest, resource, navigation, and graph relationship evidence.
+my-dev-kit is a local, deterministic command-line tool for indexing TypeScript, JavaScript, Python, Kotlin, Java, Rust, and supported Android projects; inspecting their structure; retrieving bounded source context; generating semantic and data-model artifacts; tracing supported static model-to-view lineage; and producing conservative Android Gradle, manifest, resource, navigation, and graph relationship evidence.
 
 It runs offline and works through file-based JSON artifacts. It does not require a server, does not call external APIs, does not call language models, and does not modify source files.
 
@@ -23,17 +23,21 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.13.0 is the current release. It retains v1.12.6 ownership-oriented search and bounded symbol retrieval, and adds the Android retrieval benchmark suite, packaged Android example, and workflow documentation. See [ROADMAP.md](ROADMAP.md#version-1130), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1130), and [COMMANDS.md](COMMANDS.md).
+Version 1.14.0 is the current release. It broadens Python, JavaScript/TypeScript and framework evidence and adds Rust structural retrieval, retaining the existing Android and bounded graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1140) and [COMMANDS.md](COMMANDS.md).
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 
+### v1.14.0 language and framework coverage
+
+v1.14.0 includes richer Python extraction (structured imports, nested owners, decorators, grounded local calls), Django, SQLAlchemy and FastAPI static evidence, JSDoc and CommonJS handling, configured `tsconfig.json`/`jsconfig.json` path aliases, Express and NestJS routes, Next.js App Router and Playwright/Vitest static associations, and Rust structural indexing and retrieval (Cargo packages and targets, modules, traits, impls, unique local imports, qualified same-name methods, bounded source and context). It is static analysis only: nothing is executed, and Rust call inference and Prisma are deferred. See [ROADMAP.md](ROADMAP.md#version-1140), [ARCHITECTURE.md](ARCHITECTURE.md) and [the public Rust example](../examples/basic-rust-workspace/README.md).
+
 ### v1.12.6 bounded retrieval precision
 
-Version 1.12.6 is the current release. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
+Version 1.12.6 was the current release before v1.13.0. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
 
 The current repository and package metadata contain these shipped implementation capabilities:
 
-- indexing TypeScript, JavaScript, Python, Kotlin, and Java source roots
+- indexing TypeScript, JavaScript, Python, Kotlin, Java and Rust source roots
 - extracting per-file symbol tables, imports, exports, dependencies, and source locations
 - building a typed code graph of file and symbol nodes
 - generating an optional static call graph

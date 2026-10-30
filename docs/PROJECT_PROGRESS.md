@@ -4,7 +4,18 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Published versions
 
-`@dailephd/my-dev-kit@1.13.0` is the current release. Version 1.12.6 remains the previous published release.
+`@dailephd/my-dev-kit@1.14.0` is the current release represented by this repository. Version 1.13.0 remains the previous release.
+
+## Shipped: v1.14.0
+
+Version 1.14.0 broadens non-Android language/framework evidence and adds Rust structural retrieval. Package, lockfile and CLI versions are 1.14.0.
+
+- **Implemented families:** Python (AST extraction, structured imports, nested owners, decorators, grounded local calls, Django and SQLAlchemy model facts, FastAPI routes); JavaScript/TypeScript (JSDoc, CommonJS and `.cjs`, configured `tsconfig.json`/`jsconfig.json` path aliases with config-aware incremental invalidation); frameworks (Express, NestJS, Next.js App Router, Playwright and Vitest static associations, existing React retrieval); Rust (packaged WebAssembly Tree-sitter parser, Cargo packages and targets, modules, traits and impls, unique local imports, qualified same-name methods, search, lookup, slice, source, context, cache and graph-diff support).
+- **Acceptance:** the exact implementation candidate `dac8cd5c4dc5e3a0845859113ea6b474e9099adc` passed pre-release readiness: 246 files / 3,926 tests, 108 security tests, 148 core/Android/Rust retrieval assertions and installed-package qualification. Exact-SHA Windows, Ubuntu and macOS Node 24 CI passed (run `40028693746`). Lab 0.9.6 provided adequate full-refresh references and truthful bounded comparisons; I1 stale-index remained inconclusive, not a safety claim. Release commits receive their own local and hosted checks.
+- **Schema versions:** v1.14.0 advances the persisted schemas from the published v1.13.0 (symbol index `2` → `3`, code graph `1.0.0` → `1.1.0`, internal cache `1.2.0` → `1.3.0`). Users upgrading from v1.13.0 should rebuild their index with v1.14.0 (`index`, without `--incremental`) before relying on exact qualified ownership, particularly when an older index contains duplicate graph node IDs: such an index can make `search`, `lookup` and `slice` fail with an ambiguous-node-identity error until it is rebuilt. Many operations on a v1.13.0 index still work, so this is not a claim that every older index is unreadable.
+- **Deferred:** optional Rust direct-call inference (R7) awaits separate authorization; Prisma remains an unimplemented candidate.
+- **Documentation:** the package includes the public `examples/basic-rust-workspace/` example within the existing 60-file distribution boundary. Current-version documentation describes the v1.14.0 release while preserving historical and future scope.
+- **Release process:** release-branch, merged-main, tag and package parity checks precede manual npm publication as documented in [RELEASE.md](RELEASE.md).
 
 ## Shipped: v1.13.0
 

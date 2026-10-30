@@ -1,0 +1,8 @@
+[package]
+name = "retrieval"
+version = "0.1.0"
+edition = "2021"
+
+[[test]]
+name = "owner_tests"
+path = "tests/owner_tests.rs"

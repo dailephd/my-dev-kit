@@ -27,6 +27,9 @@ export interface NormalizedDataModelWarning {
 }
 
 export interface NormalizedDataModelEntityRecord {
+  entityKey?: string
+  sourceLanguage?: 'python'
+  ormFamily?: 'django' | 'sqlalchemy'
   name: string
   kind: DataModelEntityKind
   sourceRefs: NormalizedDataModelSourceRef[]
@@ -34,6 +37,8 @@ export interface NormalizedDataModelEntityRecord {
 }
 
 export interface NormalizedDataModelFieldRecord {
+  entityKey?: string
+  options?: Record<string, string | number | boolean | null>
   entityName: string
   fieldName: string
   typeText: string
@@ -45,6 +50,9 @@ export interface NormalizedDataModelFieldRecord {
 }
 
 export interface NormalizedDataModelRelationshipRecord {
+  fromEntityKey?: string
+  toEntityKey?: string
+  occurrence?: string
   fromEntityName: string
   toEntityName: string
   kind: DataModelRelationshipKind

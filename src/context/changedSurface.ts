@@ -3,8 +3,7 @@ import { loadGraphDiffArtifacts } from '../graph-diff/loadGraphDiffArtifacts.js'
 import { buildSymbolIndexDiff } from '../graph-diff/buildSymbolIndexDiff.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 import type { ChangedFileEntry, ChangedSurface, ChangedSurfaceStatus, ChangedSymbolEntry } from './types.js'
-
-const STABLE_SYMBOL_ID_PATTERN = /^symbol:(.+)#(.+)$/
+import { declarationNodeId, parseDeclarationNodeId } from '../symbol-index/declarationIdentity.js'
 
 function normalizePath(value: string): string {
   return toForwardSlash(value).replace(/^\.\//, '')
@@ -30,10 +29,11 @@ interface MutableSymbolEntry {
   kind?: string
 }
 
-function lookupBeforeSymbol(before: SymbolIndex | null, filePath: string, name: string): { kind?: string } {
+function lookupBeforeSymbol(before: SymbolIndex | null, filePath: string, symbolId: string): { kind?: string } {
   if (!before) return {}
   const file = before.files.find((entry) => entry.path === filePath)
-  const symbol = file?.symbols.find((entry) => entry.name === name)
+  const matches = file?.symbols.filter((entry) => declarationNodeId(filePath, entry) === symbolId) ?? []
+  const symbol = matches.length === 1 ? matches[0] : undefined
   return symbol ? { kind: symbol.kind } : {}
 }
 
@@ -73,20 +73,32 @@ export function buildChangedSurface(options: {
     files.set(key, { path: rawPath, status: 'unknown', provenance: 'caller' })
   }
   for (const rawSymbol of changedSymbols) {
-    const match = STABLE_SYMBOL_ID_PATTERN.exec(rawSymbol)
+    const match = parseDeclarationNodeId(rawSymbol)
     symbols.set(rawSymbol, {
       symbolId: rawSymbol,
       status: 'unknown',
       provenance: 'caller',
-      ...(match ? { filePath: match[1], name: match[2] } : {}),
+      ...(match ? { filePath: match.filePath, name: match.symbolName } : {}),
     })
   }
 
   let diffRequested = false
   if (beforeIndex && afterIndex) {
     diffRequested = true
-    const before = loadGraphDiffArtifacts(beforeIndex)
-    const after = loadGraphDiffArtifacts(afterIndex)
+    const loadSide = (index: string) => {
+      try {
+        return loadGraphDiffArtifacts(index)
+      } catch (error) {
+        // Preserve the context pair's established error contract while the shared loader
+        // remains the sole authority for individual artifact-version compatibility.
+        if (error instanceof Error && error.message.includes('Unsupported symbol index schema version:')) {
+          throw new Error(`Incompatible beforeIndex/afterIndex symbol-index schema versions: ${error.message}`)
+        }
+        throw error
+      }
+    }
+    const before = loadSide(beforeIndex)
+    const after = loadSide(afterIndex)
 
     // Note: unlike a hard failure, differing absolute project roots are the *normal*
     // case (before/after are almost always distinct directories/checkouts of the
@@ -106,14 +118,8 @@ export function buildChangedSurface(options: {
         'beforeIndex/afterIndex changed-surface diff requires a symbol index on both sides; symbol-index.json is missing from at least one side.'
       )
     }
-    // Symbol-index `schemaVersion` ("must equal SCHEMA_VERSION for compatibility",
-    // symbol-index/types.ts) is the existing, real compatibility boundary for two
-    // symbol indexes; reuse it rather than inventing a new one.
-    if (before.symbolIndex.schemaVersion !== after.symbolIndex.schemaVersion) {
-      throw new Error(
-        `Incompatible beforeIndex/afterIndex symbol-index schema versions: before "${before.symbolIndex.schemaVersion}", after "${after.symbolIndex.schemaVersion}".`
-      )
-    }
+    // Both individual versions have been validated by the shared loader; schema 2/3
+    // comparisons are supported and must not be rejected merely for differing versions.
 
     const symbolDiff = buildSymbolIndexDiff(before.symbolIndex, after.symbolIndex)
 
@@ -165,10 +171,10 @@ function mergeSymbol(
   referenceSymbolIndex: SymbolIndex,
   conflicts: string[]
 ): void {
-  const match = STABLE_SYMBOL_ID_PATTERN.exec(symbolId)
-  const filePath = match?.[1]
-  const name = match?.[2]
-  const kindInfo = filePath && name ? lookupBeforeSymbol(referenceSymbolIndex, filePath, name) : {}
+  const match = parseDeclarationNodeId(symbolId)
+  const filePath = match?.filePath
+  const name = match?.symbolName
+  const kindInfo = filePath && name ? lookupBeforeSymbol(referenceSymbolIndex, filePath, symbolId) : {}
 
   const existing = symbols.get(symbolId)
   if (!existing) {

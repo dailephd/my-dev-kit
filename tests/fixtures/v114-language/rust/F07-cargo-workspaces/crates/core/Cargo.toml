@@ -1,0 +1,8 @@
+[package]
+name = "workspace-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+renamed-cli = { package = "workspace-cli", path = "../cli", optional = true }
