@@ -143,7 +143,7 @@ export async function qualify() {
     const before = Object.fromEntries(packageFiles.map(f => [f, sha(fs.readFileSync(path.join(root, f)))]))
     result.repositoryHashesBefore = before
     const pkg = read(path.join(root, 'package.json'))
-    assert.equal(pkg.version, '1.13.0'); assert.equal(pkg.dependencies['web-tree-sitter'], '0.25.10'); assert.equal(pkg.dependencies['smol-toml'], '1.9.1')
+    assert.equal(pkg.version, '1.14.0'); assert.equal(pkg.dependencies['web-tree-sitter'], '0.25.10'); assert.equal(pkg.dependencies['smol-toml'], '1.9.1')
     const assets = ['cli.js', 'assets/tree-sitter-rust-orchard.wasm', 'assets/tree-sitter-rust-orchard.LICENSE']
     result.builtAssets = Object.fromEntries(assets.map(f => [f, sha(fs.readFileSync(path.join(root, 'dist', f)))]))
     assert.equal(result.builtAssets[assets[1]], grammarHash)
