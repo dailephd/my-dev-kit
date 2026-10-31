@@ -583,24 +583,24 @@ ECO-00 resolved the Lab collision by preserving all existing 0.6.0-0.9.2 assignm
 
 ### 7.7 Adopted release train view
 
-The release train reflects the ECO-00 baseline and adopted reservations.
+The release train preserves the ECO-00 baseline and adopted milestone ordering. Its diagram does not designate the current release of any repository; consult each repository's latest published state and current-state documentation.
 
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6 current: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]
-    O15[1.5.0 semantic continuity] --> O16[1.6.0 current workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
+    O15[1.5.0 semantic continuity] --> O16[1.6.0 workflow telemetry] --> O17[1.7 ORC-EVIDENCE-01]
   end
 
   subgraph OBS[observer]
-    B10[0.10.0 current visual workflow] --> B11[0.11 diagnostics] --> B12[0.12 controlled state] --> B13[0.13 performance] --> B14[0.14 browser matrix]
+    B10[0.10.0 visual workflow] --> B11[0.11 diagnostics] --> B12[0.12 controlled state] --> B13[0.13 performance] --> B14[0.14 browser matrix]
   end
 
   subgraph LAB[lab]
-    L060[0.6.0 current freshness] --> L061[0.6.1 neighborhoods] --> L062[0.6.2 staleness] --> L063[0.6.3 partial-refresh planning]
+    L060[0.6.0 freshness] --> L061[0.6.1 neighborhoods] --> L062[0.6.2 staleness] --> L063[0.6.3 partial-refresh planning]
     L063 --> L07[0.7 scaling] --> L08[0.8 retrieval] --> L09[0.9 agent/provider work] --> L010[0.10 LAB-EVIDENCE-01]
     L010 --> L011[0.11 accessibility] --> L012[0.12 web security] --> L013[0.13 performance] --> L014[0.14 API assurance]
   end
@@ -1211,6 +1211,8 @@ A milestone is not complete merely because all repository-local implementations 
 - user/publication authority handled separately from implementation completion.
 
 ### 14.3 First implementation after this document
+
+This subsection preserves the original ECO-00 adoption-time work sequence, not a live queue of unfinished tasks. Consult the individual repository roadmaps and current-state records for subsequent implementation and release status.
 
 Do **not** start the later assurance domains in parallel merely because their version reservations exist. ORC-TELEMETRY is complete with published Orchestrator 1.6.0. The next cross-ecosystem consumer implementation is ORC-EVIDENCE-01 (Orchestrator 1.7.0), which can build against the frozen ECO-00 reference contracts. Repository-local work such as Kit 1.12.6, Kit 1.13.0, or Lab 0.6.1 may proceed independently. ECO-01 certification must still wait for LAB-EVIDENCE-01 at Lab 0.10.0 and an exact producer/consumer compatibility run.
 

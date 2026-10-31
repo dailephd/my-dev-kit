@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.14.0 is the current release. It broadens Python, JavaScript/TypeScript and framework evidence and adds Rust structural retrieval, retaining the existing Android and bounded graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1140) and [COMMANDS.md](COMMANDS.md).
+Version 1.14.0 is the current release. It broadens Python, JavaScript/TypeScript and framework evidence and adds Rust structural retrieval, retaining the existing Android and bounded graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#shipped-v1140) and [COMMANDS.md](COMMANDS.md).
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 
@@ -33,7 +33,7 @@ v1.14.0 includes richer Python extraction (structured imports, nested owners, de
 
 ### v1.12.6 bounded retrieval precision
 
-Version 1.12.6 was the current release before v1.13.0. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
+Version 1.12.6 was the current release before v1.13.0. It is a generic bounded-retrieval precision patch covering explicit ownership-oriented search (`search --query ... --intent ownership`) for natural-language implementation queries and optional trustworthy generic-symbol `endLine` evidence (TypeScript, TSX, JavaScript, JSX, and Python) used by bounded source retrieval to return a complete known symbol and continue only within it. Raw relevance search remains the default and unchanged, while Kotlin/Java and old-index symbols keep the conservative unknown-boundary fallback. See [ROADMAP.md](ROADMAP.md#version-1126), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#shipped-v1126), and [COMMANDS.md](COMMANDS.md).
 
 The current repository and package metadata contain these shipped implementation capabilities:
 
