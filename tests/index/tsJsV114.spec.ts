@@ -256,7 +256,7 @@ describe('B05 persistence and integration', () => {
     expect(buildCodeGraph({ symbolIndex: full.index, callGraph: full.callGraph }).edges.filter(e => e.kind === 'calls')).toHaveLength(2)
     expect(full.index.schemaVersion).toBe('3')
     expect(buildCodeGraph({ symbolIndex: full.index }).schemaVersion).toBe('1.1.0')
-    expect(CACHE_SCHEMA_VERSION).toBe('1.3.0')
+    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
     expect(JSON.parse(JSON.stringify(partial.index)).files).toEqual(full.index.files)
   })
   it('makes JSDoc descriptions searchable through the shared index', async () => {

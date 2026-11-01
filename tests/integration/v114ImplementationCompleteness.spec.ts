@@ -87,7 +87,7 @@ describe('B16 cross-language implementation completeness', () => {
     expect(graph.schemaVersion).toBe('1.1.0')
     expect(manifest.artifactKind).toBe('my-dev-kit-v1-manifest')
     expect(manifest.artifacts).toMatchObject({ symbolIndex: 'symbol-index.json', codeGraph: 'code-graph.json', callGraph: null })
-    expect(readdirSync(index).sort()).toEqual(['classification.json', 'code-graph.json', 'data-model-graph.json', 'data-model.json', 'frontend-reachability.json', 'frontend-semantic.json', 'manifest.json', 'symbol-index.json'])
+    expect(readdirSync(index).sort()).toEqual(['classification.json', 'code-graph.json', 'data-model-graph.json', 'data-model.json', 'frontend-reachability.json', 'frontend-semantic.json', 'manifest.json', 'source-audit-evidence.json', 'symbol-index.json'])
     expect(manifest.analyzers.map((a: { id: string }) => a.id)).toContain('rust-structure')
   })
 

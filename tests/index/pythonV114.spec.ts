@@ -334,7 +334,7 @@ class Child(Base):
     const refreshed = await runIndexCommand(options)
     expect(refreshed.mode === 'index' && refreshed.cache.mode).toBe('incremental-full-config-changed')
     const cache = JSON.parse(readFileSync(join(root, 'index/cache-metadata.json'), 'utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.3.0')
+    expect(cache.cacheSchemaVersion).toBe('1.4.0')
   })
 
   it('reports malformed Python without executing target code and produces deterministic bounded evidence', () => {

@@ -161,7 +161,7 @@ describe('B07 static frontend associations', () => {
     try { await runIndexCommand(options) } finally { JSON.stringify = original }
     const cachePath = path.join(root, 'index/cache-metadata.json')
     const cache = JSON.parse(fs.readFileSync(cachePath,'utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.3.0')
+    expect(cache.cacheSchemaVersion).toBe('1.4.0')
     expect(b06Fingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(cache.configFingerprint).not.toBe(b06Fingerprint)
     cache.configFingerprint = b06Fingerprint

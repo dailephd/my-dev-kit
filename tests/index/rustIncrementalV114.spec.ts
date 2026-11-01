@@ -1,6 +1,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
+import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
+import { AUDIT_PRODUCER_CAPABILITIES } from '../../src/symbol-index/auditObservations.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runIndexCommand, type RunIndexCommandOptions } from '../../src/indexing/runIndexCommand.js'
 import { loadTrustedBaseline } from '../../src/indexing/trustedBaseline.js'
@@ -48,7 +50,7 @@ function integrity(dir: string) {
   if (fs.existsSync(path.join(dir, 'cache-metadata.json'))) {
     const cache = json(dir, 'cache-metadata.json')
     expect(manifest.sourceRoots).toEqual(cache.sourceRoots)
-    expect(cache.cacheSchemaVersion).toBe('1.3.0')
+    expect(cache.cacheSchemaVersion).toBe('1.4.0')
     expect(cache.baselineArtifacts).toEqual(computeBaselineArtifactIdentity(dir))
   }
 }
@@ -67,7 +69,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
       rustParserRevision: 'rust-b08:web-tree-sitter-0.25.10:orchard-0.16.10:d98c6aa1db69cfd204bf07dfefb2451b987160cbb2db95ddac8ac04b5f1eb1d0:1',
       rustCargoStructureRevision: 'v1.14.0-b09', rustRelationshipRevision: 'v1.14.0-b14-doc-comments', rustCargoFingerprint: input.rustCargoFingerprint,
       pythonExtractionRevision: 'v1.14.0-b04', jsTsExtractionRevision: 'v1.14.0-b05', jsFrameworkExtractionRevision: 'v1.14.0-b06',
-      frontendFrameworkRevision: 'v1.14.0-b07', configuredImportsRevision: 'v1.14.0-configured-imports',
+      frontendFrameworkRevision: 'v1.14.0-b07', configuredImportsRevision: 'v1.14.0-configured-imports', sourceAuditExtractorRevision:SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION, sourceAuditSchemaVersion:'1.0.0', sourceAuditCapabilities:[...AUDIT_PRODUCER_CAPABILITIES],
       configuredImportsFingerprint: input.configuredImportsFingerprint,
       ...Object.fromEntries(Object.entries(input).filter(([key]) => !['rustCargoFingerprint', 'configuredImportsFingerprint'].includes(key))),
     }

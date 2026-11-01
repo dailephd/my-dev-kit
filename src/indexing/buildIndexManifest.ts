@@ -1,6 +1,6 @@
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
-import type { IndexAnalyzerStatus, IndexManifest, IndexModeValue, IndexSemanticArtifacts } from './manifestTypes.js'
+import type { IndexAnalyzerStatus, IndexManifest, IndexModeValue, IndexSemanticArtifacts, SourceAuditEvidenceReference } from './manifestTypes.js'
 import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
 import type { IncrementalRefreshSummary } from './incrementalRefreshTypes.js'
 
@@ -16,6 +16,7 @@ export interface BuildIndexManifestOptions {
   errors: string[]
   semanticArtifacts?: Partial<IndexSemanticArtifacts>
   analyzers?: IndexAnalyzerStatus[]
+  sourceAuditEvidence?: SourceAuditEvidenceReference
   createdAt?: string
   indexMode?: IndexModeValue
   cacheMode?: CacheMode
@@ -47,6 +48,7 @@ export function buildIndexManifest(options: BuildIndexManifestOptions): IndexMan
       frontendReachability: options.semanticArtifacts?.frontendReachability ?? null,
     },
     analyzers: options.analyzers ?? buildDefaultAnalyzerStatuses(options),
+    ...(options.sourceAuditEvidence !== undefined ? { sourceAuditEvidence: options.sourceAuditEvidence } : {}),
     summary: {
       fileCount: options.symbolIndex.fileCount,
       symbolCount: options.symbolIndex.symbolCount,

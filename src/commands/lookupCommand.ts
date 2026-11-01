@@ -2,6 +2,12 @@ import type { Command } from 'commander'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { lookupNode } from '../lookup/lookupNode.js'
+import {
+  assertSourceAuditFileFresh,
+  getSourceAuditFilePage,
+  getSourceAuditInventoryPage,
+  readSourceAuditEvidence,
+} from '../lookup/readSourceAuditEvidence.js'
 import { parseInteger } from './parseUtils.js'
 import {
   loadFrontendReachabilityArtifact,
@@ -25,6 +31,9 @@ interface LookupCommandOptions {
   depth: number
   json?: boolean
   resolveClassification?: boolean
+  auditFiles?: boolean
+  auditFile?: string
+  page?: number
 }
 
 export function registerLookupCommand(program: Command): void {
@@ -42,8 +51,45 @@ export function registerLookupCommand(program: Command): void {
       '--resolve-classification',
       'resolve the full classification.json entry for --node, when a classification analyzer artifact is present'
     )
+    .option('--audit-files', 'page through the recorded source-audit file inventory (requires --json)')
+    .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
+    .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
     .action((options: LookupCommandOptions) => {
+      const auditRequested = options.auditFiles === true || options.auditFile !== undefined
+      if (options.page !== undefined && !auditRequested) {
+        throw new Error('--page is valid only with --audit-files or --audit-file.')
+      }
+      if (auditRequested) {
+        if (options.auditFiles === true && options.auditFile !== undefined) {
+          throw new Error('--audit-files and --audit-file are mutually exclusive.')
+        }
+        if (
+          options.node !== undefined ||
+          options.route !== undefined ||
+          options.storageKey !== undefined ||
+          options.ui !== undefined ||
+          options.androidComponent !== undefined ||
+          options.resolveClassification === true
+        ) {
+          throw new Error(
+            'The audit selectors (--audit-files, --audit-file) cannot be combined with --node, --route, --storage-key, --ui, --android-component or --resolve-classification.'
+          )
+        }
+        if (!options.json) throw new Error('The audit selectors (--audit-files, --audit-file) require --json.')
+        const pageIndex = options.page ?? 0
+        if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('--page must be a nonnegative integer.')
+        // Read-only: reports the stored, identity-verified artifact. It never indexes, repairs or writes.
+        const artifact = readSourceAuditEvidence(options.index)
+        if (options.auditFiles === true) {
+          console.log(JSON.stringify(getSourceAuditInventoryPage(artifact, pageIndex), null, 2))
+          return
+        }
+        const filePage = getSourceAuditFilePage(artifact, options.auditFile as string, pageIndex)
+        if (filePage.status === 'found' && filePage.file) assertSourceAuditFileFresh(artifact, filePage.file)
+        console.log(JSON.stringify(filePage, null, 2))
+        return
+      }
       const reachabilityMode = resolveReachabilityMode(options)
       if (reachabilityMode) {
         if (options.node !== undefined) {

@@ -21,6 +21,9 @@ import {
   type SourceDiscoveryResult,
 } from './discoverSourceFiles.js'
 import { writeIndexArtifacts } from './writeIndexManifest.js'
+import { buildSourceAuditEvidence, serializeSourceAuditEvidence } from './buildSourceAuditEvidence.js'
+import { readSourceAuditEvidence } from '../lookup/readSourceAuditEvidence.js'
+import { VERSION } from '../version.js'
 import { computePreflightWarnings, type PreflightWarning } from './preflight.js'
 import {
   buildCacheFileEntries,
@@ -661,6 +664,8 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
         changedFileSummary,
         partialRebuildFallbackArtifacts,
         incrementalRefresh,
+        auditDiscovery: discovery,
+        auditFileHashes: partial.fileContentHashes,
         androidResult,
         androidGradleResult,
         androidManifestResult,
@@ -714,6 +719,17 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
       'incremental-full-cache-incompatible',
       'Cache metadata is valid but the existing index artifacts are missing or unreadable.',
       'existing-artifacts-unavailable'
+    )
+  }
+
+  // v1.15.0: a no-change result may only claim complete audit evidence when the persisted artifact is present and exact.
+  try {
+    readSourceAuditEvidence(outputDir)
+  } catch (error) {
+    return fullRebuild(
+      'incremental-full-cache-incompatible',
+      `Source-audit evidence is missing, stale, corrupt or incompatible: ${(error as Error).message}`,
+      'source-audit-evidence-unavailable'
     )
   }
 
@@ -904,6 +920,8 @@ function runFullIndexBuild(params: RunFullIndexBuildParams): RunFullIndexBuildRe
     callGraph: buildResult.callGraph,
     preflightWarnings,
     incrementalRefresh,
+    auditDiscovery: buildResult.discovery,
+    auditFileHashes: buildResult.fileContentHashes,
   })
   const result = { ...built, incrementalRefresh: incrementalRefresh ?? null }
 
@@ -935,6 +953,9 @@ interface FinishIndexBuildParams {
   partialRebuildFallbackArtifacts: string[] | undefined
   /** Public refresh evidence recorded additively on the manifest; absent for a plain (non-incremental) index. */
   incrementalRefresh?: IncrementalRefreshSummary | undefined
+  /** Discovery ledger and analyzed-content hashes from the same validated source state as `index`. */
+  auditDiscovery: SourceDiscoveryResult
+  auditFileHashes: ReadonlyMap<string, string>
   androidResult: DetectAndroidProjectResult
   androidGradleResult: BuildAndroidGradleProjectResult
   androidManifestResult: BuildAndroidManifestProjectResult
@@ -960,6 +981,8 @@ function finishIndexBuild(
     changedFileSummary,
     partialRebuildFallbackArtifacts,
     incrementalRefresh,
+    auditDiscovery,
+    auditFileHashes,
     androidResult,
     androidGradleResult,
     androidManifestResult,
@@ -1225,6 +1248,20 @@ function finishIndexBuild(
   ])
   const finalSymbolIndex = symbolIndexWithMergedRoles
 
+  // v1.15.0: source-audit evidence from the same discovery ledger, summaries and analyzed-content hashes.
+  // Built and validated before any managed output is removed, so an invalid artifact leaves the old index untouched.
+  const sourceAudit = serializeSourceAuditEvidence(
+    buildSourceAuditEvidence({
+      projectRoot,
+      sourceRoots: normalizedSourceRoots,
+      excludes: options.exclude ?? [],
+      discovery: auditDiscovery,
+      symbolIndex: finalSymbolIndex,
+      fileHashes: auditFileHashes,
+      producerVersion: VERSION,
+    }).artifact
+  )
+
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -1236,6 +1273,7 @@ function finishIndexBuild(
     warnings,
     errors,
     createdAt,
+    sourceAuditEvidence: sourceAudit.reference,
     semanticArtifacts: semanticResult.semanticArtifacts,
     analyzers: replaceAnalyzerStatuses(
       [
@@ -1274,6 +1312,7 @@ function finishIndexBuild(
     symbolIndex: finalSymbolIndex,
     codeGraph: finalCodeGraph,
     callGraph,
+    sourceAuditEvidenceJson: sourceAudit.json,
     classification: finalClassification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,

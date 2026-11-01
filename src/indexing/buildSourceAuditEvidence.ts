@@ -32,6 +32,8 @@ import {
 } from '../symbol-index/auditEvidenceTypes.js'
 import { AUDIT_PRODUCER_CAPABILITIES, BATCH2_AUDIT_CAPABILITIES } from '../symbol-index/auditObservations.js'
 import type { FileSummary, SymbolIndex } from '../symbol-index/types.js'
+import { validateSourceAuditEvidence } from '../symbol-index/validateAuditEvidence.js'
+import type { SourceAuditEvidenceReference } from './manifestTypes.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
 export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.2.0'
@@ -432,4 +434,28 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
     files,
   }
   return { artifact, incompleteReasons: [...reasons].sort(compareText) }
+}
+
+export interface SerializedSourceAuditEvidence {
+  /** The exact bytes' text form: JSON.stringify(artifact, null, 2) + "\n", encoded as UTF-8 when written. */
+  json: string
+  reference: SourceAuditEvidenceReference
+}
+
+/**
+ * Validates the artifact with the pure Batch 0 validator, then serializes it with the repository JSON
+ * convention and hashes those exact UTF-8 bytes. Throws (fail closed) when the artifact is invalid.
+ */
+export function serializeSourceAuditEvidence(artifact: SourceAuditEvidenceArtifact): SerializedSourceAuditEvidence {
+  validateSourceAuditEvidence(artifact)
+  const json = `${JSON.stringify(artifact, null, 2)}\n`
+  return {
+    json,
+    reference: {
+      path: 'source-audit-evidence.json',
+      schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+      sha256: createHash('sha256').update(Buffer.from(json, 'utf8')).digest('hex'),
+      snapshotId: artifact.source.snapshotId,
+    },
+  }
 }
