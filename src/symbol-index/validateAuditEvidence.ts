@@ -265,9 +265,8 @@ function validateLiteral(fact: Obj, path: string): void {
   if (valueSha256 !== undefined) requireSha(valueSha256, `${path}.valueSha256`)
   if (valueTruncated !== undefined) requireBool(valueTruncated, `${path}.valueTruncated`)
   if (valueTruncated === true) {
-    if (typeof value !== 'string' || value.length !== AUDIT_LITERAL_MAX_CHARS) {
-      fail(`${path}.value`, `must be exactly ${AUDIT_LITERAL_MAX_CHARS} characters when valueTruncated is true`)
-    }
+    // A known oversized literal exposes no prefix: value is null and valueSha256 identifies the exact original.
+    if (value !== null) fail(`${path}.value`, 'must be null when valueTruncated is true (no prefix is exposed)')
     if (valueSha256 === undefined) fail(`${path}.valueSha256`, 'is required when valueTruncated is true')
     return
   }

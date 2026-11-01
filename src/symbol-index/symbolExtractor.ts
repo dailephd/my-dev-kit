@@ -876,6 +876,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   else if (requireCalls > collector.requires.length) {
     partial('imports', 'require-not-enumerated', 'Some require calls are nested, conditional or not top-level and are not enumerated.')
   }
+  collectTsObservations(sf, filePath, exact, facts, capabilities, diagnostics)
   return { facts, capabilities, diagnostics }
 }
 
@@ -894,4 +895,358 @@ function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: nu
     endLine: exact ? to.line + 1 : null,
     endColumn: exact ? to.character : null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// v1.15.0 Batch 3: bounded literal observations from the same TypeScript AST
+// ---------------------------------------------------------------------------
+
+const TEST_FUNCTIONS = new Set(['describe', 'it', 'test'])
+const LEGACY_TEST_ALIASES = new Set(['xit', 'xdescribe', 'xtest', 'fit', 'fdescribe', 'ftest'])
+const PROCESS_FUNCTIONS = new Set(['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'])
+const CHILD_PROCESS_MODULES = new Set(['child_process', 'node:child_process'])
+const FIXTURE_SEGMENT = /(^|[\\/])(?:__fixtures__|fixtures?)(?:[\\/]|$)/i
+const FIXTURE_PATH_CALLS = new Set(['join', 'resolve', 'readFileSync', 'readFile', 'existsSync', 'statSync', 'readdirSync', 'copyFileSync', 'cpSync', 'createReadStream', 'accessSync'])
+const PATH_COMPOSERS = new Set(['join', 'resolve'])
+const IDENTIFIER_KEY = /^(?:id|ID)$|[a-z0-9]Id$|_ID$|_id$/
+const REGISTRY_NAME = /(?:registry|detectors?|rules)$/i
+const NPM_RUN = /\bnpm run ([A-Za-z0-9][A-Za-z0-9:_.-]*)/g
+const TEST_PATH = /(^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/
+
+type StaticString = { kind: 'literal' | 'binding'; text: string; bound?: string } | { kind: 'ignored' } | { kind: 'dynamic' }
+
+/**
+ * Collects identifier, test, fixture and process observations while walking the already-built AST.
+ * Syntax profile (anything outside it makes the affected family partial, never an invented fact):
+ * - identifier-literals: string values of `id`-like object keys and top-level `*_ID` constants, exact one-hop
+ *   bindings to a uniquely declared top-level string const, (identifier-property and literal-constant observations; no registry membership is inferred).
+ * - test-observations: direct describe/it/test calls (+ .skip/.only) not shadowed by a local declaration, literal titles,
+ *   and literal `npm run <script>` text in test files or inside test calls.
+ * - fixture-references: relative import/require specifiers and join/resolve/fs-call string arguments with a fixtures segment.
+ * - process-observations: child_process exec/spawn-family calls bound through a top-level import/require, literal
+ *   `shell: true`, and `.split("\n")` / `.split("\\")` literals.
+ */
+function collectTsObservations(
+  sf: ts.SourceFile,
+  filePath: string,
+  exact: boolean,
+  facts: SourceAuditFact[],
+  capabilities: SourceAuditExtractionPayload['capabilities'],
+  diagnostics: SourceAuditExtractionPayload['diagnostics'],
+): void {
+  const families = ['identifier-literals', 'test-observations', 'fixture-references', 'process-observations'] as const
+  for (const family of families) capabilities[family] = exact ? 'complete' : 'partial'
+  const base = { id: '', extractionMethod: 'typescript-ast' as const }
+  const span = (node: ts.Node) => auditSpanAt(sf, filePath, node.getStart(sf), node.getEnd(), exact)
+  const uncertain = (family: (typeof families)[number], code: string, message: string, node: ts.Node): void => {
+    capabilities[family] = 'partial'
+    if (diagnostics.length < 200) {
+      const at = sf.getLineAndCharacterOfPosition(node.getStart(sf))
+      diagnostics.push({ code, message, span: { path: filePath, startLine: at.line + 1, startColumn: at.character, endLine: null, endColumn: null } })
+    }
+  }
+  const isTestFile = TEST_PATH.test(filePath)
+
+  // Declaration census: a name declared more than once (or non-uniquely) is shadowed/ambiguous for ownership checks.
+  const declared = new Map<string, number>()
+  const addName = (name: string): void => { declared.set(name, (declared.get(name) ?? 0) + 1) }
+  const addBinding = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) addName(name.text)
+    else for (const element of name.elements) if (!ts.isOmittedExpression(element)) addBinding(element.name)
+  }
+  const censusVisit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) addBinding(node.name)
+    else if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) && node.name) addName(node.name.text)
+    else if (ts.isImportClause(node) && node.name) addName(node.name.text)
+    else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node) || ts.isImportEqualsDeclaration(node)) addName(node.name.text)
+    ts.forEachChild(node, censusVisit)
+  }
+  censusVisit(sf)
+  const uniquelyDeclared = (name: string): boolean => declared.get(name) === 1
+
+  // Unaliased imports of the test names count as the runner; every other local declaration shadows it.
+  const importedTestNames = new Set<string>()
+  // child_process bindings from top-level imports / requires.
+  const processNamed = new Map<string, string>()
+  const processNamespaces = new Set<string>()
+  const topLevelStrings = new Map<string, string>()
+  let cpRecognized = 0
+  const isCp = (e: ts.Expression | undefined): e is ts.StringLiteral => !!e && ts.isStringLiteral(e) && CHILD_PROCESS_MODULES.has(e.text)
+  const requireOf = (e: ts.Expression | undefined): ts.StringLiteral | undefined =>
+    e && ts.isCallExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'require' && !declared.has('require') && e.arguments.length === 1 && ts.isStringLiteral(e.arguments[0]!) ? (e.arguments[0] as ts.StringLiteral) : undefined
+  for (const statement of sf.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause
+      const named = clause?.namedBindings
+      if (named && ts.isNamedImports(named)) {
+        for (const element of named.elements) if (!element.propertyName && TEST_FUNCTIONS.has(element.name.text)) importedTestNames.add(element.name.text)
+      }
+      if (ts.isStringLiteral(statement.moduleSpecifier) && CHILD_PROCESS_MODULES.has(statement.moduleSpecifier.text)) {
+        cpRecognized++
+        if (clause?.name) processNamespaces.add(clause.name.text)
+        if (named && ts.isNamespaceImport(named)) processNamespaces.add(named.name.text)
+        if (named && ts.isNamedImports(named)) {
+          for (const element of named.elements) {
+            const imported = (element.propertyName ?? element.name).text
+            if (PROCESS_FUNCTIONS.has(imported)) processNamed.set(element.name.text, imported)
+          }
+        }
+      }
+    } else if (ts.isImportEqualsDeclaration(statement) && ts.isExternalModuleReference(statement.moduleReference) && isCp(statement.moduleReference.expression)) {
+      cpRecognized++
+      processNamespaces.add(statement.name.text)
+    } else if (ts.isVariableStatement(statement)) {
+      const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
+      for (const declaration of statement.declarationList.declarations) {
+        const literal = declaration.initializer ? staticLiteralText(declaration.initializer) : undefined
+        if (isConst && ts.isIdentifier(declaration.name) && literal !== undefined) topLevelStrings.set(declaration.name.text, literal)
+        if (isCp(requireOf(declaration.initializer))) {
+          cpRecognized++
+          if (ts.isIdentifier(declaration.name)) processNamespaces.add(declaration.name.text)
+          else if (ts.isObjectBindingPattern(declaration.name)) {
+            for (const element of declaration.name.elements) {
+              const imported = (element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName : ts.isIdentifier(element.name) ? element.name : undefined)?.text
+              if (imported && PROCESS_FUNCTIONS.has(imported) && ts.isIdentifier(element.name)) processNamed.set(element.name.text, imported)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const resolveString = (expression: ts.Expression): StaticString => {
+    const unwrapped = unwrapExpression(expression)
+    const literal = staticLiteralText(unwrapped)
+    if (literal !== undefined) return { kind: 'literal', text: literal }
+    if (ts.isIdentifier(unwrapped)) {
+      const bound = topLevelStrings.get(unwrapped.text)
+      if (bound !== undefined && uniquelyDeclared(unwrapped.text)) return { kind: 'binding', text: bound, bound: unwrapped.text }
+      return { kind: 'dynamic' }
+    }
+    if (ts.isNumericLiteral(unwrapped) || ts.isBigIntLiteral(unwrapped) || unwrapped.kind === ts.SyntaxKind.TrueKeyword || unwrapped.kind === ts.SyntaxKind.FalseKeyword || unwrapped.kind === ts.SyntaxKind.NullKeyword) return { kind: 'ignored' }
+    return { kind: 'dynamic' }
+  }
+  const pushLiteral = (kind: SourceAuditFact['kind'], observationKind: NonNullable<SourceAuditFact['observationKind']>, node: ts.Node, name: string, value?: string): void => {
+    facts.push({ ...base, kind, span: span(node), observationKind, name, ...(value !== undefined ? { value } : {}) })
+  }
+
+  let testDepth = 0
+  const attributedShell = new Set<ts.Node>()
+  let cpLiterals = 0
+  const registryValue = (key: string, init: ts.Expression, keyNode: ts.Node): void => {
+    const resolved = resolveString(init)
+    if (resolved.kind === 'literal') pushLiteral('identifier-literal', 'registry-id', init, key, resolved.text)
+    else if (resolved.kind === 'binding') pushLiteral('identifier-literal', 'registry-id', init, `${key}<-${resolved.bound}`, resolved.text)
+    else if (resolved.kind === 'dynamic') uncertain('identifier-literals', 'dynamic-identifier-value', `The value of identifier key "${key}" is not a static string.`, keyNode)
+  }
+
+  function isModuleSpecifier(node: ts.Node): boolean {
+    const parent = node.parent
+    return (!!parent && (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) ||
+      (!!parent && ts.isExternalModuleReference(parent))
+  }
+  function isConcatenationOperand(node: ts.Node): boolean {
+    const parent = node.parent
+    return !!parent && ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.PlusToken
+  }
+  function fixtureSpecifier(literal: ts.StringLiteral): void {
+    if (!literal.text.startsWith('.') || !FIXTURE_SEGMENT.test(literal.text)) return
+    pushLiteral('fixture-reference', 'fixture-basename', literal, literal.text, literal.text.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? literal.text)
+  }
+  function visitFixturePathCall(call: ts.CallExpression, callee: ts.Expression): void {
+    const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined
+    if (!name || !FIXTURE_PATH_CALLS.has(name)) return
+    const args = call.arguments
+    const composing = PATH_COMPOSERS.has(name)
+    const limit = composing ? args.length : Math.min(1, args.length)
+    for (let i = 0; i < limit; i++) {
+      const arg = args[i]!
+      if (ts.isTemplateExpression(arg)) {
+        if (FIXTURE_SEGMENT.test([arg.head.text, ...arg.templateSpans.map((s) => s.literal.text)].join('/'))) uncertain('fixture-references', 'dynamic-fixture-path', 'A fixture path template contains substitutions.', arg)
+        continue
+      }
+      const text = staticLiteralText(arg)
+      if (text === undefined || !FIXTURE_SEGMENT.test(text)) continue
+      const parts = [text]
+      let last: ts.Expression = arg
+      let allStatic = true
+      if (composing) {
+        for (let j = i + 1; j < args.length; j++) {
+          const next = staticLiteralText(args[j]!)
+          if (next === undefined) { allStatic = false; break }
+          parts.push(next)
+          last = args[j]!
+        }
+      }
+      if (!allStatic) { uncertain('fixture-references', 'dynamic-fixture-path', 'A fixture path continues with a non-literal segment.', arg); break }
+      const joined = parts.join('/').replace(/\\/g, '/')
+      facts.push({
+        ...base, kind: 'fixture-reference', observationKind: 'fixture-basename', name: joined,
+        span: auditSpanAt(sf, filePath, arg.getStart(sf), last.getEnd(), exact), value: joined.replace(/\/+$/, '').split('/').pop() ?? joined,
+      })
+      break
+    }
+  }
+  function visitTestCall(call: ts.CallExpression, callee: ts.Expression): boolean {
+    let testName: string | undefined
+    let modifier: 'skip' | 'only' | undefined
+    if (ts.isIdentifier(callee)) {
+      if (LEGACY_TEST_ALIASES.has(callee.text) && declared.get(callee.text) === undefined) {
+        uncertain('test-observations', 'unsupported-test-alias', `The call ${callee.text}(...) is a test alias outside the supported profile.`, call)
+        return false
+      }
+      if (TEST_FUNCTIONS.has(callee.text)) testName = callee.text
+    } else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && TEST_FUNCTIONS.has(callee.expression.text)) {
+      testName = callee.expression.text
+      if (callee.name.text === 'skip' || callee.name.text === 'only') modifier = callee.name.text
+      else {
+        // describe.each, it.concurrent, test.describe, ... are outside the supported profile.
+        if (declared.get(testName) === undefined || importedTestNames.has(testName)) {
+          uncertain('test-observations', 'unsupported-test-modifier', `${testName}.${callee.name.text}(...) is outside the supported test profile.`, call)
+        }
+        return false
+      }
+    }
+    if (!testName) return false
+    const owner = declared.get(testName)
+    if (owner !== undefined && !(owner === 1 && importedTestNames.has(testName))) {
+      uncertain('test-observations', 'test-call-shadowed', `${testName} is declared locally, so the call is not attributed to a test runner.`, call)
+      return false
+    }
+    const title = call.arguments[0]
+    if (modifier) pushLiteral('test-observation', modifier === 'skip' ? 'test-modifier-skip' : 'test-modifier-only', callee, testName)
+    if (!title) return true
+    const literal = staticLiteralText(title)
+    if (literal !== undefined) pushLiteral('test-observation', 'test-title', title, testName, literal)
+    else uncertain('test-observations', 'dynamic-test-title', `The title of ${testName}(...) is not a static string.`, title)
+    return true
+  }
+  function visitProcessCall(call: ts.CallExpression, callee: ts.Expression): void {
+    let fn: string | undefined
+    if (ts.isIdentifier(callee) && uniquelyDeclared(callee.text)) fn = processNamed.get(callee.text)
+    else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && processNamespaces.has(callee.expression.text) && uniquelyDeclared(callee.expression.text)) {
+      if (PROCESS_FUNCTIONS.has(callee.name.text)) fn = callee.name.text
+    } else if (ts.isElementAccessExpression(callee) && ts.isIdentifier(callee.expression) && processNamespaces.has(callee.expression.text)) {
+      uncertain('process-observations', 'dynamic-process-target', 'A child_process member is invoked through a computed key.', call)
+      return
+    }
+    if (!fn) return
+    const target = call.arguments[0]
+    const resolved = target ? resolveString(target) : ({ kind: 'dynamic' } as StaticString)
+    if (resolved.kind === 'literal' || resolved.kind === 'binding') pushLiteral('process-observation', 'process-invocation', call, fn, resolved.text)
+    else {
+      pushLiteral('process-observation', 'process-invocation', call, fn)
+      uncertain('process-observations', 'dynamic-process-target', `The command argument of ${fn}(...) is not a static string.`, target ?? call)
+    }
+    call.arguments.forEach((arg, index) => {
+      const value = unwrapExpression(arg)
+      if (ts.isObjectLiteralExpression(value)) {
+        for (const property of value.properties) {
+          if (ts.isSpreadAssignment(property)) uncertain('process-observations', 'unsupported-process-options', 'Spread options cannot be enumerated.', property)
+          else if ((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && property.name.text === 'shell') {
+            const initializer = ts.isPropertyAssignment(property) ? unwrapExpression(property.initializer) : undefined
+            if (initializer?.kind === ts.SyntaxKind.TrueKeyword) { attributedShell.add(property); pushLiteral('process-observation', 'process-option', property, 'shell', 'true') }
+            else if (initializer?.kind !== ts.SyntaxKind.FalseKeyword) uncertain('process-observations', 'dynamic-process-option', 'The shell option is not a literal boolean.', property)
+          }
+        }
+      } else if (index >= 1 && !ts.isArrayLiteralExpression(value) && !ts.isArrowFunction(value) && !ts.isFunctionExpression(value) && staticLiteralText(value) === undefined) {
+        uncertain('process-observations', 'unresolved-process-options', 'A non-literal argument may carry process options.', arg)
+      }
+    })
+  }
+
+  const visit = (node: ts.Node): void => {
+    // Identifier constants and registry objects (top-level declarations only).
+    if (ts.isVariableStatement(node) && node.parent === sf) {
+      const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0
+      for (const declaration of node.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
+        const name = declaration.name.text
+        if (isConst && IDENTIFIER_KEY.test(name)) registryValue(name, declaration.initializer, declaration.name)
+        const init = unwrapExpression(declaration.initializer)
+        // Registry membership cannot be established from a name alone: report the gap instead of inventing registry-id facts.
+        if (isConst && REGISTRY_NAME.test(name) && ts.isObjectLiteralExpression(init) && init.properties.length > 0) {
+          uncertain('identifier-literals', 'registry-membership-unsupported', `Keys of "${name}" are not observed as identifiers: registry membership is not established from a name.`, declaration.name)
+        }
+      }
+    }
+    // A literal shell: true outside a recognised child_process call is not attributed to a process call.
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && node.name.text === 'shell' && unwrapExpression(node.initializer).kind === ts.SyntaxKind.TrueKeyword && !attributedShell.has(node)) {
+      uncertain('process-observations', 'unattributed-shell-option', 'A shell: true option appears outside a recognised child_process call.', node)
+    }
+    // Identifier-like object keys anywhere.
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && IDENTIFIER_KEY.test(node.name.text)) {
+      registryValue(node.name.text, node.initializer, node)
+    } else if (ts.isShorthandPropertyAssignment(node) && IDENTIFIER_KEY.test(node.name.text)) {
+      registryValue(node.name.text, node.name, node)
+    }
+
+    // Module specifiers: fixture references and child_process literal accounting.
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      fixtureSpecifier(node.moduleSpecifier)
+      if (CHILD_PROCESS_MODULES.has(node.moduleSpecifier.text)) cpLiterals++
+      return
+    }
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && ts.isStringLiteral(node.moduleReference.expression)) {
+      fixtureSpecifier(node.moduleReference.expression)
+      if (isCp(node.moduleReference.expression)) cpLiterals++
+      return
+    }
+
+    let enteredTest = false
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const required = requireOf(node)
+      if (required) {
+        fixtureSpecifier(required)
+        if (CHILD_PROCESS_MODULES.has(required.text)) cpLiterals++
+      }
+      enteredTest = visitTestCall(node, callee)
+      visitProcessCall(node, callee)
+      visitFixturePathCall(node, callee)
+      if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'split' && node.arguments.length >= 1) {
+        const literal = staticLiteralText(node.arguments[0]!)
+        if (literal === '\n') pushLiteral('process-observation', 'newline-split', node, 'split', literal)
+        else if (literal === '\\') pushLiteral('process-observation', 'path-separator-split', node, 'split', literal)
+      }
+    }
+    // Embedded npm run commands inside string-like nodes.
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      if ((testDepth > 0 || isTestFile) && !isModuleSpecifier(node)) {
+        const matches = [...node.text.matchAll(NPM_RUN)]
+        if (matches.length > 0) {
+          if (isConcatenationOperand(node)) uncertain('test-observations', 'dynamic-test-command', 'A literal containing "npm run" is part of a concatenated command.', node)
+          else for (const match of matches) pushLiteral('test-observation', 'embedded-test-command', node, `npm run ${match[1]}`, node.text)
+        }
+      }
+      if (ts.isStringLiteral(node) && CHILD_PROCESS_MODULES.has(node.text) && !isModuleSpecifier(node) && !(ts.isCallExpression(node.parent) && requireOf(node.parent))) cpLiterals++
+    } else if (ts.isTemplateExpression(node) && (testDepth > 0 || isTestFile)) {
+      const staticText = [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join('')
+      if (/\bnpm run\b/.test(staticText)) uncertain('test-observations', 'dynamic-test-command', 'A template with substitutions contains "npm run"; the command is not exact.', node)
+    }
+
+    if (enteredTest) testDepth++
+    ts.forEachChild(node, visit)
+    if (enteredTest) testDepth--
+  }
+
+  visit(sf)
+  if (isTestFile && capabilities['fixture-references'] === 'complete') {
+    // Parser-backed path literals cannot prove the absence of an arbitrary basename occurrence in raw test content.
+    capabilities['fixture-references'] = 'partial'
+    diagnostics.push({ code: 'fixture-text-occurrence-unavailable', message: 'Fixture references are parser-backed path literals only; raw basename text occurrences are not enumerated.', span: null })
+  }
+  if (cpLiterals > cpRecognized) uncertain('process-observations', 'unsupported-process-import', 'child_process is referenced in a form outside the top-level import/require profile.', sf)
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isNonNullExpression(current)) current = current.expression
+  return current
+}
+
+/** Exact text of a string literal or substitution-free template, otherwise undefined. */
+function staticLiteralText(expression: ts.Expression): string | undefined {
+  const value = unwrapExpression(expression)
+  return ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value) ? value.text : undefined
 }

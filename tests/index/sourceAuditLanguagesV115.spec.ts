@@ -91,7 +91,8 @@ function artifactFor(root: string, sourceRoots: string[] = ['src']) {
   return { built, ...result }
 }
 
-const OUT_OF_SCOPE = ['identifier-literals', 'test-observations', 'fixture-references', 'process-observations', 'api-client-calls'] as const
+// Batch 3 lifted identifier/test/fixture/process observations for TypeScript and JavaScript; api-client-calls remains Batch 6.
+const OUT_OF_SCOPE = ['api-client-calls'] as const
 
 describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
   it('extracts imports, declarations and exports with exact spans from the .mts fixture', () => {
@@ -203,6 +204,11 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     // Missing files stay unresolved; the specifier alone never selects a different extension.
     expect(ts.resolveImportToFile('./left.mts', 'consumer.ts', ['other.mts'])).toBeNull()
     expect(ts.resolveImportToFile('./left.cts', 'consumer.ts', ['left.mts'])).toBeNull()
+    // ./x.mjs -> x.mts and ./x.cjs -> x.cts only when that exact candidate is in the selected set.
+    expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.mts'])).toBe('left.mts')
+    expect(ts.resolveImportToFile('./left.cjs', 'consumer.ts', ['left.cts'])).toBe('left.cts')
+    expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['other.mts'])).toBeNull()
+    expect(ts.resolveImportToFile('./left.cjs', 'consumer.ts', ['left.mts'])).toBeNull()
     // .mjs is not a supported source extension: an existing left.mjs is never selected.
     expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.mjs'])).toBeNull()
     expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.ts'])).toBeNull()
@@ -546,11 +552,10 @@ describe('v1.15.0 Batch 2 fact identity and provenance', () => {
     expect(payload.capabilities['source-ranges']).toBe('partial')
   })
 
-  it('never lets an adapter mark out-of-scope capability families', () => {
+  it('never lets an adapter mark out-of-scope capability families (api-client-calls is Batch 6)', () => {
     const adapter = registry.adapterForFile('src/o.ts')!
     const extraction = adapter.extractFromSource('src/o.ts', 'export const x = 1\n')
     extraction.sourceAudit!.capabilities['api-client-calls'] = 'complete'
-    extraction.sourceAudit!.capabilities['test-observations'] = 'partial'
     const payload = extractAuditObservations('src/o.ts', 'export const x = 1\n', extraction)
     for (const name of OUT_OF_SCOPE) expect(payload.capabilities[name]).toBe('unsupported')
   })
@@ -661,7 +666,10 @@ describe('v1.15.0 Batch 2 full and incremental parity', () => {
   it('changes the snapshot when only language facts could differ and leaves out-of-scope families unsupported', () => {
     const { artifact } = artifactFor(makeProject(MIXED))
     for (const file of artifact.files) {
-      for (const name of ['identifier-literals', 'process-observations'] as const) expect(file.capabilities[name]).toBe('unsupported')
+      // Python, Java, Kotlin and Rust stay unsupported for the Batch 3 families; TypeScript/JavaScript report their own status.
+      if (file.language !== 'typescript' && file.language !== 'javascript') {
+        for (const name of ['identifier-literals', 'process-observations'] as const) expect(file.capabilities[name]).toBe('unsupported')
+      }
       expect(['unsupported', 'not-applicable']).toContain(file.capabilities['api-client-calls'])
     }
     const python = artifact.files.find((file) => file.path === 'src/p.py')!

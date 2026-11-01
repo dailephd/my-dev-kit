@@ -30,11 +30,11 @@ import {
   type SourceAuditFile,
   type SourceAuditRole,
 } from '../symbol-index/auditEvidenceTypes.js'
-import { BATCH2_AUDIT_CAPABILITIES } from '../symbol-index/auditObservations.js'
+import { AUDIT_PRODUCER_CAPABILITIES, BATCH2_AUDIT_CAPABILITIES } from '../symbol-index/auditObservations.js'
 import type { FileSummary, SymbolIndex } from '../symbol-index/types.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.1.0'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.2.0'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string
@@ -293,8 +293,19 @@ function projectFile(
   }
 
   const parserFailed = BATCH2_AUDIT_CAPABILITIES.every((capability) => payload.capabilities[capability] === 'failed')
-  for (const capability of BATCH2_AUDIT_CAPABILITIES) {
+  const factKinds = new Set<string>(payload.facts.map((fact) => fact.kind))
+  const kindOf: Partial<Record<SourceAuditCapability, string>> = {
+    'identifier-literals': 'identifier-literal',
+    'test-observations': 'test-observation',
+    'fixture-references': 'fixture-reference',
+    'process-observations': 'process-observation',
+  }
+  for (const capability of AUDIT_PRODUCER_CAPABILITIES) {
     const reported = payload.capabilities[capability]
+    const inapplicable = capabilities[capability] === 'not-applicable'
+    // A role-inapplicable family (e.g. test observations in a production source file) stays not-applicable
+    // while the extractor found nothing and reports a clean scan; observed facts or uncertainty always surface.
+    if (inapplicable && reported === 'complete' && !factKinds.has(kindOf[capability] ?? '')) continue
     // Without content identity matching the analyzed bytes, nothing may be complete.
     capabilities[capability] = reported === 'complete' && validHash === null ? 'partial' : reported
   }

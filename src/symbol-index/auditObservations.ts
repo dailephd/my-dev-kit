@@ -7,9 +7,12 @@
  * deterministic payload stored on `FileSummary`. It never parses source with
  * another parser, opens files, runs subprocesses or walks directories.
  *
- * Only the `declarations`, `imports`, `exports` and `source-ranges`
- * capabilities can be anything but `unsupported` in this batch.
+ * Batch 3 adds the bounded literal families (identifier literals, test
+ * observations, fixture references, process observations). `api-client-calls`
+ * stays out of scope.
  */
+
+import { createHash } from 'node:crypto'
 
 import { declarationNodeId } from './declarationIdentity.js'
 import {
@@ -18,6 +21,8 @@ import {
   SOURCE_AUDIT_EXPORT_ORIGINS,
   SOURCE_AUDIT_EXTRACTION_METHODS,
   SOURCE_AUDIT_IMPORT_RESOLUTIONS,
+  AUDIT_LITERAL_MAX_CHARS,
+  type SourceAuditObservationKind,
   SOURCE_AUDIT_VISIBILITIES,
   type SourceAuditCapability,
   type SourceAuditCapabilityStatus,
@@ -42,13 +47,51 @@ const MAX_NAME_CHARS = 512
 const MAX_SPECIFIER_CHARS = 1024
 const MAX_IMPORTED_NAMES = 128
 const MAX_MESSAGE_CHARS = 240
-const BATCH2_KINDS: readonly SourceAuditFactKind[] = ['declaration', 'import', 'export']
-const KIND_CAPABILITY: Record<'declaration' | 'import' | 'export', SourceAuditCapability> = {
+/** Capabilities a producer may report beyond `unsupported`. api-client-calls is Batch 6. */
+export const AUDIT_PRODUCER_CAPABILITIES = [
+  ...BATCH2_AUDIT_CAPABILITIES,
+  'identifier-literals',
+  'test-observations',
+  'fixture-references',
+  'process-observations',
+] as const
+
+type ProducedKind = 'declaration' | 'import' | 'export' | 'identifier-literal' | 'test-observation' | 'fixture-reference' | 'process-observation'
+const PRODUCED_KINDS: readonly SourceAuditFactKind[] = ['declaration', 'import', 'export', 'identifier-literal', 'test-observation', 'fixture-reference', 'process-observation']
+const KIND_CAPABILITY: Record<ProducedKind, SourceAuditCapability> = {
   declaration: 'declarations',
   import: 'imports',
   export: 'exports',
+  'identifier-literal': 'identifier-literals',
+  'test-observation': 'test-observations',
+  'fixture-reference': 'fixture-references',
+  'process-observation': 'process-observations',
 }
-const ALLOWED_FIELDS: Record<'declaration' | 'import' | 'export', readonly (keyof SourceAuditFact)[]> = {
+const LITERAL_FIELDS: readonly (keyof SourceAuditFact)[] = ['name', 'observationKind', 'value', 'valueSha256', 'valueTruncated', 'owningSymbolId']
+/** Observation kinds each literal-family fact kind may carry; no other vocabulary exists. */
+const OBSERVATION_KINDS: Record<'identifier-literal' | 'test-observation' | 'fixture-reference' | 'process-observation', readonly SourceAuditObservationKind[]> = {
+  'identifier-literal': ['registry-id'],
+  'test-observation': ['test-title', 'test-modifier-skip', 'test-modifier-only', 'embedded-test-command'],
+  'fixture-reference': ['fixture-basename'],
+  'process-observation': ['process-invocation', 'process-option', 'newline-split', 'path-separator-split'],
+}
+/** Kinds whose value is mandatory (the observed literal itself). */
+const VALUE_REQUIRED = new Set<SourceAuditFactKind>(['identifier-literal', 'fixture-reference'])
+
+/**
+ * Bounds an exact observed literal. At most AUDIT_LITERAL_MAX_CHARS characters keep the exact value;
+ * longer literals expose no prefix: value null, SHA-256 of the exact original, valueTruncated true.
+ */
+export function boundedAuditLiteral(raw: string): Pick<SourceAuditFact, 'value' | 'valueSha256' | 'valueTruncated'> {
+  if (raw.length <= AUDIT_LITERAL_MAX_CHARS) return { value: raw }
+  return { value: null, valueSha256: createHash('sha256').update(raw, 'utf8').digest('hex'), valueTruncated: true }
+}
+
+const ALLOWED_FIELDS: Record<ProducedKind, readonly (keyof SourceAuditFact)[]> = {
+  'identifier-literal': LITERAL_FIELDS,
+  'test-observation': LITERAL_FIELDS,
+  'fixture-reference': LITERAL_FIELDS,
+  'process-observation': LITERAL_FIELDS,
   declaration: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId'],
   import: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId'],
   export: ['name', 'symbolId', 'visibility', 'exported', 'exportOrigin', 'sourceSpecifier', 'owningSymbolId'],
@@ -159,7 +202,7 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
   const lines = sourceText.split('\n')
   const counters: Counters = { dropped: new Map(), adjusted: new Map(), downgraded: new Set() }
   const capabilities = auditCapabilityMap('unsupported')
-  for (const capability of BATCH2_AUDIT_CAPABILITIES) {
+  for (const capability of AUDIT_PRODUCER_CAPABILITIES) {
     const status = raw.capabilities?.[capability]
     capabilities[capability] = isOneOf(status, SOURCE_AUDIT_CAPABILITY_STATUSES) ? status : 'unsupported'
   }
@@ -168,20 +211,20 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
   const droppedKinds = new Set<SourceAuditCapability>()
   const drop = (reason: string, kind: unknown): void => {
     bump(counters.dropped, reason)
-    if (isOneOf(kind, BATCH2_KINDS)) droppedKinds.add(KIND_CAPABILITY[kind as 'declaration' | 'import' | 'export'])
+    if (isOneOf(kind, PRODUCED_KINDS)) droppedKinds.add(KIND_CAPABILITY[kind as ProducedKind])
     droppedKinds.add('source-ranges')
   }
 
   ;(raw.facts ?? []).forEach((candidate, index) => {
     if (typeof candidate !== 'object' || candidate === null) return drop('malformed-fact', undefined)
     const kind = candidate.kind
-    if (kind !== 'declaration' && kind !== 'import' && kind !== 'export') return drop('unsupported-fact-kind', undefined)
+    if (!isOneOf(kind, PRODUCED_KINDS)) return drop('unsupported-fact-kind', undefined)
     if (!isOneOf(candidate.extractionMethod, SOURCE_AUDIT_EXTRACTION_METHODS)) return drop('invalid-extraction-method', kind)
     const span = normalizeSpan(candidate.span, filePath, lines, counters)
     if (!span) return drop('invalid-span', kind)
 
     const fact: SourceAuditFact = { id: '', kind, span, extractionMethod: candidate.extractionMethod }
-    for (const key of ALLOWED_FIELDS[kind]) {
+    for (const key of ALLOWED_FIELDS[kind as ProducedKind]) {
       const value = candidate[key]
       if (value !== undefined) (fact as unknown as Record<string, unknown>)[key] = value
     }
@@ -219,13 +262,29 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
     } else if (kind === 'import') {
       if (!fact.sourceSpecifier) return drop('incomplete-import', kind)
       if (!isOneOf(fact.importResolution, SOURCE_AUDIT_IMPORT_RESOLUTIONS) || fact.importResolution === 'resolved-local') fact.importResolution = 'observed'
-    } else {
+    } else if (kind === 'export') {
       if (!fact.name) return drop('incomplete-export', kind)
       if (!fact.exportOrigin) fact.exportOrigin = 'unknown'
       if (fact.symbolId === '' || fact.symbolId === undefined) {
         delete fact.symbolId
         const match = matchSymbol({ ...fact, declarationKind: undefined }, extraction)
         if (match !== 'none' && match !== 'ambiguous') fact.symbolId = match.nodeId
+      }
+    }
+    else {
+      // Literal families: observation kind must belong to the fact kind; the producer supplies only the exact raw value.
+      const allowedKinds = OBSERVATION_KINDS[kind as keyof typeof OBSERVATION_KINDS]
+      if (!isOneOf(fact.observationKind, allowedKinds)) return drop('invalid-observation-kind', kind)
+      const rawValue = candidate.value
+      delete fact.value
+      delete fact.valueSha256
+      delete fact.valueTruncated
+      if (rawValue !== undefined) {
+        // null or non-string input is never an established literal; an oversized one is hashed by this owner.
+        if (typeof rawValue !== 'string') return drop('invalid-literal-value', kind)
+        Object.assign(fact, boundedAuditLiteral(rawValue))
+      } else if (VALUE_REQUIRED.has(kind)) {
+        return drop('missing-literal-value', kind)
       }
     }
     pending.push({ fact, index })
@@ -242,6 +301,8 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
       compareText(a.fact.name ?? '', b.fact.name ?? '') ||
       compareText(a.fact.declarationKind ?? '', b.fact.declarationKind ?? '') ||
       compareText(a.fact.sourceSpecifier ?? '', b.fact.sourceSpecifier ?? '') ||
+      compareText(a.fact.observationKind ?? '', b.fact.observationKind ?? '') ||
+      compareText(a.fact.value ?? '', b.fact.value ?? '') ||
       a.index - b.index
     )
   })
@@ -271,7 +332,7 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
   }
   for (const capability of droppedKinds) downgrade(capability)
   for (const capability of counters.downgraded) downgrade(capability)
-  for (const kind of ['declaration', 'import', 'export'] as const) {
+  for (const kind of PRODUCED_KINDS as readonly ProducedKind[]) {
     const capability = KIND_CAPABILITY[kind]
     if (facts.some((fact) => fact.kind === kind) && capabilities[capability] !== 'complete' && capabilities[capability] !== 'partial') {
       capabilities[capability] = 'partial'

@@ -342,13 +342,14 @@ describe('validateSourceAuditEvidence negative cases', () => {
     }
     expect(() => validateSourceAuditEvidence(withValue('x'.repeat(255), false, true))).not.toThrow()
     expect(() => validateSourceAuditEvidence(withValue('x'.repeat(256), false, true))).not.toThrow()
-    expect(() => validateSourceAuditEvidence(withValue('x'.repeat(256), true, true))).not.toThrow()
-    expectInvalidArtifact(withValue('x'.repeat(257), false, true), 'exceeds')
-    expectInvalidArtifact(withValue('x'.repeat(257), undefined, true), 'exceeds')
+    // Planner section 18 (Batch 3): a known oversized literal is value=null + sha + truncated; a prefix is never exposed.
+    expect(() => validateSourceAuditEvidence(withValue(null, true, true))).not.toThrow()
+    expectInvalidArtifact(withValue('x'.repeat(256), true, true), 'valueTruncated')
     expectInvalidArtifact(withValue('x'.repeat(257), true, true), 'valueTruncated')
     expectInvalidArtifact(withValue('x'.repeat(255), true, true), 'valueTruncated')
-    expectInvalidArtifact(withValue('x'.repeat(256), true, false), 'valueSha256')
-    expectInvalidArtifact(withValue(null, true, true), 'valueTruncated')
+    expectInvalidArtifact(withValue(null, true, false), 'valueSha256')
+    expectInvalidArtifact(withValue('x'.repeat(257), false, true), 'exceeds')
+    expectInvalidArtifact(withValue('x'.repeat(257), undefined, true), 'exceeds')
   })
 
   it('does not accept complete capabilities for unproven files or facts for unsupported capabilities (RSP-005)', () => {

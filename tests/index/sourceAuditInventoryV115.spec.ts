@@ -236,15 +236,19 @@ describe('v1.15.0 Batch 1 coverage projection', () => {
     expect(artifact.coverage.excludedPathCount).toBe(1)
   })
 
-  it('never marks out-of-scope capability families complete, even for a complete inventory', () => {
+  it('never marks api-client-calls or unextracted-language families complete, even for a complete inventory', () => {
     const root = makeProject({ 'src/a.ts': 'export function f() { return 1 }\n', 'src/b.py': 'def g():\n    return 1\n' })
     const { result } = project(root)
     expect(result.artifact.coverage.inventoryComplete).toBe(true)
     for (const file of result.artifact.files) {
       // Batch 2 evidence exists for the four language families; the Batch 3+ families stay unsupported or not applicable.
-      for (const capability of ['identifier-literals', 'test-observations', 'fixture-references', 'process-observations', 'api-client-calls'] as const) {
-        expect(file.capabilities[capability]).not.toBe('complete')
-        expect(file.capabilities[capability]).not.toBe('partial')
+      expect(file.capabilities['api-client-calls']).not.toBe('complete')
+      expect(file.capabilities['api-client-calls']).not.toBe('partial')
+      // Batch 3 families are extracted for TypeScript/JavaScript only; Python stays unsupported or not applicable.
+      if (file.language === 'python') {
+        for (const capability of ['identifier-literals', 'test-observations', 'fixture-references', 'process-observations'] as const) {
+          expect(['unsupported', 'not-applicable']).toContain(file.capabilities[capability])
+        }
       }
       expect(file.analyzerId).not.toBeNull()
     }
@@ -401,7 +405,7 @@ describe('v1.15.0 Batch 1 hash and snapshot identity', () => {
     expect(first.files[0]!.contentSha256).toBe(sha256(text))
     expect(first.source.snapshotId).toMatch(/^[0-9a-f]{64}$/)
     expect(second).toEqual(first)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.1.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.2.0')
   })
 
   it('hashes raw bytes rather than decoded text (BOM and invalid UTF-8 stay distinguishable)', () => {
