@@ -1,5 +1,12 @@
+import { createHash } from 'node:crypto'
 import { readSourceText } from '../lookup/getSourceSlice.js'
 import { toForwardSlash } from '../io/pathUtils.js'
+import {
+  assertSourceAuditFileFresh,
+  isCanonicalAuditRelativePath,
+  SourceAuditEvidenceError,
+} from '../lookup/readSourceAuditEvidence.js'
+import { SOURCE_AUDIT_SCHEMA_VERSION, type SourceAuditEvidenceArtifact } from '../symbol-index/auditEvidenceTypes.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
@@ -128,6 +135,79 @@ export function findExactMatches(options: {
     limit: MAX_TOTAL_MATCHES,
     pathFilter: pathFilter ?? undefined,
   }
+}
+
+/** Maximum bytes of one selected file examined by an exact-file occurrence query. */
+export const MAX_EXACT_FILE_SCAN_BYTES = 200000
+
+/** Raw literal-text occurrences in one selected file. Interpretation (imports, fixtures, policy) belongs to the consumer. */
+export interface AuditFileOccurrenceResult {
+  schemaVersion: '1.0.0'
+  mode: 'exact-file-occurrence'
+  snapshotId: string
+  filePath: string
+  value: string
+  scannedBytes: number
+  complete: boolean
+  reasonCode: string | null
+  matchCount: number
+  returnedMatches: number
+  truncated: boolean
+  matches: Array<{ line: number; column: number; windowStart: number; windowEnd: number; content: string }>
+}
+
+/**
+ * Exact literal-substring occurrences in ONE exact selected file of a verified source-audit artifact.
+ * complete=true only when the file's recorded content hash matched the live bytes, the whole file was
+ * valid UTF-8 within the scan limit, and the match list was not capped; anything else is complete=false
+ * with a reasonCode, so a zero-match result is an absence proof only when complete. Stale, missing,
+ * escaping or unselected files throw SourceAuditEvidenceError instead of returning a result.
+ */
+export function findExactFileOccurrences(options: {
+  artifact: SourceAuditEvidenceArtifact
+  filePath: string
+  value: string
+  contextLines: number
+}): AuditFileOccurrenceResult {
+  const { artifact, filePath, value } = options
+  if (value.length === 0) throw new Error('--contains value must be a non-empty string.')
+  if (value.includes('\n') || value.includes('\r')) throw new Error('An exact-file --contains value must not contain line breaks.')
+  if (!isCanonicalAuditRelativePath(filePath)) {
+    throw new SourceAuditEvidenceError('INVALID_AUDIT_PATH', 'The path must be a canonical, forward-slash, root-relative selected path without traversal.')
+  }
+  const file = artifact.files.find((candidate) => candidate.path === filePath)
+  if (!file) throw new SourceAuditEvidenceError('INVALID_AUDIT_PATH', `"${filePath}" is not in the selected source-audit inventory.`)
+  const contextLines = Math.min(Math.max(0, options.contextLines), MAX_CONTEXT_LINES)
+
+  const result = (fields: Pick<AuditFileOccurrenceResult, 'scannedBytes' | 'complete' | 'reasonCode' | 'matchCount' | 'matches'>): AuditFileOccurrenceResult => ({
+    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    mode: 'exact-file-occurrence',
+    snapshotId: artifact.source.snapshotId,
+    filePath,
+    value,
+    returnedMatches: fields.matches.length,
+    truncated: fields.matchCount > fields.matches.length,
+    ...fields,
+  })
+
+  // Without a trusted content hash the bytes cannot be authenticated; nothing is read or claimed.
+  if (file.contentSha256 === null) {
+    return result({ scannedBytes: 0, complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE', matchCount: 0, matches: [] })
+  }
+  // Rejects missing, replaced, changed and root-escaping files before any content is released.
+  assertSourceAuditFileFresh(artifact, file)
+  const text = readSourceText(artifact.source.projectRoot, file.path)
+  const bytes = Buffer.from(text, 'utf8')
+  const validUtf8 = createHash('sha256').update(bytes).digest('hex') === file.contentSha256
+  const withinLimit = bytes.length <= MAX_EXACT_FILE_SCAN_BYTES
+  const scanned = withinLimit ? text : bytes.subarray(0, MAX_EXACT_FILE_SCAN_BYTES).toString('utf8')
+
+  const lines = scanned.split(/\r?\n/)
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  const all = scanLinesForValue(lines, value, contextLines, new Map())
+  const matches = all.slice(0, MAX_TOTAL_MATCHES).map(({ line, column, windowStart, windowEnd, content }) => ({ line, column, windowStart, windowEnd, content }))
+  const reasonCode = !validUtf8 ? 'FILE_NOT_VALID_UTF8' : !withinLimit ? 'FILE_EXCEEDS_SCAN_LIMIT' : all.length > matches.length ? 'MATCHES_TRUNCATED' : null
+  return result({ scannedBytes: Math.min(bytes.length, MAX_EXACT_FILE_SCAN_BYTES), complete: reasonCode === null, reasonCode, matchCount: all.length, matches })
 }
 
 function buildGlobalSemanticMap(

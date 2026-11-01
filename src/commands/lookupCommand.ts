@@ -8,6 +8,7 @@ import {
   getSourceAuditInventoryPage,
   readSourceAuditEvidence,
 } from '../lookup/readSourceAuditEvidence.js'
+import { resolveAuditImportTarget } from '../lookup/resolveAuditImportTarget.js'
 import { parseInteger } from './parseUtils.js'
 import {
   loadFrontendReachabilityArtifact,
@@ -33,6 +34,7 @@ interface LookupCommandOptions {
   resolveClassification?: boolean
   auditFiles?: boolean
   auditFile?: string
+  auditImportTarget?: string
   page?: number
 }
 
@@ -53,16 +55,21 @@ export function registerLookupCommand(program: Command): void {
     )
     .option('--audit-files', 'page through the recorded source-audit file inventory (requires --json)')
     .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
+    .option('--audit-import-target <fact-id>', 'prove whether one recorded source-audit import fact has an existing target in the selected inventory (requires --json)')
     .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
     .action((options: LookupCommandOptions) => {
-      const auditRequested = options.auditFiles === true || options.auditFile !== undefined
+      const importTargetRequested = options.auditImportTarget !== undefined
+      const auditRequested = options.auditFiles === true || options.auditFile !== undefined || importTargetRequested
       if (options.page !== undefined && !auditRequested) {
         throw new Error('--page is valid only with --audit-files or --audit-file.')
       }
       if (auditRequested) {
-        if (options.auditFiles === true && options.auditFile !== undefined) {
-          throw new Error('--audit-files and --audit-file are mutually exclusive.')
+        if ([options.auditFiles === true, options.auditFile !== undefined, importTargetRequested].filter(Boolean).length > 1) {
+          throw new Error('--audit-files, --audit-file and --audit-import-target are mutually exclusive.')
+        }
+        if (importTargetRequested && options.page !== undefined) {
+          throw new Error('--page is valid only with --audit-files or --audit-file.')
         }
         if (
           options.node !== undefined ||
@@ -73,10 +80,15 @@ export function registerLookupCommand(program: Command): void {
           options.resolveClassification === true
         ) {
           throw new Error(
-            'The audit selectors (--audit-files, --audit-file) cannot be combined with --node, --route, --storage-key, --ui, --android-component or --resolve-classification.'
+            'The audit selectors (--audit-files, --audit-file, --audit-import-target) cannot be combined with --node, --route, --storage-key, --ui, --android-component or --resolve-classification.'
           )
         }
-        if (!options.json) throw new Error('The audit selectors (--audit-files, --audit-file) require --json.')
+        if (!options.json) throw new Error('The audit selectors (--audit-files, --audit-file, --audit-import-target) require --json.')
+        if (importTargetRequested) {
+          // Read-only: derives the proof from the stored, identity-verified artifact and live containment-checked paths.
+          console.log(JSON.stringify(resolveAuditImportTarget(options.index, options.auditImportTarget as string), null, 2))
+          return
+        }
         const pageIndex = options.page ?? 0
         if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('--page must be a nonnegative integer.')
         // Read-only: reports the stored, identity-verified artifact. It never indexes, repairs or writes.

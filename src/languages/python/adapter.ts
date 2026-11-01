@@ -545,14 +545,20 @@ function extracted(file: string, source: string, data?: ParsedPython, warning?: 
 
 // Candidate sets deliberately include both module.py and module/__init__.py.
 // No suffix candidate wins merely because it was encountered first.
+/** The two project-relative paths a relative (leading-dot) module can denote, or null when it climbs above the project root. */
+function relativeModulePaths(spec: string, level: number, file: string): string[] | null {
+  const modulePath = spec.replace(/\./g, '/')
+  const dirs = path.posix.dirname(file).split('/').filter(p => p !== '.')
+  if (level - 1 > dirs.length) return null
+  const base = dirs.slice(0, dirs.length - level + 1).join('/')
+  const p = [base, modulePath].filter(Boolean).join('/')
+  return [p + '.py', p + '/__init__.py']
+}
 function moduleCandidates(spec: string, level: number, file: string, files: readonly string[]): string[] {
   const modulePath = spec.replace(/\./g, '/')
   if (level) {
-    const dirs = path.posix.dirname(file).split('/').filter(p => p !== '.')
-    if (level - 1 > dirs.length) return []
-    const base = dirs.slice(0, dirs.length - level + 1).join('/')
-    const p = [base, modulePath].filter(Boolean).join('/')
-    return files.filter(f => f === p + '.py' || f === p + '/__init__.py').sort()
+    const paths = relativeModulePaths(spec, level, file)
+    return paths ? files.filter(f => paths.includes(f)).sort() : []
   }
   if (!spec) return []
   return files.filter(f => [modulePath + '.py', modulePath + '/__init__.py'].some(p => f === p || f.endsWith('/' + p))).sort()
@@ -577,6 +583,20 @@ export class PythonAdapter implements LanguageAdapter {
     const module = dots ? dots[2] : specifier
     const spec = module || (level && importedNames.length === 1 && importedNames[0] !== '*' ? importedNames[0] : '')
     return moduleCandidates(spec, level, importingFile, knownFiles)
+  }
+  /**
+   * Every project-relative path a RELATIVE audit import with an explicit module part can denote, existing or
+   * not. Null for absolute imports (suffix-matched against any selected root, so no finite set exists), for
+   * relative imports with no module part (the target may be a name defined in the package __init__), and for
+   * imports that climb above the project root.
+   */
+  enumerateAuditCandidatePaths(specifier: string, importingFile: string): string[] | null {
+    const dots = specifier.match(/^(\.*)(.*)$/)
+    const level = dots ? dots[1].length : 0
+    const module = dots ? dots[2] : specifier
+    if (level === 0 || module === '') return null
+    const paths = relativeModulePaths(module, level, importingFile)
+    return paths ? [...paths].sort() : null
   }
   resolveImportToFile(specifier: string, importingFile: string, knownFiles: readonly string[]): string | null {
     const from = specifier.match(/^from (\.+)([^\s]*)\s+import\s+(.+)$/)

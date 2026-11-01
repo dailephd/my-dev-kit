@@ -27,6 +27,8 @@ export type SourceAuditErrorCode =
   | 'STALE_SOURCE_EVIDENCE'
   | 'INVALID_AUDIT_PATH'
   | 'INVALID_AUDIT_PAGE'
+  | 'AUDIT_FACT_NOT_FOUND'
+  | 'AUDIT_FACT_NOT_IMPORT'
 
 /** Stable, machine-readable failure for the audit lookup modes. The message is bounded and contains no source text. */
 export class SourceAuditEvidenceError extends Error {
