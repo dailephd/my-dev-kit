@@ -6,6 +6,8 @@ my-dev-kit provides deterministic, offline code graph indexing, semantic enrichm
 
 The system produces local JSON artifacts that can be inspected, searched, sliced, rendered, and reused by developers or coding agents. It does not run a server, call LLMs, call external APIs, execute user source code, or modify source files.
 
+The [planned KIT-FACTS-01 workstream in v1.15.0](ROADMAP.md#kit-facts-01-source-evidence-for-lab-audits) extends these existing owners so Kit can become Lab's sole source-analysis and source-retrieval provider after a gated migration. Lab retains audit policy, reports and executed validation. The [coordinated roadmap](ECOSYSTEM_COORDINATED_ROADMAP.md#79-kit-backed-lab-source-audits--2026-10-27) owns that future dependency and its six gates; no new source-evidence contract, Lab bridge or analyzer retirement is claimed by the current architecture below.
+
 ## High-level architecture
 
 ```text
