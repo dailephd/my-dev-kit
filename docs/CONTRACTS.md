@@ -223,6 +223,25 @@ improvements remain v1.14.0 scope.
 
 The retrieval-regression runner gains additive `search` and `source` task execution and a `commandResult` expectation; tasks without `execution` behave as before. This is internal maintainer tooling, not a public command or published artifact schema.
 
+## v1.15.0 source-evidence contracts (unreleased)
+
+**Status:** implemented in the v1.15.0 development branch (KIT-FACTS-01 producer); not released. The published package is 1.14.0 and does not contain these contracts. This section is the canonical contract summary; the artifact is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), commands in [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased), ownership in [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased). They are not repeated here.
+
+- **Additive, not replacing.** Symbol-index schema `3`, code-graph `1.1.0` and manifest `1.0.0` are unchanged; the artifact is `source-audit-evidence.json` (kind `my-dev-kit-v1-source-audit-evidence`, schema `1.0.0`), referenced by an optional `manifest.json` `sourceAuditEvidence` field. No new command family exists.
+- **Source selection and coverage.** The evidence records the selected source roots, the effective exclusion rules and coverage counts. `inventoryComplete` and `exclusionsAreExplicit` state whether the selected inventory and its exclusions are fully accounted for. An unselected or excluded path is not evidence that a file is absent or clean.
+- **Hashes and identity.** Each file carries a content SHA-256 where available. The manifest records the exact serialized artifact SHA-256 and a semantic `snapshotId`; they are different identities. Files without a trusted hash are never claimed authenticated.
+- **Stable fact IDs.** Fact IDs are opaque, deterministic and taken from output; consumers must not reconstruct them.
+- **Capability completeness.** Each file and capability is reported as complete, partial, unsupported, failed, skipped or not applicable. Partial or unsupported evidence is explicit, and a missing fact there is not absence. A complete selected inventory does not imply complete parsing or semantic resolution.
+- **Managed artifact and manifest integrity.** `index` validates the artifact, writes it, then writes the manifest last. Readers verify the manifest reference, hash and snapshot and fail closed on a missing, unregistered or mismatched artifact. Multi-artifact publication is not atomic: an interrupted write can leave incomplete output, which must fail closed.
+- **Cache compatibility.** The private cache (schema `1.4.0`) records the extractor revision (`source-audit-v1.2.0`) and capability set; an incompatible older cache causes one full rebuild. Legacy indexes without the artifact stay valid for all other commands, and the audit selectors report the evidence unavailable.
+- **Complete inventory and exact-fact pagination.** Audit pagination is zero-based with fixed page sizes (64 files, 128 facts), a `null` `nextPageIndex` on the terminal page, an error for a page beyond it, and an explicit `not-selected` result for an unselected path. Ranked search and context capsules are not a substitute for this enumeration.
+- **Import-target existence states.** `present` (candidate existence only), `proven-missing` (complete enumerated candidates in a complete, explicit selection, none on disk), `outside-selected-roots` and `indeterminate`. The last two are never missing-file proof. `present` does not establish unique semantic binding, and Java/Kotlin `candidatePaths` can be incomplete.
+- **Raw occurrence completeness.** The exact-file query returns literal occurrences with `complete`, scan limit 200000 bytes, 200 matches and 40 context lines. A zero-match result is absence evidence only when `complete` is true; truncated, oversized, invalid or unhashed content is never reported as complete absence.
+- **Containment and freshness.** Source reads stay inside the indexed project root; a changed, deleted, replaced or symlink-escaping selected file is rejected as stale. Targets are never modified.
+- **Failure behavior.** Successful results are JSON. Argument and evidence errors exit with code 2 and print a code-prefixed plain-text message; a JSON error object is not guaranteed.
+- **Kit facts versus Lab policy.** Kit supplies source facts, existence and occurrence evidence. Lab keeps audit rules, severity, policy, findings and reports. An exact occurrence is not automatically a syntactic reference, and a candidate's existence is not proof of unique semantic binding.
+- **Graph identity.** File-dependency edge IDs in `code-graph.json` stay unique when a file depends on one target through several statement kinds: the first kind (import, re-export, export-all) keeps the historical ID and the others receive a `#<kind>` suffix. Node and edge validation was not weakened.
+
 ## Static-evidence boundary
 
 All produced evidence is conservative static repository evidence. It does not

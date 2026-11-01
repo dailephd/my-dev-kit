@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Source-audit evidence (v1.15.0 development, not yet published): `index` writes a managed `source-audit-evidence.json` registered in `manifest.json`; `lookup` gains `--audit-files`, `--audit-file` and `--audit-import-target` (existence proof: present, proven-missing, outside-selected-roots, indeterminate); `source --file <path> --contains <literal> --json` returns bounded raw occurrences in one selected file. No new command family. Existing symbol-index, code-graph and manifest schemas are unchanged.
+- Code graph: file-dependency edge IDs are now unique when one file imports and re-exports the same target; the first statement kind keeps its historical ID.
+
 ## 1.14.0 - 2026-10-30
 
 - Python: AST-based extraction of nested classes and methods, decorators and structured import bindings; exact cross-module and method-call attribution where uniquely grounded; Django and SQLAlchemy model facts; FastAPI route and handler facts. Target code and frameworks are never executed.

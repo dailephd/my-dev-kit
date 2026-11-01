@@ -6,6 +6,17 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.14.0` is the current release represented by this repository. Version 1.13.0 remains the previous release.
 
+## In development: v1.15.0 (unpublished)
+
+Version 1.15.0 is not published. The npm package, `package.json` and the CLI still report 1.14.0, and no v1.15.0 tag, GitHub Release or registry entry exists. This section records locally implemented evidence only; it is not release qualification.
+
+KIT-FACTS-01 (the Kit source-evidence producer for ECO-SOURCE-01) is implemented and locally committed on `feature/v1.15.0-contract-foundation`; the source correction commit is `6ead9ae317770a4c0a43b793b0909bd54d1a56a8`. Reported local evidence for that commit: full suite 259 files / 4,167 tests passed, and `npm run verify` passed. This is not a published or release-qualified package, and the version is not complete.
+
+- **Implemented (local):** the managed `source-audit-evidence.json` artifact with manifest linkage and the `lookup --audit-files`, `--audit-file` and `--audit-import-target` selectors; the read-only import-target existence proof; raw exact-file occurrence retrieval (`source --file --contains --json`); and a repair of duplicate file-dependency edge IDs in the code graph. See [COMMANDS.md](COMMANDS.md), [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased) and [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased).
+- **Known limitations:** Java and Kotlin extraction is lexical, and import existence for them cannot enumerate source-set candidates, so `present` is not unique resolution. Python absolute and module-less relative imports cannot be proven missing, non-relative TypeScript specifiers are `indeterminate` when nothing is found, and Rust import resolution is not implemented. Set-level live freshness and non-TypeScript observation families remain open.
+- **Remaining ecosystem obligations (not done):** a hash-pinned Kit package candidate; the Lab managed-provider bridge and consumption (LAB-KIT-01, Lab v0.10.0); five-language differential comparison; retirement of Lab's duplicate analyzers, scanners and resolvers; and proof of Rust reuse. Kit producer completion alone does not complete the one-provider restructuring.
+- **Remaining Kit work:** KIT-API-01 (API and data relationships) is not started and remains planned for v1.15.0. See [ROADMAP.md](ROADMAP.md).
+
 ## Shipped: v1.14.0
 
 Version 1.14.0 broadens non-Android language/framework evidence and adds Rust structural retrieval. Package, lockfile and CLI versions are 1.14.0.

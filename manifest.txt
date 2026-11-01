@@ -10,6 +10,7 @@ Historical inspection date: 2026-10-16
 Historical snapshot tree coverage: 326 tracked directories, 728 tracked files (not local/ignored files)
 Status: operating placement contract; not authority to implement, migrate, delete, or release
 The inspection fields above describe a historical Git tree, not the current branch HEAD or package/release version. Reverify the live tree, package metadata, and published release before each task.
+Ownership-map reconciliation: the v1.15.0 KIT-FACTS-01 source-audit owners below were reconciled against Kit commit 6ead9ae317770a4c0a43b793b0909bd54d1a56a8 on feature/v1.15.0-contract-foundation. That work is implemented locally and unpublished; it is not release status. The historical inspection fields above are intentionally unchanged.
 
 READ THIS FIRST — REQUIRED INTAKE
 ---------------------------------
@@ -58,15 +59,15 @@ ROOT /
   .github/workflows/ — existing CI workflow; amend rather than duplicate.
 
 src/ — PRODUCTION implementation, never scratch, generated index, report, or temporary output.
-  src/commands/ — public command registration and option validation; no duplicate CLI entry.
-  src/indexing/ — source-root discovery, index pipeline, manifests, cache, full/partial/affected-neighborhood indexing and managed artifacts.
-  src/symbol-index/ — generic symbol extraction, symbol-index contract, builder, graph section, writer.
-  src/languages/ — language registry/adapters; typescript/, python/, kotlin/, java/ own language-specific extraction/resolution.
+  src/commands/ — public command registration and option validation; no duplicate CLI entry. The lookup and source command families own the additive v1.15 source-audit selectors (lookup --audit-files/--audit-file/--audit-import-target, source --file with --contains); no parallel CLI router or command family.
+  src/indexing/ — source-root discovery, index pipeline, manifests, cache, full/partial/affected-neighborhood indexing and managed artifacts. Also owns the v1.15 source discovery ledger (one traversal), the source-audit projection (buildSourceAuditEvidence.ts), the managed source-audit-evidence.json artifact and its manifest linkage, cache schema and invalidation, and the full/incremental evidence lifecycle.
+  src/symbol-index/ — generic symbol extraction, symbol-index contract, builder, graph section, writer. Also owns the v1.15 source-audit types, validator, observation normalization, source spans and stable fact identities (auditEvidenceTypes.ts, validateAuditEvidence.ts, auditObservations.ts).
+  src/languages/ — language registry/adapters; typescript/, python/, kotlin/, java/, rust/ own language-specific extraction/resolution. They are the only source parsers: source-audit facts come from these existing adapters, with explicit partial/unsupported capability status, and no duplicate source parser belongs in Lab.
   src/search/ — generic candidate construction, relevance ranking, result contracts.
   src/context/ — bounded context capsules, candidate/role selection, responsibilities, evidence, adequacy, audit and budgets.
-  src/lookup/ — exact node/symbol target resolution, bounded source slices and continuation cursor contract.
-  src/source/ — source rendering, source bundles, exact source matches, React/local-component source extraction.
-  src/graph/ — code graph nodes/edges and structural graph operations.
+  src/lookup/ — exact node/symbol target resolution, bounded source slices and continuation cursor contract. Also owns the v1.15 managed source-audit reader (manifest-verified, exact-file inventory/fact pagination), the read-only import-target existence proof (resolveAuditImportTarget.ts), and the source containment and freshness authority for audit evidence.
+  src/source/ — source rendering, source bundles, exact source matches, React/local-component source extraction. Also owns v1.15 exact-file raw occurrence retrieval (findExactMatches.ts) beside unchanged cross-file exact matching, source rendering and continuation.
+  src/graph/ — code graph nodes/edges and structural graph operations. buildCodeGraph.ts is the one code-graph producer, including deterministic file-dependency edge identities.
   src/graph-diff/ — deterministic old/new artifact comparisons.
   src/classification/ — static classification and edit guidance; no automatic editing authority.
   src/retrievalRegression/ — internal deterministic retrieval benchmark runner/assertions/reporting; do not invent parallel benchmark runtime.
@@ -80,10 +81,11 @@ src/ — PRODUCTION implementation, never scratch, generated index, report, or t
 
 tests/ — tracked regression/integration tests and fixtures; mirror existing owners, not arbitrary per-task folders.
   tests/search/, tests/context/ — ranking, owner evidence, capsule/audit behavior.
-  tests/source/, tests/lookup/ — bounded source, continuation, output behavior.
-  tests/index/, tests/graph/, tests/graph-diff/ — extraction, incremental, graph and graph-diff.
+  tests/source/, tests/lookup/ — bounded source, continuation, output behavior; v1.15 exact-file occurrence, audit lookup pagination and import-target proof regressions.
+  tests/index/, tests/graph/, tests/graph-diff/ — extraction, incremental, graph and graph-diff; v1.15 source-audit artifact, inventory, language, observation and incremental regressions in tests/index/, and framework graph identity regressions in tests/index/ and tests/graph/.
   tests/retrievalRegression/ — benchmark runner/assertions.
   tests/classification/, tests/semantics/, tests/frontend/, tests/frontend-reachability/, tests/data-model/, tests/lineage/, tests/android/ — matching subsystem checks.
+  tests/security/ also owns v1.15 source-audit containment and freshness regressions (symlink, junction, traversal, stale source).
   tests/cli/, tests/slice/, tests/view/, tests/security/, tests/integration/, tests/docs/, tests/scripts/, tests/helpers/ — existing tool-level/integration/test helper owners.
   tests/fixtures/ — deliberate miniature source projects; the nested android/, kotlin/, java/, context/, data-model/, lineage/, compose-retrieval/, android-* trees are FIXTURES, not misplaced production.
   tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
@@ -108,6 +110,7 @@ GENERATED / IGNORED / LOCAL FILES AND OUTPUT PLACEMENT
 -----------------------------------------------------
 - .my-dev-kit/ — established default index and retrieval-regression output root, ignored; create or refresh ONLY when indexing/benchmark generation is explicitly authorized and no existing user artifact would be overwritten. Preserve index identity and stale/current distinctions.
 - .my-dev-kit-context/ and .my-dev-kit*/ — ignored index/context folders may already exist; do not create new timestamped child trees, repurpose, delete, or reorganize existing data by convenience. Use only when the task explicitly approves the path and lifecycle. Existing indexes are NOT disposable.
+- source-audit-evidence.json — managed generated index artifact written inside the selected index output directory (for example .my-dev-kit/) by the index command and registered in that directory's manifest.json (sourceAuditEvidence). It is NOT a tracked source file, report, fixture or independently published package file; never create, edit or commit it by hand, and never place it at the repository root or under src/, tests/ or docs/.
 - reports/ — existing ignored generated report policy referenced by docs/DOCUMENTATION_PRESERVATION_POLICY.md; do not create a report file unless the user expressly requests a persisted artifact. Prefer returning bounded evidence directly to the caller when no file is requested. If a file is authorized, use a named report under an established approved output root and disclose its path.
 - dev/reports/ — NOT a tracked Kit report owner in the inspected tree. A prior local reconnaissance file may exist here as ignored content; preserve it as user data. Never create new dev/ or dev/reports/ directories as a default report location.
 - dist/, node_modules/, coverage/, tmp/, log/, logs/, artifacts/, test-results/, playwright-report/, .cache/, .vite/, .nyc_output/ — generated or ignored build/test/runtime content, not architecture/source owners. No cleanup without exact target approval.
