@@ -196,7 +196,10 @@ describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
     expect(c).toMatchObject({ status: 'partial', contentSha256: null })
     expect(artifact.coverage.inventoryComplete).toBe(false)
     expect(incompleteReasons).toContain('content-identity-gap')
-    for (const file of artifact.files) for (const k of SOURCE_AUDIT_CAPABILITIES) expect(file.capabilities[k]).not.toBe('complete')
+    // Without content identity matching the analyzed bytes, no capability of that file may be complete.
+    for (const k of SOURCE_AUDIT_CAPABILITIES) expect(c.capabilities[k]).not.toBe('complete')
+    // Files whose trusted baseline hash and audit evidence are reused keep their demonstrated capabilities.
+    expect(artifact.files.find((f) => f.path === 'src/a.ts')!.capabilities.declarations).toBe('complete')
     expect(() => validateSourceAuditEvidence(artifact)).not.toThrow()
   })
 

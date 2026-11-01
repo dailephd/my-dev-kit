@@ -164,7 +164,7 @@ describe('B05 selected mixed source resolution and calls', () => {
     ['./left.cjs', ['left.cjs'], 'left.cjs'], ['./left.mjs', ['left.ts'], null],
     ['package', ['package/index.js'], null],
     ['./left.py', ['left.py'], null], ['./left.kt', ['left.kt'], null], ['./left.java', ['left.java'], null],
-    ['./left.mjs', ['left.mjs'], null], ['./left.mts', ['left.mts'], null], ['./left.cts', ['left.cts'], null],
+    ['./left.mjs', ['left.mjs'], null], ['./left.mts', ['left.mts'], 'left.mts'], ['./left.cts', ['left.cts'], 'left.cts'],
   ] as const)('resolves %s in %j conservatively', (spec, files, expected) => {
     expect(adapter.resolveImportToFile(spec, 'consumer.js', files)).toBe(expected)
   })

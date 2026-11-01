@@ -11,7 +11,7 @@ export class TypeScriptAdapter implements LanguageAdapter {
   constructor(repoRoot?: string) {
     if (repoRoot) this.configured = new ConfiguredImportResolver(repoRoot)
   }
-  readonly extensions = ['.ts', '.tsx', '.js', '.jsx', '.cjs'] as const
+  readonly extensions = ['.ts', '.tsx', '.js', '.jsx', '.cjs', '.mts', '.cts'] as const
   readonly supportsCallGraph = true
 
   extractFromSource(filePath: string, sourceText: string): ExtractionResult {
@@ -45,13 +45,15 @@ export class TypeScriptAdapter implements LanguageAdapter {
 export function resolveJsTsCandidates(specifier: string, importingFile: string, knownFiles: readonly string[]): string[] {
   if (!specifier.startsWith('.')) return []
   const base = toForwardSlash(path.join(path.dirname(importingFile), specifier))
-  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.cjs']
+  const extensions = ['.ts', '.tsx', '.js', '.jsx', '.cjs', '.mts', '.cts']
   const known = new Set(knownFiles.filter(file => extensions.includes(path.extname(file).toLowerCase())))
   if (known.has(base)) return [base]
   const ext = path.extname(base).toLowerCase()
   const candidates = ext === '.js' ? [base.slice(0, -3) + '.ts', base.slice(0, -3) + '.tsx']
     : ext === '.jsx' ? [base.slice(0, -4) + '.tsx']
+    : ext === '.mjs' ? [base.slice(0, -4) + '.mts']
+    : ext === '.cjs' ? [base.slice(0, -4) + '.cts']
     : ext ? []
-    : ['.ts', '.tsx', '.js', '.jsx', '.cjs'].flatMap(e => [base + e, base + '/index' + e])
+    : ['.ts', '.tsx', '.js', '.jsx', '.cjs', '.mts', '.cts'].flatMap(e => [base + e, base + '/index' + e])
   return [...new Set(candidates.filter(p => known.has(p)))].sort()
 }

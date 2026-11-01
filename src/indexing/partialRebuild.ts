@@ -22,6 +22,7 @@
 
 import * as fs from 'node:fs'
 import { assignDeclarationIdentities } from '../symbol-index/declarationIdentity.js'
+import { extractAuditObservations } from '../symbol-index/auditObservations.js'
 import * as path from 'node:path'
 import { createCallGraph } from '../symbol-index/graphBuilder.js'
 import { buildGraphSection, type FileExtractionMeta } from '../symbol-index/builder.js'
@@ -194,6 +195,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       const exportAllSpecifiers = previousCacheEntry?.exportAllSpecifiers ?? []
       const cleanSymbols = previousSummary.symbols.map(cleanSymbol)
       const importBindings = previousSummary.importBindings?.map(binding => ({ ...binding }))
+      const sourceAudit = previousSummary.sourceAudit ? structuredClone(previousSummary.sourceAudit) : undefined
       const frameworkRouteFacts = previousSummary.frameworkRouteFacts?.map(fact => ({ ...fact, ...(fact.syntax ? { syntax: [...fact.syntax] } : {}), ...(fact.warnings ? { warnings: [...fact.warnings] } : {}) }))
 
       summaries.push({
@@ -201,6 +203,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         language: previousSummary.language,
         lineCount: previousSummary.lineCount,
         imports: previousSummary.imports,
+        ...(sourceAudit ? { sourceAudit } : {}),
         ...(importBindings ? { importBindings } : {}),
         ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
         ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
@@ -217,6 +220,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           language: previousSummary.language,
           lineCount: previousSummary.lineCount,
           imports: previousSummary.imports,
+          ...(sourceAudit ? { sourceAudit } : {}),
           ...(importBindings ? { importBindings } : {}),
           ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
           ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
@@ -253,6 +257,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     fileContentHashes.set(relPath, sha256Hex(sourceBytes))
     const extraction = adapter.extractFromSource(relPath, sourceText)
     extraction.symbols = assignDeclarationIdentities(relPath, extraction.symbols)
+    extraction.sourceAudit = extractAuditObservations(relPath, sourceText, extraction)
     freshPaths.add(relPath)
     rawExtractions.push({ relPath, extraction })
     fileExtractionMeta.set(relPath, {
@@ -264,6 +269,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       language: extraction.language,
       lineCount: extraction.lineCount,
       imports: extraction.imports,
+      ...(extraction.sourceAudit ? { sourceAudit: extraction.sourceAudit } : {}),
       ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
       ...(extraction.commonJsExports ? { commonJsExports: extraction.commonJsExports } : {}),
       ...(extraction.rustSyntaxFacts ? { rustSyntaxFacts: extraction.rustSyntaxFacts } : {}),

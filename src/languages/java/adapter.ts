@@ -28,6 +28,8 @@
 
 import type { LanguageAdapter, ExtractionResult } from '../types.js'
 import type { SymbolDefinition, SymbolKind } from '../../symbol-index/types.js'
+import { auditCapabilityMap, type SourceAuditExtractionPayload } from '../../symbol-index/auditObservations.js'
+import type { SourceAuditFact, SourceAuditSpan } from '../../symbol-index/auditEvidenceTypes.js'
 
 /**
  * Matches `class|interface|enum|record` anywhere in the (comment-stripped,
@@ -110,6 +112,47 @@ export function parseJavaPackageName(sourceText: string): string | null {
   return null
 }
 
+/** Strict form of a declaration line: only modifiers may precede the class-like keyword. */
+const NESTED_DECLARATION_PATTERN = /^((?:(?:public|protected|private|static|final|abstract|sealed|non-sealed|strictfp)\s+)*)(@\s*interface|class|interface|enum|record)\s+([A-Za-z_]\w*)/
+const ANNOTATION_PREFIX_PATTERN = /^(?:@(?!\s*interface\b)[\w.]+(?:\([^)]*\))?\s*)+/
+const LITERAL_PATTERN = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g
+
+interface JavaScope {
+  name: string
+  kind: SymbolKind
+  keyword: string
+  bodyDepth: number
+  /** Dotted lexical path, established only from certain nesting. */
+  qualified: string
+  effectivelyPublic: boolean
+  implicitMemberVisibility: 'public' | 'package'
+}
+
+interface PendingScope extends Omit<JavaScope, 'bodyDepth'> {
+  depth: number
+  waited: number
+}
+
+function literalBraceImbalance(line: string): boolean {
+  for (const literal of line.match(LITERAL_PATTERN) ?? []) {
+    if (countNetBraces(literal) !== 0) return true
+  }
+  return false
+}
+
+function javaVisibility(head: string): 'public' | 'protected' | 'private' | null {
+  const modifiers = head.replace(ANNOTATION_PREFIX_PATTERN, '')
+  if (/\bpublic\b/.test(modifiers)) return 'public'
+  if (/\bprotected\b/.test(modifiers)) return 'protected'
+  if (/\bprivate\b/.test(modifiers)) return 'private'
+  return null
+}
+
+function javaSpan(filePath: string, line: number): SourceAuditSpan {
+  // The lexical scanner establishes line starts only; columns and end ranges are unknown, never guessed.
+  return { path: filePath, startLine: line, startColumn: null, endLine: null, endColumn: null }
+}
+
 export function extractJavaSource(filePath: string, sourceText: string): ExtractionResult {
   const rawLines = sourceText.split('\n')
   const lineCount = rawLines.length
@@ -117,8 +160,34 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
   const imports: string[] = []
   const symbols: SymbolDefinition[] = []
   const exports: string[] = []
+  const topFacts: SourceAuditFact[] = []
+  const nestedFacts: SourceAuditFact[] = []
+  const uncertain = new Map<string, string>()
+  const scopes: JavaScope[] = []
+  let pending: PendingScope | null = null
+  const seenQualified = new Set<string>()
 
   const state: LineScanState = { depth: 0, inBlockComment: false, pendingAnnotations: [] }
+  const base = { id: '', extractionMethod: 'java-lexical' as const }
+
+  const declarationFacts = (
+    target: SourceAuditFact[],
+    lineNumber: number,
+    name: string,
+    kind: SymbolKind,
+    visibility: SourceAuditFact['visibility'],
+    exported: boolean | null,
+    ownerKey: string | null,
+    symbolId: string,
+  ): void => {
+    target.push({
+      ...base, kind: 'declaration', span: javaSpan(filePath, lineNumber), name, symbolId, declarationKind: kind, ownerKey,
+      visibility, exported, exportOrigin: visibility === 'unknown' ? 'unknown' : 'visibility-inferred',
+    })
+    if (exported === true) {
+      target.push({ ...base, kind: 'export', span: javaSpan(filePath, lineNumber), name, exportOrigin: 'visibility-inferred', visibility, exported: true, ...(symbolId ? { symbolId } : {}) })
+    }
+  }
 
   for (let i = 0; i < rawLines.length; i++) {
     const rawLine = rawLines[i]
@@ -146,6 +215,28 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
 
     if (trimmed.length === 0) continue
 
+    if (line.includes('"""')) uncertain.set('text-block-literal', 'A text block can hide braces from the depth scanner.')
+    if (literalBraceImbalance(line)) uncertain.set('brace-in-literal', 'A string or character literal contains an unbalanced brace that can corrupt scope depth.')
+
+    // Close scopes whose bodies ended on earlier lines.
+    while (scopes.length > 0 && depthBeforeLine < scopes[scopes.length - 1]!.bodyDepth) scopes.pop()
+
+    // A declared body opens when real brace depth increases past the declaration depth.
+    if (pending) {
+      if (state.depth > pending.depth) {
+        if (state.depth - pending.depth !== 1) uncertain.set('multiple-braces-on-declaration-line', 'More than one scope opened at a class-like declaration.')
+        const { depth, waited: _waited, ...scope } = pending
+        scopes.push({ ...scope, bodyDepth: depth + 1 })
+        pending = null
+      } else if (line.includes('{')) {
+        // The body opened and closed on this line.
+        pending = null
+      } else if (trimmed.endsWith(';') || ++pending.waited > 4) {
+        uncertain.set('declaration-body-not-found', 'A class-like declaration did not open a body where one was expected.')
+        pending = null
+      }
+    }
+
     if (depthBeforeLine === 0) {
       if (PACKAGE_PATTERN.test(trimmed)) continue
 
@@ -155,6 +246,11 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
         // field exists for it, matching the "no new fields" design already
         // used for Kotlin) — the qualified name is still captured either way.
         imports.push(importMatch[2])
+        const segments = importMatch[2].split('.')
+        topFacts.push({
+          ...base, kind: 'import', span: javaSpan(filePath, lineNumber), sourceSpecifier: importMatch[2],
+          importedNames: [segments[segments.length - 1]!], importResolution: 'observed',
+        })
         continue
       }
     }
@@ -180,15 +276,81 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
           signature: buildSignature(state, trimmed),
         })
         if (exported) exports.push(name)
+        // Explicit visibility from the modifiers before the keyword; no modifier means package-private, never public.
+        const visibility = javaVisibility(trimmed.slice(0, classMatch.index ?? 0)) ?? 'package'
+        declarationFacts(topFacts, lineNumber, name, kind, visibility, visibility === 'public', null, '')
+        const next: PendingScope = {
+          name, kind, keyword: isAnnotationTypeDeclaration ? '@interface' : keyword, depth: depthBeforeLine, waited: 0, qualified: name,
+          effectivelyPublic: visibility === 'public',
+          implicitMemberVisibility: keyword === 'interface' || isAnnotationTypeDeclaration ? 'public' : 'package',
+        }
+        if (state.depth > depthBeforeLine) {
+          if (state.depth - depthBeforeLine !== 1) uncertain.set('multiple-braces-on-declaration-line', 'More than one scope opened at a class-like declaration.')
+          const { depth, waited: _waited, ...scope } = next
+          scopes.push({ ...scope, bodyDepth: depth + 1 })
+        } else if (!line.includes('{')) {
+          pending = next
+        }
         state.pendingAnnotations = []
         continue
+      }
+    } else if (scopes.length > 0 && depthBeforeLine === scopes[scopes.length - 1]!.bodyDepth) {
+      // Member level of a known class body: only class-like declarations are audit-visible here.
+      const owner = scopes[scopes.length - 1]!
+      const looksClassLike = CLASS_LIKE_PATTERN.test(trimmed)
+      const strict = trimmed.match(NESTED_DECLARATION_PATTERN)
+      if (strict) {
+        const [, head, keyword, name] = strict
+        const annotationType = keyword.startsWith('@')
+        const kind = classifyClassLikeKind(annotationType ? 'interface' : keyword)
+        const qualified = `${owner.qualified}.${name}`
+        if (seenQualified.has(qualified)) uncertain.set('duplicate-nested-declaration', 'Two nested declarations share one lexical path.')
+        seenQualified.add(qualified)
+        const visibility = javaVisibility(head) ?? owner.implicitMemberVisibility
+        const effectivelyPublic = owner.effectivelyPublic && visibility === 'public'
+        const chain = scopes.map((scope) => `${scope.keyword}:${scope.name}`).join('/')
+        declarationFacts(
+          nestedFacts, lineNumber, name, kind, visibility, effectivelyPublic, `java/${chain}`,
+          `audit-symbol:${encodeURIComponent(filePath)}#${encodeURIComponent(qualified)}`,
+        )
+        const next: PendingScope = {
+          name, kind, keyword: annotationType ? '@interface' : keyword, depth: depthBeforeLine, waited: 0, qualified, effectivelyPublic,
+          implicitMemberVisibility: keyword === 'interface' || annotationType ? 'public' : 'package',
+        }
+        if (state.depth > depthBeforeLine) {
+          if (state.depth - depthBeforeLine !== 1) uncertain.set('multiple-braces-on-declaration-line', 'More than one scope opened at a class-like declaration.')
+          const { depth, waited: _waited, ...scope } = next
+          scopes.push({ ...scope, bodyDepth: depth + 1 })
+        } else if (!line.includes('{')) {
+          pending = next
+        }
+      } else if (looksClassLike) {
+        uncertain.set('unrecognized-nested-declaration', 'A member line mentions a class-like keyword in a form the scanner cannot classify.')
       }
     }
 
     state.pendingAnnotations = []
   }
 
+  if (state.depth !== 0) uncertain.set('unbalanced-braces', 'Brace depth did not return to zero at the end of the file.')
+  if (state.inBlockComment) uncertain.set('unterminated-block-comment', 'A block comment was not closed.')
+  if (pending) uncertain.set('declaration-body-not-found', 'A class-like declaration did not open a body where one was expected.')
+
+  const capabilities = auditCapabilityMap('unsupported')
+  const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
+  const settled = uncertain.size === 0
+  capabilities.declarations = settled ? 'complete' : 'partial'
+  capabilities.imports = settled ? 'complete' : 'partial'
+  capabilities.exports = 'partial'
+  capabilities['source-ranges'] = 'partial'
+  diagnostics.push({ code: 'lexical-line-ranges', message: 'The lexical scanner records declaration start lines only; columns and end ranges are unknown.', span: null })
+  diagnostics.push({ code: 'visibility-inferred-exports', message: 'Java has no export statements; exports are inferred from explicit class-like visibility and do not reflect module descriptors.', span: null })
+  for (const [code, message] of [...uncertain].sort(([a], [b]) => (a < b ? -1 : 1))) diagnostics.push({ code, message, span: null })
+  // Nested facts are published only when the lexical nesting is certain.
+  const facts = settled ? [...topFacts, ...nestedFacts] : topFacts
+
   return {
+    sourceAudit: { facts, capabilities, diagnostics },
     language: 'java',
     lineCount,
     imports: dedupe(imports),

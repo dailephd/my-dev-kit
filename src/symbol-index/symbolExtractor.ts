@@ -14,6 +14,8 @@
 
 import * as ts from 'typescript'
 import * as path from 'path'
+import { auditCapabilityMap, type SourceAuditExtractionPayload } from './auditObservations.js'
+import type { SourceAuditFact } from './auditEvidenceTypes.js'
 import {
   type SymbolDefinition,
   type SymbolKind,
@@ -36,6 +38,12 @@ export interface ExtractionResult {
   pythonOrmFacts?: import('./types.js').PythonOrmFact[]
   frameworkRouteFacts?: import('./types.js').FrameworkRouteFact[]
   importBindings?: ImportBinding[]
+  /**
+   * Language-owned source-audit evidence (v1.15.0 Batch 2). Adapters attach raw
+   * facts here; `extractAuditObservations` normalizes them. Optional so older
+   * artifacts and third-party adapters remain valid.
+   */
+  sourceAudit?: import('./auditObservations.js').SourceAuditExtractionPayload
   warnings?: string[]
   language: SourceLanguage
   lineCount: number
@@ -109,10 +117,13 @@ export function extractFromSource(
   const importBindings: ImportBinding[] = []
   const commonJsExports: CommonJsExportFact[] = []
   extractDocumentation(sourceFile, filePath, symbols, warnings, endLineLimit)
-  extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings)
+  const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false }
+  extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings, auditCollector)
   const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
+  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
 
   return {
+    sourceAudit,
     importBindings,
     commonJsExports,
     frameworkRouteFacts,
@@ -341,7 +352,7 @@ function briefSignature(node: ts.Node, sourceFile: ts.SourceFile): string {
  */
 function languageOf(filePath: string): SourceLanguage {
   const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.ts' || ext === '.tsx') return 'typescript'
+  if (ext === '.ts' || ext === '.tsx' || ext === '.mts' || ext === '.cts') return 'typescript'
   return 'javascript'
 }
 
@@ -593,7 +604,7 @@ function extractJsFrameworkEvidence(sf: ts.SourceFile, file: string, symbols: Sy
   return facts
 }
 
-function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[]): void {
+function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[], audit?: TsAuditCollector): void {
   const shadowed = new Set<string>()
   const mutated = new Set<string>()
   let unsupportedExportMutation = false
@@ -625,6 +636,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
   const literalRequire = (n: ts.Node | undefined): string | undefined => {
     if (!n || !ts.isCallExpression(n) || !ts.isIdentifier(n.expression) || n.expression.text !== 'require') return
     if (shadowed.has('require') || mutated.has('require') || n.arguments.length !== 1 || !ts.isStringLiteral(n.arguments[0])) {
+      if (audit) audit.unsupportedRequire = true
       warnings.push(`Unsupported require at line ${span(n).startLine}.`); return
     }
     return n.arguments[0].text
@@ -643,14 +655,21 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       const spec = literalRequire(d.initializer)
       if (spec === undefined) continue
       imports.push(spec)
-      if (ts.isIdentifier(d.name)) binding(d, d.name.text, '*', spec, 'commonjs', true)
+      const auditNames: string[] = []
+      if (ts.isIdentifier(d.name)) { binding(d, d.name.text, '*', spec, 'commonjs', true); auditNames.push('*') }
       else if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) {
-        if (!el.dotDotDotToken && !el.initializer && ts.isIdentifier(el.name) && (!el.propertyName || ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName))) binding(el, el.name.text, el.propertyName?.getText(sf).replace(/^['"]|['"]$/g, '') ?? el.name.text, spec, 'commonjs')
+        if (!el.dotDotDotToken && !el.initializer && ts.isIdentifier(el.name) && (!el.propertyName || ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName))) {
+          const imported = el.propertyName?.getText(sf).replace(/^['"]|['"]$/g, '') ?? el.name.text
+          binding(el, el.name.text, imported, spec, 'commonjs')
+          auditNames.push(imported)
+        } else if (audit) audit.unsupportedRequire = true
       }
+      else if (audit) audit.unsupportedRequire = true
+      audit?.requires.push({ node: d, specifier: spec, names: auditNames })
     }
     if (ts.isExpressionStatement(n)) {
       const spec = literalRequire(n.expression)
-      if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs') }
+      if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs'); audit?.requires.push({ node: n, specifier: spec, names: [] }) }
     }
   }
   const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
@@ -669,7 +688,10 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
         if (kind === 'module-exports') wholeModuleAssignments++
         const unconditional = ts.isExpressionStatement(n.parent) && ts.isSourceFile(n.parent.parent)
         const safe = unconditional && !shadowed.has(global) && !mutated.has(global)
-        const add = (exportedName: string | null, rhs: ts.Node) => facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
+        const add = (exportedName: string | null, rhs: ts.Node) => {
+          facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
+          audit?.commonJsExports.push({ node: n, fact: facts[facts.length - 1]! })
+        }
         if (name === null && ts.isObjectLiteralExpression(n.right)) {
           for (const p of n.right.properties) {
             if (ts.isShorthandPropertyAssignment(p)) add(p.name.text, p.name)
@@ -682,6 +704,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     ts.forEachChild(n, visit)
   }
   visit(sf)
+  if (audit) audit.unsupportedExportMutation = unsupportedExportMutation
   for (const fact of facts) {
     if (unsupportedExportMutation) { fact.resolutionStatus = 'unresolved'; fact.reason = 'Unsupported CommonJS mutation or alias.'; continue }
     if (wholeModuleAssignments > 1 || wholeModuleAssignments && facts.some(f => f.assignmentKind === 'exports-member')) {
@@ -696,5 +719,179 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       matches[0].exported = true
       exports.push(fact.exportedName ?? fact.bindingName)
     } else { fact.resolutionStatus = matches.length > 1 ? 'ambiguous' : 'unresolved'; fact.reason = 'No unique immutable local declaration.' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v1.15.0 Batch 2: source-audit facts from the already-parsed TypeScript AST
+// ---------------------------------------------------------------------------
+
+interface TsAuditCollector {
+  requires: Array<{ node: ts.Node; specifier: string; names: string[] }>
+  commonJsExports: Array<{ node: ts.Node; fact: CommonJsExportFact }>
+  unsupportedExportMutation: boolean
+  unsupportedRequire: boolean
+}
+
+/**
+ * Builds raw audit facts from the AST that `extractFromSource` already created;
+ * no second parse happens. Capabilities are `complete` only within the declared
+ * syntactic profile: top-level named declarations, static ES imports/exports,
+ * top-level literal `require` and top-level CommonJS export assignments.
+ */
+function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector): SourceAuditExtractionPayload {
+  const facts: SourceAuditFact[] = []
+  const capabilities = auditCapabilityMap('unsupported')
+  capabilities.declarations = 'complete'
+  capabilities.imports = 'complete'
+  capabilities.exports = 'complete'
+  capabilities['source-ranges'] = parseErrors ? 'partial' : 'complete'
+  const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
+  const note = (code: string, message: string, node?: ts.Node): void => {
+    const position = node ? sf.getLineAndCharacterOfPosition(node.getStart(sf)) : undefined
+    diagnostics.push({ code, message, span: position ? { path: filePath, startLine: position.line + 1, startColumn: position.character, endLine: null, endColumn: null } : null })
+  }
+  const partial = (capability: 'declarations' | 'imports' | 'exports', code: string, message: string, node?: ts.Node): void => {
+    capabilities[capability] = 'partial'
+    note(code, message, node)
+  }
+  if (parseErrors) {
+    const first = (sf as unknown as { parseDiagnostics?: ReadonlyArray<{ start?: number }> }).parseDiagnostics?.[0]
+    for (const capability of ['declarations', 'imports', 'exports'] as const) capabilities[capability] = 'partial'
+    diagnostics.push({
+      code: 'syntax-errors',
+      message: 'The parser reported syntax diagnostics; end positions are omitted and enumeration is partial.',
+      span: first?.start !== undefined ? auditSpanAt(sf, filePath, first.start, first.start, false) : null,
+    })
+  }
+  const exact = !parseErrors
+  const span = (node: ts.Node) => auditSpanAt(sf, filePath, node.getStart(sf), node.getEnd(), exact)
+  const base = { id: '', extractionMethod: 'typescript-ast' as const }
+
+  // Local export clauses make a same-named declaration explicitly exported.
+  const locallyExported = new Set<string>()
+  for (const statement of sf.statements) {
+    if (ts.isExportDeclaration(statement) && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      for (const element of statement.exportClause.elements) locallyExported.add((element.propertyName ?? element.name).text)
+    }
+  }
+  const declare = (node: ts.Node, name: string, kind: string, explicit: boolean, isDefault: boolean): void => {
+    const exported = explicit || locallyExported.has(name)
+    facts.push({
+      ...base, kind: 'declaration', span: span(node), name, symbolId: '', declarationKind: kind,
+      visibility: exported ? 'public' : 'module', exported, exportOrigin: exported ? 'declared-export' : 'none',
+    })
+    if (explicit) {
+      facts.push({ ...base, kind: 'export', span: span(node), name: isDefault ? 'default' : name, exportOrigin: 'declared-export', visibility: 'public', exported: true, symbolId: '' })
+    }
+  }
+
+  for (const statement of sf.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      if (!ts.isStringLiteral(statement.moduleSpecifier)) { partial('imports', 'unsupported-import-specifier', 'Import specifier is not a string literal.', statement); continue }
+      const clause = statement.importClause
+      const names: string[] = []
+      if (clause?.name) names.push('default')
+      const named = clause?.namedBindings
+      if (named && ts.isNamespaceImport(named)) names.push('*')
+      if (named && ts.isNamedImports(named)) for (const element of named.elements) names.push((element.propertyName ?? element.name).text)
+      facts.push({ ...base, kind: 'import', span: span(statement), sourceSpecifier: statement.moduleSpecifier.text, importedNames: names, importResolution: 'observed' })
+    } else if (ts.isImportEqualsDeclaration(statement)) {
+      if (ts.isExternalModuleReference(statement.moduleReference) && ts.isStringLiteral(statement.moduleReference.expression)) {
+        facts.push({ ...base, kind: 'import', span: span(statement), sourceSpecifier: statement.moduleReference.expression.text, importedNames: ['*'], importResolution: 'observed' })
+      }
+    } else if (ts.isExportDeclaration(statement)) {
+      const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : undefined
+      if (statement.moduleSpecifier && specifier === undefined) { partial('exports', 'unsupported-export-specifier', 'Re-export specifier is not a string literal.', statement); continue }
+      const clause = statement.exportClause
+      if (!clause) {
+        if (specifier !== undefined) facts.push({ ...base, kind: 'export', span: span(statement), name: '*', exportOrigin: 're-export', sourceSpecifier: specifier, exported: true })
+      } else if (ts.isNamespaceExport(clause)) {
+        facts.push({ ...base, kind: 'export', span: span(statement), name: clause.name.text, exportOrigin: 're-export', ...(specifier !== undefined ? { sourceSpecifier: specifier } : {}), exported: true })
+      } else {
+        for (const element of clause.elements) {
+          facts.push({
+            ...base, kind: 'export', span: span(element), name: element.name.text, exported: true,
+            exportOrigin: specifier !== undefined ? 're-export' : 'declared-export',
+            ...(specifier !== undefined ? { sourceSpecifier: specifier } : {}),
+          })
+        }
+      }
+    } else if (ts.isExportAssignment(statement)) {
+      facts.push({ ...base, kind: 'export', span: span(statement), name: statement.isExportEquals ? 'export=' : 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isFunctionDeclaration(statement)) {
+      const explicit = hasExportKeyword(statement)
+      if (statement.name) declare(statement, statement.name.text, 'function', explicit, hasDefaultKeyword(statement))
+      else if (explicit) facts.push({ ...base, kind: 'export', span: span(statement), name: 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isClassDeclaration(statement)) {
+      const explicit = hasExportKeyword(statement)
+      if (statement.name) declare(statement, statement.name.text, 'class', explicit, hasDefaultKeyword(statement))
+      else if (explicit) facts.push({ ...base, kind: 'export', span: span(statement), name: 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isInterfaceDeclaration(statement)) {
+      declare(statement, statement.name.text, 'interface', hasExportKeyword(statement), hasDefaultKeyword(statement))
+    } else if (ts.isTypeAliasDeclaration(statement)) {
+      declare(statement, statement.name.text, 'type', hasExportKeyword(statement), false)
+    } else if (ts.isEnumDeclaration(statement)) {
+      declare(statement, statement.name.text, 'enum', hasExportKeyword(statement), false)
+    } else if (ts.isVariableStatement(statement)) {
+      const explicit = hasExportKeyword(statement)
+      const kind = statement.declarationList.flags & ts.NodeFlags.Const ? 'const' : 'variable'
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) declare(declaration, declaration.name.text, kind, explicit, false)
+        else {
+          partial('declarations', 'destructured-declaration-unsupported', 'A destructured top-level declaration is not enumerated.', declaration)
+          if (explicit) partial('exports', 'destructured-export-unsupported', 'A destructured exported declaration is not enumerated.', declaration)
+        }
+      }
+    } else if (ts.isModuleDeclaration(statement)) {
+      partial('declarations', 'module-declaration-unsupported', 'Namespace and module declarations are outside the extraction profile.', statement)
+      if (hasExportKeyword(statement)) partial('exports', 'module-export-unsupported', 'An exported namespace or module declaration is not enumerated.', statement)
+    }
+  }
+
+  // CommonJS imports and exports observed by the existing module-evidence pass.
+  for (const entry of collector.requires) {
+    facts.push({ ...base, kind: 'import', span: span(entry.node), sourceSpecifier: entry.specifier, importedNames: entry.names, importResolution: 'observed' })
+  }
+  let uncertainCommonJs = collector.unsupportedExportMutation
+  for (const entry of collector.commonJsExports) {
+    if (entry.fact.resolutionStatus === 'unresolved' || entry.fact.resolutionStatus === 'ambiguous') uncertainCommonJs = true
+    facts.push({ ...base, kind: 'export', span: span(entry.node), name: entry.fact.exportedName ?? 'module.exports', exportOrigin: 'commonjs', exported: true })
+  }
+  if (uncertainCommonJs) partial('exports', 'commonjs-export-uncertain', 'CommonJS exports include conditional, mutated, aliased or competing assignments.')
+
+  // Whole-tree scan for dynamic constructs the static profile cannot enumerate.
+  let dynamicImports = 0
+  let requireCalls = 0
+  const scan = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) dynamicImports++
+      else if (ts.isIdentifier(node.expression) && node.expression.text === 'require') requireCalls++
+    }
+    ts.forEachChild(node, scan)
+  }
+  scan(sf)
+  if (dynamicImports > 0) partial('imports', 'dynamic-import-not-enumerated', `${dynamicImports} dynamic import() call(s) are not enumerated as static imports.`)
+  if (collector.unsupportedRequire) partial('imports', 'unsupported-require', 'A require call or binding form is outside the static profile.')
+  else if (requireCalls > collector.requires.length) {
+    partial('imports', 'require-not-enumerated', 'Some require calls are nested, conditional or not top-level and are not enumerated.')
+  }
+  return { facts, capabilities, diagnostics }
+}
+
+function hasDefaultKeyword(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined
+  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false
+}
+
+function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean) {
+  const from = sf.getLineAndCharacterOfPosition(start)
+  const to = sf.getLineAndCharacterOfPosition(end)
+  return {
+    path: filePath,
+    startLine: from.line + 1,
+    startColumn: from.character,
+    endLine: exact ? to.line + 1 : null,
+    endColumn: exact ? to.character : null,
   }
 }

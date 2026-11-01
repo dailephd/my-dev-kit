@@ -13,6 +13,8 @@
 import * as fs from 'fs'
 import { assignDeclarationIdentities } from './declarationIdentity.js'
 import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
+import { PythonAdapter } from '../languages/python/adapter.js'
+import { extractAuditObservations } from './auditObservations.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
@@ -151,6 +153,8 @@ export function buildIndex(config: BuildConfig): BuildResult {
 
     const result = adapter.extractFromSource(relPath, sourceText)
     result.symbols = assignDeclarationIdentities(relPath, result.symbols)
+    // Audit facts reuse this extraction and this exact source text; nothing is read or parsed again.
+    result.sourceAudit = extractAuditObservations(relPath, sourceText, result)
     rawExtractions.push({ relPath, extraction: result })
     fileExtractionMeta.set(relPath, {
       reExportSpecifiers: result.reExportSpecifiers,
@@ -161,6 +165,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
       language: result.language,
       lineCount: result.lineCount,
       imports: result.imports,
+      ...(result.sourceAudit ? { sourceAudit: result.sourceAudit } : {}),
       ...(result.importBindings ? { importBindings: result.importBindings } : {}),
       ...(result.commonJsExports ? { commonJsExports: result.commonJsExports } : {}),
       ...(result.rustSyntaxFacts ? { rustSyntaxFacts: result.rustSyntaxFacts } : {}),
@@ -276,6 +281,7 @@ export function buildGraphSection(
     }
     const adapter = registry.adapterForFile(relPath)!
     extraction.warnings = extraction.warnings?.filter(w => !w.startsWith('Configured import unresolved:'))
+    resolveAuditImports(extraction, relPath, adapter, knownFiles)
 
     for (const fact of extraction.frameworkRouteFacts ?? []) {
       if (fact.framework !== 'express' && fact.framework !== 'nestjs') continue
@@ -356,6 +362,36 @@ export function buildGraphSection(
   )
 
   return { fileDeps: uniqueDeps, symbols }
+}
+
+/**
+ * Derives the local-resolution state of audit import facts from the same
+ * selected inventory and adapter resolvers used for file dependencies. Always
+ * recomputed from the specifier, so full and partial builds agree. An
+ * unresolved import is never reported as a proven missing file.
+ */
+function resolveAuditImports(extraction: ExtractionResult, relPath: string, adapter: LanguageAdapter, knownFiles: readonly string[]): void {
+  for (const fact of extraction.sourceAudit?.facts ?? []) {
+    if (fact.kind !== 'import' || !fact.sourceSpecifier) continue
+    const specifier = fact.sourceSpecifier
+    const relative = specifier.startsWith('.')
+    let candidates: string[]
+    if (adapter instanceof TypeScriptAdapter) candidates = adapter.resolveCandidates(specifier, relPath, knownFiles)
+    else if (adapter instanceof PythonAdapter) candidates = adapter.resolveAuditCandidates(specifier, fact.importedNames ?? [], relPath, knownFiles)
+    else {
+      const target = adapter.resolveImportToFile(specifier, relPath, knownFiles)
+      candidates = target ? [target] : []
+    }
+    candidates = [...new Set(candidates)].sort()
+    delete fact.targetPaths
+    if (candidates.length > 0) fact.targetPaths = candidates
+    fact.importResolution =
+      candidates.length === 1 ? 'resolved-local'
+      : candidates.length > 1 ? 'ambiguous'
+      : relative ? 'unresolved'
+      : adapter instanceof TypeScriptAdapter ? 'external'
+      : 'observed'
+  }
 }
 
 function emitBuildProgress(

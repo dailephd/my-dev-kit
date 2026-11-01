@@ -138,17 +138,16 @@ export function validateApiUnresolvedEvidence(value: unknown): asserts value is 
   requireClosed(evidence, '$', ['subjectId', 'status', 'reasonCode', 'candidateNodeIds', 'sourceFactIds'])
   requireId(evidence.subjectId, '$.subjectId')
   if (evidence.status === 'resolved-static') fail('$.status', 'must describe an unresolved state')
-  const status = requireOneOf(evidence.status, API_RESOLUTION_STATUSES, '$.status')
+  requireOneOf(evidence.status, API_RESOLUTION_STATUSES, '$.status')
   if (typeof evidence.reasonCode !== 'string' || !REASON_CODE_PATTERN.test(evidence.reasonCode)) {
     fail('$.reasonCode', 'must be a short lowercase kebab-case code')
   }
-  const candidates = requireUniqueIds(evidence.candidateNodeIds, '$.candidateNodeIds')
-  requireUniqueIds(evidence.sourceFactIds, '$.sourceFactIds')
+  // Candidate arrays may be empty or hold any number of unique independently established identities.
+  // A candidate is never a proven endpoint, so dynamic/unsupported/ambiguous records may carry candidates
+  // yet stay unresolved (resolved-static is rejected above). No candidates are invented or discarded here.
+  requireUniqueIds(evidence.candidateNodeIds, '$.candidateNodeIds')
   // sourceFactIds may be empty: some unresolved observations cannot be tied to a confidently identified fact.
-  // An ambiguous result may retain fewer than two candidates; no candidates are invented to satisfy a count.
-  if ((status === 'dynamic' || status === 'unsupported') && candidates.length > 0) {
-    fail('$.candidateNodeIds', `must be empty for a ${status} subject`)
-  }
+  requireUniqueIds(evidence.sourceFactIds, '$.sourceFactIds')
 }
 
 const CHANGE_KINDS = ['route', 'client-call', 'schema', 'data-field', 'relationship'] as const

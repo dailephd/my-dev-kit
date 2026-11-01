@@ -30,10 +30,11 @@ import {
   type SourceAuditFile,
   type SourceAuditRole,
 } from '../symbol-index/auditEvidenceTypes.js'
+import { BATCH2_AUDIT_CAPABILITIES } from '../symbol-index/auditObservations.js'
 import type { FileSummary, SymbolIndex } from '../symbol-index/types.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.0.0'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.1.0'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string
@@ -125,6 +126,24 @@ function uniformCapabilities(status: SourceAuditCapabilityStatus): Record<Source
   return capabilities
 }
 
+const ANALYZER_BY_LANGUAGE: Readonly<Record<string, string>> = {
+  typescript: 'typescript-ast',
+  javascript: 'typescript-ast',
+  python: 'python-ast',
+  rust: 'rust-tree-sitter',
+  java: 'java-lexical',
+  kotlin: 'kotlin-lexical',
+}
+
+/** Extension-based language for records without an index entry; covers the extensions the adapters own. */
+function auditLanguageForPath(relPath: string): string {
+  const lower = relPath.toLowerCase()
+  if (lower.endsWith('.cjs') || lower.endsWith('.mjs')) return 'javascript'
+  if (lower.endsWith('.mts') || lower.endsWith('.cts')) return 'typescript'
+  if (lower.endsWith('.kts')) return 'kotlin'
+  return languageNameForPath(relPath)
+}
+
 /** Applicable capabilities are `unsupported` in Batch 1 (nothing extracted); genuinely inapplicable ones are `not-applicable`. */
 function indexedFileCapabilities(role: SourceAuditRole, language: string): Record<SourceAuditCapability, SourceAuditCapabilityStatus> {
   const capabilities = uniformCapabilities('unsupported')
@@ -196,7 +215,7 @@ function projectFile(
     return { record, unreadable: false, identityGap: false }
   }
 
-  const extensionLanguage = languageNameForPath(entry.relPath)
+  const extensionLanguage = auditLanguageForPath(entry.relPath)
   const knownLanguage = extensionLanguage === 'unknown' ? 'unsupported' : extensionLanguage
 
   if (entry.selectionStatus === 'unreadable') {
@@ -249,15 +268,47 @@ function projectFile(
       span: null,
     })
   }
+  const capabilities = indexedFileCapabilities(role, summary.language)
+  const payload = summary.sourceAudit
+  if (!payload) {
+    // A legacy summary is not proof of current audit capability; it is never promoted to complete.
+    diagnostics.push({
+      code: 'source-audit-evidence-missing',
+      message: 'The index entry carries no source-audit evidence; re-extract it before relying on language facts.',
+      span: null,
+    })
+    const record: SourceAuditFile = {
+      ...base,
+      language: summary.language,
+      role,
+      status: validHash === null || warnings.length > 0 ? 'partial' : 'file-level-only',
+      lineCount: summary.lineCount,
+      analyzerId: null,
+      capabilities,
+      facts: [],
+      warnings,
+      diagnostics,
+    }
+    return { record, unreadable: false, identityGap: validHash === null }
+  }
+
+  const parserFailed = BATCH2_AUDIT_CAPABILITIES.every((capability) => payload.capabilities[capability] === 'failed')
+  for (const capability of BATCH2_AUDIT_CAPABILITIES) {
+    const reported = payload.capabilities[capability]
+    // Without content identity matching the analyzed bytes, nothing may be complete.
+    capabilities[capability] = reported === 'complete' && validHash === null ? 'partial' : reported
+  }
+  diagnostics.unshift(...payload.diagnostics)
+  const recovered = payload.diagnostics.some((d) => d.code === 'syntax-errors' || d.code === 'rust-parser-recovery')
   const record: SourceAuditFile = {
     ...base,
     language: summary.language,
     role,
-    status: validHash === null || warnings.length > 0 ? 'partial' : 'file-level-only',
+    status: parserFailed ? 'failed' : validHash === null || recovered ? 'partial' : 'parsed',
     lineCount: summary.lineCount,
-    analyzerId: null,
-    capabilities: indexedFileCapabilities(role, summary.language),
-    facts: [],
+    analyzerId: ANALYZER_BY_LANGUAGE[summary.language] ?? null,
+    capabilities,
+    facts: parserFailed ? [] : payload.facts.map((fact) => structuredClone(fact)),
     warnings,
     diagnostics,
   }

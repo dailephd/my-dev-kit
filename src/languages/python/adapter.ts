@@ -3,6 +3,8 @@ import * as path from 'node:path'
 import type { LanguageAdapter, ExtractionResult, SourceFileInput } from '../types.js'
 import type { CallGraphEdge, SymbolDefinition, SymbolLocation, ImportBinding, DecoratorMetadata, PythonOrmFact, FrameworkRouteFact } from '../../symbol-index/types.js'
 import { assignDeclarationIdentities } from '../../symbol-index/declarationIdentity.js'
+import { auditCapabilityMap, failedAuditPayload, type SourceAuditExtractionPayload } from '../../symbol-index/auditObservations.js'
+import type { SourceAuditFact, SourceAuditSpan } from '../../symbol-index/auditEvidenceTypes.js'
 
 // Only this trusted script executes. Indexed source is passed to ast.parse via stdin.
 const EXTRACT_PY = `
@@ -71,7 +73,7 @@ def main():
         value = n.value if isinstance(n, ast.Subscript) else n
         return (isinstance(value, ast.Name) and value.id == "Final") or (isinstance(value, ast.Attribute) and value.attr == "Final")
     def declare(n, name, kind, owners):
-        s = {"name": name, "kind": kind, "line": n.lineno, "end_line": end(n), "exported": not owners and (name in all_names if all_names is not None else not name.startswith("_")), "signature": lines[n.lineno-1].strip()[:120]}
+        s = {"name": name, "kind": kind, "line": n.lineno, "col": n.col_offset, "end_col": getattr(n, "end_col_offset", None), "end_line": end(n), "exported": not owners and (name in all_names if all_names is not None else not name.startswith("_")), "signature": lines[n.lineno-1].strip()[:120]}
         if owners:
             s["ownerKey"] = "python/" + "/".join("class:" + x for x in owners)
             s["qualifiedName"] = ".".join(owners + [name])
@@ -339,9 +341,43 @@ def main():
                 calls.append({"caller": dict(self.caller), "calleeName": p, "callLine": n.lineno, "owners": self.owners, "blocked": self.blocked, "receiver": self.receiver})
             self.generic_visit(n)
     Visitor().visit(tree)
+    # v1.15.0 audit evidence is read from this same parsed tree; no second parse or process.
+    top_ids = set(id(x) for x in tree.body)
+    def is_all(t): return isinstance(t, ast.Name) and t.id == "__all__"
+    all_info = {"declared": False, "static": False, "names": [], "reasons": [], "line": None, "col": None}
+    handled_writes, static_count = 0, 0
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Assign) and any(is_all(t) for t in n.targets):
+            all_info["declared"] = True
+            handled_writes += sum(1 for t in n.targets if is_all(t))
+            literal = id(n) in top_ids and len(n.targets) == 1 and isinstance(n.value, (ast.List, ast.Tuple)) and all(isinstance(v, ast.Constant) and isinstance(v.value, str) for v in n.value.elts)
+            if literal:
+                static_count += 1
+                all_info["names"] = [{"name": v.value, "line": v.lineno, "col": v.col_offset, "end_line": end(v), "end_col": getattr(v, "end_col_offset", None)} for v in n.value.elts]
+                all_info["line"], all_info["col"] = n.lineno, n.col_offset
+            elif id(n) in top_ids: all_info["reasons"].append("non-literal-assignment")
+            else: all_info["reasons"].append("conditional-assignment")
+        elif isinstance(n, ast.AnnAssign) and is_all(n.target):
+            all_info["declared"] = True; handled_writes += 1; all_info["reasons"].append("annotated-assignment")
+        elif isinstance(n, ast.AugAssign) and is_all(n.target):
+            all_info["declared"] = True; handled_writes += 1; all_info["reasons"].append("augmented-assignment")
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and is_all(n.func.value):
+            all_info["declared"] = True; all_info["reasons"].append("mutation-call")
+    total_writes = sum(1 for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == "__all__" and isinstance(n.ctx, (ast.Store, ast.Del)))
+    if total_writes != handled_writes:
+        all_info["declared"] = True; all_info["reasons"].append("indirect-write")
+    if static_count > 1: all_info["reasons"].append("multiple-assignments")
+    all_info["static"] = all_info["declared"] and static_count == 1 and not all_info["reasons"]
+    audit_imports = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                audit_imports.append({"line": n.lineno, "col": n.col_offset, "end_line": end(n), "end_col": getattr(n, "end_col_offset", None), "module": a.name, "level": 0, "names": []})
+        elif isinstance(n, ast.ImportFrom):
+            audit_imports.append({"line": n.lineno, "col": n.col_offset, "end_line": end(n), "end_col": getattr(n, "end_col_offset", None), "module": n.module or "", "level": n.level, "names": [a.name for a in n.names]})
     bindings.sort(key=lambda b: b["startLine"])
     imports.sort(key=lambda i: i[0])
-    sys.stdout.write(json.dumps({"symbols": symbols, "imports": [i[1] for i in imports], "bindings": bindings, "calls": calls, "writes": module_writes, "classScopes": class_scopes, "orm": orm, "framework": framework}))
+    sys.stdout.write(json.dumps({"symbols": symbols, "imports": [i[1] for i in imports], "bindings": bindings, "calls": calls, "writes": module_writes, "classScopes": class_scopes, "orm": orm, "framework": framework, "audit": {"all": all_info, "imports": audit_imports}}))
 main()
 `
 
@@ -354,10 +390,12 @@ interface ObservedCall {
   blocked: string[]
   receiver: string | null
 }
+interface PyPos { line: number; col: number | null; end_line?: number | null; end_col?: number | null }
 interface ParsedPython {
+  audit?: { all: { declared: boolean; static: boolean; reasons: string[]; names: Array<PyPos & { name: string }> }; imports: Array<PyPos & { module: string; level: number; names: string[] }> }
   orm: PythonOrmFact[]
   framework: FrameworkRouteFact[]
-  symbols: Array<{ name: string; kind: SymbolDefinition['kind']; line: number; end_line: number | null; exported: boolean; signature?: string; ownerKey?: string; qualifiedName?: string; declarationMetadata?: { decorators?: DecoratorMetadata[] }; callableEvidence?: boolean }>
+  symbols: Array<{ name: string; kind: SymbolDefinition['kind']; line: number; col?: number | null; end_col?: number | null; end_line: number | null; exported: boolean; signature?: string; ownerKey?: string; qualifiedName?: string; declarationMetadata?: { decorators?: DecoratorMetadata[] }; callableEvidence?: boolean }>
   imports: string[]
   bindings: BindingEvidence[]
   calls: ObservedCall[]
@@ -383,6 +421,96 @@ function parsePython(file: string, source: string): { data?: ParsedPython; warni
     return { data }
   } catch { return { warning: `python-extraction: invalid parser output for ${file}` } }
 }
+/** Python reports UTF-8 byte offsets; audit columns are zero-based UTF-16 code units. Unconvertible offsets become unknown. */
+function pythonColumn(line: string | undefined, byteOffset: number | null | undefined): number | null {
+  if (line === undefined || typeof byteOffset !== 'number' || !Number.isInteger(byteOffset) || byteOffset < 0) return null
+  let bytes = 0
+  for (let index = 0; index < line.length;) {
+    if (bytes === byteOffset) return index
+    const codePoint = line.codePointAt(index)!
+    bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4
+    index += codePoint > 0xffff ? 2 : 1
+  }
+  return bytes === byteOffset ? line.length : null
+}
+
+function pythonSpan(file: string, lines: readonly string[], position: PyPos): SourceAuditSpan {
+  const endLine = typeof position.end_line === 'number' ? position.end_line : null
+  return {
+    path: file,
+    startLine: position.line,
+    startColumn: pythonColumn(lines[position.line - 1], position.col),
+    endLine,
+    endColumn: endLine === null ? null : pythonColumn(lines[endLine - 1], position.end_col),
+  }
+}
+
+/**
+ * Audit facts from the single parse in `parsePython`. `__all__` is verified only
+ * when it is one top-level assignment of string literals; any other form is
+ * recorded as dynamic and never presented as a verified export list.
+ */
+function pythonAudit(file: string, source: string, symbols: readonly SymbolDefinition[], data?: ParsedPython, warning?: string): SourceAuditExtractionPayload {
+  if (!data?.audit) return failedAuditPayload('python-extraction-failed', warning ?? 'Python extraction produced no audit evidence.')
+  const lines = source.split(/\r\n|\r|\n/)
+  const facts: SourceAuditFact[] = []
+  const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
+  const capabilities = auditCapabilityMap('unsupported')
+  capabilities.declarations = 'complete'
+  capabilities.imports = 'complete'
+  capabilities['source-ranges'] = 'complete'
+  const base = { id: '', extractionMethod: 'python-ast' as const }
+  const all = data.audit.all
+  const names = new Set(all.names.map((entry) => entry.name))
+  const topLevel = (name: string): SymbolDefinition | undefined => {
+    const matches = symbols.filter((symbol) => !symbol.ownerKey && symbol.name === name)
+    return matches.length === 1 ? matches[0] : undefined
+  }
+
+  for (const raw of data.symbols) {
+    const span = pythonSpan(file, lines, { line: raw.line, col: raw.col ?? null, end_line: raw.end_line, end_col: raw.end_col })
+    const member = !!raw.ownerKey
+    let exported: boolean | null
+    let exportOrigin: SourceAuditFact['exportOrigin']
+    if (member) { exported = false; exportOrigin = 'none' }
+    else if (all.declared && !all.static) { exported = null; exportOrigin = 'unknown' }
+    else if (all.static) { exported = names.has(raw.name); exportOrigin = exported ? 'python-all' : 'none' }
+    else { exported = !raw.name.startsWith('_'); exportOrigin = exported ? 'python-convention' : 'none' }
+    facts.push({
+      ...base, kind: 'declaration', span, name: raw.name, symbolId: '', declarationKind: raw.kind,
+      ownerKey: raw.ownerKey ?? null, visibility: 'unknown', exported, exportOrigin,
+    })
+    if (!all.declared && !member && exported) {
+      const symbol = topLevel(raw.name)
+      facts.push({ ...base, kind: 'export', span, name: raw.name, exportOrigin: 'python-convention', exported: true, visibility: 'unknown', ...(symbol?.nodeId ? { symbolId: symbol.nodeId } : {}) })
+    }
+  }
+
+  if (all.static) {
+    for (const entry of all.names) {
+      const symbol = topLevel(entry.name)
+      facts.push({ ...base, kind: 'export', span: pythonSpan(file, lines, entry), name: entry.name, exportOrigin: 'python-all', exported: true, visibility: 'unknown', ...(symbol?.nodeId ? { symbolId: symbol.nodeId } : {}) })
+    }
+    capabilities.exports = 'complete'
+  } else if (all.declared) {
+    capabilities.exports = 'partial'
+    diagnostics.push({ code: 'python-dynamic-all', message: `__all__ is not one literal top-level list or tuple (${[...new Set(all.reasons)].join(', ')}); the export list is not verified.`, span: null })
+  } else {
+    capabilities.exports = 'partial'
+    diagnostics.push({ code: 'python-convention-exports', message: 'No __all__ was found; exports are inferred from naming conventions over extracted top-level declarations only.', span: null })
+  }
+
+  for (const entry of data.audit.imports) {
+    const specifier = '.'.repeat(entry.level) + entry.module
+    if (specifier.length === 0) continue
+    facts.push({
+      ...base, kind: 'import', span: pythonSpan(file, lines, entry), sourceSpecifier: specifier,
+      importedNames: entry.names, importResolution: 'observed',
+    })
+  }
+  return { facts, capabilities, diagnostics }
+}
+
 function extracted(file: string, source: string, data?: ParsedPython, warning?: string): ExtractionResult {
   const lineCount = source.split('\n').length
   const result: ExtractionResult = {
@@ -403,6 +531,7 @@ function extracted(file: string, source: string, data?: ParsedPython, warning?: 
     ...(warning ? { warnings: [warning] } : {}),
   }
   result.symbols = assignDeclarationIdentities(file, result.symbols)
+  result.sourceAudit = pythonAudit(file, source, result.symbols, data, warning)
   for (const fact of result.pythonOrmFacts ?? []) {
     const matches = result.symbols.filter(s => s.kind === 'class' && s.name === fact.name && s.location.line === fact.line)
     if (matches.length === 1) fact.nodeId = matches[0].nodeId
@@ -440,6 +569,14 @@ export class PythonAdapter implements LanguageAdapter {
   extractFromSource(filePath: string, sourceText: string): ExtractionResult {
     const { data, warning } = parsePython(filePath, sourceText)
     return extracted(filePath, sourceText, data, warning)
+  }
+  /** Candidate local files for an audit import (dotted specifier with leading dots for relative imports). */
+  resolveAuditCandidates(specifier: string, importedNames: readonly string[], importingFile: string, knownFiles: readonly string[]): string[] {
+    const dots = specifier.match(/^(\.*)(.*)$/)
+    const level = dots ? dots[1].length : 0
+    const module = dots ? dots[2] : specifier
+    const spec = module || (level && importedNames.length === 1 && importedNames[0] !== '*' ? importedNames[0] : '')
+    return moduleCandidates(spec, level, importingFile, knownFiles)
   }
   resolveImportToFile(specifier: string, importingFile: string, knownFiles: readonly string[]): string | null {
     const from = specifier.match(/^from (\.+)([^\s]*)\s+import\s+(.+)$/)

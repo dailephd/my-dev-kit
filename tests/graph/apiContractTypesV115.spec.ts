@@ -156,8 +156,6 @@ describe('validateApiUnresolvedEvidence', () => {
     expect(() => validateApiUnresolvedEvidence(base)).not.toThrow()
     expectInvalidUnresolved({ ...base, candidateNodeIds: ['n1', 'n1'] }, 'duplicated')
     expectInvalidUnresolved({ ...base, sourceFactIds: ['f1', 'f1'] }, 'duplicated')
-    expectInvalidUnresolved({ ...base, status: 'unsupported', candidateNodeIds: ['n1'] }, 'candidateNodeIds')
-    expectInvalidUnresolved({ ...base, status: 'dynamic', candidateNodeIds: ['n1', 'n2'] }, 'candidateNodeIds')
     expectInvalidUnresolved({ ...base, reasonCode: 'Not Kebab' }, 'reasonCode')
     expectInvalidUnresolved({ ...base, subjectId: '' }, 'subjectId')
     expectInvalidUnresolved({ ...base, extra: 1 }, 'extra')
@@ -174,5 +172,23 @@ describe('validateApiUnresolvedEvidence', () => {
     expectInvalidUnresolved({ ...base, subjectId: '' }, 'subjectId')
     expectInvalidUnresolved({ ...base, reasonCode: '' }, 'reasonCode')
     expectInvalidUnresolved({ ...base, candidateNodeIds: 'n1' }, 'candidateNodeIds')
+  })
+
+  it('allows candidates on dynamic and unsupported evidence without promoting them (planner section 4)', () => {
+    const base = { subjectId: 'api-client-call:src/a.ts:1:0', reasonCode: 'dynamic-url', candidateNodeIds: ['n1', 'n2'], sourceFactIds: ['f1'] }
+    expect(() => validateApiUnresolvedEvidence({ ...base, status: 'dynamic' })).not.toThrow()
+    expect(() => validateApiUnresolvedEvidence({ ...base, status: 'unsupported' })).not.toThrow()
+    expect(() => validateApiUnresolvedEvidence({ ...base, status: 'dynamic', candidateNodeIds: ['n1'] })).not.toThrow()
+    // Empty candidate arrays remain valid for every unresolved status.
+    for (const status of ['dynamic', 'unsupported', 'ambiguous', 'external'] as const) {
+      expect(() => validateApiUnresolvedEvidence({ ...base, status, candidateNodeIds: [] })).not.toThrow()
+    }
+    // Duplicate candidates are rejected regardless of status.
+    expectInvalidUnresolved({ ...base, status: 'dynamic', candidateNodeIds: ['n1', 'n1'] }, 'duplicated')
+    expectInvalidUnresolved({ ...base, status: 'unsupported', candidateNodeIds: ['n1', 'n1'] }, 'duplicated')
+    // Candidates are not proof: a candidate cannot promote the record to resolved-static.
+    expectInvalidUnresolved({ ...base, status: 'resolved-static' }, 'status')
+    // Every unresolved record needs a nonempty reason code.
+    expectInvalidUnresolved({ ...base, status: 'dynamic', reasonCode: '' }, 'reasonCode')
   })
 })
