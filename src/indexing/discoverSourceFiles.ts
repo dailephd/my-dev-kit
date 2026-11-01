@@ -78,6 +78,32 @@ export interface LargestFileSample {
   sizeBytes: number
 }
 
+/** How a selected regular file was classified during discovery (v1.15.0 audit ledger). */
+export type AuditSelectionStatus =
+  | 'supported'
+  | 'unsupported'
+  | 'unreadable'
+
+/** One selected regular file after configured exclusions, including unsupported and unreadable files. */
+export interface AuditSelectedFile {
+  relPath: string
+  absPath: string
+  sizeBytes: number | null
+  selectionStatus: AuditSelectionStatus
+}
+
+/**
+ * Additive audit ledger populated during the single discovery traversal.
+ * `excludedPathCount` counts unique excluded path entries actually observed
+ * (an excluded directory counts once; its contents are never scanned).
+ */
+export interface AuditSelectionLedger {
+  selectedFiles: AuditSelectedFile[]
+  excludedPathCount: number
+  inaccessibleDirectoryCount: number
+  incompleteReasons: string[]
+}
+
 export interface SourceDiscoveryResult {
   files: DiscoveredSourceFile[]
   defaultIgnoredDirectoryNames: string[]
@@ -93,6 +119,7 @@ export interface SourceDiscoveryResult {
   largestFiles: LargestFileSample[]
   sampleIndexedFiles: string[]
   sampleSkippedFiles: SkippedPathSample[]
+  auditSelection: AuditSelectionLedger
 }
 
 interface DiscoveryState {
@@ -105,6 +132,9 @@ interface DiscoveryState {
   lastProgressTime: number
   onProgress?: (event: SourceDiscoveryProgressEvent) => void
   result: SourceDiscoveryResult
+  selectedByPath: Map<string, AuditSelectedFile>
+  excludedPaths: Set<string>
+  incompleteReasons: Set<string>
 }
 
 interface ExcludeRule {
@@ -141,7 +171,16 @@ export function discoverSourceFiles(options: SourceFileDiscoveryOptions): Source
       largestFiles: [],
       sampleIndexedFiles: [],
       sampleSkippedFiles: [],
+      auditSelection: {
+        selectedFiles: [],
+        excludedPathCount: 0,
+        inaccessibleDirectoryCount: 0,
+        incompleteReasons: [],
+      },
     },
+    selectedByPath: new Map(),
+    excludedPaths: new Set(),
+    incompleteReasons: new Set(),
   }
 
   emitProgress(state, 'scan-start', 'Scanning source roots')
@@ -152,6 +191,7 @@ export function discoverSourceFiles(options: SourceFileDiscoveryOptions): Source
   emitProgress(state, 'scan-complete', 'Source scan completed')
 
   state.result.largestFiles.sort((a, b) => b.sizeBytes - a.sizeBytes)
+  finalizeAuditSelection(state)
   return state.result
 }
 
@@ -165,6 +205,9 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
   } catch {
+    // The subtree is unreadable: never report it as covered.
+    state.result.auditSelection.inaccessibleDirectoryCount += 1
+    state.incompleteReasons.add('directory-enumeration-failed')
     return
   }
 
@@ -200,6 +243,10 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     try {
       stat = fs.statSync(absPath)
     } catch {
+      // Existing behavior is unchanged for counters; the audit ledger keeps the
+      // known path as unreadable so it can never silently disappear.
+      if (shouldExcludeByFilePattern(relPath)) state.excludedPaths.add(relPath)
+      else recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
       continue
     }
 
@@ -210,9 +257,11 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
 
     if (!state.registry.supportsFile(entry.name)) {
       recordSkipped(state, relPath, 'unsupported')
+      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported' })
       continue
     }
 
+    recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'supported' })
     state.result.files.push({ relPath, absPath, sizeBytes: stat.size })
     state.result.totalFilesEligibleForIndexing += 1
     incrementLanguageCount(state.result.languageCounts, relPath)
@@ -234,11 +283,33 @@ function recordSkipped(
   reason: SkippedPathSample['reason']
 ): void {
   state.result.totalFilesSkipped += 1
+  if (reason !== 'unsupported') state.excludedPaths.add(relPath)
   if (reason === 'default-ignore') state.result.skippedByDefaultIgnore += 1
   if (reason === 'user-exclude') state.result.skippedByUserExclude += 1
   if (reason === 'file-pattern') state.result.skippedByFilePattern += 1
   if (reason === 'unsupported') state.result.skippedUnsupportedFiles += 1
   pushSample(state.result.sampleSkippedFiles, { path: relPath, reason })
+}
+
+/** Records a selected file once per canonical relative path; a conflicting re-observation marks the ledger incomplete. */
+function recordSelected(state: DiscoveryState, file: AuditSelectedFile): void {
+  const existing = state.selectedByPath.get(file.relPath)
+  if (!existing) {
+    state.selectedByPath.set(file.relPath, file)
+    return
+  }
+  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes) {
+    state.incompleteReasons.add('conflicting-selection-identity')
+  }
+}
+
+function finalizeAuditSelection(state: DiscoveryState): void {
+  const ledger = state.result.auditSelection
+  ledger.selectedFiles = [...state.selectedByPath.values()].sort((a, b) =>
+    a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0
+  )
+  ledger.excludedPathCount = state.excludedPaths.size
+  ledger.incompleteReasons = [...state.incompleteReasons].sort()
 }
 
 function shouldExcludeByFilePattern(relPath: string): boolean {
@@ -270,9 +341,10 @@ function matchesUserExclude(relPath: string, basename: string, rules: ExcludeRul
   })
 }
 
-function incrementLanguageCount(languageCounts: Record<string, number>, relPath: string): void {
+/** Language name for a path by extension; 'unknown' when the extension has no registered language family. */
+export function languageNameForPath(relPath: string): string {
   const ext = path.extname(relPath).toLowerCase()
-  const language =
+  return (
     ext === '.py' ? 'python' :
     ext === '.ts' || ext === '.tsx' ? 'typescript' :
     ext === '.js' || ext === '.jsx' ? 'javascript' :
@@ -280,6 +352,11 @@ function incrementLanguageCount(languageCounts: Record<string, number>, relPath:
     ext === '.java' ? 'java' :
     ext === '.rs' ? 'rust' :
     'unknown'
+  )
+}
+
+function incrementLanguageCount(languageCounts: Record<string, number>, relPath: string): void {
+  const language = languageNameForPath(relPath)
   languageCounts[language] = (languageCounts[language] ?? 0) + 1
 }
 

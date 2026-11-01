@@ -1,3 +1,5 @@
+import type { FrontendSourceRef } from '../frontend/frontendTypes.js'
+
 export const GRAPH_DIFF_REPORT_KIND = 'my-dev-kit-v1-graph-diff'
 
 export interface GraphDiffSide {
@@ -90,6 +92,32 @@ export interface SemanticSummaryDiffSection {
   changedFields: ChangedFieldEntry[]
 }
 
+/** Maximum number of API contract changes returned in one GraphDiffResult section. */
+export const MAX_API_CONTRACT_CHANGES = 200
+
+export type ApiContractChangeKind = 'route' | 'client-call' | 'schema' | 'data-field' | 'relationship'
+export type ApiContractChangeType = 'added' | 'removed' | 'changed' | 'unresolved'
+export type ApiContractChangeCertainty = 'explicit-static' | 'partial' | 'unknown'
+
+export interface ApiContractChange {
+  kind: ApiContractChangeKind
+  change: ApiContractChangeType
+  subjectId: string
+  affectedNodeIds: string[]
+  sourceRefs: FrontendSourceRef[]
+  certainty: ApiContractChangeCertainty
+}
+
+export interface ApiContractChangeSection {
+  available: ArtifactAvailability
+  complete: boolean
+  totalChanges: number
+  returnedChanges: number
+  omittedChanges: number
+  changes: ApiContractChange[]
+  warnings: string[]
+}
+
 export interface GraphDiffSummary {
   nodesAdded: number
   nodesRemoved: number
@@ -120,5 +148,6 @@ export interface GraphDiffResult {
     frontendSemantic: SemanticSummaryDiffSection
     frontendReachability: SemanticSummaryDiffSection
   }
+  apiContractChanges?: ApiContractChangeSection
   warnings: string[]
 }

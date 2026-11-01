@@ -16,6 +16,7 @@ import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
+import { sha256Hex } from '../indexing/cacheMetadata.js'
 import type { LanguageAdapter, SourceFileInput } from '../languages/types.js'
 import {
   discoverSourceFiles,
@@ -80,6 +81,12 @@ export interface BuildResult {
    * reconstruct a full `ExtractionResult` for an unchanged file without re-parsing it.
    */
   fileExtractionMeta: Map<string, FileExtractionMeta>
+  /**
+   * Lowercase SHA-256 of the exact source bytes each indexed file was analyzed
+   * from, keyed by relative path (v1.15.0 audit provenance). Files that could
+   * not be read are absent; absence is never replaced by a hash from another read.
+   */
+  fileContentHashes: Map<string, string>
 }
 
 export type BuildIndexProgressEvent =
@@ -123,6 +130,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
+  const fileContentHashes = new Map<string, string>()
 
   emitBuildProgress(config, 'index-start', 'Indexing started', startTime, 0, sourceFiles.length)
   let filesIndexed = 0
@@ -130,9 +138,13 @@ export function buildIndex(config: BuildConfig): BuildResult {
   for (const { relPath, absPath } of sourceFiles) {
     let sourceText: string
     try {
-      sourceText = fs.readFileSync(absPath, 'utf-8')
+      // One read yields both the analyzed text and its content identity; the
+      // decoding is identical to readFileSync(absPath, 'utf-8').
+      const sourceBytes = fs.readFileSync(absPath)
+      sourceText = sourceBytes.toString('utf-8')
+      fileContentHashes.set(relPath, sha256Hex(sourceBytes))
     } catch {
-      continue // Skip unreadable files silently
+      continue // Unreadable files stay out of the index; the audit ledger still records them
     }
 
     const adapter = registry.adapterForFile(relPath)!
@@ -229,7 +241,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
     // callGraphArtifact set by writer after writing the artifact
   }
 
-  return { index, callGraph, discovery, fileExtractionMeta }
+  return { index, callGraph, discovery, fileExtractionMeta, fileContentHashes }
 }
 
 // ---------------------------------------------------------------------------

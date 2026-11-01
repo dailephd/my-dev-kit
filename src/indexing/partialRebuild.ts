@@ -37,7 +37,7 @@ import {
   type SymbolIndex,
 } from '../symbol-index/types.js'
 import type { SourceDiscoveryResult } from './discoverSourceFiles.js'
-import type { CacheFileEntry } from './cacheMetadata.js'
+import { sha256Hex, type CacheFileEntry } from './cacheMetadata.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 
 export interface PartialRebuildEligibility {
@@ -113,6 +113,14 @@ export interface BuildPartialSymbolIndexResult {
   /** True whenever `--call-graph` was requested — call-graph is always fully regenerated, never partially reused. */
   callGraphFallback: boolean
   fileExtractionMeta: Map<string, FileExtractionMeta>
+  /**
+   * SHA-256 of the exact source bytes behind each current file's evidence
+   * (v1.15.0 audit provenance). Freshly extracted files are hashed from the
+   * bytes analyzed now; reused files carry only the previous trusted cache
+   * entry's content hash (unchanged classification already matched it). A file
+   * without a trustworthy hash is absent so no identity is fabricated.
+   */
+  fileContentHashes: Map<string, string>
   /** Internal execution evidence: sorted, de-duplicated current paths. Removed files appear in none. */
   freshlyExtractedPaths: string[]
   /** Unchanged paths whose previous per-file evidence was reused. Excludes forced paths. */
@@ -147,6 +155,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
+  const fileContentHashes = new Map<string, string>()
   const callGraphInputsByAdapter = new Map<LanguageAdapter, SourceFileInput[]>()
   const freshPaths = new Set<string>()
   const reusedPaths = new Set<string>()
@@ -222,6 +231,9 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       })
       fileExtractionMeta.set(relPath, { reExportSpecifiers, exportAllSpecifiers })
       reusedPaths.add(relPath)
+      if (previousCacheEntry && /^[0-9a-f]{64}$/.test(previousCacheEntry.contentHash)) {
+        fileContentHashes.set(relPath, previousCacheEntry.contentHash)
+      }
 
       if (input.buildCallGraph && adapter.supportsCallGraph && adapter.extractCallGraphEdges) {
         const sourceText = readFileSafely(file.absPath)
@@ -235,8 +247,10 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     }
 
     // Changed, added, or forced-unchanged file: analyze it exactly like a full build would.
-    const sourceText = readFileSafely(file.absPath)
-    if (sourceText === null) continue
+    const sourceBytes = readBytesSafely(file.absPath)
+    if (sourceBytes === null) continue
+    const sourceText = sourceBytes.toString('utf-8')
+    fileContentHashes.set(relPath, sha256Hex(sourceBytes))
     const extraction = adapter.extractFromSource(relPath, sourceText)
     extraction.symbols = assignDeclarationIdentities(relPath, extraction.symbols)
     freshPaths.add(relPath)
@@ -314,9 +328,18 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     callGraph,
     callGraphFallback: input.buildCallGraph === true,
     fileExtractionMeta,
+    fileContentHashes,
     freshlyExtractedPaths: [...freshPaths].sort(),
     reusedPaths: [...reusedPaths].sort(),
     forcedReextractPaths: [...forcedPaths].filter((forced) => freshPaths.has(forced)).sort(),
+  }
+}
+
+function readBytesSafely(absPath: string): Buffer | null {
+  try {
+    return fs.readFileSync(absPath)
+  } catch {
+    return null
   }
 }
 
