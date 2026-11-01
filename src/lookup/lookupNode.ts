@@ -45,7 +45,9 @@ export function lookupNode(options: {
   manifest?: IndexManifest
 }): LookupNodeResult {
   validateDepth(options.depth)
-  const node = options.graph.nodes.find((candidate) => candidate.id === options.nodeId)
+  const matches = options.graph.nodes.filter((candidate) => candidate.id === options.nodeId)
+  if (matches.length > 1) throw new Error(`Ambiguous graph node identity: ${options.nodeId}`)
+  const node = matches[0]
   if (!node) throw new Error(`Node not found: ${options.nodeId}`)
 
   const incomingEdges = options.graph.edges
@@ -54,6 +56,11 @@ export function lookupNode(options: {
   const outgoingEdges = options.graph.edges
     .filter((edge) => edge.source === options.nodeId)
     .sort(compareById)
+  const nodeIds = new Set(options.graph.nodes.map(candidate => candidate.id))
+  if (nodeIds.size !== options.graph.nodes.length) throw new Error('Ambiguous graph node identity: duplicate node IDs.')
+  for (const edge of [...incomingEdges, ...outgoingEdges]) {
+    if (edge.kind.startsWith('rust-') && (!nodeIds.has(edge.source) || !nodeIds.has(edge.target))) throw new Error(`Missing graph endpoint reference: ${edge.id}`)
+  }
   const neighbors = collectNeighbors(options.graph, options.nodeId, options.depth)
 
   const classificationDetail =

@@ -11,6 +11,8 @@
  */
 
 import * as fs from 'fs'
+import { assignDeclarationIdentities } from './declarationIdentity.js'
+import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
@@ -105,7 +107,7 @@ export type BuildIndexProgressEvent =
 export function buildIndex(config: BuildConfig): BuildResult {
   const startTime = Date.now()
   const buildTime = new Date().toISOString()
-  const registry = createDefaultRegistry()
+  const registry = createDefaultRegistry(config.repoRoot)
 
   const discovery = discoverSourceFiles({
     repoRoot: config.repoRoot,
@@ -134,7 +136,9 @@ export function buildIndex(config: BuildConfig): BuildResult {
     }
 
     const adapter = registry.adapterForFile(relPath)!
+
     const result = adapter.extractFromSource(relPath, sourceText)
+    result.symbols = assignDeclarationIdentities(relPath, result.symbols)
     rawExtractions.push({ relPath, extraction: result })
     fileExtractionMeta.set(relPath, {
       reExportSpecifiers: result.reExportSpecifiers,
@@ -145,6 +149,12 @@ export function buildIndex(config: BuildConfig): BuildResult {
       language: result.language,
       lineCount: result.lineCount,
       imports: result.imports,
+      ...(result.importBindings ? { importBindings: result.importBindings } : {}),
+      ...(result.commonJsExports ? { commonJsExports: result.commonJsExports } : {}),
+      ...(result.rustSyntaxFacts ? { rustSyntaxFacts: result.rustSyntaxFacts } : {}),
+      ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
+      ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
+      ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       exports: result.exports,
       symbols: result.symbols,
       hasCallGraphEntries: false, // updated below if call graph is built
@@ -191,6 +201,11 @@ export function buildIndex(config: BuildConfig): BuildResult {
   // Build richer graph section
   const indexedFileSet = new Set(summaries.map((s) => s.path))
   const graph = buildGraphSection(rawExtractions, indexedFileSet, registry)
+  const warnings = new Map(rawExtractions.map(e => [e.relPath, e.extraction.warnings]))
+  for (const summary of summaries) {
+    if (warnings.get(summary.path)?.length) summary.warnings = warnings.get(summary.path)
+    else delete summary.warnings
+  }
 
   const symbolCount = summaries.reduce((n, f) => n + f.symbols.length, 0)
 
@@ -241,7 +256,37 @@ export function buildGraphSection(
   const knownFiles = [...indexedFileSet]
 
   for (const { relPath, extraction } of rawExtractions) {
+    for (const fact of extraction.rustSyntaxFacts ?? []) {
+      delete fact.nodeId
+      if (fact.kind !== 'declaration' && fact.kind !== 'module') continue
+      const matches = extraction.symbols.filter(s => s.name === fact.name && s.ownerKey === fact.ownerKey && s.location.line === fact.line)
+      if (matches.length === 1) fact.nodeId = matches[0].nodeId
+    }
     const adapter = registry.adapterForFile(relPath)!
+    extraction.warnings = extraction.warnings?.filter(w => !w.startsWith('Configured import unresolved:'))
+
+    for (const fact of extraction.frameworkRouteFacts ?? []) {
+      if (fact.framework !== 'express' && fact.framework !== 'nestjs') continue
+      delete fact.handlerId
+      fact.handlerStatus = 'unresolved'
+      if (fact.kind === 'route' && fact.handlerName && fact.handlerLine !== undefined) {
+        const matches = extraction.symbols.filter(s => s.name === fact.handlerName && s.ownerKey === fact.ownerKey && s.location.line === fact.handlerLine)
+        if (matches.length === 1 && matches[0].nodeId) { fact.handlerId = matches[0].nodeId; fact.handlerStatus = 'resolved' }
+      }
+      if (fact.framework === 'nestjs') {
+        const controllers = (extraction.frameworkRouteFacts ?? []).filter(f => f.kind === 'controller' && f.name === fact.name)
+        const classes = extraction.symbols.filter(s => s.kind === 'class' && s.name === fact.name && controllers.length === 1 && s.location.line === controllers[0].line)
+        if (classes.length === 1) fact.controllerId = classes[0].nodeId
+      }
+    }
+
+    if (extraction.language === 'javascript' || extraction.language === 'typescript') {
+      for (const binding of extraction.importBindings ?? []) {
+        const candidates = adapter instanceof TypeScriptAdapter ? adapter.resolveCandidates(binding.sourceSpecifier, relPath, knownFiles) : []
+        if (binding.resolutionStatus === 'unresolved') continue
+        binding.resolutionStatus = candidates.length === 1 ? 'resolved-local' : candidates.length > 1 ? 'ambiguous' : binding.sourceSpecifier.startsWith('.') ? 'unresolved' : 'external'
+      }
+    }
 
     for (const specifier of extraction.imports) {
       const to = adapter.resolveImportToFile(specifier, relPath, knownFiles)
@@ -258,6 +303,12 @@ export function buildGraphSection(
       if (to && to !== relPath) fileDeps.push({ from: relPath, to, kind: 'export-all' })
     }
 
+    if (adapter instanceof TypeScriptAdapter) {
+      const diagnostics = [...new Set([...extraction.imports, ...extraction.reExportSpecifiers, ...extraction.exportAllSpecifiers]
+        .map(specifier => adapter.resolutionDiagnostic(specifier, relPath)).filter((value): value is string => !!value))].slice(0, 20)
+      if (diagnostics.length) extraction.warnings = [...(extraction.warnings ?? []), ...diagnostics]
+    }
+
     for (const sym of extraction.symbols) {
       symbols.push({
         file: relPath,
@@ -265,6 +316,10 @@ export function buildGraphSection(
         kind: sym.kind,
         exported: sym.exported,
         line: sym.location.line,
+        nodeId: sym.nodeId,
+        qualifiedName: sym.qualifiedName,
+        ownerKey: sym.ownerKey,
+        ...(sym.declarationMetadata ? { declarationMetadata: sym.declarationMetadata } : {}),
       })
     }
   }

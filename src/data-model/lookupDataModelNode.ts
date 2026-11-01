@@ -27,7 +27,11 @@ export function lookupDataModelEntity(
   artifact: DataModelArtifact,
   selector: string
 ): DataModelEntityLookupResult {
-  const entity = artifact.entities.find((candidate) => candidate.name === selector || candidate.id === selector)
+  if (!selector.trim() || selector !== selector.trim()) throw new Error('Invalid entity selector.')
+  const exact = artifact.entities.filter(candidate => candidate.id === selector)
+  const candidates = exact.length ? exact : artifact.entities.filter(candidate => candidate.name === selector)
+  if (candidates.length > 1) throw ambiguity(candidates.map(candidate => candidate.id))
+  const entity = candidates[0]
   if (!entity) {
     throw new Error(`Entity not found: ${selector}`)
   }
@@ -45,8 +49,15 @@ export function lookupDataModelField(
   artifact: DataModelArtifact,
   selector: string
 ): DataModelFieldLookupResult {
+  if (!selector.trim() || selector !== selector.trim()) throw new Error('Invalid field selector.')
+  const exact = artifact.entities.flatMap(entity => entity.fields.filter(field => field.id === selector).map(field => ({ entity, field })))
+  if (exact.length > 1) throw ambiguity(exact.map(match => match.field.id))
+  if (exact.length === 1) return { status: 'found', selector, ...exact[0], sourceRefs: [...exact[0].field.sourceRefs], warnings: [...exact[0].entity.warnings, ...exact[0].field.warnings] }
+  if (selector.startsWith('field:')) throw new Error(`Field not found: ${selector}`)
   const parsed = parseDataModelFieldSelector(selector)
-  const entity = artifact.entities.find((candidate) => candidate.name === parsed.entityName || candidate.id === parsed.entityName)
+  const candidates = artifact.entities.filter(candidate => candidate.name === parsed.entityName || candidate.id === parsed.entityName)
+  if (candidates.length > 1) throw ambiguity(candidates.map(candidate => candidate.id))
+  const entity = candidates[0]
   if (!entity) {
     throw new Error(`Entity not found for field lookup: ${parsed.entityName}`)
   }
@@ -64,6 +75,11 @@ export function lookupDataModelField(
     sourceRefs: [...field.sourceRefs],
     warnings: [...entity.warnings, ...field.warnings],
   }
+}
+
+function ambiguity(ids: string[]): Error & { candidates: string[]; code: string } {
+  const candidates = [...ids].sort().slice(0, 20)
+  return Object.assign(new Error(`Ambiguous data-model selector; use an exact ID. Candidates: ${candidates.join(', ')}`), { candidates, code: 'AMBIGUOUS_DATA_MODEL_SELECTOR' })
 }
 
 export function parseDataModelFieldSelector(selector: string): {

@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util'
+
 /** Shared, deterministic comparison helpers used across every graph-diff section. */
 
 export function sortByString<T>(items: T[], key: (item: T) => string): T[] {
@@ -9,7 +11,9 @@ export function sortByString<T>(items: T[], key: (item: T) => string): T[] {
 }
 
 export function deepEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  // Persisted JSON object member order is not semantic. Partial extraction
+  // can insert the same fields in a different order from fresh extraction.
+  return isDeepStrictEqual(a, b)
 }
 
 /**

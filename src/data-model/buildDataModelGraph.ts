@@ -15,7 +15,7 @@ export function buildDataModelGraph(input: BuildDataModelGraphInput): DataModelG
   const createdAt = input.createdAt ?? input.artifact.createdAt
   const entityNodes: DataModelGraphNode[] = input.artifact.entities
     .map((entity) => ({
-      id: buildEntityNodeId(entity.name),
+      id: (entity.sourceLanguage === 'python' ? entity.id : buildEntityNodeId(entity.name)),
       kind: 'entity' as const,
       label: entity.name,
       entityId: entity.id,
@@ -29,7 +29,7 @@ export function buildDataModelGraph(input: BuildDataModelGraphInput): DataModelG
   const fieldNodes: DataModelGraphNode[] = input.artifact.entities
     .flatMap((entity) =>
       entity.fields.map((field) => ({
-        id: buildFieldNodeId(entity.name, field.name),
+        id: (entity.sourceLanguage === 'python' ? field.id : buildFieldNodeId(entity.name, field.name)),
         kind: 'field' as const,
         label: `${entity.name}.${field.name}`,
         entityId: entity.id,
@@ -44,9 +44,9 @@ export function buildDataModelGraph(input: BuildDataModelGraphInput): DataModelG
   const hasFieldEdges: DataModelGraphEdge[] = input.artifact.entities
     .flatMap((entity) =>
       entity.fields.map((field) => ({
-        id: `data-model-edge:has-field:${entity.name}.${field.name}`,
-        source: buildEntityNodeId(entity.name),
-        target: buildFieldNodeId(entity.name, field.name),
+        id: (entity.sourceLanguage === 'python' ? `data-model-edge:has-field:${field.id}` : `data-model-edge:has-field:${entity.name}.${field.name}`),
+        source: (entity.sourceLanguage === 'python' ? entity.id : buildEntityNodeId(entity.name)),
+        target: (entity.sourceLanguage === 'python' ? field.id : buildFieldNodeId(entity.name, field.name)),
         kind: 'has-field' as const,
         relationshipId: null,
         sourceRefs: [...field.sourceRefs],
@@ -103,9 +103,9 @@ function buildRelationshipEdge(
   relationshipCounts.set(signature, index + 1)
 
   return {
-    id: `data-model-edge:${edgeKind}:${fromEntity.name}:${toEntity.name}:${index}`,
-    source: buildEntityNodeId(fromEntity.name),
-    target: buildEntityNodeId(toEntity.name),
+    id: (fromEntity.sourceLanguage === 'python' ? `data-model-edge:${encodeURIComponent(relationship.id)}` : `data-model-edge:${edgeKind}:${fromEntity.name}:${toEntity.name}:${index}`),
+    source: (fromEntity.sourceLanguage === 'python' ? fromEntity.id : buildEntityNodeId(fromEntity.name)),
+    target: (toEntity.sourceLanguage === 'python' ? toEntity.id : buildEntityNodeId(toEntity.name)),
     kind: edgeKind,
     relationshipId: relationship.id,
     sourceRefs: [...relationship.sourceRefs],

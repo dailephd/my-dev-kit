@@ -1,5 +1,4 @@
-import * as fs from 'node:fs'
-import { ensureInsideProjectRoot } from '../lookup/getSourceSlice.js'
+import { ensureInsideProjectRoot, readSourceText } from '../lookup/getSourceSlice.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import type {
   FrontendFileResult,
@@ -180,7 +179,7 @@ export function buildLocalComponentTreeSource(options: BuildOptions): LocalCompo
   }
 
   const absolutePath = ensureInsideProjectRoot(options.projectRoot, file.filePath)
-  const lines = fs.readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+  const lines = readSourceText(options.projectRoot, file.filePath).split(/\r?\n/)
   const selected = selectBlocks(candidates, lines, options.maxLines)
 
   return {

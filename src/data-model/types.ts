@@ -56,6 +56,7 @@ export interface DataModelWarning {
 }
 
 export interface DataModelField {
+  options?: Record<string, string | number | boolean | null>
   id: string
   name: string
   typeText: string
@@ -79,6 +80,9 @@ export interface DataModelRelationship {
 }
 
 export interface DataModelEntity {
+  entityKey?: string
+  sourceLanguage?: 'python'
+  ormFamily?: 'django' | 'sqlalchemy'
   id: string
   name: string
   kind: DataModelEntityKind

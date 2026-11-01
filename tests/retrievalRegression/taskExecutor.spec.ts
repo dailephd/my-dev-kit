@@ -1,18 +1,52 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCommandArgs, executeTask } from '../../src/retrievalRegression/taskExecutor.js'
 import type { RetrievalRegressionSuiteConfig, RetrievalRegressionTask } from '../../src/retrievalRegression/types.js'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const tempDirs: string[] = []
+
+describe('B14 actual role-aware context dispatch', () => {
+  const method = 'symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0'
+  it.each(['architecture', 'implementation', 'test-implementation'] as const)('writes and dispatches a bounded task-owned %s request', async role => {
+    const base = allocateV114OutputDir('task-executor-v114')
+    mkdirSync(base, { recursive: true })
+    let ordinal = 1
+    while (existsSync(join(base, `035-role-${ordinal}`))) ordinal++
+    const outputDir = join(base, `035-role-${ordinal}`)
+    const task: RetrievalRegressionTask = { id: 'role', title: role, fixtureRoot: resolve('tests/fixtures/v114-language/rust/F13-retrieval'), sourceRoots: ['src', 'tests'], query: 'impl crate::alpha::Runner for crate::alpha::Worker run', mode: 'general', caps: { maxGraphNodes: 40, maxGraphEdges: 70, maxSourceSlices: 6 }, execution: { kind: 'context', role, focusSymbols: [method], changedSymbols: [method], requestedEvidenceKinds: ['owner', 'changed-surface'] } }
+    const result = await executeTask({ repoRoot: process.cwd(), configPath: join(outputDir, 'config.json'), outputDir, task, config: sampleConfig })
+    expect(result.status).toBe('executed')
+    expect(result.errors).toEqual([])
+    const requestPath = join(outputDir, 'tasks/role/context-request.json')
+    expect(existsSync(requestPath)).toBe(true)
+    const request = JSON.parse(readFileSync(requestPath, 'utf8'))
+    expect(request).toEqual({ schemaVersion: '1.0.0', query: task.query, role, focusSymbols: [method], changedSymbols: [method], requestedEvidenceKinds: ['owner', 'changed-surface'] })
+    expect(request.index).toBeUndefined()
+    expect(request.output).toBeUndefined()
+    expect(request.auditOutput).toBeUndefined()
+    const execution = JSON.parse(readFileSync(result.artifactPaths!.taskExecutionPath!, 'utf8'))
+    const args: string[] = execution.contextExecution.args
+    expect(args.filter(a => a === '--request')).toHaveLength(1)
+    expect(args).not.toContain('--query')
+    for (const flag of ['--index', '--out', '--audit-out', '--mode', '--max-source-slices']) expect(args.filter(a => a === flag)).toHaveLength(1)
+    expect(args[args.indexOf('--request') + 1]).toBe(requestPath.replaceAll('\\', '/'))
+    const capsule = JSON.parse(readFileSync(result.artifactPaths!.capsulePath!, 'utf8'))
+    expect(capsule.roleContext.role).toBe(role)
+    expect(capsule.request.originalQuery).toBe(task.query)
+    expect(capsule.roleContext.focus.focusSymbols).toContainEqual(expect.objectContaining({ symbol: method, resolved: true, matchedNodeIds: [method] }))
+    expect(capsule.roleContext.changedSurface.symbols).toContainEqual(expect.objectContaining({ symbolId: method }))
+    expect(capsule.selectedSource.slices).toContainEqual(expect.objectContaining({ filePath: 'src/impls.rs', startLine: 5, endLine: 7 }))
+  })
+})
 
 afterEach(() => {
   while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true })
 })
 
 function tmpRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-task-executor-'))
+  const dir = allocateV114OutputDir('task-executor-fixture-v114')
   tempDirs.push(dir)
   return dir
 }

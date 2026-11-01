@@ -5,6 +5,7 @@ import { createDefaultRegistry, type LanguageRegistry } from '../languages/regis
 
 export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
   'node_modules',
+  'target',
   '.next',
   'dist',
   'build',
@@ -155,6 +156,11 @@ export function discoverSourceFiles(options: SourceFileDiscoveryOptions): Source
 }
 
 function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: string): void {
+  const relativeDir = toForwardSlash(path.relative(state.repoRoot, dir))
+  if (relativeDir.split('/').some(segment => segment.toLowerCase() === 'target')) {
+    recordSkipped(state, relativeDir, 'default-ignore')
+    return
+  }
   let entries: fs.Dirent[]
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -272,6 +278,7 @@ function incrementLanguageCount(languageCounts: Record<string, number>, relPath:
     ext === '.js' || ext === '.jsx' ? 'javascript' :
     ext === '.kt' ? 'kotlin' :
     ext === '.java' ? 'java' :
+    ext === '.rs' ? 'rust' :
     'unknown'
   languageCounts[language] = (languageCounts[language] ?? 0) + 1
 }

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import { CONTEXT_ROLES, REQUESTED_EVIDENCE_KINDS } from '../context/types.js'
 import type { RetrievalRegressionMode, RetrievalRegressionSuiteConfig, RetrievalRegressionTask } from './types.js'
 
 const VALID_MODES: RetrievalRegressionMode[] = ['general', 'feature-add', 'subsystem']
@@ -168,6 +169,8 @@ const SLICE_GRAPH_EVIDENCE_KEYS = [
   'requireAndroidTests',
 ]
 const SOURCE_EXECUTION_KEYS = ['kind', 'file', 'symbol', 'node', 'maxLines', 'continue', 'continueFrom']
+const CONTEXT_COLLECTION_KEYS = ['focusFiles', 'focusSymbols', 'changedFiles', 'changedSymbols'] as const
+const CONTEXT_EXECUTION_KEYS = ['kind', 'role', ...CONTEXT_COLLECTION_KEYS, 'requestedEvidenceKinds']
 const CONTINUATION_REASONS = ['symbol-end-unknown', 'max-lines-reached', 'window-capped', 'eof']
 const SEARCH_COMMAND_KEYS = ['requiredResultIds', 'topK', 'required']
 const SOURCE_COMMAND_KEYS = [
@@ -214,6 +217,9 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 function validateExecutionAndCommandResult(task: Record<string, unknown>, label: string, problems: string[]): void {
+  for (const key of CONTEXT_EXECUTION_KEYS.filter(key => key !== 'kind')) {
+    if (task[key] !== undefined) problems.push(`${label}.${key} is only valid inside context execution`)
+  }
   const execution = task.execution
   let kind: 'context' | 'search' | 'source' | 'lookup' | 'slice' = 'context'
   let executionRecord: Record<string, unknown> = {}
@@ -233,7 +239,18 @@ function validateExecutionAndCommandResult(task: Record<string, unknown>, label:
 
     if (kind === 'context') {
       for (const key of Object.keys(record)) {
-        if (key !== 'kind') problems.push(`${label}.execution.${key} is not valid for kind "context"`)
+        if (!CONTEXT_EXECUTION_KEYS.includes(key)) problems.push(`${label}.execution.${key} is not valid for kind "context"`)
+      }
+      if (record.role !== undefined && !CONTEXT_ROLES.some(role => role === record.role)) problems.push(`${label}.execution.role must be one of: ${CONTEXT_ROLES.join(', ')}`)
+      for (const key of CONTEXT_COLLECTION_KEYS) {
+        const values = record[key]
+        if (values !== undefined && (!Array.isArray(values) || values.length > 20 || !values.every(v => typeof v === 'string' && v.trim().length > 0 && v.length <= 1024))) {
+          problems.push(`${label}.execution.${key} must be an array of at most 20 non-empty strings, each at most 1024 characters`)
+        }
+      }
+      const kinds = record.requestedEvidenceKinds
+      if (kinds !== undefined && (!Array.isArray(kinds) || kinds.length > REQUESTED_EVIDENCE_KINDS.length || !kinds.every(k => REQUESTED_EVIDENCE_KINDS.some(kind => kind === k)))) {
+        problems.push(`${label}.execution.requestedEvidenceKinds must be a bounded array of existing requested evidence kinds`)
       }
     } else if (kind === 'search') {
       for (const key of Object.keys(record)) {

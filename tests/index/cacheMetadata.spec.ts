@@ -193,7 +193,7 @@ describe('classifyChangedFiles', () => {
   })
 })
 
-describe('cache schema 1.2.0 baseline artifact identity', () => {
+describe('cache schema 1.3.0 baseline artifact identity', () => {
   const sha = (text: string) => createHash('sha256').update(text).digest('hex')
 
   function writeIndex(symbolIndexName = 'symbol-index.json'): string {
@@ -213,8 +213,8 @@ describe('cache schema 1.2.0 baseline artifact identity', () => {
     return dir
   }
 
-  it('advances the internal cache schema to 1.2.0', () => {
-    expect(CACHE_SCHEMA_VERSION).toBe('1.2.0')
+  it('advances the internal cache schema to 1.3.0', () => {
+    expect(CACHE_SCHEMA_VERSION).toBe('1.3.0')
   })
 
   it('hashes the exact manifest and the manifest-registered symbol index and code graph, deterministically', () => {
@@ -242,7 +242,7 @@ describe('cache schema 1.2.0 baseline artifact identity', () => {
       const read = readCacheMetadata(dir)
       expect(read.status).toBe('ok')
       if (read.status === 'ok') {
-        expect(read.metadata.cacheSchemaVersion).toBe('1.2.0')
+        expect(read.metadata.cacheSchemaVersion).toBe('1.3.0')
         expect(read.metadata.baselineArtifacts).toEqual(baselineArtifacts)
         expect(checkCacheCompatibility(read.metadata).compatible).toBe(true)
       }

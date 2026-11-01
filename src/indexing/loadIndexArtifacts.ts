@@ -61,10 +61,25 @@ export function loadViewGraphArtifact(indexDir: string, graph: GraphArtifactSele
 export function readRequiredJson<T>(filePath: string, label: string): T {
   if (!fs.existsSync(filePath)) throw new Error(`Missing required ${label} artifact: ${filePath}`)
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T
+    const value: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    if (label === 'code graph' || label === 'symbol index') validateStructuralArtifact(value, label)
+    return value as T
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error(`Invalid JSON in ${filePath}: ${error.message}`)
     throw new Error(`Failed to read ${filePath}: ${(error as Error).message}`)
+  }
+}
+
+/** One version policy for the existing structural artifact readers. */
+export function validateStructuralArtifact(value: unknown, artifact: 'symbol index' | 'code graph'): void {
+  const record = value !== null && typeof value === 'object' ? value as Record<string, unknown> : null
+  const version = record?.schemaVersion
+  const supported = artifact === 'symbol index' ? ['2', '3'] : ['1.0.0', '1.1.0']
+  if (typeof version !== 'string' || !supported.includes(version)) {
+    throw new Error(`Unsupported ${artifact} schema version: ${JSON.stringify(version) ?? 'missing'}. Supported: ${supported.join(', ')}.`)
+  }
+  if (artifact === 'symbol index' ? !Array.isArray(record?.files) : !Array.isArray(record?.nodes) || !Array.isArray(record?.edges)) {
+    throw new Error(`Invalid ${artifact} artifact structure.`)
   }
 }
 

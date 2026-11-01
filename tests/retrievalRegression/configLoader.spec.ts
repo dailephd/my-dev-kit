@@ -2,9 +2,32 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadRetrievalRegressionConfig } from '../../src/retrievalRegression/configLoader.js'
+import { loadRetrievalRegressionConfig, validateRetrievalRegressionConfig } from '../../src/retrievalRegression/configLoader.js'
 
 const tempDirs: string[] = []
+
+describe('B14 structured context execution validation', () => {
+  const value = (execution: Record<string, unknown>) => ({ schemaVersion: '1.0.0', suiteId: 'roles', tasks: [{ id: 'owner', title: 'Owner', query: 'Worker', execution }] })
+  it.each(['architecture', 'implementation', 'test-implementation'])('accepts the existing %s role and exact focus/changed fields', role => {
+    expect(() => validateRetrievalRegressionConfig(value({ kind: 'context', role, focusFiles: ['src/lib.rs'], focusSymbols: ['symbolq:src%2Flib.rs#owner#run#0'], changedFiles: ['src/lib.rs'], changedSymbols: ['symbolq:src%2Flib.rs#owner#run#0'], requestedEvidenceKinds: ['owner', 'changed-surface'] }), 'test')).not.toThrow()
+  })
+  it('preserves legacy omitted and kind-only context execution', () => {
+    const legacy = value({ kind: 'context' })
+    expect(() => validateRetrievalRegressionConfig(legacy, 'test')).not.toThrow()
+    delete (legacy.tasks[0] as { execution?: unknown }).execution
+    expect(() => validateRetrievalRegressionConfig(legacy, 'test')).not.toThrow()
+  })
+  it.each([
+    { role: 'rust' }, { focusSymbols: 'Worker' }, { focusFiles: [''] }, { focusFiles: ['   '] },
+    { changedSymbols: [1] }, { changedFiles: Array(21).fill('src/lib.rs') }, { focusSymbols: ['x'.repeat(1025)] },
+    { requestedEvidenceKinds: ['unknown'] }, { unknown: true },
+  ])('rejects malformed structured fields: %j', fields => {
+    expect(() => validateRetrievalRegressionConfig(value({ kind: 'context', ...fields }), 'test')).toThrow()
+  })
+  it.each(['search', 'source', 'lookup', 'slice'])('rejects structured fields on %s', kind => {
+    expect(() => validateRetrievalRegressionConfig(value({ kind, node: 'symbol:a#b', role: 'implementation', focusSymbols: ['Worker'] }), 'test')).toThrow(/not valid/)
+  })
+})
 
 afterEach(() => {
   while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true })

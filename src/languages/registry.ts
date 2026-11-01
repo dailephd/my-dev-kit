@@ -4,6 +4,7 @@ import { TypeScriptAdapter } from './typescript/adapter.js'
 import { PythonAdapter } from './python/adapter.js'
 import { KotlinAdapter } from './kotlin/adapter.js'
 import { JavaAdapter } from './java/adapter.js'
+import { RustAdapter } from './rust/adapter.js'
 
 export class LanguageRegistry {
   private readonly adapters: LanguageAdapter[] = []
@@ -25,11 +26,12 @@ export class LanguageRegistry {
   }
 }
 
-export function createDefaultRegistry(): LanguageRegistry {
+export function createDefaultRegistry(repoRoot?: string): LanguageRegistry {
   const registry = new LanguageRegistry()
-  registry.register(new TypeScriptAdapter())
+  registry.register(new TypeScriptAdapter(repoRoot))
   registry.register(new PythonAdapter())
   registry.register(new KotlinAdapter())
   registry.register(new JavaAdapter())
+  registry.register(new RustAdapter())
   return registry
 }

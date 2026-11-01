@@ -18,18 +18,20 @@ import type { AndroidComponentRoleRef } from '../android/androidComponentTypes.j
 // ---------------------------------------------------------------------------
 
 /** Schema version string for artifact forward-compatibility checks. */
-export const SCHEMA_VERSION = '2'
+export const SCHEMA_VERSION = '3'
 
 /** Artifact filenames (relative to the output directory). */
 export const ARTIFACT_MAIN = 'symbol-index.json'
 export const ARTIFACT_CALL_GRAPH = 'symbol-index.call-graph.json'
 
 /** Supported source language labels. */
-export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' | 'java'
+export type SourceLanguage = 'typescript' | 'javascript' | 'python' | 'kotlin' | 'java' | 'rust'
 
 /** Classification of a symbol declaration. */
 export type SymbolKind =
   | 'function'
+  | 'method'
+  | 'field'
   | 'class'
   | 'interface'
   | 'type'
@@ -38,6 +40,12 @@ export type SymbolKind =
   | 'variable'
   /** Kotlin `object`/`companion object` declarations: a singleton/namespace, not cleanly a `class`. */
   | 'object'
+  | 'struct'
+  | 'union'
+  | 'trait'
+  | 'variant'
+  | 'module'
+  | 'macro'
 
 // ---------------------------------------------------------------------------
 // Symbol index types
@@ -64,6 +72,10 @@ export interface SymbolLocation {
  * defined at a specific location in a source file.
  */
 export interface SymbolDefinition {
+  declarationMetadata?: { decorators?: DecoratorMetadata[]; jsdoc?: JSDocMetadata[]; rust?: RustDeclarationMetadata }
+  nodeId?: string
+  qualifiedName?: string
+  ownerKey?: string
   /** Declared name of the symbol. */
   name: string
   /** Declaration kind. */
@@ -97,6 +109,12 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  rustSyntaxFacts?: RustSyntaxFact[]
+  commonJsExports?: CommonJsExportFact[]
+  pythonOrmFacts?: PythonOrmFact[]
+  frameworkRouteFacts?: FrameworkRouteFact[]
+  warnings?: string[]
+  importBindings?: ImportBinding[]
   /** File path relative to the repo root, forward slashes. */
   path: string
   /** Source language of the file. */
@@ -120,6 +138,116 @@ export interface FileSummary {
    * False if call-graph was not built or this file has no edges.
    */
   hasCallGraphEntries: boolean
+}
+
+/** Compact parser observations, never Cargo/module resolution or macro expansion. */
+export interface RustDeclarationMetadata {
+  syntaxKind: string
+  visibility: string
+  attributes: string[]
+  declarationOnly: boolean
+  modifiers: string[]
+  shape?: 'named' | 'tuple' | 'unit'
+}
+
+export interface RustSyntaxFact {
+  /** B10 source-grounded observations from the existing CST traversal. */
+  parentOwnerKey?: string
+  visibility?: string
+  genericParameters?: string
+  genericParameterNames?: string[]
+  negative?: boolean
+  useLeaves?: Array<{ path: string; alias?: string; glob: boolean; line: number; sourceIndex: number }>
+  unsupportedUse?: boolean
+  /** Parser-owned lexical key and offset for exact module-parent joins (B09). */
+  moduleKey?: string
+  sourceIndex?: number
+  kind: 'declaration' | 'module' | 'use' | 'impl' | 'macro' | 'attribute' | 'ffi' | 'diagnostic'
+  syntaxKind: string
+  line: number
+  endLine?: number
+  name?: string
+  ownerKey?: string
+  nodeId?: string
+  text?: string
+  attributes?: string[]
+  inline?: boolean
+  implementation?: 'inherent' | 'trait'
+  typePath?: string
+  traitPath?: string
+  forms?: Array<'named' | 'grouped' | 'glob' | 'aliased'>
+  status: 'syntax-only' | 'parser-error'
+}
+
+/** Bounded documentation syntax, never a type-checker result. */
+export interface JSDocMetadata {
+  tagName: string
+  parameterName?: string
+  typeExpression?: string
+  textSummary?: string
+  startLine: number
+  endLine?: number
+  status: 'syntax-only' | 'partial' | 'unsupported'
+}
+
+export interface CommonJsExportFact {
+  exportedName: string | null
+  bindingName?: string
+  assignmentKind: 'exports-member' | 'module-exports-member' | 'module-exports'
+  startLine: number
+  endLine?: number
+  resolutionStatus: 'observed' | 'resolved-local' | 'ambiguous' | 'unresolved'
+  reason?: string
+}
+
+/** Bounded syntax evidence from the isolated Python AST adapter. */
+export interface PythonOrmFact {
+  name: string
+  line: number
+  nodeId?: string
+  family: 'django' | 'sqlalchemy'
+  declarativeBase?: boolean
+  baseReference?: string
+  ownership?: 'verified' | 'unresolved'
+  ownerKey?: string
+  table?: string
+  fields: Array<{
+    name: string
+    line: number
+    type: string
+    options: Record<string, string | number | boolean | null>
+    target?: string
+    targetKind?: 'name' | 'string' | 'foreign-key' | 'dynamic'
+    relationship?: 'many-to-one' | 'one-to-one' | 'many-to-many' | 'field-reference'
+    unresolved?: boolean
+  }>
+}
+
+export interface FrameworkRouteFact {
+  framework?: 'fastapi' | 'express' | 'nestjs'
+  kind: 'router' | 'route' | 'mount' | 'import' | 'controller' | 'export'
+  ownerKey?: string
+  endLine?: number
+  controllerId?: string
+  handlerStatus?: 'resolved' | 'unresolved'
+  syntax?: string[]
+  provenance?: string
+  warnings?: string[]
+  name: string
+  line: number
+  column: number
+  status: 'static' | 'unresolved'
+  prefix?: string
+  path?: string
+  method?: string
+  handlerName?: string
+  handlerLine?: number
+  handlerId?: string
+  target?: string
+  module?: string
+  importedName?: string
+  qualifier?: string
+  relativeLevel?: number
 }
 
 /**
@@ -188,6 +316,10 @@ export interface FileDependencyEdge {
  * traversal, cross-file lookup, and visualization labels.
  */
 export interface GraphSymbolRecord {
+  declarationMetadata?: SymbolDefinition['declarationMetadata']
+  nodeId?: string
+  qualifiedName?: string
+  ownerKey?: string
   /** Source file, relative to repo root (forward slashes). */
   file: string
   /** Declared name of the symbol. */
@@ -247,6 +379,8 @@ export interface SymbolIndexGraph {
  * file (e.g. external library calls).
  */
 export interface CallGraphEdge {
+  callerNodeId?: string
+  calleeNodeId?: string
   caller: {
     file: string
     name: string
@@ -259,6 +393,29 @@ export interface CallGraphEdge {
   }
   /** Source line of the call expression. */
   callLine: number
+}
+
+/** Observed static import syntax; resolution never implies runtime import behavior. */
+export interface ImportBinding {
+  localName: string
+  importedName: string
+  sourceSpecifier: string
+  syntaxKind: 'python' | 'esm' | 'commonjs' | 'rust-use'
+  relativeLevel?: number
+  wildcard?: boolean
+  startLine: number
+  endLine: number
+  resolutionStatus?: 'observed' | 'resolved-local' | 'ambiguous' | 'unresolved' | 'external'
+}
+
+/** Bounded parser evidence, without evaluating decorator expressions. */
+export interface DecoratorMetadata {
+  path?: string
+  expressionKind: 'name' | 'attribute' | 'call' | 'unsupported'
+  startLine: number
+  endLine?: number
+  argumentShape: 'none' | 'literal' | 'mixed' | 'dynamic'
+  literalArguments?: Array<{ positionalIndex?: number; keywordName?: string; value: string | number | boolean | null }>
 }
 
 /**

@@ -340,13 +340,13 @@ describe('affected-neighborhood full fallback', () => {
     expect(result.cache.mode).toBe('incremental-change-detected-full-rebuild')
   })
 
-  it('does not depend on baseline identity under the changed-files scope', () => {
+  it('requires baseline identity under the changed-files scope before reusing facts', () => {
     const root = createRoot()
     run(root, CHANGED)
     writeFileSync(join(root, OUT, 'code-graph.json'), `${readFileSync(join(root, OUT, 'code-graph.json'), 'utf8')}\n`)
     modifyA(root)
     const result = run(root, CHANGED)
-    expect(result.incrementalRefresh).toMatchObject({ appliedScope: 'changed-files', selectionStatus: 'applied' })
+    expect(result.incrementalRefresh).toMatchObject({ appliedScope: 'full', selectionStatus: 'fallback-full', fallbackReason: 'code-graph-hash-mismatch' })
   })
 
   it('falls back on a dangling edge incident to a seed', () => {
@@ -390,7 +390,7 @@ describe('affected-neighborhood full fallback', () => {
         requestedScope: args === AFFECTED ? 'affected-neighborhood' : 'changed-files',
         appliedScope: 'full',
         selectionStatus: 'fallback-full',
-        fallbackReason: 'partial-rebuild-ineligible',
+        fallbackReason: 'symbol-index-missing',
       })
     }
   })

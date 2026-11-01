@@ -18,25 +18,26 @@ export function buildSemanticRolesFromDataModel(
   const bySymbolId = new Map<string, SemanticMetadataForSymbol>()
 
   for (const entity of options.dataModel.entities) {
+    const analyzer = entity.sourceLanguage === 'python' && entity.ormFamily ? 'python-orm-analyzer' : 'typescript-model-analyzer'
     const symbolIds = entity.sourceRefs
       .map((sourceRef) => sourceRef.symbolId)
-      .filter((symbolId): symbolId is string => !!symbolId && !symbolId.split('#').at(-1)?.includes('.'))
+      .filter((symbolId): symbolId is string => !!symbolId && (entity.sourceLanguage === 'python' || !symbolId.split('#').at(-1)?.includes('.')))
     if (symbolIds.length === 0) continue
 
     const artifactRefs = buildEntityArtifactRefs(entity, options)
-    const evidenceRefs = entity.sourceRefs.map(toEvidenceRef)
+    const evidenceRefs = entity.sourceRefs.map(ref => toEvidenceRef(ref, analyzer))
     const role: SemanticRole = {
       role: 'data-entity',
       subtype: entityKindToSubtype(entity.kind),
       confidence: entity.sourceRefs.some((sourceRef) => sourceRef.symbolId) ? 'explicit' : 'inferred-static',
-      source: 'typescript-model-analyzer',
+      source: analyzer,
       artifactRefs,
       evidenceRefs,
       warnings: entity.warnings.map((warning) => ({
         kind: warning.kind === 'partial-extraction' ? 'partial-classification' : 'unsupported-pattern',
         message: warning.message,
         artifactRefs,
-        evidenceRefs: (warning.sourceRefs ?? []).map(toEvidenceRef),
+        evidenceRefs: (warning.sourceRefs ?? []).map(ref => toEvidenceRef(ref, analyzer)),
       })),
     }
 
@@ -65,19 +66,19 @@ function buildEntityArtifactRefs(
     {
       artifact: options.dataModelGraphPath ?? 'data-model-graph.json',
       artifactKind: 'data-model-graph',
-      id: `data-model-entity:${entity.name}`,
+      id: entity.sourceLanguage === 'python' ? entity.id : `data-model-entity:${entity.name}`,
       path: options.dataModelGraphPath ?? 'data-model-graph.json',
     },
   ]
 }
 
-function toEvidenceRef(sourceRef: DataModelSourceRef): SemanticEvidenceRef {
+function toEvidenceRef(sourceRef: DataModelSourceRef, analyzer: string): SemanticEvidenceRef {
   return {
     filePath: sourceRef.filePath,
     symbolId: sourceRef.symbolId ?? sourceRef.nodeId ?? null,
     line: sourceRef.line ?? null,
     source: sourceRef.evidenceKind ?? null,
-    analyzer: 'typescript-model-analyzer',
+    analyzer,
   }
 }
 

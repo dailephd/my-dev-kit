@@ -1,9 +1,10 @@
 import { toForwardSlash } from '../io/pathUtils.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import { declarationNodeId } from '../symbol-index/declarationIdentity.js'
 import type { ContextFocusIntake, FocusFileResolution, FocusSymbolResolution } from './types.js'
 
-const STABLE_ID_PATTERN = /^symbol:.+#.+$/
+const STABLE_ID_PATTERN = /^(?:symbol:.+#.+|symbolq:|rust-(?:package|target|module|impl):)/
 
 function normalizeInputPath(value: string): string {
   return toForwardSlash(value).replace(/^\.\//, '')
@@ -36,7 +37,7 @@ export function resolveFocusIntake(options: {
       unresolvedFocusFiles.push(rawPath)
       continue
     }
-    const containedSymbolIds = match.symbols.map((symbol) => `symbol:${match.path}#${symbol.name}`).sort()
+    const containedSymbolIds = match.symbols.map((symbol) => declarationNodeId(match.path, symbol)).sort()
     fileResolutions.push({
       path: rawPath,
       resolved: true,
@@ -48,8 +49,8 @@ export function resolveFocusIntake(options: {
   const symbolNodesByExactId = new Map<string, CodeGraphNode>()
   const symbolNodesBySimpleName = new Map<string, CodeGraphNode[]>()
   for (const node of codeGraph.nodes) {
+    if (node.kind === 'symbol' || node.kind.startsWith('rust-')) symbolNodesByExactId.set(node.id, node)
     if (node.kind !== 'symbol') continue
-    symbolNodesByExactId.set(node.id, node)
     const simpleName = node.symbolName ?? node.label
     if (!simpleName) continue
     const bucket = symbolNodesBySimpleName.get(simpleName)

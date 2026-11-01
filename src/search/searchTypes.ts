@@ -73,6 +73,14 @@ export interface SearchResultOwnership {
 }
 
 export interface SearchResultItem {
+  qualifiedName?: string
+  ownerKey?: string
+  language?: string
+  line?: number
+  endLine?: number
+  rustMetadata?: CodeGraphNode['rustMetadata']
+  /** Persisted, bounded ownership witnesses; these IDs are not reconstructed declarations. */
+  rustContext?: { ownerNodeIds: string[]; edgeIds: string[] }
   kind: SearchResultKind
   id: string
   label: string

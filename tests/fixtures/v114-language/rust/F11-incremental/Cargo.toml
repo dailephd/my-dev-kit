@@ -1,0 +1,11 @@
+[package]
+name = "cache-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["crates/worker"]
+
+[lib]
+name = "cache_fixture"
+path = "src/lib.rs"

@@ -31,28 +31,29 @@ export function buildDataModelArtifact(input: BuildDataModelArtifactInput): Data
   const entitiesByName = new Map<string, DataModelEntity>()
 
   for (const entityRecord of entityRecords) {
-    const entityId = buildEntityId(entityRecord.name)
-    entitiesByName.set(entityRecord.name, {
+    const entityId = buildEntityId(entityRecord.entityKey ?? entityRecord.name)
+    entitiesByName.set(entityRecord.entityKey ?? entityRecord.name, {
       id: entityId,
       name: entityRecord.name,
       kind: entityRecord.kind,
+      ...(entityRecord.entityKey ? { entityKey: entityRecord.entityKey, sourceLanguage: entityRecord.sourceLanguage, ormFamily: entityRecord.ormFamily } : {}),
       fields: [],
       relationships: [],
       sourceRefs: sortSourceRefs(entityRecord.sourceRefs.map(toSourceRef)),
       warnings: sortWarnings(entityRecord.warnings.map((warning) => toWarning(warning, { entityId }))),
     })
-    fieldsByEntity.set(entityRecord.name, [])
+    fieldsByEntity.set(entityRecord.entityKey ?? entityRecord.name, [])
   }
 
   for (const fieldRecord of fieldRecords) {
-    const entity = entitiesByName.get(fieldRecord.entityName)
+    const entity = entitiesByName.get(fieldRecord.entityKey ?? fieldRecord.entityName)
     if (!entity) continue
     const field = buildField(fieldRecord)
-    fieldsByEntity.get(fieldRecord.entityName)!.push(field)
+    fieldsByEntity.get(fieldRecord.entityKey ?? fieldRecord.entityName)!.push(field)
   }
 
   for (const entity of entitiesByName.values()) {
-    entity.fields = (fieldsByEntity.get(entity.name) ?? []).sort((left, right) => compareStrings(left.id, right.id))
+    entity.fields = (fieldsByEntity.get(entity.entityKey ?? entity.name) ?? []).sort((left, right) => compareStrings(left.id, right.id))
   }
 
   const relationshipCounts = new Map<string, number>()
@@ -102,8 +103,9 @@ export function buildDataModelArtifact(input: BuildDataModelArtifactInput): Data
 
 function buildField(record: NormalizedDataModelFieldRecord): DataModelField {
   return {
-    id: buildFieldId(record.entityName, record.fieldName),
+    id: buildFieldId(record.entityKey ?? record.entityName, record.fieldName),
     name: record.fieldName,
+    ...(record.options ? { options: record.options } : {}),
     typeText: record.typeText,
     optional: record.optional,
     nullable: record.nullable,
@@ -112,8 +114,8 @@ function buildField(record: NormalizedDataModelFieldRecord): DataModelField {
     warnings: sortWarnings(
       record.warnings.map((warning) =>
         toWarning(warning, {
-          entityId: buildEntityId(record.entityName),
-          fieldId: buildFieldId(record.entityName, record.fieldName),
+          entityId: buildEntityId(record.entityKey ?? record.entityName),
+          fieldId: buildFieldId(record.entityKey ?? record.entityName, record.fieldName),
         })
       )
     ),
@@ -125,8 +127,8 @@ function buildRelationship(
   entitiesByName: Map<string, DataModelEntity>,
   relationshipCounts: Map<string, number>
 ): DataModelRelationship | null {
-  const fromEntity = entitiesByName.get(record.fromEntityName)
-  const toEntity = entitiesByName.get(record.toEntityName)
+  const fromEntity = entitiesByName.get(record.fromEntityKey ?? record.fromEntityName)
+  const toEntity = entitiesByName.get(record.toEntityKey ?? record.toEntityName)
   if (!fromEntity || !toEntity) return null
 
   const signature = [
@@ -145,8 +147,8 @@ function buildRelationship(
     kind: record.kind,
     fromEntityId: fromEntity.id,
     toEntityId: toEntity.id,
-    fromFieldId: record.fromFieldName ? buildFieldId(record.fromEntityName, record.fromFieldName) : null,
-    toFieldId: record.toFieldName ? buildFieldId(record.toEntityName, record.toFieldName) : null,
+    fromFieldId: record.fromFieldName ? buildFieldId(record.fromEntityKey ?? record.fromEntityName, record.fromFieldName) : null,
+    toFieldId: record.toFieldName ? buildFieldId(record.toEntityKey ?? record.toEntityName, record.toFieldName) : null,
     confidence: record.confidence,
     sourceRefs: sortSourceRefs(record.sourceRefs.map(toSourceRef)),
     warnings: sortWarnings(
@@ -215,10 +217,11 @@ export function buildEntityId(entityName: string): string {
 }
 
 export function buildFieldId(entityName: string, fieldName: string): string {
-  return `field:${entityName}.${fieldName}`
+  return entityName.startsWith('python:') ? `field:${entityName}#${encodeURIComponent(fieldName)}` : `field:${entityName}.${fieldName}`
 }
 
 function buildRelationshipId(record: NormalizedDataModelRelationshipRecord, index: number): string {
+  if (record.fromEntityKey && record.toEntityKey) return 'relationship:python:' + [record.kind, buildEntityId(record.fromEntityKey), record.fromFieldName ? buildFieldId(record.fromEntityKey, record.fromFieldName) : '', buildEntityId(record.toEntityKey), record.occurrence ?? String(index)].map(encodeURIComponent).join('#')
   return `relationship:${record.kind}:${record.fromEntityName}:${record.fromFieldName ?? '-'}:${record.toEntityName}:${record.toFieldName ?? '-'}:${index}`
 }
 

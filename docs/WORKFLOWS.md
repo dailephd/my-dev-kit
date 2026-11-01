@@ -184,7 +184,7 @@ node dist/cli.js index --root examples/basic-android-kotlin --src app/src/main -
 - **Why list all three source sets.** The `--src` roots decide which files get `file:` and `symbol:` nodes, file-level imports, and `source --contains` coverage. For the example, `app/src/main` alone discovers 10 Kotlin files and all three roots discover 12. In a `main`-only index the Android test-semantic analyzer still detects the two test files from the project's test roots and `--android-role` and `--query` still return `android-test-*` nodes, but `lookup --node file:app/src/test/...` returns not found and `source --contains FakeUserDao` finds nothing. Pass `app/src/test` and `app/src/androidTest` so production, unit-test, and instrumented-test code are all reachable through the same index.
 - **Artifacts depend on evidence.** The manifest, resource, and navigation artifacts are generated only from the matching files under the detected modules: `android-manifest` from `AndroidManifest.xml`, `android-resources` from `res/values`, `android-navigation` from `composable("...")` route calls, and the Compose and test artifacts from indexed or detected Kotlin sources. A missing artifact means that evidence was not found or not analyzed, not that the application lacks the behavior.
 - **Analyzer statuses.** Read `analyzers[].status` in the `index --json` result or `manifest.json`. `complete` means the analyzer ran and found what it supports. `partial` means it produced output with per-item warnings. `skipped` and `not-run` mean it did not apply or was not requested. For the example, `android-gradle` is `partial` (four warnings that BOM-managed coordinates such as `androidx.compose.ui:ui` carry no version) and `classification` is `partial` (27 per-entry warnings such as "no static file-level pattern matched" and "Compose route has no exact static screen resolution"). `frontend-reachability` is `skipped` and `call-graph` and `model-view-lineage` are `not-run`, because the example has no web source and no `--call-graph`. Partial status is not by itself a correctness defect; retrieval from the other artifacts works. Read the warnings before deciding whether a missing fact matters.
-- **Generated directories.** Default ignores skip `build`, `.gradle`, `out`, `output`, `.my-dev-kit`, and `.my-dev-kit-*` at any depth, so Gradle build output and previous indexes are not indexed. The example has no build output, so `search --android-role generated-file` correctly returns zero results; see the fixture-backed benchmark A11 in [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite-unreleased-candidate) for the generated-output case.
+- **Generated directories.** Default ignores skip `build`, `.gradle`, `out`, `output`, `.my-dev-kit`, and `.my-dev-kit-*` at any depth, so Gradle build output and previous indexes are not indexed. The example has no build output, so `search --android-role generated-file` correctly returns zero results; see the fixture-backed benchmark A11 in [DEVELOPMENT.md](DEVELOPMENT.md#v1130-android-retrieval-regression-suite) for the generated-output case.
 
 The detailed per-file walkthrough is in the [example README](../examples/basic-android-kotlin/README.md).
 
@@ -463,6 +463,26 @@ What is **not** solved, and stays a verification duty:
 - The benchmark fixture phrasing noted in `benchmarks/retrieval/v1.13/README.md` (a "change the UserHomeScreen layout" request on `combined-app`) was not re-evaluated here.
 
 Keep verifying the production owner with the exact selectors above, confirm the actual edit target from source, and treat a conflict or unresolved adequacy status as a decision for the person approving the change.
+
+## Workflow 19: Python, JavaScript/TypeScript, framework and Rust retrieval (v1.14.0)
+
+These workflows require v1.14.0 or later. Use the installed CLI, or `node dist/cli.js ...` from a built v1.14.0 checkout. They add no commands. Results are static source evidence: nothing is executed, and routes, models and tests are not proof of runtime behavior. Always take node IDs from `search` output.
+
+**Python model and route ownership.** Index the Python source root, then search for the model or route and follow the result.
+
+1. `index --root . --src app --out .my-dev-kit` (Python is analyzed with a local interpreter and `ast`; modules are never imported).
+2. `search --index .my-dev-kit --query "Item model" --intent ownership --limit 5`. A Django or SQLAlchemy model appears as a normal symbol with model facts in the data-model artifacts; a FastAPI route appears as a `framework-route` node.
+3. `lookup --node '<framework-route id>' --depth 1` shows the handler (`framework-route-handled-by-symbol`) and defining file; `source --node '<handler id>' --max-lines 40 --format numbered` reads the handler.
+
+**JavaScript/TypeScript framework routes.** For Express or NestJS, search `"express GET /items"` or `"nestjs GET :id"`, then `lookup`/`slice` the `framework-route` node to reach the exact handler or controller method. Literal paths and mounts are reported; dynamic paths, inline handlers and unrecognized decorators stay marked unresolved. A route node does not mean the route is reachable or protected.
+
+**Configured alias imports.** When `tsconfig.json` or `jsconfig.json` defines `paths` (for example `@/*` to `./src/*`), indexing adds ordinary file `imports` edges for uniquely resolved local targets. Use `lookup --node file:src/app/page.tsx --depth 1` or `slice` to inspect them. An alias that is ambiguous, excluded, external or outside the selected roots produces no edge. Editing the configuration invalidates the incremental cache.
+
+**Rust crate, module and impl retrieval.** Select Rust roots explicitly (for example `--src crates/core/src --src crates/core/tests`), then use `search --intent ownership`, `lookup --node 'rust-package:...'` or a module ID, and `slice --depth 1` around a `rust-impl` node to see its type, trait and methods. See `examples/basic-rust-workspace/`.
+
+**Exact Rust method and related test context.** Search with the impl wording (`"impl Runner for Worker run"`), then `source --node '<method id>' --max-lines 20 --format numbered`, and `context --query "..." --out <capsule>.json` for the architecture, implementation or test role. Tests are related by grounded static evidence only; a recognized test attribute does not mean the test ran.
+
+**Mixed-language owner disambiguation.** When several languages define the same name (for example a `Worker` class in Python, TypeScript, Kotlin, Java and Rust), the search results keep one distinct node per file and language. Use the node's path and ID, not the bare name, for `lookup`, `source` and `slice`; no edge is created between files of different languages.
 
 ## Bundled examples
 

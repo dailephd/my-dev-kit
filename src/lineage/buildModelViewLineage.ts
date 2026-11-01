@@ -68,11 +68,13 @@ export interface BuildModelViewLineageResult {
 }
 
 export function buildModelViewLineage(input: BuildModelViewLineageInput): BuildModelViewLineageResult {
+  const eligible = input.dataModel.entities.filter(entity => entity.sourceLanguage !== 'python' && entity.sourceRefs.some(ref => /\.tsx?$/i.test(ref.filePath)))
+  const uniqueEntities = eligible.filter(entity => eligible.filter(other => other.name === entity.name).length === 1)
   const context: AnalysisContext = {
     dataModel: input.dataModel,
-    entitiesByName: new Map(input.dataModel.entities.map((entity) => [entity.name, entity])),
+    entitiesByName: new Map(uniqueEntities.map((entity) => [entity.name, entity])),
     fieldsByEntity: new Map(
-      input.dataModel.entities.map((entity) => [entity.name, new Map(entity.fields.map((field) => [field.name, field]))])
+      uniqueEntities.map((entity) => [entity.name, new Map(entity.fields.map((field) => [field.name, field]))])
     ),
     nodes: new Map(),
     edges: new Map(),

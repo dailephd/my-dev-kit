@@ -58,7 +58,7 @@ export function selectSourceSlices(options: {
       const nodeTarget = resolveFileNodeTarget(codeGraph, target.nodeId, DEFAULT_MAX_LINES)
       const resolvedTarget =
         nodeTarget.mode === 'symbol'
-          ? resolveSymbolTarget(symbolIndex, nodeTarget.filePath, nodeTarget.symbolName!, DEFAULT_MAX_LINES)
+          ? resolveSymbolTarget(symbolIndex, nodeTarget.filePath, nodeTarget.symbolName!, DEFAULT_MAX_LINES, nodeTarget.nodeId)
           : nodeTarget
 
       let slice = getSourceSlice({

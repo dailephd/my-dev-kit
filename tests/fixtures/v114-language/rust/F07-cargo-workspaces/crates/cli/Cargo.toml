@@ -1,0 +1,13 @@
+[package]
+name = "workspace-cli"
+version.workspace = true
+edition.workspace = true
+autobins = false
+
+[[bin]]
+name = "workspace-cli"
+path = "src/main.rs"
+
+[[bin]]
+name = "custom"
+path = "src/custom.rs"

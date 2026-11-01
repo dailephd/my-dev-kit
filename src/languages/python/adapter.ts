@@ -1,697 +1,541 @@
-import { spawnSync } from 'node:child_process'
+﻿import { spawnSync } from 'node:child_process'
 import * as path from 'node:path'
 import type { LanguageAdapter, ExtractionResult, SourceFileInput } from '../types.js'
-import type { CallGraphEdge, SymbolDefinition, SymbolLocation } from '../../symbol-index/types.js'
+import type { CallGraphEdge, SymbolDefinition, SymbolLocation, ImportBinding, DecoratorMetadata, PythonOrmFact, FrameworkRouteFact } from '../../symbol-index/types.js'
+import { assignDeclarationIdentities } from '../../symbol-index/declarationIdentity.js'
 
-// ---------------------------------------------------------------------------
-// Embedded Python scripts (avoids external file dependency in dist/)
-// ---------------------------------------------------------------------------
-
-const EXTRACT_SYMBOLS_PY = `
-import sys, ast, json
+// Only this trusted script executes. Indexed source is passed to ast.parse via stdin.
+const EXTRACT_PY = `
+import sys, ast, json, math
 
 def main():
-    source = sys.stdin.read()
-    file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
+    source = sys.stdin.buffer.read().decode("utf-8")
     try:
-        tree = ast.parse(source, filename=file_path)
-    except SyntaxError as e:
-        sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
-        return
+        tree = ast.parse(source, filename=sys.argv[1])
     except Exception as e:
-        sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
+        sys.stdout.write(json.dumps({"error": type(e).__name__, "message": str(e)}))
         return
-
-    source_lines = source.splitlines()
-
-    def get_sig(lineno):
-        idx = lineno - 1
-        return source_lines[idx].strip()[:120] if 0 <= idx < len(source_lines) else ""
-
-    def decorator_names(dl):
-        names = []
-        for d in dl:
-            if isinstance(d, ast.Name): names.append(d.id)
-            elif isinstance(d, ast.Attribute): names.append(d.attr)
-            elif isinstance(d, ast.Call):
-                func = d.func
-                if isinstance(func, ast.Name): names.append(func.id)
-                elif isinstance(func, ast.Attribute): names.append(func.attr)
-        return names
-
-    dunder_all = None
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            for t in node.targets:
-                if isinstance(t, ast.Name) and t.id == "__all__":
-                    if isinstance(node.value, (ast.List, ast.Tuple)):
-                        try:
-                            dunder_all = [e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
-                        except Exception:
-                            dunder_all = None
-
-    def is_exported(name):
-        if dunder_all is not None: return name in dunder_all
-        return not name.startswith("_")
-
-    def is_all_caps(name):
-        alpha = [c for c in name if c.isalpha()]
-        return len(alpha) > 0 and all(c.isupper() for c in alpha)
-
-    def has_final(ann):
-        if ann is None: return False
-        if isinstance(ann, ast.Name) and ann.id == "Final": return True
-        if isinstance(ann, ast.Subscript):
-            v = ann.value
-            if isinstance(v, ast.Name) and v.id == "Final": return True
-            if isinstance(v, ast.Attribute) and v.attr == "Final": return True
-        if isinstance(ann, ast.Attribute) and ann.attr == "Final": return True
-        return False
-
-    symbols = []
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            name = node.name
-            symbols.append({"name": name, "kind": "function", "line": node.lineno,
-                "end_line": getattr(node, "end_lineno", None),
-                "exported": is_exported(name), "signature": get_sig(node.lineno),
-                "decorators": decorator_names(node.decorator_list)})
-        elif isinstance(node, ast.ClassDef):
-            name = node.name
-            symbols.append({"name": name, "kind": "class", "line": node.lineno,
-                "end_line": getattr(node, "end_lineno", None),
-                "exported": is_exported(name), "signature": get_sig(node.lineno),
-                "decorators": decorator_names(node.decorator_list)})
-        elif isinstance(node, ast.Assign):
-            for t in node.targets:
-                if isinstance(t, ast.Name) and is_all_caps(t.id):
-                    name = t.id
-                    symbols.append({"name": name, "kind": "const", "line": node.lineno,
-                        "end_line": getattr(node, "end_lineno", None),
-                        "exported": is_exported(name), "signature": get_sig(node.lineno), "decorators": []})
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name):
-                name = node.target.id
-                if has_final(node.annotation) or is_all_caps(name):
-                    symbols.append({"name": name, "kind": "const", "line": node.lineno,
-                        "end_line": getattr(node, "end_lineno", None),
-                        "exported": is_exported(name), "signature": get_sig(node.lineno), "decorators": []})
-    sys.stdout.write(json.dumps({"symbols": symbols}))
-
-main()
-`
-
-const EXTRACT_IMPORTS_PY = `
-import sys, ast, json
-
-def main():
-    source = sys.stdin.read()
-    file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
-    try:
-        tree = ast.parse(source, filename=file_path)
-    except SyntaxError as e:
-        sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
-        return
-    except Exception as e:
-        sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
-        return
-
-    imports = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                entry = {"form": "import-module-alias" if alias.asname else "import-module",
-                    "module": alias.name, "names": [], "level": 0, "line": node.lineno}
-                if alias.asname: entry["alias"] = alias.asname
-                imports.append(entry)
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            level = node.level or 0
-            names = [a.name for a in node.names]
-            single_alias = node.names[0].asname if len(node.names) == 1 and node.names[0].asname else None
-            entry = {"form": "relative-from-import" if level > 0 else "from-import",
-                "module": module, "names": names, "level": level, "line": node.lineno}
-            if single_alias: entry["alias"] = single_alias
-            imports.append(entry)
-    imports.sort(key=lambda x: x["line"])
-    sys.stdout.write(json.dumps({"imports": imports}))
-
-main()
-`
-
-const EXTRACT_CALLS_PY = `
-import sys, ast, json
-
-def main():
-    source = sys.stdin.read()
-    file_path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
-    try:
-        tree = ast.parse(source, filename=file_path)
-    except SyntaxError as e:
-        sys.stdout.write(json.dumps({"error": "SyntaxError", "message": str(e), "lineno": e.lineno or 0}))
-        return
-    except Exception as e:
-        sys.stdout.write(json.dumps({"error": "ParseError", "message": str(e)}))
-        return
-
-    imports = []
-    definitions = []
-
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            definitions.append({"name": node.name, "file": file_path, "line": node.lineno, "kind": "function"})
-        elif isinstance(node, ast.ClassDef):
-            definitions.append({"name": node.name, "file": file_path, "line": node.lineno, "kind": "class"})
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    definitions.append({"name": node.name + "." + child.name, "file": file_path, "line": child.lineno, "kind": "method"})
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.append({"form": "import", "module": alias.name, "name": alias.asname or alias.name.split(".")[0]})
-        elif isinstance(node, ast.ImportFrom):
-            module = node.module or ""
-            for alias in node.names:
-                imports.append({"form": "from", "module": module, "level": node.level or 0, "imported": alias.name, "name": alias.asname or alias.name})
-
-    def callee_name(expr, class_name):
-        if isinstance(expr, ast.Name):
-            return expr.id
-        if isinstance(expr, ast.Attribute):
-            parts = []
-            cur = expr
-            while isinstance(cur, ast.Attribute):
-                parts.append(cur.attr)
-                cur = cur.value
-            if isinstance(cur, ast.Name):
-                if cur.id == "self" and class_name:
-                    parts.append(class_name)
-                else:
-                    parts.append(cur.id)
-                return ".".join(reversed(parts))
+    lines = source.splitlines()
+    symbols, imports, bindings, calls, class_scopes = [], [], [], [], []
+    # Compatibility marker for parser-proven-boundary fault injection:
+    # json.dumps({"symbols": symbols})
+    def dotted(n):
+        if isinstance(n, ast.Name): return n.id
+        if isinstance(n, ast.Attribute):
+            base = dotted(n.value)
+            if base: return base + "." + n.attr
         return None
-
-    edges = []
-
+    def end(n):
+        e = getattr(n, "end_lineno", None)
+        return e if type(e) == int and n.lineno <= e <= len(lines) else None
+    def decorators(nodes):
+        result = []
+        for n in nodes[:16]:
+            call = isinstance(n, ast.Call)
+            p = dotted(n.func if call else n)
+            entry = {"expressionKind": "call" if call else "name" if isinstance(n, ast.Name) else "attribute" if isinstance(n, ast.Attribute) else "unsupported", "startLine": n.lineno, "argumentShape": "none"}
+            if p and len(p) <= 256: entry["path"] = p
+            if end(n): entry["endLine"] = end(n)
+            if call:
+                args = [(i, None, v) for i, v in enumerate(n.args)] + [(None, k.arg, k.value) for k in n.keywords]
+                literals, literal_count = [], 0
+                for i, k, v in args:
+                    if i is None and k is None: continue  # ** expansion is unresolved
+                    # Signed scalar syntax is a literal, not an evaluated expression.
+                    if isinstance(v, ast.UnaryOp) and isinstance(v.op, (ast.USub, ast.UAdd)) and isinstance(v.operand, ast.Constant) and type(v.operand.value) in (int, float):
+                        v = ast.Constant(value=(-v.operand.value if isinstance(v.op, ast.USub) else v.operand.value))
+                    if isinstance(v, ast.Constant) and (v.value is None or type(v.value) in (str, int, float, bool)):
+                        literal_count += 1
+                        value = v.value
+                        if len(literals) >= 16: continue
+                        if isinstance(value, str) and len(value) > 256: continue
+                        if type(value) in (int, float) and (abs(value) > 9007199254740991 or not math.isfinite(value)): continue
+                        if k is not None and len(k) > 128: continue
+                        a = {"value": value}
+                        if i is not None: a["positionalIndex"] = i
+                        else: a["keywordName"] = k
+                        literals.append(a)
+                entry["argumentShape"] = "none" if not args else "literal" if literal_count == len(args) else "mixed" if literal_count else "dynamic"
+                if literals: entry["literalArguments"] = literals
+            result.append(entry)
+        return result
+    all_names = None
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in n.targets):
+            if isinstance(n.value, (ast.List, ast.Tuple)):
+                all_names = [v.value for v in n.value.elts if isinstance(v, ast.Constant) and isinstance(v.value, str)]
+    def caps(name):
+        alpha = [c for c in name if c.isalpha()]
+        return bool(alpha) and all(c.isupper() for c in alpha)
+    def final(n):
+        value = n.value if isinstance(n, ast.Subscript) else n
+        return (isinstance(value, ast.Name) and value.id == "Final") or (isinstance(value, ast.Attribute) and value.attr == "Final")
+    def declare(n, name, kind, owners):
+        s = {"name": name, "kind": kind, "line": n.lineno, "end_line": end(n), "exported": not owners and (name in all_names if all_names is not None else not name.startswith("_")), "signature": lines[n.lineno-1].strip()[:120]}
+        if owners:
+            s["ownerKey"] = "python/" + "/".join("class:" + x for x in owners)
+            s["qualifiedName"] = ".".join(owners + [name])
+        ds = decorators(getattr(n, "decorator_list", []))
+        if ds: s["declarationMetadata"] = {"decorators": ds}
+        # This private proof uses every decorator, independently of public caps.
+        dl = getattr(n, "decorator_list", [])
+        s["callableEvidence"] = isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and (not dl or bool(owners) and all(isinstance(d, ast.Name) and d.id in ("staticmethod", "classmethod") for d in dl))
+        symbols.append(s)
+    def declared_names(target):
+        if isinstance(target, ast.Name): return [target.id]
+        if isinstance(target, ast.Starred): return declared_names(target.value)
+        if isinstance(target, (ast.Tuple, ast.List)):
+            return [name for element in target.elts for name in declared_names(element)]
+        return []
+    def declarations(body, owners):
+        for n in body:
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                declare(n, n.name, "method" if owners else "function", owners)
+            elif isinstance(n, ast.ClassDef):
+                declare(n, n.name, "class", owners)
+                declarations(n.body, owners + [n.name])
+            elif isinstance(n, (ast.Assign, ast.AnnAssign)):
+                targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+                for t in targets:
+                    # Module-level constant extraction retains its legacy named-target policy.
+                    names = declared_names(t) if owners else [t.id] if isinstance(t, ast.Name) else []
+                    for name in names:
+                        constant = caps(name) or (isinstance(n, ast.AnnAssign) and final(n.annotation))
+                        if owners or constant: declare(n, name, "const" if constant else "field", owners)
+    declarations(tree.body, [])
+    # Every binding remains observed, including conditional/function-local imports.
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.Import, ast.ImportFrom)):
+            module = n.module or "" if isinstance(n, ast.ImportFrom) else None
+            level = n.level if isinstance(n, ast.ImportFrom) else 0
+            spec = ("." * level + module) if module is not None else None
+            if module is not None:
+                imports.append((n.lineno, "from " + spec + " import " + ", ".join(a.name for a in n.names) if level else module))
+            for a in n.names:
+                if module is None: imports.append((n.lineno, a.name))
+                bindings.append({"localName": a.asname or (a.name.split(".")[0] if module is None else a.name), "importedName": a.name, "sourceSpecifier": a.name if module is None else spec, "syntaxKind": "python", "relativeLevel": level, "wildcard": a.name == "*", "startLine": n.lineno, "endLine": end(n) or n.lineno, "resolutionStatus": "observed", "form": "import" if module is None else "from", "topLevel": n in tree.body, "qualifier": a.asname or a.name})
+    # Conservatively invalidate names with competing writes, including conditional writes.
+    def writes(body):
+        result = []
+        class W(ast.NodeVisitor):
+            def visit_Name(self, n):
+                if isinstance(n.ctx, (ast.Store, ast.Del)): result.append(n.id)
+            def visit_FunctionDef(self, n): result.append(n.name)
+            def visit_AsyncFunctionDef(self, n): result.append(n.name)
+            def visit_ClassDef(self, n): result.append(n.name)
+            def visit_Import(self, n): result.extend(a.asname or a.name.split(".")[0] for a in n.names)
+            def visit_ImportFrom(self, n): result.extend(a.asname or a.name for a in n.names)
+            def visit_ExceptHandler(self, n):
+                if n.name: result.append(n.name)
+                self.generic_visit(n)
+        w = W()
+        for n in body: w.visit(n)
+        return result
+    module_writes = writes(tree.body)
+    # B04 uses the same parsed tree. Only unique, unconditional import bindings
+    # establish framework ownership; target expressions are never evaluated.
+    orm, framework = [], []
+    wildcard = any(b["wildcard"] for b in bindings)
+    attribute_writes = set()
+    for written in ast.walk(tree):
+        if isinstance(written, ast.Attribute) and isinstance(written.ctx, (ast.Store, ast.Del)):
+            p = dotted(written)
+            if p: attribute_writes.add(p.split(".")[0])
+    blocked_framework_names = set()
+    def bound(p):
+        if not p or wildcard: return None
+        root = p.split(".")[0]
+        if root in blocked_framework_names or root in attribute_writes: return None
+        bs = [b for b in bindings if b["localName"] == root and b["topLevel"] and module_writes.count(root) == 1 and b["relativeLevel"] == 0]
+        if len(bs) != 1: return None
+        b = bs[0]
+        if b["form"] == "from": return b["sourceSpecifier"] + "." + b["importedName"] + p[len(root):]
+        prefix = b["qualifier"]
+        if p == prefix or p.startswith(prefix + "."): return b["sourceSpecifier"] + p[len(prefix):]
+        return None
+    def scalar(n):
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)) and isinstance(n.operand, ast.Constant) and type(n.operand.value) in (int, float):
+            n = ast.Constant(value=(-n.operand.value if isinstance(n.op, ast.USub) else n.operand.value))
+        if isinstance(n, ast.Constant) and (n.value is None or type(n.value) in (str, bool, int, float)):
+            v = n.value
+            if isinstance(v, str) and len(v) > 256: return False, None
+            if type(v) in (int, float) and (abs(v) > 9007199254740991 or not math.isfinite(v)): return False, None
+            return True, v
+        return False, None
+    def options(call):
+        result = {}
+        for k in call.keywords[:16]:
+            ok, v = scalar(k.value)
+            if k.arg and len(k.arg) <= 128 and ok: result[k.arg] = v
+            elif k.arg and len(k.arg) <= 128: result["unresolved:" + k.arg] = True
+        for i, a in enumerate(call.args[:16]):
+            ok, v = scalar(a)
+            if ok: result["arg" + str(i)] = v
+        return result
+    def value_of(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and len(n.value) <= 256: return n.value, "string"
+        p = dotted(n)
+        return (p, "name") if p and len(p) <= 256 else (None, "dynamic")
+    def assignment(n):
+        if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name): return n.targets[0].id, n.value
+        if isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name): return n.target.id, n.value
+        return None, None
+    bases = {}
+    for n in tree.body:
+        if isinstance(n, ast.ClassDef) and module_writes.count(n.name) == 1 and not n.decorator_list and not n.keywords:
+            ps = [bound(dotted(b)) for b in n.bases]
+            if len(n.bases) == 1 and ps[0] == "sqlalchemy.orm.DeclarativeBase": bases[n.name] = "sqlalchemy"
+        name, v = assignment(n)
+        if name and isinstance(v, ast.Call) and bound(dotted(v.func)) in ("sqlalchemy.orm.declarative_base", "sqlalchemy.ext.declarative.declarative_base") and module_writes.count(name) == 1 and not v.args and not v.keywords:
+            bases[name] = "sqlalchemy"
+    django_fields = ("CharField", "TextField", "IntegerField", "BooleanField", "DateField", "DateTimeField", "DecimalField", "ForeignKey", "OneToOneField", "ManyToManyField")
+    def model_classes(body, owners, blocked):
+        counts = writes(body)
+        for n in body:
+            if isinstance(n, ast.ClassDef) and counts.count(n.name) == 1 and not n.decorator_list and not n.keywords:
+                yield n, owners, blocked
+                yield from model_classes(n.body, owners + [n.name], blocked + writes(n.body))
+    for n, owners, blocked in model_classes(tree.body, [], []):
+        blocked_framework_names = set(blocked)
+        family = None
+        base_reference, declarative_base, ownership = None, False, "verified"
+        if len(n.bases) == 1:
+            b = n.bases[0]
+            if bound(dotted(b)) == "django.db.models.Model": family = "django"
+            elif bound(dotted(b)) == "sqlalchemy.orm.DeclarativeBase": family, declarative_base = "sqlalchemy", True
+            elif isinstance(b, ast.Name) and bases.get(b.id) == "sqlalchemy" and b.id not in blocked and b.id not in attribute_writes: family, base_reference = "sqlalchemy", b.id
+            elif dotted(b) and not wildcard:
+                root = dotted(b).split(".")[0]
+                bs = [x for x in bindings if x["localName"] == root and x["topLevel"] and module_writes.count(root) == 1 and root not in blocked and root not in attribute_writes]
+                if len(bs) == 1:
+                    family, base_reference, ownership = "sqlalchemy", dotted(b), "unresolved"
+        if not family: continue
+        fact = {"name": n.name, "line": n.lineno, "family": family, "fields": []}
+        if owners: fact["ownerKey"] = "python/" + "/".join("class:" + x for x in owners)
+        if declarative_base: fact["declarativeBase"] = True
+        if base_reference: fact["baseReference"] = base_reference
+        fact["ownership"] = ownership
+        member_names = writes(n.body)
+        blocked_framework_names = set(blocked + member_names)
+        for member in n.body:
+            name, v = assignment(member)
+            if name == "__tablename__":
+                ok, table = scalar(v)
+                if ok and isinstance(table, str): fact["table"] = table
+            if not name or member_names.count(name) != 1: continue
+            annotation = member.annotation if isinstance(member, ast.AnnAssign) else None
+            mapped = isinstance(annotation, ast.Subscript) and bound(dotted(annotation.value)) == "sqlalchemy.orm.Mapped"
+            p = bound(dotted(v.func)) if isinstance(v, ast.Call) else None
+            typ = p.rsplit(".", 1)[-1] if p else "Mapped" if mapped else ""
+            if family == "django" and p not in ["django.db.models." + t for t in django_fields]: continue
+            if family == "sqlalchemy" and p not in ("sqlalchemy.Column", "sqlalchemy.orm.mapped_column", "sqlalchemy.orm.relationship") and not (mapped and v is None): continue
+            f = {"name": name, "line": member.lineno, "type": typ, "options": options(v) if isinstance(v, ast.Call) else {}}
+            if mapped:
+                a = dotted(annotation.slice)
+                if a and len(a) <= 256: f["options"]["mappedType"] = a
+            if isinstance(v, ast.Call):
+                if family == "django" and typ in ("ForeignKey", "OneToOneField", "ManyToManyField") or p == "sqlalchemy.orm.relationship":
+                    target_node = v.args[0] if v.args else next((k.value for k in v.keywords if k.arg in ("to", "argument")), None)
+                    target, tk = value_of(target_node)
+                    f.update({"targetKind": tk, "relationship": {"ForeignKey": "many-to-one", "OneToOneField": "one-to-one", "ManyToManyField": "many-to-many"}.get(typ, "field-reference")})
+                    if target: f["target"] = target
+                    else: f["unresolved"] = True
+                for a in v.args[:16]:
+                    if isinstance(a, ast.Call) and bound(dotted(a.func)) == "sqlalchemy.ForeignKey":
+                        target, tk = value_of(a.args[0] if a.args else None)
+                        f.update({"targetKind": "foreign-key" if tk == "string" else "dynamic", "relationship": "many-to-one"})
+                        if target: f["target"] = target
+                        else: f["unresolved"] = True
+                    else:
+                        t = bound(dotted(a.func if isinstance(a, ast.Call) else a))
+                        if t and t.startswith("sqlalchemy."):
+                            f["options"]["columnType"] = t[:256]
+                            if isinstance(a, ast.Call):
+                                for i, arg in enumerate(a.args[:16]):
+                                    ok, literal = scalar(arg)
+                                    if ok: f["options"]["typeArg" + str(i)] = literal
+                        ok, literal = scalar(a)
+                        if ok and "literal" not in f["options"]: f["options"]["literal"] = literal
+            fact["fields"].append(f)
+        orm.append(fact)
+    blocked_framework_names = set()
+    routers = {}
+    for n in tree.body:
+        name, v = assignment(n)
+        if name and isinstance(v, ast.Call) and bound(dotted(v.func)) in ("fastapi.FastAPI", "fastapi.APIRouter") and module_writes.count(name) == 1 and name not in attribute_writes:
+            prefix_nodes = [k.value for k in v.keywords if k.arg == "prefix"]
+            ok, prefix = scalar(prefix_nodes[0]) if len(prefix_nodes) == 1 else (True, "")
+            safe = ok and isinstance(prefix, str) and not any(k.arg is None for k in v.keywords) and not v.args
+            r = {"kind": "router", "name": name, "line": n.lineno, "column": n.col_offset, "status": "static" if safe else "unresolved"}
+            if safe: r["prefix"] = prefix
+            framework.append(r)
+            routers[name] = r
+    # Import evidence for cross-file mounts, with conditional/shadowed imports excluded.
+    if not wildcard:
+        for b in bindings:
+            if b["topLevel"] and module_writes.count(b["localName"]) == 1 and b["localName"] not in attribute_writes:
+                framework.append({"kind": "import", "name": b["localName"], "line": b["startLine"], "column": 0, "status": "static", "module": b["sourceSpecifier"], "importedName": b["importedName"] if b["form"] == "from" else "", "qualifier": b["qualifier"], "relativeLevel": b["relativeLevel"]})
+    methods = ("get", "post", "put", "patch", "delete", "head", "options", "trace")
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for d in n.decorator_list:
+                if not isinstance(d, ast.Call) or not isinstance(d.func, ast.Attribute): continue
+                receiver = dotted(d.func.value)
+                if receiver not in routers or d.func.attr not in methods: continue
+                path_node = d.args[0] if d.args else next((k.value for k in d.keywords if k.arg == "path"), None)
+                ok, route_path = scalar(path_node)
+                safe = n in tree.body and ok and isinstance(route_path, str) and not any(k.arg is None for k in d.keywords)
+                r = {"kind": "route", "name": receiver, "line": d.lineno, "column": d.col_offset, "status": "static" if safe else "unresolved", "method": d.func.attr.upper(), "handlerName": n.name, "handlerLine": n.lineno}
+                if ok and isinstance(route_path, str): r["path"] = route_path
+                if n not in tree.body or module_writes.count(n.name) != 1: r.pop("handlerName"); r.pop("handlerLine")
+                framework.append(r)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "include_router" and dotted(n.func.value) in routers:
+            pn = [k.value for k in n.keywords if k.arg == "prefix"]
+            ok, prefix = scalar(pn[0]) if len(pn) == 1 else (True, "")
+            target_node = n.args[0] if n.args else next((k.value for k in n.keywords if k.arg == "router"), None)
+            target = dotted(target_node)
+            top = any(isinstance(t, ast.Expr) and t.value is n for t in tree.body)
+            safe = top and target is not None and ok and isinstance(prefix, str) and not any(k.arg is None for k in n.keywords)
+            r = {"kind": "mount", "name": dotted(n.func.value), "line": n.lineno, "column": n.col_offset, "status": "static" if safe else "unresolved"}
+            if target: r["target"] = target[:256]
+            if ok and isinstance(prefix, str): r["prefix"] = prefix
+            framework.append(r)
     class Visitor(ast.NodeVisitor):
         def __init__(self):
-            self.class_name = None
+            self.owners = []
             self.caller = None
-
-        def visit_ClassDef(self, node):
-            old_class = self.class_name
-            self.class_name = node.name
-            for child in node.body:
-                self.visit(child)
-            self.class_name = old_class
-
-        def visit_FunctionDef(self, node):
-            self._visit_function(node)
-
-        def visit_AsyncFunctionDef(self, node):
-            self._visit_function(node)
-
-        def _visit_function(self, node):
-            old_caller = self.caller
-            name = self.class_name + "." + node.name if self.class_name else node.name
-            self.caller = {"file": file_path, "name": name, "line": node.lineno}
-            for child in node.body:
-                self.visit(child)
-            self.caller = old_caller
-
-        def visit_Call(self, node):
-            if self.caller:
-                name = callee_name(node.func, self.class_name)
-                if name:
-                    edges.append({"caller": self.caller, "calleeName": name, "callLine": node.lineno})
-            self.generic_visit(node)
-
+            self.blocked = []
+            self.receiver = None
+            self.safe_class = True
+        def visit_ClassDef(self, n):
+            if self.caller: return
+            old = self.owners
+            old_safe = self.safe_class
+            self.safe_class = old_safe and not n.decorator_list and not n.keywords
+            self.owners = old + [n.name]
+            member_writes = [a.attr for a in ast.walk(n) if isinstance(a, ast.Attribute) and isinstance(a.ctx, (ast.Store, ast.Del)) and isinstance(a.value, ast.Name) and a.value.id in ("self", "cls")]
+            class_scopes.append({"ownerKey": "python/" + "/".join("class:" + x for x in self.owners), "writes": writes(n.body) + member_writes, "safe": self.safe_class and not any(x in writes(n.body) for x in ("__getattribute__", "__getattr__"))})
+            for c in n.body: self.visit(c)
+            self.owners = old
+            self.safe_class = old_safe
+        def visit_FunctionDef(self, n): self.function(n)
+        def visit_AsyncFunctionDef(self, n): self.function(n)
+        def visit_Lambda(self, n): pass  # no indexed caller identity for lambda bodies
+        def function(self, n):
+            if self.caller: return  # nested functions are outside this batch
+            self.caller = {"name": ".".join(self.owners + [n.name]), "line": n.lineno}
+            args = list(getattr(n.args, "posonlyargs", [])) + n.args.args + n.args.kwonlyargs
+            self.blocked = writes(n.body) + [a.arg for a in args]
+            if n.args.vararg: self.blocked.append(n.args.vararg.arg)
+            if n.args.kwarg: self.blocked.append(n.args.kwarg.arg)
+            ds = [dotted(d) for d in n.decorator_list]
+            first = args[0].arg if args else None
+            self.receiver = first if self.safe_class and self.owners and first in ("self", "cls") and "staticmethod" not in ds and all(d in ("classmethod", "staticmethod", "property") for d in ds) and first not in writes(n.body) else None
+            for c in n.body: self.visit(c)
+            self.caller = None
+        def visit_Call(self, n):
+            p = dotted(n.func)
+            if self.caller and p:
+                calls.append({"caller": dict(self.caller), "calleeName": p, "callLine": n.lineno, "owners": self.owners, "blocked": self.blocked, "receiver": self.receiver})
+            self.generic_visit(n)
     Visitor().visit(tree)
-    sys.stdout.write(json.dumps({"definitions": definitions, "imports": imports, "edges": edges}))
-
+    bindings.sort(key=lambda b: b["startLine"])
+    imports.sort(key=lambda i: i[0])
+    sys.stdout.write(json.dumps({"symbols": symbols, "imports": [i[1] for i in imports], "bindings": bindings, "calls": calls, "writes": module_writes, "classScopes": class_scopes, "orm": orm, "framework": framework}))
 main()
 `
 
-// ---------------------------------------------------------------------------
-// Python subprocess helpers
-// ---------------------------------------------------------------------------
-
-const PYTHON_TIMEOUT_MS = 15_000
-
-function findPythonCmd(): string | null {
-  for (const cmd of ['python', 'python3']) {
-    const probe = spawnSync(cmd, ['--version'], { encoding: 'utf8', shell: false, timeout: 5000 })
-    if (!probe.error && probe.status === 0) return cmd
-  }
-  return null
-}
-
-let _pythonCmd: string | null | undefined = undefined
-
-function getPythonCmd(): string | null {
-  if (_pythonCmd === undefined) _pythonCmd = findPythonCmd()
-  return _pythonCmd
-}
-
-function runPythonScript(
-  script: string,
-  filePath: string,
-  sourceText: string
-): { stdout: string; stderr: string; error: string | null } {
-  const cmd = getPythonCmd()
-  if (!cmd) {
-    return { stdout: '', stderr: '', error: 'Python interpreter not found on PATH (tried python, python3).' }
-  }
-  const result = spawnSync(cmd, ['-c', script, filePath], {
-    input: sourceText,
-    encoding: 'utf8',
-    shell: false,
-    timeout: PYTHON_TIMEOUT_MS,
-  })
-  if (result.error) {
-    const e = result.error as NodeJS.ErrnoException
-    return { stdout: '', stderr: '', error: `Python subprocess error: ${e.message}` }
-  }
-  if (result.status === null) {
-    return { stdout: '', stderr: '', error: `Python subprocess timed out after ${PYTHON_TIMEOUT_MS}ms` }
-  }
-  return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    error: null,
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
-
-interface PythonSymbolRaw {
-  name: string
-  kind: 'function' | 'class' | 'const' | 'variable'
-  line: number
-  end_line: number | null
-  exported: boolean
-  signature?: string
-}
-
-interface PythonImportRaw {
-  form: string
-  module: string
-  names: string[]
-  level: number
-  line: number
-  alias?: string
-}
-
-interface PythonCallDefinitionRaw {
-  name: string
-  file: string
-  line: number
-  kind: 'function' | 'class' | 'method'
-}
-
-interface PythonCallImportRaw {
-  form: 'import' | 'from'
-  module: string
-  level?: number
-  name: string
-  imported?: string
-}
-
-interface PythonCallEdgeRaw {
-  caller: {
-    file: string
-    name: string
-    line: number
-  }
+interface BindingEvidence extends ImportBinding { form: 'import' | 'from'; topLevel: boolean; qualifier: string }
+interface ObservedCall {
+  caller: { name: string; line: number }
   calleeName: string
   callLine: number
+  owners: string[]
+  blocked: string[]
+  receiver: string | null
 }
-
-interface PythonCallExtractionRaw {
-  definitions: PythonCallDefinitionRaw[]
-  imports: PythonCallImportRaw[]
-  edges: PythonCallEdgeRaw[]
+interface ParsedPython {
+  orm: PythonOrmFact[]
+  framework: FrameworkRouteFact[]
+  symbols: Array<{ name: string; kind: SymbolDefinition['kind']; line: number; end_line: number | null; exported: boolean; signature?: string; ownerKey?: string; qualifiedName?: string; declarationMetadata?: { decorators?: DecoratorMetadata[] }; callableEvidence?: boolean }>
+  imports: string[]
+  bindings: BindingEvidence[]
+  calls: ObservedCall[]
+  writes: string[]
+  classScopes: Array<{ ownerKey: string; writes: string[]; safe: boolean }>
 }
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function parseJsonOutput(
-  raw: string,
-  filePath: string,
-  context: string
-): { data: Record<string, unknown> | null; warning: string | null } {
-  const trimmed = raw.trim()
-  if (!trimmed) {
-    return { data: null, warning: `python-extraction: no output for ${context} from ${filePath}` }
+let pythonCmd: string | null | undefined
+function parsePython(file: string, source: string): { data?: ParsedPython; warning?: string } {
+  if (pythonCmd === undefined) {
+    pythonCmd = ['python', 'python3'].find(cmd => {
+      const probe = spawnSync(cmd, ['--version'], { encoding: 'utf8', shell: false, timeout: 5000 })
+      return !probe.error && probe.status === 0
+    }) ?? null
   }
-  let parsed: unknown
+  if (!pythonCmd) return { warning: 'python-extraction: Python interpreter not found on PATH (tried python, python3).' }
+  // Exclude cwd, PYTHONPATH and site startup hooks from this stdlib-only
+  // parser subprocess, preventing indexed files from shadowing its imports.
+  const result = spawnSync(pythonCmd, ['-I', '-S', '-c', EXTRACT_PY, file], { input: source, encoding: 'utf8', shell: false, timeout: 15000, maxBuffer: 16 * 1024 * 1024 })
+  if (result.error || result.status !== 0) return { warning: `python-extraction: subprocess failed for ${file}: ${result.error?.message ?? result.stderr}` }
   try {
-    parsed = JSON.parse(trimmed)
-  } catch {
-    return { data: null, warning: `python-extraction: could not parse ${context} output for ${filePath}` }
+    const data = JSON.parse(result.stdout)
+    if (data.error) return { warning: `python-extraction: ${data.message} in ${file}` }
+    return { data }
+  } catch { return { warning: `python-extraction: invalid parser output for ${file}` } }
+}
+function extracted(file: string, source: string, data?: ParsedPython, warning?: string): ExtractionResult {
+  const lineCount = source.split('\n').length
+  const result: ExtractionResult = {
+    language: 'python', lineCount,
+    pythonOrmFacts: data?.orm ?? [],
+    frameworkRouteFacts: data?.framework ?? [],
+    imports: [...new Set(data?.imports ?? [])],
+    importBindings: (data?.bindings ?? []).map(({ form: _form, topLevel: _topLevel, qualifier: _qualifier, ...b }) => b),
+    exports: [...new Set((data?.symbols ?? []).filter(s => s.exported).map(s => s.name))],
+    symbols: (data?.symbols ?? []).map(s => {
+      const location: SymbolLocation = { file, line: s.line }
+      if (Number.isInteger(s.line) && s.line >= 1 && Number.isInteger(s.end_line) && s.end_line! >= s.line && s.end_line! <= lineCount) location.endLine = s.end_line!
+      return { name: s.name, kind: s.kind, location, exported: s.exported, signature: s.signature,
+        ...(s.ownerKey ? { ownerKey: s.ownerKey, qualifiedName: s.qualifiedName } : {}),
+        ...(s.declarationMetadata ? { declarationMetadata: s.declarationMetadata } : {}) }
+    }),
+    reExportSpecifiers: [], exportAllSpecifiers: [],
+    ...(warning ? { warnings: [warning] } : {}),
   }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return { data: null, warning: `python-extraction: unexpected ${context} output shape for ${filePath}` }
+  result.symbols = assignDeclarationIdentities(file, result.symbols)
+  for (const fact of result.pythonOrmFacts ?? []) {
+    const matches = result.symbols.filter(s => s.kind === 'class' && s.name === fact.name && s.location.line === fact.line)
+    if (matches.length === 1) fact.nodeId = matches[0].nodeId
   }
-  const obj = parsed as Record<string, unknown>
-  if ('error' in obj) {
-    const msg = typeof obj['message'] === 'string' ? obj['message'] : String(obj['error'])
-    return { data: null, warning: `python-extraction: ${msg} in ${filePath}` }
+  for (const fact of result.frameworkRouteFacts ?? []) {
+    const matches = result.symbols.filter(s => s.name === fact.handlerName && s.location.line === fact.handlerLine && !s.ownerKey)
+    if (matches.length === 1) fact.handlerId = matches[0].nodeId
   }
-  return { data: obj, warning: null }
+  return result
 }
 
-function mapPythonKind(kind: string): SymbolDefinition['kind'] {
-  if (kind === 'function') return 'function'
-  if (kind === 'class') return 'class'
-  if (kind === 'const') return 'const'
-  return 'variable'
+// Candidate sets deliberately include both module.py and module/__init__.py.
+// No suffix candidate wins merely because it was encountered first.
+function moduleCandidates(spec: string, level: number, file: string, files: readonly string[]): string[] {
+  const modulePath = spec.replace(/\./g, '/')
+  if (level) {
+    const dirs = path.posix.dirname(file).split('/').filter(p => p !== '.')
+    if (level - 1 > dirs.length) return []
+    const base = dirs.slice(0, dirs.length - level + 1).join('/')
+    const p = [base, modulePath].filter(Boolean).join('/')
+    return files.filter(f => f === p + '.py' || f === p + '/__init__.py').sort()
+  }
+  if (!spec) return []
+  return files.filter(f => [modulePath + '.py', modulePath + '/__init__.py'].some(p => f === p || f.endsWith('/' + p))).sort()
 }
-
-function buildImportSpecifier(imp: PythonImportRaw): string {
-  if (imp.level > 0) {
-    const dots = '.'.repeat(imp.level)
-    const mod = imp.module ? `${dots}${imp.module}` : dots
-    return imp.names.length > 0 ? `from ${mod} import ${imp.names.join(', ')}` : mod
-  }
-  if (imp.form === 'import-module' || imp.form === 'import-module-alias') {
-    return imp.module
-  }
-  return imp.module
+function unique<T>(items: T[]): T | undefined { return items.length === 1 ? items[0] : undefined }
+function callable(s: SymbolDefinition, data: ParsedPython): boolean {
+  if (s.kind !== 'function' && s.kind !== 'method') return false
+  return data.symbols.some(raw => raw.line === s.location.line && raw.name === s.name && raw.ownerKey === s.ownerKey && raw.callableEvidence === true)
 }
-
-function dedup(arr: string[]): string[] {
-  return [...new Set(arr)]
-}
-
-function buildModulePathMap(knownFiles: readonly string[]): Map<string, string> {
-  const map = new Map<string, string>()
-  for (const f of knownFiles) {
-    const norm = f.replace(/\\/g, '/')
-    const withoutExt = norm.endsWith('.py')
-      ? norm.slice(0, -3)
-      : norm.endsWith('/__init__.py')
-        ? norm.slice(0, -12)
-        : null
-    if (withoutExt) {
-      const parts = withoutExt.split('/')
-      for (let start = parts.length - 1; start >= 0; start--) {
-        const key = parts.slice(start).join('.')
-        if (!map.has(key)) map.set(key, norm)
-      }
-    }
-  }
-  return map
-}
-
-function resolveAbsoluteImport(
-  module: string,
-  knownSet: Set<string>,
-  modulePathMap: Map<string, string>
-): string | null {
-  if (!module) return null
-  const direct = modulePathMap.get(module)
-  if (direct) return direct
-  const asPath = module.replace(/\./g, '/')
-  for (const candidate of [asPath + '.py', asPath + '/__init__.py']) {
-    if (knownSet.has(candidate)) return candidate
-    for (const f of knownSet) {
-      if (f.endsWith('/' + candidate) || f === candidate) return f
-    }
-  }
-  return null
-}
-
-function resolveRelativeImport(
-  imp: PythonImportRaw,
-  importingFile: string,
-  knownSet: Set<string>
-): string | null {
-  const norm = importingFile.replace(/\\/g, '/')
-  const dir = path.posix.dirname(norm)
-  const parts = dir.split('/').filter((p) => p.length > 0)
-  const upCount = imp.level - 1
-  if (upCount > parts.length) return null
-  const baseParts = upCount > 0 ? parts.slice(0, parts.length - upCount) : parts
-  const baseDir = baseParts.length > 0 ? baseParts.join('/') : '.'
-
-  if (!imp.module) {
-    if (imp.names.length === 0 || imp.names[0] === '*') return null
-    const name = imp.names[0]
-    for (const c of [baseDir + '/' + name + '.py', baseDir + '/' + name + '/__init__.py']) {
-      if (knownSet.has(c)) return c
-    }
-    return null
-  }
-
-  const moduleParts = imp.module.split('.')
-  const modulePath = moduleParts.join('/')
-  for (const c of [baseDir + '/' + modulePath + '.py', baseDir + '/' + modulePath + '/__init__.py']) {
-    if (knownSet.has(c)) return c
-  }
-  return null
-}
-
-function specifierToPythonImport(specifier: string): PythonImportRaw {
-  const relMatch = specifier.match(/^from (\.+)([^\s]*)\s+import/)
-  if (relMatch) {
-    const level = relMatch[1].length
-    const module = relMatch[2]
-    return { form: 'relative-from-import', module, names: [], level, line: 0 }
-  }
-  const dotMatch = specifier.match(/^(\.+)(.*)$/)
-  if (dotMatch) {
-    return { form: 'relative-from-import', module: dotMatch[2], names: [], level: dotMatch[1].length, line: 0 }
-  }
-  return { form: 'from-import', module: specifier, names: [], level: 0, line: 0 }
-}
-
-function resolvePythonImportToFile(
-  imp: PythonImportRaw,
-  importingFile: string,
-  knownFiles: readonly string[]
-): string | null {
-  const knownSet = new Set(knownFiles)
-  const modulePathMap = buildModulePathMap(knownFiles)
-
-  if (imp.level > 0) {
-    return resolveRelativeImport(imp, importingFile, knownSet)
-  }
-  return resolveAbsoluteImport(imp.module, knownSet, modulePathMap)
-}
-
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
 
 export class PythonAdapter implements LanguageAdapter {
   readonly extensions = ['.py'] as const
   readonly supportsCallGraph = true
-
   extractFromSource(filePath: string, sourceText: string): ExtractionResult {
-    const lineCount = sourceText.split('\n').length
-    const warnings: string[] = []
-    const symbols: SymbolDefinition[] = []
-    const imports: string[] = []
-    const exports: string[] = []
-
-    const symResult = runPythonScript(EXTRACT_SYMBOLS_PY, filePath, sourceText)
-    if (symResult.error) {
-      warnings.push(`python-extraction: ${symResult.error}`)
-    } else {
-      const parsed = parseJsonOutput(symResult.stdout, filePath, 'symbols')
-      if (parsed.warning) {
-        warnings.push(parsed.warning)
-      } else if (parsed.data) {
-        const rawSymbols: PythonSymbolRaw[] = Array.isArray(parsed.data['symbols'])
-          ? (parsed.data['symbols'] as PythonSymbolRaw[])
-          : []
-        for (const s of rawSymbols) {
-          if (!s.name || !s.kind) continue
-          if (s.exported) exports.push(s.name)
-          const location: SymbolLocation = { file: filePath, line: s.line }
-          // AST end_lineno is trusted only as an in-file integer span.
-          if (
-            typeof s.end_line === 'number' &&
-            Number.isInteger(s.end_line) &&
-            s.end_line >= s.line &&
-            s.end_line <= lineCount
-          ) {
-            location.endLine = s.end_line
-          }
-          symbols.push({
-            name: s.name,
-            kind: mapPythonKind(s.kind),
-            location,
-            exported: s.exported,
-            signature: s.signature,
-          })
-        }
-      }
-    }
-
-    const impResult = runPythonScript(EXTRACT_IMPORTS_PY, filePath, sourceText)
-    if (impResult.error) {
-      warnings.push(`python-extraction: ${impResult.error}`)
-    } else {
-      const parsed = parseJsonOutput(impResult.stdout, filePath, 'imports')
-      if (parsed.warning) {
-        warnings.push(parsed.warning)
-      } else if (parsed.data) {
-        const rawImports: PythonImportRaw[] = Array.isArray(parsed.data['imports'])
-          ? (parsed.data['imports'] as PythonImportRaw[])
-          : []
-        for (const imp of rawImports) {
-          const spec = buildImportSpecifier(imp)
-          if (spec) imports.push(spec)
-        }
-      }
-    }
-
-    return {
-      language: 'python',
-      lineCount,
-      imports: dedup(imports),
-      exports: dedup(exports),
-      symbols,
-      reExportSpecifiers: [],
-      exportAllSpecifiers: [],
-    }
+    const { data, warning } = parsePython(filePath, sourceText)
+    return extracted(filePath, sourceText, data, warning)
   }
-
-  resolveImportToFile(
-    specifier: string,
-    importingFile: string,
-    knownFiles: readonly string[]
-  ): string | null {
-    const imp = specifierToPythonImport(specifier)
-    return resolvePythonImportToFile(imp, importingFile, knownFiles)
+  resolveImportToFile(specifier: string, importingFile: string, knownFiles: readonly string[]): string | null {
+    const from = specifier.match(/^from (\.+)([^\s]*)\s+import\s+(.+)$/)
+    if (from) {
+      const spec = from[2] || (from[3].includes(',') || from[3] === '*' ? '' : from[3])
+      return unique(moduleCandidates(spec, from[1].length, importingFile, knownFiles)) ?? null
+    }
+    const dots = specifier.match(/^(\.+)(.*)$/)
+    return unique(moduleCandidates(dots ? dots[2] : specifier, dots ? dots[1].length : 0, importingFile, knownFiles)) ?? null
   }
-
   extractCallGraphEdges(files: readonly SourceFileInput[]): CallGraphEdge[] {
-    const extractions = new Map<string, PythonCallExtractionRaw>()
-    const definitionsByName = new Map<string, PythonCallDefinitionRaw>()
-    const knownFiles = files.map((f) => f.filePath)
-
-    for (const file of files) {
-      const result = runPythonScript(EXTRACT_CALLS_PY, file.filePath, file.sourceText)
-      if (result.error) continue
-
-      const parsed = parseJsonOutput(result.stdout, file.filePath, 'calls')
-      if (!parsed.data || parsed.warning) continue
-
-      const extraction: PythonCallExtractionRaw = {
-        definitions: Array.isArray(parsed.data['definitions'])
-          ? (parsed.data['definitions'] as PythonCallDefinitionRaw[])
-          : [],
-        imports: Array.isArray(parsed.data['imports'])
-          ? (parsed.data['imports'] as PythonCallImportRaw[])
-          : [],
-        edges: Array.isArray(parsed.data['edges'])
-          ? (parsed.data['edges'] as PythonCallEdgeRaw[])
-          : [],
-      }
-      extractions.set(file.filePath, extraction)
-      for (const definition of extraction.definitions) {
-        if (!definitionsByName.has(definition.name)) {
-          definitionsByName.set(definition.name, definition)
-        }
-        const shortName = definition.kind === 'method' ? null : definition.name.split('.').at(-1)
-        if (shortName && !definitionsByName.has(shortName)) {
-          definitionsByName.set(shortName, definition)
-        }
-      }
+    const parsed = new Map<string, { data: ParsedPython; symbols: SymbolDefinition[] }>()
+    for (const f of files) {
+      const { data } = parsePython(f.filePath, f.sourceText)
+      if (data) parsed.set(f.filePath, { data, symbols: assignDeclarationIdentities(f.filePath, extracted(f.filePath, f.sourceText, data).symbols) })
     }
-
+    // A malformed selected module still participates in path ambiguity.
+    const known = files.map(f => f.filePath)
     const edges: CallGraphEdge[] = []
-    for (const [filePath, extraction] of extractions) {
-      const importMap = buildPythonCallImportMap(extraction.imports, filePath, knownFiles)
-      for (const rawEdge of extraction.edges) {
-        edges.push({
-          caller: rawEdge.caller,
-          callee: {
-            file: resolvePythonCalleeFile(rawEdge.calleeName, importMap, definitionsByName),
-            name: rawEdge.calleeName,
-          },
-          callLine: rawEdge.callLine,
-        })
+    for (const [file, { data, symbols }] of parsed) {
+      const writeCount = (name: string) => data.writes.filter(n => n === name).length
+      const hasWildcard = data.bindings.some(b => b.wildcard)
+      const top = (name: string) => hasWildcard ? undefined : unique(symbols.filter(s => !s.ownerKey && s.name === name && writeCount(name) === 1))
+      const method = (ownerKey: string, name: string) => {
+        const scope = unique(data.classScopes.filter(s => s.ownerKey === ownerKey))
+        if (!scope?.safe || scope.writes.filter(n => n === name).length !== 1) return undefined
+        const candidate = unique(symbols.filter(s => s.ownerKey === ownerKey && s.name === name))
+        return candidate && callable(candidate, data) ? candidate : undefined
+      }
+      const inModule = (targetFile: string, name: string) => {
+        const target = parsed.get(targetFile)
+        if (!target) return undefined
+        if (target.data.writes.includes('__getattr__')) return undefined
+        return unique(target.symbols.filter(s => !s.ownerKey && s.name === name && target.data.writes.filter(n => n === name).length === 1 && callable(s, target.data)))
+      }
+      for (const c of data.calls) {
+        const caller = unique(symbols.filter(s => (s.qualifiedName ?? s.name) === c.caller.name && s.location.line === c.caller.line))
+        const parts = c.calleeName.split('.')
+        const base = parts[0]
+        let target: SymbolDefinition | undefined
+        if (caller && parts.length === 2 && c.receiver === base && c.owners.length) {
+          const ownerKey = 'python/' + c.owners.map(n => 'class:' + n).join('/')
+          target = method(ownerKey, parts[1])
+        } else if (!c.blocked.includes(base)) {
+          if (parts.length === 1) {
+            const local = top(base)
+            if (local && callable(local, data) && !data.bindings.some(b => b.wildcard)) target = local
+          } else if (parts.length === 2) {
+            const cls = top(base)
+            if (cls?.kind === 'class' && !cls.declarationMetadata?.decorators?.length) {
+              const candidate = method('python/class:' + base, parts[1])
+              if (candidate?.declarationMetadata?.decorators?.some(d => d.path === 'staticmethod' || d.path === 'classmethod')) target = candidate
+            }
+          }
+          if (!target && !hasWildcard && writeCount(base) === 1) {
+            const binding = unique(data.bindings.filter(b => b.localName === base && b.topLevel && !b.wildcard))
+            if (binding) {
+              let spec = binding.sourceSpecifier.replace(/^\.+/, '')
+              let name: string | undefined
+              if (binding.form === 'from' && parts.length === 1) name = binding.importedName
+              if (binding.form === 'import') {
+                const prefix = binding.qualifier.split('.')
+                if (parts.length === prefix.length + 1 && prefix.every((p, i) => p === parts[i])) name = parts.at(-1)
+              }
+              if (binding.form === 'from' && parts.length === 2) {
+                // A package attribute can replace a same-named child module.
+                // Without a unique unshadowed package binding, do not choose it.
+                const parents = moduleCandidates(spec, binding.relativeLevel ?? 0, file, known)
+                if (parents.length <= 1 && !parents.some(p => {
+                  const parent = parsed.get(p)
+                  return !parent || parent.data.writes.includes(binding.importedName) || parent.data.writes.includes('__getattr__')
+                })) {
+                  spec = [spec, binding.importedName].filter(Boolean).join('.')
+                  name = parts[1]
+                }
+              }
+              if (name) {
+                const targetFile = unique(moduleCandidates(spec, binding.relativeLevel ?? 0, file, known))
+                if (targetFile) target = inModule(targetFile, name)
+              }
+            }
+          }
+        }
+        const observedName = c.receiver === base && parts.length === 2 ? [...c.owners, parts[1]].join('.') : c.calleeName
+        edges.push({ caller: { file, ...c.caller }, callee: { file: target?.location.file ?? null, name: observedName }, callLine: c.callLine,
+          ...(caller?.nodeId ? { callerNodeId: caller.nodeId } : {}),
+          ...(caller?.nodeId && target?.nodeId ? { calleeNodeId: target.nodeId } : {}) })
       }
     }
-
-    return dedupCallEdges(edges)
+    const seen = new Set<string>()
+    return edges.filter(edge => {
+      // The existing edge contract has line, but no expression column.
+      const key = JSON.stringify([edge.callerNodeId, edge.calleeNodeId, edge.caller, edge.callee, edge.callLine])
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).sort((a, b) => a.caller.file.localeCompare(b.caller.file) || a.callLine - b.callLine || a.callee.name.localeCompare(b.callee.name))
   }
-}
-
-function buildPythonCallImportMap(
-  imports: readonly PythonCallImportRaw[],
-  importingFile: string,
-  knownFiles: readonly string[]
-): Map<string, string | null> {
-  const map = new Map<string, string | null>()
-  for (const imp of imports) {
-    if (imp.form === 'import') {
-      const file = resolvePythonImportToFile(
-        { form: 'import-module', module: imp.module, names: [], level: 0, line: 0 },
-        importingFile,
-        knownFiles
-      )
-      map.set(imp.name, file)
-      continue
-    }
-
-    const file = resolvePythonImportToFile(
-      {
-        form: (imp.level ?? 0) > 0 ? 'relative-from-import' : 'from-import',
-        module: imp.module,
-        names: imp.imported ? [imp.imported] : [],
-        level: imp.level ?? 0,
-        line: 0,
-      },
-      importingFile,
-      knownFiles
-    )
-    map.set(imp.name, file)
-  }
-  return map
-}
-
-function resolvePythonCalleeFile(
-  calleeName: string,
-  importMap: Map<string, string | null>,
-  definitionsByName: Map<string, PythonCallDefinitionRaw>
-): string | null {
-  const directDefinition = definitionsByName.get(calleeName)
-  if (directDefinition) return directDefinition.file
-
-  const parts = calleeName.split('.')
-  const base = parts[0]
-  if (importMap.has(base)) return importMap.get(base) ?? null
-
-  if (parts.length === 1) {
-    const short = parts[0]
-    const shortDefinition = definitionsByName.get(short)
-    if (shortDefinition) return shortDefinition.file
-  }
-
-  return null
-}
-
-function dedupCallEdges(edges: CallGraphEdge[]): CallGraphEdge[] {
-  const seen = new Set<string>()
-  return edges.filter((edge) => {
-    const key = [
-      edge.caller.file,
-      edge.caller.name,
-      edge.caller.line,
-      edge.callee.file ?? '',
-      edge.callee.name,
-      edge.callLine,
-    ].join('\0')
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }

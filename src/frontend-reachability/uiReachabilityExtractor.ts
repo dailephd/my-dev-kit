@@ -87,6 +87,22 @@ export function extractUiReachabilityFacts(options: ExtractUiReachabilityFactsOp
     }
   }
 
+  const ownersByMarker = new Map<string, Set<string>>()
+  for (const ui of results) {
+    const owners = ownersByMarker.get(ui.id) ?? new Set<string>()
+    owners.add(`${ui.sourceRef.filePath}:${ui.componentId ?? ''}`)
+    ownersByMarker.set(ui.id, owners)
+  }
+  for (const ui of results) {
+    if ((ownersByMarker.get(ui.id)?.size ?? 0) > 1) {
+      ui.testEvidenceRefs = []
+      ui.warnings.push({ kind: 'ambiguous-component-ownership', factId: ui.id, message: 'Identical UI marker has multiple source owners; locator association unresolved' })
+    }
+    if (ui.testEvidenceRefs.length > 32) {
+      ui.testEvidenceRefs = ui.testEvidenceRefs.slice(0, 32)
+      ui.warnings.push({ kind: 'partial-extraction', factId: ui.id, message: 'UI test evidence truncated at 32 references' })
+    }
+  }
   return results.sort((a, b) =>
     `${a.markerKind}:${a.value}`.localeCompare(`${b.markerKind}:${b.value}`)
   )
@@ -160,6 +176,10 @@ function findTestEvidenceRefs(
   const targetLocatorKind = MARKER_TO_LOCATOR[markerKind]
   const matches = locatorIndex.get(`${targetLocatorKind}:${value}`) ?? []
   return matches
+    .filter((locator) => {
+      const block = locator.testBlockId ? testBlockIndex.get(locator.testBlockId) : undefined
+      return block && (block.kind === 'test' || block.kind === 'it') && locator.sourceRef.filePath === block.sourceRef.filePath && locator.sourceRef.line >= block.sourceRef.line && locator.sourceRef.endLine <= block.sourceRef.endLine
+    })
     .map((locator) => {
       const block = locator.testBlockId ? testBlockIndex.get(locator.testBlockId) : undefined
       return {

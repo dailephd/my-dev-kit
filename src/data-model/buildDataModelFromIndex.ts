@@ -16,6 +16,7 @@ import type {
   NormalizedDataModelWarning,
 } from './normalizedTypes.js'
 import type { DataModelArtifact } from './types.js'
+import { normalizePythonOrmEvidence } from './pythonOrmEvidence.js'
 
 export interface BuildDataModelFromIndexInput {
   indexDir?: string
@@ -69,6 +70,7 @@ export function buildDataModelFromIndex(input: BuildDataModelFromIndexInput): Bu
     appendRecords(combinedRecords, extracted.records)
   }
 
+  appendRecords(combinedRecords, normalizePythonOrmEvidence(symbolIndex.files))
   const dataModel = buildDataModelArtifact({
     records: combinedRecords,
     createdAt: input.createdAt ?? manifest.createdAt,

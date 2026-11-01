@@ -7,7 +7,7 @@ import type { FrontendReachabilityArtifact } from '../frontend-reachability/type
 import { loadClassificationArtifact } from '../classification/resolveClassificationForCommands.js'
 import type { ClassificationArtifact } from '../classification/classificationTypes.js'
 import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
-import { readRequiredJson } from '../indexing/loadIndexArtifacts.js'
+import { readRequiredJson, validateStructuralArtifact } from '../indexing/loadIndexArtifacts.js'
 
 /**
  * One side (`--before` or `--after`) of a graph-diff comparison.
@@ -32,11 +32,12 @@ export interface GraphDiffArtifacts {
 export function loadGraphDiffArtifacts(indexDir: string): GraphDiffArtifacts {
   const resolved = readIndexManifest(indexDir)
   const codeGraph = readRequiredJson<CodeGraph>(resolved.artifactPaths.codeGraph, 'code graph')
+  const symbolIndex = readOptionalJson<SymbolIndex>(resolved.artifactPaths.symbolIndex, (value) => validateStructuralArtifact(value, 'symbol index'))
 
   return {
     resolved,
     codeGraph,
-    symbolIndex: readOptionalJson<SymbolIndex>(resolved.artifactPaths.symbolIndex),
+    symbolIndex,
     classification: loadClassificationArtifact(indexDir, resolved.manifest),
     dataModel: readOptionalJson<DataModelArtifact>(resolved.semanticArtifactPaths.dataModel),
     frontendSemantic: readOptionalJson<FrontendSemanticArtifact>(resolved.semanticArtifactPaths.frontendSemantic),
@@ -46,12 +47,15 @@ export function loadGraphDiffArtifacts(indexDir: string): GraphDiffArtifacts {
   }
 }
 
-function readOptionalJson<T>(filePath: string | null | undefined): T | null {
+function readOptionalJson<T>(filePath: string | null | undefined, validate?: (value: unknown) => void): T | null {
   if (!filePath) return null
+  let value: unknown
   try {
     if (!fs.existsSync(filePath)) return null
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T
+    value = JSON.parse(fs.readFileSync(filePath, 'utf8'))
   } catch {
     return null
   }
+  validate?.(value)
+  return value as T
 }

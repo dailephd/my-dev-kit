@@ -93,6 +93,24 @@ export interface RouteFact {
   sourceRefs: ReachabilityEvidenceRef[]
   confidence: ReachabilityConfidence
   warnings: ReachabilityWarning[]
+  /** Separate physical declarations; aggregate identity stays compatible. */
+  declarations?: RouteSourceDeclaration[]
+  declarationsTruncated?: boolean
+  testEvidenceRefs?: TestEvidenceRef[]
+}
+
+export interface RouteSourceDeclaration {
+  kind: RouteFactKind
+  sourceRef: ReachabilityEvidenceRef
+  pattern: string
+  convention?: 'app-page' | 'app-route-handler'
+  segmentKinds?: Array<'static' | 'dynamic' | 'catch-all' | 'optional-catch-all'>
+  routeGroups?: string[]
+  status: 'supported' | 'partial' | 'unsupported'
+  componentId: string | null
+  methods?: Array<{ method: string; sourceRef: ReachabilityEvidenceRef }>
+  confidence: ReachabilityConfidence
+  warnings: ReachabilityWarning[]
 }
 
 export type RouteFactKind =

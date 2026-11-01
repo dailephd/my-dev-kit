@@ -58,7 +58,7 @@ describe('index --incremental', () => {
     const out = join(root, 'cache-out')
     const cache = JSON.parse(readFileSync(join(out, 'cache-metadata.json'), 'utf8'))
     const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.2.0')
+    expect(cache.cacheSchemaVersion).toBe('1.3.0')
     expect(cache.baselineArtifacts).toEqual({
       manifestSha256: sha256Of(join(out, 'manifest.json')),
       symbolIndexSha256: sha256Of(join(out, manifest.artifacts.symbolIndex)),

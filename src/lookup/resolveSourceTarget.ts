@@ -2,9 +2,39 @@ import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SemanticEvidenceRef, SemanticRole } from '../semantics/index.js'
 import type { SymbolIndex, SymbolDefinition } from '../symbol-index/types.js'
 import type { SourceTarget } from './sourceSliceTypes.js'
+import { declarationNodeId, parseDeclarationNodeId } from '../symbol-index/declarationIdentity.js'
+
+export class AmbiguousSymbolError extends Error {
+  readonly code = 'AMBIGUOUS_SYMBOL'
+  readonly candidates: Array<{ nodeId: string; filePath: string; name: string; qualifiedName?: string; ownerKey?: string; startLine: number; endLine?: number }>
+  constructor(filePath: string, symbols: SymbolDefinition[], lineCount: number) {
+    super(`AMBIGUOUS_SYMBOL: Multiple declarations match in ${filePath}; use an exact node ID.`)
+    this.candidates = symbols.map((symbol) => ({
+      nodeId: declarationNodeId(filePath, symbol), filePath, name: symbol.name,
+      ...(symbol.qualifiedName !== undefined ? { qualifiedName: symbol.qualifiedName } : {}),
+      ...(symbol.ownerKey !== undefined ? { ownerKey: symbol.ownerKey } : {}),
+      startLine: symbol.location.line,
+      ...(trustedEnd(symbol, lineCount) !== undefined ? { endLine: symbol.location.endLine } : {}),
+    })).sort((a, b) => a.nodeId.localeCompare(b.nodeId) || a.startLine - b.startLine).slice(0, 20)
+  }
+}
+
+function trustedEnd(symbol: SymbolDefinition, lineCount: number): number | undefined {
+  const { line, endLine } = symbol.location
+  return Number.isInteger(line) && line >= 1 && typeof endLine === 'number' && Number.isInteger(endLine) && endLine >= line && endLine <= lineCount ? endLine : undefined
+}
 
 export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines: number): SourceTarget {
+  if (nodeId.startsWith('symbolq:')) parseDeclarationNodeId(nodeId)
   const node = findNode(graph, nodeId)
+  if (node.kind === 'rust-package' && node.rustMetadata?.manifest) {
+    return { mode: 'node', nodeId: node.id, filePath: node.rustMetadata.manifest, startLine: 1, endLine: maxLines, warnings: ['Cargo manifest evidence is not a parser-proven Rust declaration.'] }
+  }
+  if (node.kind === 'rust-module' && node.rustMetadata?.origin === 'external' && node.rustMetadata.status === 'RESOLVED' && node.rustMetadata.resolvedFile) {
+    const resolvedFile = node.rustMetadata.resolvedFile
+    if (!graph.nodes.some(candidate => candidate.kind === 'file' && candidate.path === resolvedFile)) throw new Error(`Missing selected Rust source reference: ${resolvedFile}`)
+    return { mode: 'node', nodeId: node.id, filePath: resolvedFile, startLine: 1, endLine: maxLines, warnings: ['Selected external module file; no parser-proven complete file boundary.'] }
+  }
   if (node.kind === 'file') {
     if (!node.path) throw new Error(`File node does not include a source path: ${nodeId}`)
     return {
@@ -15,12 +45,24 @@ export function resolveFileNodeTarget(graph: CodeGraph, nodeId: string, maxLines
       warnings: ['File node retrieval returns a capped preview, not the whole file.'],
     }
   }
+  if (node.kind === 'framework-route' && node.path && Number.isInteger(node.line) && node.line! > 0) {
+    return { mode: 'node', nodeId: node.id, filePath: node.path, startLine: node.line!, endLine: node.line! + Math.max(1, Math.min(maxLines, 12)) - 1, warnings: ['Framework route source is a bounded declaration excerpt; the declaration end is unknown.'] }
+  }
+  if ((node.kind === 'rust-module' || node.kind === 'rust-target' || node.kind === 'rust-impl') && node.path && Number.isInteger(node.line) && node.line! > 0) {
+    const startLine = node.line!
+    const end = node.rustMetadata?.endLine
+    const trusted = (node.kind === 'rust-impl' || node.rustMetadata?.origin === 'inline') && typeof end === 'number' && Number.isInteger(end) && end >= startLine
+    return { mode: 'node', nodeId: node.id, filePath: node.path, startLine, endLine: Math.min(trusted ? end : startLine + 11, startLine + maxLines - 1), ...(trusted ? { symbolEndLine: end } : {}), warnings: ['Rust structural source is observed syntax; external module declarations do not prove a module body in this file.'] }
+  }
   if (node.kind === 'symbol') {
     const filePath = node.path ?? parseSymbolNodeId(node.id).filePath
     const symbolName = node.symbolName ?? parseSymbolNodeId(node.id).symbolName
     if (!filePath || !symbolName) throw new Error(`Symbol node does not include retrievable source metadata: ${nodeId}`)
     return {
       mode: 'symbol',
+      nodeId: node.id,
+      qualifiedName: node.qualifiedName,
+      ownerKey: node.ownerKey,
       filePath,
       symbolName,
       semanticRoles: node.semanticRoles,
@@ -80,10 +122,16 @@ const ANDROID_LINE_RETRIEVABLE_KINDS = new Set([
 
 const ANDROID_DEFAULT_WINDOW = 12
 
-export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, symbolName: string, maxLines: number): SourceTarget {
+export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, symbolName: string, maxLines: number, nodeId?: string): SourceTarget {
+  const exactId = nodeId ?? (symbolName.startsWith('symbol:') || symbolName.startsWith('symbolq:') ? symbolName : undefined)
+  if (exactId !== undefined) parseDeclarationNodeId(exactId)
   const file = symbolIndex.files.find((candidate) => candidate.path === normalize(filePath))
   if (!file) throw new Error(`File is not present in the current symbol index: ${filePath}`)
-  const symbol = file.symbols.find((candidate) => candidate.name === symbolName)
+  const matches = file.symbols.filter((candidate) => exactId !== undefined
+    ? declarationNodeId(file.path, candidate) === exactId
+    : candidate.name === symbolName || candidate.qualifiedName === symbolName)
+  if (matches.length > 1) throw new AmbiguousSymbolError(file.path, matches, file.lineCount)
+  const symbol = matches[0]
   if (!symbol) throw new Error(`Symbol not found in ${filePath}: ${symbolName}`)
   if (!symbol.location || typeof symbol.location.line !== 'number') {
     throw new Error('Symbol was found, but source location is not available in the current symbol index.')
@@ -104,6 +152,9 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
   if (boundaryKnown) {
     return {
       mode: 'symbol',
+      nodeId: declarationNodeId(file.path, symbol),
+      qualifiedName: symbol.qualifiedName,
+      ownerKey: symbol.ownerKey,
       filePath: file.path,
       symbolName: symbol.name,
       startLine,
@@ -123,6 +174,9 @@ export function resolveSymbolTarget(symbolIndex: SymbolIndex, filePath: string, 
   const endLine = Math.min(file.lineCount, symbol.location.line + Math.min(maxLines, 20) - 1)
   return {
     mode: 'symbol',
+    nodeId: declarationNodeId(file.path, symbol),
+    qualifiedName: symbol.qualifiedName,
+    ownerKey: symbol.ownerKey,
     filePath: file.path,
     symbolName: symbol.name,
     startLine: symbol.location.line,
@@ -153,17 +207,15 @@ function collectEvidenceRefs(semanticRoles: SemanticRole[] | undefined): Semanti
 }
 
 function findNode(graph: CodeGraph, nodeId: string): CodeGraphNode {
-  const node = graph.nodes.find((candidate) => candidate.id === nodeId)
+  const matches = graph.nodes.filter((candidate) => candidate.id === nodeId)
+  if (matches.length > 1) throw new Error(`Ambiguous graph node identity: ${nodeId}`)
+  const node = matches[0]
   if (!node) throw new Error(`Node not found: ${nodeId}`)
   return node
 }
 
 function parseSymbolNodeId(nodeId: string): { filePath: string | null; symbolName: string | null } {
-  if (!nodeId.startsWith('symbol:')) return { filePath: null, symbolName: null }
-  const body = nodeId.slice('symbol:'.length)
-  const marker = body.lastIndexOf('#')
-  if (marker < 0) return { filePath: null, symbolName: null }
-  return { filePath: body.slice(0, marker), symbolName: body.slice(marker + 1) }
+  return parseDeclarationNodeId(nodeId) ?? { filePath: null, symbolName: null }
 }
 
 function normalize(filePath: string): string {

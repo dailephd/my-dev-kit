@@ -840,7 +840,11 @@ function evaluateAdequacy(taskId: string, expectation: AdequacyExpectation, evid
 
   const required = expectation.required ?? true
   const severity: AssertionSeverity = required ? 'required' : 'warning'
-  const adequacy = evidence.capsule.contextAdequacy
+  const declaredRole = evidence.capsule.request?.role
+  if (declaredRole && (!evidence.capsule.roleAdequacy || evidence.capsule.roleAdequacy.role !== declaredRole)) {
+    return [makeResult({ taskId, kind, index: 0, status: 'blocked', severity, message: 'Declared context role has no matching role-adequacy evidence.', expectedSummary: `role=${declaredRole}`, actualSummary: 'role adequacy missing or mismatched', evidencePath: evidence.capsulePath })]
+  }
+  const adequacy = declaredRole ? evidence.capsule.roleAdequacy : evidence.capsule.contextAdequacy
   const status = adequacy.status
 
   const problems: string[] = []

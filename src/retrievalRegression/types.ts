@@ -1,3 +1,5 @@
+import type { ContextRole, RequestedEvidenceKind } from '../context/types.js'
+
 export const RETRIEVAL_REGRESSION_SCHEMA_VERSION = '1.0.0'
 
 export type RetrievalRegressionMode = 'general' | 'feature-add' | 'subsystem'
@@ -238,6 +240,12 @@ export type RetrievalRegressionExecutionKind = 'context' | 'search' | 'source' |
 
 export interface RetrievalRegressionContextExecution {
   kind: 'context'
+  role?: ContextRole
+  focusFiles?: string[]
+  focusSymbols?: string[]
+  changedFiles?: string[]
+  changedSymbols?: string[]
+  requestedEvidenceKinds?: RequestedEvidenceKind[]
 }
 
 export interface RetrievalRegressionSearchExecution {

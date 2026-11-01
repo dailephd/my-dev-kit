@@ -1,0 +1,578 @@
+{
+  "schemaVersion": "1.0.0",
+  "suiteId": "rust-v1.14",
+  "name": "Rust structural retrieval and pinned licensed corpus",
+  "description": "Fourteen deterministic Rust structural retrieval tasks, including actual role-aware structured context requests and independently pinned licensed source. Optional B13/R7 calls remain deferred.",
+  "target": "my-dev-kit",
+  "tasks": [
+    {
+      "id": "rust-v114-f13-ownership-method",
+      "title": "Exact Runner-for-Worker ownership",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "impl crate::alpha::Runner for crate::alpha::Worker run",
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 8
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+          ],
+          "topK": 1,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f13-exact-lookup",
+      "title": "Persisted physical method lookup",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "execution": {
+        "kind": "lookup",
+        "node": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+        "depth": 1
+      },
+      "expectations": {
+        "commandResult": {
+          "lookup": {
+            "expectedStatus": "found",
+            "expectedNodeId": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+            "expectedNodeKind": "symbol"
+          },
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f13-method-source",
+      "title": "Trusted complete method source lines 5 through 7",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "execution": {
+        "kind": "source",
+        "node": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+        "maxLines": 20
+      },
+      "expectations": {
+        "commandResult": {
+          "expectedMode": "node",
+          "expectedStartLine": 5,
+          "expectedEndLine": 7,
+          "expectedLineCount": 3,
+          "requiredContent": [
+            "fn run(&self) -> u8",
+            "        2"
+          ],
+          "forbiddenContent": [
+            "impl crate::alpha::Worker",
+            "        1"
+          ],
+          "continuation": "absent",
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f13-impl-slice",
+      "title": "Exact physical impl and directed type/trait/member edges",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "execution": {
+        "kind": "slice",
+        "node": "rust-impl:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#0",
+        "depth": 1,
+        "direction": "both"
+      },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "symbol:src/alpha.rs#Worker",
+              "symbol:src/alpha.rs#Runner",
+              "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+            ],
+            "forbiddenNodeIds": [
+              "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%401%3A0#run#0"
+            ],
+            "requiredEdges": [
+              {
+                "source": "rust-impl:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#0",
+                "kind": "rust-impl-for-type",
+                "target": "symbol:src/alpha.rs#Worker"
+              },
+              {
+                "source": "rust-impl:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#0",
+                "kind": "rust-impl-of-trait",
+                "target": "symbol:src/alpha.rs#Runner"
+              },
+              {
+                "source": "rust-impl:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#0",
+                "kind": "rust-impl-defines-symbol",
+                "target": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+              }
+            ],
+            "maxNodes": 12,
+            "maxEdges": 20
+          },
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f13-architecture-context",
+      "title": "Selected Cargo and module architecture context",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "rust-target:Cargo.toml#lib#retrieval#src%2Flib.rs",
+      "mode": "general",
+      "caps": {
+        "maxCandidateFiles": 12,
+        "maxSourceSlices": 6,
+        "maxGraphNodes": 40,
+        "maxGraphEdges": 70
+      },
+      "expectations": {
+        "focus": {
+          "nodeId": "rust-target:Cargo.toml#lib#retrieval#src%2Flib.rs",
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": [
+            "rust-package:Cargo.toml"
+          ],
+          "requiredEdgeKinds": [
+            "rust-package-has-target",
+            "rust-target-root-file"
+          ],
+          "maxNodes": 40,
+          "maxEdges": 70,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFiles": [
+            "src/lib.rs"
+          ],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "adequacy": {
+          "allowedStatuses": [
+            "context sufficient for implementation",
+            "context sufficient with listed assumptions"
+          ],
+          "allowInsufficient": false,
+          "allowConflict": false,
+          "required": true
+        },
+        "auditSteps": {
+          "requiredStepIds": [
+            "step-run-search",
+            "step-write-context-capsule",
+            "step-write-retrieval-audit-record"
+          ],
+          "requireUniqueStepIds": true,
+          "required": true
+        },
+        "noRawContent": {
+          "enabled": true
+        }
+      },
+      "execution": {
+        "kind": "context",
+        "role": "architecture",
+        "focusSymbols": [
+          "rust-target:Cargo.toml#lib#retrieval#src%2Flib.rs",
+          "symbol:src/alpha.rs#Runner"
+        ],
+        "focusFiles": [
+          "src/lib.rs",
+          "src/alpha.rs"
+        ],
+        "requestedEvidenceKinds": [
+          "owner",
+          "contracts",
+          "dependencies",
+          "closest-tests"
+        ]
+      }
+    },
+    {
+      "id": "rust-v114-f13-implementation-context",
+      "title": "Physical implementation source and structural witnesses",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+      "mode": "general",
+      "caps": {
+        "maxCandidateFiles": 12,
+        "maxSourceSlices": 6,
+        "maxGraphNodes": 40,
+        "maxGraphEdges": 70
+      },
+      "expectations": {
+        "focus": {
+          "nodeId": "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": [
+            "symbol:src/alpha.rs#Worker",
+            "symbol:src/alpha.rs#Runner"
+          ],
+          "requiredEdgeKinds": [
+            "rust-impl-defines-symbol"
+          ],
+          "maxNodes": 40,
+          "maxEdges": 70,
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFiles": [
+            "src/impls.rs"
+          ],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "adequacy": {
+          "allowedStatuses": [
+            "context sufficient for implementation",
+            "context sufficient with listed assumptions"
+          ],
+          "allowInsufficient": false,
+          "allowConflict": false,
+          "required": true
+        },
+        "artifactReferences": {
+          "requiredKinds": [
+            "symbolIndex",
+            "codeGraph"
+          ],
+          "required": true
+        },
+        "noRawContent": {
+          "enabled": true
+        }
+      },
+      "execution": {
+        "kind": "context",
+        "role": "implementation",
+        "focusSymbols": [
+          "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+        ],
+        "changedSymbols": [
+          "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+        ],
+        "requestedEvidenceKinds": [
+          "owner",
+          "contracts"
+        ]
+      }
+    },
+    {
+      "id": "rust-v114-f13-test-context",
+      "title": "Selected test declaration without function-coverage claims",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "symbol:tests/owner_tests.rs#runner_implementation",
+      "mode": "general",
+      "caps": {
+        "maxCandidateFiles": 12,
+        "maxSourceSlices": 6,
+        "maxGraphNodes": 40,
+        "maxGraphEdges": 70
+      },
+      "expectations": {
+        "focus": {
+          "nodeId": "symbol:tests/owner_tests.rs#runner_implementation",
+          "required": true
+        },
+        "sourceEvidence": {
+          "requiredFiles": [
+            "tests/owner_tests.rs"
+          ],
+          "minSlices": 1,
+          "maxSlices": 6,
+          "required": true
+        },
+        "selectedGraph": {
+          "requiredNodeIds": [
+            "symbol:tests/owner_tests.rs#runner_implementation"
+          ],
+          "maxNodes": 40,
+          "maxEdges": 70,
+          "required": true
+        },
+        "adequacy": {
+          "allowedStatuses": [
+            "context sufficient for implementation",
+            "context sufficient with listed assumptions"
+          ],
+          "allowInsufficient": false,
+          "allowConflict": false,
+          "required": true
+        },
+        "noRawContent": {
+          "enabled": true
+        }
+      },
+      "execution": {
+        "kind": "context",
+        "role": "test-implementation",
+        "focusSymbols": [
+          "symbol:tests/owner_tests.rs#runner_implementation",
+          "symbol:src/alpha.rs#Worker"
+        ],
+        "changedSymbols": [
+          "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0"
+        ],
+        "requestedEvidenceKinds": [
+          "test-infrastructure",
+          "changed-surface"
+        ]
+      }
+    },
+    {
+      "id": "rust-v114-f13-ambiguous-name",
+      "title": "Preserve same-named inherent, trait and implementation alternatives",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "query": "run",
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 40
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%401%3A0#run#0",
+            "symbolq:src%2Fimpls.rs#rust%3Aimpl%3Acrate%3A%3Aalpha%3A%3AWorker%3Atrait%3Acrate%3A%3Aalpha%3A%3ARunner%404%3A64#run#0",
+            "symbolq:src%2Falpha.rs#rust%3Atrait_item%3ARunner%402%3A19#run#0"
+          ],
+          "topK": 40,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f13-unresolved-import",
+      "title": "Unresolved and conditional syntax creates no resolved ownership edge",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F13-retrieval",
+      "sourceRoots": [
+        "src",
+        "tests"
+      ],
+      "execution": {
+        "kind": "slice",
+        "node": "file:src/lib.rs",
+        "depth": 1
+      },
+      "expectations": {
+        "commandResult": {
+          "slice": {
+            "expectedStatus": "ok",
+            "requiredNodeIds": [
+              "file:src/lib.rs"
+            ],
+            "forbiddenNodeIds": [
+              "file:src/missing.rs"
+            ],
+            "forbiddenEdges": [
+              {
+                "source": "file:src/lib.rs",
+                "kind": "imports",
+                "target": "file:src/missing.rs"
+              }
+            ],
+            "maxNodes": 25,
+            "maxEdges": 40
+          },
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f10-mixed-language",
+      "title": "Rust-qualified source ownership amid five languages",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F10-mixed-language",
+      "sourceRoots": [
+        "src"
+      ],
+      "query": "src/worker.rs run",
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 8
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "symbolq:src%2Fworker.rs#rust%3Aimpl%3AWorker%402%3A19#run#0"
+          ],
+          "topK": 1,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f14-async-service",
+      "title": "Real top-level async service owner distinct from impl methods",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F14-licensed-corpus/async-service",
+      "sourceRoots": [
+        "src"
+      ],
+      "query": "symbol:src/server.rs#run",
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 8
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "symbol:src/server.rs#run"
+          ],
+          "topK": 1,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f14-cli",
+      "title": "Real Config declaration and source-qualified owner",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F14-licensed-corpus/cli",
+      "sourceRoots": [
+        "src"
+      ],
+      "query": "src/config.rs Config",
+      "execution": {
+        "kind": "search",
+        "intent": "ownership",
+        "limit": 8
+      },
+      "expectations": {
+        "commandResult": {
+          "requiredResultIds": [
+            "symbol:src/config.rs#Config"
+          ],
+          "topK": 1,
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f14-multi-crate",
+      "title": "Distinct selected tracing-core package lookup",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F14-licensed-corpus/multi-crate-library",
+      "sourceRoots": [
+        "tracing/src",
+        "tracing-core/src"
+      ],
+      "execution": {
+        "kind": "lookup",
+        "node": "rust-package:tracing-core%2FCargo.toml",
+        "depth": 1
+      },
+      "expectations": {
+        "commandResult": {
+          "lookup": {
+            "expectedStatus": "found",
+            "expectedNodeId": "rust-package:tracing-core%2FCargo.toml",
+            "expectedNodeKind": "rust-package"
+          },
+          "required": true
+        }
+      }
+    },
+    {
+      "id": "rust-v114-f14-partial-selection",
+      "title": "Unselected workspace body cannot supply sufficient context",
+      "description": "tracing-subscriber is listed upstream but its body is deliberately absent. Insufficient context is expected, never complete-workspace coverage.",
+      "fixtureRoot": "../../../tests/fixtures/v114-language/rust/F14-licensed-corpus/multi-crate-library",
+      "sourceRoots": [
+        "tracing/src",
+        "tracing-core/src"
+      ],
+      "query": "tracing-subscriber Layer",
+      "mode": "general",
+      "caps": {
+        "maxCandidateFiles": 8,
+        "maxSourceSlices": 3,
+        "maxGraphNodes": 20,
+        "maxGraphEdges": 30
+      },
+      "expectations": {
+        "selectedGraph": {
+          "forbiddenFileContains": [
+            "tracing-subscriber/",
+            "macros.rs"
+          ],
+          "maxNodes": 20,
+          "maxEdges": 30,
+          "required": true
+        },
+        "sourceEvidence": {
+          "forbiddenFileContains": [
+            "tracing-subscriber/",
+            "macros.rs"
+          ],
+          "maxSlices": 3,
+          "required": true
+        },
+        "adequacy": {
+          "expectedStatus": "context insufficient and more retrieval required",
+          "allowInsufficient": true,
+          "required": true
+        },
+        "noRawContent": {
+          "enabled": true
+        }
+      },
+      "execution": {
+        "kind": "context",
+        "role": "architecture",
+        "focusFiles": [
+          "tracing-subscriber/src/layer/mod.rs"
+        ],
+        "focusSymbols": [
+          "symbol:tracing-subscriber/src/layer/mod.rs#Layer"
+        ],
+        "requestedEvidenceKinds": [
+          "owner",
+          "contracts"
+        ]
+      }
+    }
+  ]
+}

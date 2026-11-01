@@ -15,6 +15,7 @@ export function sliceGraph(options: {
 }): GraphSliceCore {
   validateSliceInputs(options.depth, options.direction)
   const nodeMap = new Map(options.graph.nodes.map((node) => [node.id, node]))
+  if (nodeMap.size !== options.graph.nodes.length) throw new Error('Ambiguous graph node identity: duplicate node IDs.')
   if (!nodeMap.has(options.focusNodeId)) throw new Error(`Node not found: ${options.focusNodeId}`)
 
   const includedNodeIds = new Set([options.focusNodeId])
@@ -25,6 +26,7 @@ export function sliceGraph(options: {
     for (const current of frontier) {
       for (const edge of options.graph.edges) {
         for (const adjacent of adjacentNodes(edge, current, options.direction)) {
+          if (edge.kind.startsWith('rust-') && !nodeMap.has(adjacent)) throw new Error(`Missing graph endpoint reference: ${adjacent}`)
           if (includedNodeIds.has(adjacent)) continue
           includedNodeIds.add(adjacent)
           next.add(adjacent)
@@ -82,6 +84,9 @@ export function sliceGraph(options: {
     dataFlowExpansion = { addedNodeIds, truncated }
   }
 
+  for (const edge of options.graph.edges) {
+    if (edge.kind.startsWith('rust-') && (includedNodeIds.has(edge.source) || includedNodeIds.has(edge.target)) && (!nodeMap.has(edge.source) || !nodeMap.has(edge.target))) throw new Error(`Missing graph endpoint reference: ${edge.id}`)
+  }
   const nodes = [...includedNodeIds]
     .map((id) => nodeMap.get(id))
     .filter((node): node is CodeGraphNode => node !== undefined)

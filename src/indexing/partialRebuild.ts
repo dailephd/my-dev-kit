@@ -21,6 +21,7 @@
  */
 
 import * as fs from 'node:fs'
+import { assignDeclarationIdentities } from '../symbol-index/declarationIdentity.js'
 import * as path from 'node:path'
 import { createCallGraph } from '../symbol-index/graphBuilder.js'
 import { buildGraphSection, type FileExtractionMeta } from '../symbol-index/builder.js'
@@ -129,6 +130,10 @@ function cleanSymbol(symbol: SymbolDefinition): SymbolDefinition {
     exported: symbol.exported,
   }
   if (symbol.signature !== undefined) clean.signature = symbol.signature
+  if (symbol.nodeId !== undefined) clean.nodeId = symbol.nodeId
+  if (symbol.qualifiedName !== undefined) clean.qualifiedName = symbol.qualifiedName
+  if (symbol.ownerKey !== undefined) clean.ownerKey = symbol.ownerKey
+  if (symbol.declarationMetadata !== undefined) clean.declarationMetadata = symbol.declarationMetadata
   return clean
 }
 
@@ -138,7 +143,7 @@ function cleanSymbol(symbol: SymbolDefinition): SymbolDefinition {
  * files are simply absent from `discoveryFiles` and therefore never included.
  */
 export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): BuildPartialSymbolIndexResult {
-  const registry = input.registry ?? createDefaultRegistry()
+  const registry = input.registry ?? createDefaultRegistry(input.repoRoot)
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
@@ -161,19 +166,38 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const adapter = registry.adapterForFile(relPath)
     if (!adapter) continue
 
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath)) {
+    // Re-extract summaries lacking B03 bindings or either B04 fact array.
+    const missingPythonEvidence = input.previousFileSummariesByPath.get(relPath)?.language === 'python' &&
+      (input.previousFileSummariesByPath.get(relPath)?.importBindings === undefined || input.previousFileSummariesByPath.get(relPath)?.pythonOrmFacts === undefined || input.previousFileSummariesByPath.get(relPath)?.frameworkRouteFacts === undefined)
+    const previous = input.previousFileSummariesByPath.get(relPath)
+    // The configuration fingerprint rejects pre-B05 caches. Re-evaluate
+    // unresolved bindings when the selected target inventory changes; legacy
+    // direct callers without optional B05 evidence retain identity-only reuse.
+    const unresolvedJsBindings = previous && ['typescript', 'javascript'].includes(previous.language) &&
+      previous.importBindings?.some(b => b.resolutionStatus === 'unresolved')
+    const missingJsFrameworkEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.frameworkRouteFacts === undefined
+    const missingRustEvidence = previous?.language === 'rust' && previous.rustSyntaxFacts === undefined
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence && !missingRustEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
       const reExportSpecifiers = previousCacheEntry?.reExportSpecifiers ?? []
       const exportAllSpecifiers = previousCacheEntry?.exportAllSpecifiers ?? []
       const cleanSymbols = previousSummary.symbols.map(cleanSymbol)
+      const importBindings = previousSummary.importBindings?.map(binding => ({ ...binding }))
+      const frameworkRouteFacts = previousSummary.frameworkRouteFacts?.map(fact => ({ ...fact, ...(fact.syntax ? { syntax: [...fact.syntax] } : {}), ...(fact.warnings ? { warnings: [...fact.warnings] } : {}) }))
 
       summaries.push({
         path: relPath,
         language: previousSummary.language,
         lineCount: previousSummary.lineCount,
         imports: previousSummary.imports,
+        ...(importBindings ? { importBindings } : {}),
+        ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
+        ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
+        ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
+        ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
+        ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
         exports: previousSummary.exports,
         symbols: cleanSymbols,
         hasCallGraphEntries: false,
@@ -184,6 +208,12 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           language: previousSummary.language,
           lineCount: previousSummary.lineCount,
           imports: previousSummary.imports,
+          ...(importBindings ? { importBindings } : {}),
+          ...(previousSummary.commonJsExports ? { commonJsExports: previousSummary.commonJsExports } : {}),
+          ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
+          ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
+          ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
+          ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
           exports: previousSummary.exports,
           symbols: cleanSymbols,
           reExportSpecifiers,
@@ -208,6 +238,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const sourceText = readFileSafely(file.absPath)
     if (sourceText === null) continue
     const extraction = adapter.extractFromSource(relPath, sourceText)
+    extraction.symbols = assignDeclarationIdentities(relPath, extraction.symbols)
     freshPaths.add(relPath)
     rawExtractions.push({ relPath, extraction })
     fileExtractionMeta.set(relPath, {
@@ -219,6 +250,12 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       language: extraction.language,
       lineCount: extraction.lineCount,
       imports: extraction.imports,
+      ...(extraction.importBindings ? { importBindings: extraction.importBindings } : {}),
+      ...(extraction.commonJsExports ? { commonJsExports: extraction.commonJsExports } : {}),
+      ...(extraction.rustSyntaxFacts ? { rustSyntaxFacts: extraction.rustSyntaxFacts } : {}),
+      ...(extraction.pythonOrmFacts ? { pythonOrmFacts: extraction.pythonOrmFacts } : {}),
+      ...(extraction.frameworkRouteFacts ? { frameworkRouteFacts: extraction.frameworkRouteFacts } : {}),
+      ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),
       exports: extraction.exports,
       symbols: extraction.symbols,
       hasCallGraphEntries: false,
@@ -254,6 +291,11 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
 
   const indexedFileSet = new Set(summaries.map((summary) => summary.path))
   const graph = buildGraphSection(rawExtractions, indexedFileSet, registry)
+  const warnings = new Map(rawExtractions.map(e => [e.relPath, e.extraction.warnings]))
+  for (const summary of summaries) {
+    if (warnings.get(summary.path)?.length) summary.warnings = warnings.get(summary.path)
+    else delete summary.warnings
+  }
   const symbolCount = summaries.reduce((sum, file) => sum + file.symbols.length, 0)
 
   const index: SymbolIndex = {

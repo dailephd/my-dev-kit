@@ -49,6 +49,9 @@ export interface SourceSlice {
 }
 
 export interface SourceTarget {
+  nodeId?: string
+  qualifiedName?: string
+  ownerKey?: string
   mode: SourceSliceMode
   filePath: string
   symbolName?: string

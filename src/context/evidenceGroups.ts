@@ -24,6 +24,7 @@ import {
 import type { ClassificationRoleRef } from '../classification/classificationTypes.js'
 import type { CodeGraph, CodeGraphNode } from '../graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
+import { rustEvidenceStatus } from '../languages/rust/useResolver.js'
 import type {
   CandidateFile,
   CandidateNode,
@@ -217,7 +218,7 @@ function fileToItem(file: CandidateFile, relationship: string, basis: string): E
   }
 }
 
-function nodeToItem(node: CandidateNode, relationship: string, basis: string): EvidenceItemRef {
+function candidateNodeToItem(node: CandidateNode, relationship: string, basis: string): EvidenceItemRef {
   return {
     id: node.nodeId,
     itemKind: node.kind === 'symbol' ? 'symbol' : 'file',
@@ -400,6 +401,7 @@ function isStructuralContractNode(
   node: CandidateNode,
   structuralContractIds: Set<string>
 ): boolean {
+  if (node.filePath?.endsWith('.rs') && structuralContractIds.has(node.nodeId) && !isForbiddenOwnerPath(node.filePath)) return true
   if (isContractLike(node)) return true
   if (!hasRequestRelevance(node) || isForbiddenOwnerPath(node.filePath)) return false
   if (!(node.filePath ?? '').toLowerCase().endsWith('.py')) return false
@@ -543,9 +545,19 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   let roleConditionCoverage: RoleConditionCoverage[] = []
 
   const nodeGraphById = new Map<string, CodeGraphNode>(codeGraph.nodes.map((n) => [n.id, n]))
+  const nodeToItem = (node: CandidateNode, relationship: string, basis: string): EvidenceItemRef => {
+    const item = candidateNodeToItem(node, relationship, basis)
+    const fact = nodeGraphById.get(node.nodeId)
+    if (fact?.kind === 'framework-route') {
+      item.metadata = { ...item.metadata, nodeKind: fact.kind, ...fact.routeMetadata }
+      item.sourceLocation = { filePath: fact.path ?? node.filePath ?? '', line: fact.line }
+    }
+    return item
+  }
 
   const seedNodeIds = computeSeedNodeIds({ codeGraph, focusIntake, changedSurface })
   const structuralContractIds = new Set<string>()
+  const rustGraphContractItems: EvidenceItemRef[] = []
   const structuralContractFilePaths = new Set<string>()
   const contractDeclarationKinds = new Set(['class', 'interface', 'type', 'enum', 'const', 'variable'])
   const pathByNodeId = new Map(codeGraph.nodes.map((n) => [n.id, n.path]))
@@ -566,11 +578,31 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
     }
   }
 
+  for (const edge of selectedGraph.edges) {
+    if (!['rust-impl-for-type', 'rust-impl-of-trait'].includes(edge.kind)) continue
+    const target = nodeGraphById.get(edge.to)
+    if (target?.path?.endsWith('.rs') && target.kind === 'symbol' && ['struct', 'trait', 'enum', 'union'].includes(target.symbolKind ?? '') && !isForbiddenOwnerPath(target.path)) {
+      structuralContractIds.add(target.id)
+      // Exact focus queries need not lexically rank the impl's type/trait.
+      // Preserve that already-selected persisted contract witness independently.
+      rustGraphContractItems.push({ id: target.id, itemKind: 'symbol', nodeId: target.id, symbolId: target.id, path: target.path,
+        sourceLocation: { filePath: target.path, line: target.line }, relationship: 'selected Rust impl contract',
+        basis: `${edge.from}--${edge.kind}-->${edge.to}`, provenance: `graph-edge:${edge.kind}` })
+    }
+  }
+  for (const focus of focusIntake.focusSymbols.filter(f => f.resolved && !f.ambiguous)) {
+    for (const id of focus.matchedNodeIds) {
+      const node = nodeGraphById.get(id)
+      if (node?.path?.endsWith('.rs') && !isForbiddenOwnerPath(node.path) && ['struct', 'trait', 'enum', 'union', 'type'].includes(node.symbolKind ?? '') && codeGraph.edges.some(e => e.kind === 'rust-module-defines-symbol' && e.target === id)) structuralContractIds.add(id)
+    }
+  }
+
   const contractNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralContractNode(n, structuralContractIds)))
   const contractFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralContractFile(f, structuralContractFilePaths)))
   const contractItems = [
     ...contractNodes.map((n) => nodeToItem(n, 'contract-like candidate', isContractLike(n) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
     ...contractFiles.map((f) => fileToItem(f, 'contract-like candidate', isContractLike({ filePath: f.path, label: f.path }) ? 'contract/validator/schema/error naming heuristic' : 'direct implementation dependency with contract-bearing declaration kind')),
+    ...rustGraphContractItems,
   ]
 
   const closestTestNodes = sortByScoreThenPath(retainedNodes.filter((n) => isTestLike(n.filePath)))
@@ -613,8 +645,39 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
   const exportedFilePaths = new Set(codeGraph.nodes.filter((n) => n.kind === 'symbol' && n.exported === true && n.path).map((n) => n.path as string))
   const producerIds = computeStructuralProducerIds(codeGraph)
 
-  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => isStructuralOwnerNode(n, { exportedNodeIds, producerIds, callerOnlyFilePaths }, androidOwnerContext)))
-  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => isStructuralOwnerFile(f, { exportedFilePaths, producerIds, callerOnlyFilePaths }, androidOwnerContext)))
+  const rustFocus = selectedGraph.nodes.find(node => node.reasons.includes('primary focus node'))
+  const rustOwnerIds = new Set<string>()
+  const rustFocusSelected = !!rustFocus && (rustFocus.filePath?.endsWith('.rs') === true || rustFocus.kind.startsWith('rust-'))
+  if (rustFocus && rustFocusSelected) {
+    const fact = nodeGraphById.get(rustFocus.nodeId)
+    const declaration = fact && symbolIndex.files.find(file => file.path === fact.path)?.symbols.find(symbol => symbol.nodeId === fact.id)
+    const physicalFile = symbolIndex.files.find(file => file.path === fact?.path)
+    const conditionalAncestor = physicalFile?.symbols.some(symbol => declaration?.ownerKey?.includes(`:${symbol.name}@${symbol.location.line}:`) && rustEvidenceStatus({ endLine: symbol.location.endLine, attributes: symbol.declarationMetadata?.rust?.attributes }) !== 'RESOLVED')
+    const uncertain = declaration && (conditionalAncestor || rustEvidenceStatus({ endLine: declaration.location.endLine, attributes: declaration.declarationMetadata?.rust?.attributes }) !== 'RESOLVED')
+    if (fact && !uncertain && (!fact.rustMetadata || fact.rustMetadata.status === 'RESOLVED')) rustOwnerIds.add(fact.id)
+    for (const edge of codeGraph.edges) {
+      if (edge.target !== rustFocus.nodeId || !['rust-impl-defines-symbol', 'rust-module-defines-symbol'].includes(edge.kind)) continue
+      const owner = nodeGraphById.get(edge.source)
+      if (!uncertain && owner?.rustMetadata?.status === 'RESOLVED') rustOwnerIds.add(owner.id)
+    }
+    for (const id of rustOwnerIds) producerIds.add(id)
+    if (role === 'architecture' && selectedGraph.nodes.some(node => {
+      const metadata = nodeGraphById.get(node.nodeId)?.rustMetadata
+      return metadata && metadata.status !== 'RESOLVED'
+    })) {
+      rustOwnerIds.clear()
+      warnings.push('Selected Rust structure contains unresolved or conditional ownership; architecture completeness is not established.')
+    }
+  }
+
+  const ownerNodes = sortByScoreThenPath(retainedNodes.filter((n) => {
+    if (rustFocusSelected && (n.filePath?.endsWith('.rs') || n.kind.startsWith('rust-'))) return rustOwnerIds.has(n.nodeId) && !isForbiddenOwnerPath(n.filePath)
+    return isStructuralOwnerNode(n, { exportedNodeIds, producerIds, callerOnlyFilePaths }, androidOwnerContext)
+  }))
+  const ownerFiles = sortByScoreThenPath(retainedFiles.filter((f) => {
+    if (rustFocusSelected && f.path.endsWith('.rs')) return [...rustOwnerIds].some(id => nodeGraphById.get(id)?.path === f.path)
+    return isStructuralOwnerFile(f, { exportedFilePaths, producerIds, callerOnlyFilePaths }, androidOwnerContext)
+  }))
   const ownerItems = [
     ...ownerNodes.map((n) =>
       nodeToItem(n, 'structural owner candidate', isOwnerLike(n) ? 'structural ownership evidence (owner-like filename is a supporting ranking signal only)' : 'structural ownership evidence')
@@ -689,6 +752,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       relationship: 'selected-graph-neighborhood',
       basis: n.reasons.join('; ') || 'selected graph neighborhood',
       provenance: 'selected-graph',
+      ...(nodeGraphById.get(n.nodeId)?.kind === 'framework-route' ? { metadata: { nodeKind: 'framework-route', ...nodeGraphById.get(n.nodeId)?.routeMetadata } } : {}),
     }))
     pushGroup('graph-neighborhood', graphNeighborhoodItems, {
       limit: null,
@@ -832,13 +896,16 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
 
     const filesOfInterest = [
       ...new Set([...changedSurface.files.filter((f) => f.status !== 'removed').map((f) => f.path), ...focusIntake.focusFiles.filter((f) => f.resolved).flatMap((f) => f.matchedFilePaths)]),
+      ...selectedGraph.nodes.filter(node => node.filePath?.endsWith('.rs')).map(node => node.filePath!),
     ].sort()
     const symbolsOfInterest = [
       ...new Set([...changedSurface.symbols.map((s) => s.symbolId), ...focusIntake.focusSymbols.filter((s) => s.resolved).flatMap((s) => s.matchedNodeIds)]),
+      ...selectedGraph.nodes.filter(node => node.filePath?.endsWith('.rs') && node.kind === 'symbol').map(node => node.nodeId),
     ].sort()
 
     const infra = discoverTestInfrastructure({
       role,
+      codeGraph,
       symbolIndex,
       filesOfInterest,
       symbolsOfInterest,
@@ -995,7 +1062,7 @@ export function buildEvidenceGroups(options: BuildEvidenceGroupsOptions): BuildE
       ...new Set([...changedSurface.files.filter((f) => f.status !== 'removed').map((f) => f.path), ...focusIntake.focusFiles.filter((f) => f.resolved).flatMap((f) => f.matchedFilePaths), ...selectedOwners.map((o) => o.path).filter((p): p is string => !!p)]),
     ].sort()
     const symbolsOfInterest = [...new Set([...changedSurface.symbols.map((s) => s.symbolId), ...focusIntake.focusSymbols.filter((s) => s.resolved).flatMap((s) => s.matchedNodeIds)])].sort()
-    const infra = discoverTestInfrastructure({ role, symbolIndex, filesOfInterest, symbolsOfInterest, requestedEvidenceKinds, repoRoot })
+    const infra = discoverTestInfrastructure({ role, codeGraph, symbolIndex, filesOfInterest, symbolsOfInterest, requestedEvidenceKinds, repoRoot })
     warnings.push(...infra.warnings)
     unresolvedItems.push(...infra.unresolved)
     testInfrastructure = {
