@@ -76,6 +76,91 @@ const TS_FILES: Record<string, string> = {
 }
 
 describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
+  it('preserves the frozen Gate 4B peer.mjs counterexample as present', async () => {
+    // Lab kitSourceReaderReplacement.test.ts: exact counterexample for ambiguous::test-rot.
+    const root = makeProject({
+      'src/peer.mjs': 'export const peer = 1;\n',
+      'tests/check.test.ts': 'import "../src/peer";\n',
+    })
+    const out = await build(root, ['src', 'tests'])
+    expect(resolveAuditImportTarget(out, importId(out, 'tests/check.test.ts', '../src/peer')))
+      .toMatchObject({ status: 'present', reasonCode: 'TARGET_IN_SELECTED_INVENTORY' })
+  })
+
+  it.each([
+    ['../src/peer.mjs', 'src/peer.mjs'],
+    ['../src/peer.mjs', 'src/peer.mts'],
+    ['../src/peer', 'src/peer.mjs'],
+    ['../src/peer', 'src/peer/index.mjs'],
+    ['../src/peer.cjs', 'src/peer.cts'],
+    ['../src/peer.js', 'src/peer.ts'],
+    ['../src/peer.jsx', 'src/peer.tsx'],
+  ])('proves selected source existence for %s with %s', async (specifier, target) => {
+    const root = makeProject({ [target]: 'export const peer = 1;\n', 'tests/check.test.ts': `import "${specifier}";\n` })
+    const out = await build(root, ['src', 'tests'])
+    const proof = resolveAuditImportTarget(out, importId(out, 'tests/check.test.ts', specifier))
+    expect(proof).toMatchObject({ status: 'present', candidatePaths: [target], selectionComplete: true })
+    expect(readSourceAuditEvidence(out).files.find(f => f.path === target)?.capabilities.imports).toBe('complete')
+  })
+
+  it('preserves all selected .mjs/.mts candidates without a unique-binding claim, deterministically', async () => {
+    const root = makeProject({
+      'src/peer.mjs': 'export const peer = 1;\n', 'src/peer.mts': 'export const peer = 2;\n',
+      'tests/check.test.ts': 'import "../src/peer.mjs";\n',
+    })
+    const out = await build(root, ['src', 'tests'])
+    const id = importId(out, 'tests/check.test.ts', '../src/peer.mjs')
+    const first = readSourceAuditEvidence(out)
+    const proof = resolveAuditImportTarget(out, id)
+    expect(proof).toMatchObject({ status: 'present', reasonCode: 'MULTIPLE_TARGETS_IN_SELECTED_INVENTORY', candidatePaths: ['src/peer.mjs', 'src/peer.mts'] })
+    expect(first.files.find(f => f.path === 'tests/check.test.ts')?.facts.find(f => f.id === id))
+      .toMatchObject({ importResolution: 'ambiguous', targetPaths: ['src/peer.mjs', 'src/peer.mts'] })
+    await build(root, ['src', 'tests'])
+    expect(readSourceAuditEvidence(out).files).toEqual(first.files)
+    expect(resolveAuditImportTarget(out, id)).toEqual(proof)
+  })
+
+  it('covers the frozen ambiguous fixture absence only with all sixteen eligible paths', async () => {
+    const root = makeProject({
+      'src/peer.js': 'export const peer = 1;\n', 'src/peer.ts': 'export const peer = 2;\n',
+      'tests/check.sample.ts': '// @ts-nocheck -- intentionally unresolved audit input, never executed\nimport "../src/peer";\nimport "../src/absent";\n',
+    })
+    const out = await build(root, ['src', 'tests'])
+    const proof = resolveAuditImportTarget(out, importId(out, 'tests/check.sample.ts', '../src/absent'))
+    expect(proof.status).toBe('proven-missing')
+    expect(proof.candidatePaths).toEqual(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs']
+      .flatMap(ext => ['src/absent' + ext, 'src/absent/index' + ext]).sort())
+  })
+
+  it.each(['../src/peer', '../src/peer.mjs'])('does not prove excluded .mjs absent for %s', async specifier => {
+    const root = makeProject({ 'src/peer.mjs': 'export const peer = 1;\n', 'tests/check.test.ts': `import "${specifier}";\n` })
+    const out = await build(root, ['src', 'tests'], ['src/peer.mjs'])
+    expect(resolveAuditImportTarget(out, importId(out, 'tests/check.test.ts', specifier)))
+      .toMatchObject({ status: 'indeterminate', reasonCode: 'CANDIDATE_EXISTS_BUT_NOT_SELECTED' })
+    const outside = await build(root, ['tests'])
+    expect(resolveAuditImportTarget(outside, importId(outside, 'tests/check.test.ts', specifier)).status).toBe('outside-selected-roots')
+  })
+
+  it('keeps unresolved configured targets indeterminate', async () => {
+    const root = makeProject({
+      'tsconfig.json': '{"extends":"./missing.json","compilerOptions":{"paths":{"@/*":["./src/*"]}}}',
+      'src/main.ts': 'import "@/absent";\n',
+    })
+    const out = await build(root)
+    expect(resolveAuditImportTarget(out, importId(out, 'src/main.ts', '@/absent')).status).toBe('indeterminate')
+  })
+
+  it('rejects .mjs candidate traversal and a directory symlink escape', async () => {
+    const outside = makeProject({ 'peer.mjs': 'export const peer = 1;\n' })
+    const root = makeProject({ 'src/main.ts': 'import "./link/peer.mjs";\nimport "../../../peer.mjs";\n' })
+    symlinkSync(outside, join(root, 'src/link'), process.platform === 'win32' ? 'junction' : 'dir')
+    const out = await build(root)
+    for (const specifier of ['./link/peer.mjs', '../../../peer.mjs']) {
+      expect(resolveAuditImportTarget(out, importId(out, 'src/main.ts', specifier)))
+        .toMatchObject({ status: 'indeterminate', reasonCode: 'CANDIDATE_ESCAPES_PROJECT_ROOT' })
+    }
+  })
+
   it('reports present, proven-missing, outside-selected-roots, external, ambiguous and unsupported shapes', async () => {
     const root = makeProject(TS_FILES)
     const out = await build(root)

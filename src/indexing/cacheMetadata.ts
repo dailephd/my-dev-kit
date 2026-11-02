@@ -1,4 +1,5 @@
 import { RUST_PARSER_REVISION } from '../languages/rust/parser.js'
+import { JS_TS_CANDIDATE_REVISION } from '../languages/typescript/adapter.js'
 /**
  * Internal incremental-indexing cache metadata.
  *
@@ -198,6 +199,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     rustCargoFingerprint: input.rustCargoFingerprint ?? null,
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',
+    jsTsCandidateRevision: JS_TS_CANDIDATE_REVISION,
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
     frontendFrameworkRevision: 'v1.14.0-b07',
     configuredImportsRevision: 'v1.14.0-configured-imports',

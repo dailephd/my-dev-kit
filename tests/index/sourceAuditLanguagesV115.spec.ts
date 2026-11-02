@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -209,9 +210,10 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     expect(ts.resolveImportToFile('./left.cjs', 'consumer.ts', ['left.cts'])).toBe('left.cts')
     expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['other.mts'])).toBeNull()
     expect(ts.resolveImportToFile('./left.cjs', 'consumer.ts', ['left.mts'])).toBeNull()
-    // .mjs is not a supported source extension: an existing left.mjs is never selected.
-    expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.mjs'])).toBeNull()
+    // .mjs is an eligible source candidate; unrelated extensions do not become counterparts.
+    expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.mjs'])).toBe('left.mjs')
     expect(ts.resolveImportToFile('./left.mjs', 'consumer.ts', ['left.ts'])).toBeNull()
+    expect(ts.resolveImportToFile('./left.txt', 'consumer.ts', ['left.txt'])).toBeNull()
     // External packages never become local.
     expect(ts.resolveImportToFile('package', 'consumer.ts', ['package/index.ts', 'package.mts'])).toBeNull()
     // Ambiguous extensionless imports remain ambiguous and are never silently picked.
@@ -222,6 +224,36 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
       expect(ts.resolveImportToFile(`./left${ext}`, 'consumer.ts', [`left${ext}`])).toBe(`left${ext}`)
     }
     expect(ts.resolveImportToFile('./left.js', 'consumer.ts', ['left.ts'])).toBe('left.ts')
+
+    const source = 'export const left = 1\n'
+    const dynamicSource = "export const lazy = () => import('./left.mjs')\n"
+    const root = makeProject({ 'src/left.mjs': source, 'src/partial.mjs': dynamicSource, 'src/unsupported.txt': 'not source\n' })
+    const { built, artifact } = artifactFor(root)
+    expect(built.discovery.auditSelection.selectedFiles.map(({ relPath, selectionStatus }) => ({ relPath, selectionStatus }))).toEqual([
+      { relPath: 'src/left.mjs', selectionStatus: 'supported' },
+      { relPath: 'src/partial.mjs', selectionStatus: 'supported' },
+      { relPath: 'src/unsupported.txt', selectionStatus: 'unsupported' },
+    ])
+    const selected = artifact.files.find(file => file.path === 'src/left.mjs')!
+    expect(selected).toMatchObject({ language: 'javascript', status: 'parsed', analyzerId: 'typescript-ast', contentSha256: createHash('sha256').update(source).digest('hex') })
+    expect(selected.capabilities).toEqual({
+      declarations: 'complete', imports: 'complete', exports: 'complete', 'identifier-literals': 'complete',
+      'test-observations': 'not-applicable', 'fixture-references': 'not-applicable', 'process-observations': 'complete',
+      'api-client-calls': 'unsupported', 'source-ranges': 'complete',
+    })
+    expect(selected.facts.find(fact => fact.kind === 'declaration' && fact.name === 'left'))
+      .toMatchObject({ extractionMethod: 'typescript-ast', span: { path: 'src/left.mjs' } })
+    const partial = artifact.files.find(file => file.path === 'src/partial.mjs')!
+    // Successful parsing is distinct from complete import observations.
+    expect(partial).toMatchObject({ language: 'javascript', status: 'parsed', analyzerId: 'typescript-ast', contentSha256: createHash('sha256').update(dynamicSource).digest('hex'), capabilities: { imports: 'partial', 'api-client-calls': 'unsupported' } })
+    expect(partial.diagnostics.map(diagnostic => diagnostic.code)).toContain('dynamic-import-not-enumerated')
+    expect(partial.facts.filter(fact => fact.kind === 'import')).toEqual([])
+    expect(registry.adapterForFile('src/unsupported.txt')).toBeNull()
+    expect(built.index.files.map(file => file.path)).not.toContain('src/unsupported.txt')
+    const unsupported = artifact.files.find(file => file.path === 'src/unsupported.txt')!
+    expect(unsupported).toMatchObject({ language: 'unsupported', status: 'unsupported', analyzerId: null, contentSha256: null, facts: [] })
+    expect(unsupported.capabilities).toEqual(Object.fromEntries(SOURCE_AUDIT_CAPABILITIES.map(capability => [capability, 'unsupported'])))
+    expect(() => validateSourceAuditEvidence(artifact)).not.toThrow()
   })
 
   it('resolves a self-import without implying a call or recursion relationship', () => {

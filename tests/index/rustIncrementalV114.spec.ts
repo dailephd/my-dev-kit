@@ -68,7 +68,8 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
     const expected = {
       rustParserRevision: 'rust-b08:web-tree-sitter-0.25.10:orchard-0.16.10:d98c6aa1db69cfd204bf07dfefb2451b987160cbb2db95ddac8ac04b5f1eb1d0:1',
       rustCargoStructureRevision: 'v1.14.0-b09', rustRelationshipRevision: 'v1.14.0-b14-doc-comments', rustCargoFingerprint: input.rustCargoFingerprint,
-      pythonExtractionRevision: 'v1.14.0-b04', jsTsExtractionRevision: 'v1.14.0-b05', jsFrameworkExtractionRevision: 'v1.14.0-b06',
+      pythonExtractionRevision: 'v1.14.0-b04', jsTsExtractionRevision: 'v1.14.0-b05',
+      jsTsCandidateRevision: 'v1.15.0-import-proof-correction-02', jsFrameworkExtractionRevision: 'v1.14.0-b06',
       frontendFrameworkRevision: 'v1.14.0-b07', configuredImportsRevision: 'v1.14.0-configured-imports', sourceAuditExtractorRevision:SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION, sourceAuditSchemaVersion:'1.0.0', sourceAuditCapabilities:[...AUDIT_PRODUCER_CAPABILITIES],
       configuredImportsFingerprint: input.configuredImportsFingerprint,
       ...Object.fromEntries(Object.entries(input).filter(([key]) => !['rustCargoFingerprint', 'configuredImportsFingerprint'].includes(key))),

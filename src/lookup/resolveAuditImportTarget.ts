@@ -159,7 +159,7 @@ export function resolveAuditImportTarget(indexDir: string, importFactId: string)
   existing = existing.filter((candidate) => inventorySet.has(candidate))
   if (existing.length > 0) {
     confirmPresent(existing)
-    return proof('present', enumerated ?? existing, existing.length === 1 ? 'TARGET_IN_SELECTED_INVENTORY' : 'MULTIPLE_TARGETS_IN_SELECTED_INVENTORY')
+    return proof('present', adapter instanceof TypeScriptAdapter ? existing : enumerated ?? existing, existing.length === 1 ? 'TARGET_IN_SELECTED_INVENTORY' : 'MULTIPLE_TARGETS_IN_SELECTED_INVENTORY')
   }
   if (enumerated === null) return proof('indeterminate', [], notEnumerableReason)
 
