@@ -36,7 +36,7 @@ import { validateSourceAuditEvidence } from '../symbol-index/validateAuditEviden
 import type { SourceAuditEvidenceReference } from './manifestTypes.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.2.0'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.3.0'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string
@@ -161,6 +161,7 @@ interface SelectedEntry {
   relPath: string
   sizeBytes: number | null
   selectionStatus: AuditSelectedFile['selectionStatus']
+  contentSha256?: string
 }
 
 /** Deduplicates by canonical path; conflicting identities keep the most conservative status and flag the ledger. */
@@ -170,15 +171,16 @@ function dedupeSelected(selected: readonly AuditSelectedFile[], reasons: Set<str
     const relPath = toForwardSlash(file.relPath)
     const existing = byPath.get(relPath)
     if (!existing) {
-      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus })
+      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus, contentSha256: file.contentSha256 })
       continue
     }
-    if (existing.selectionStatus === file.selectionStatus && existing.sizeBytes === file.sizeBytes) continue
+    if (existing.selectionStatus === file.selectionStatus && existing.sizeBytes === file.sizeBytes && existing.contentSha256 === file.contentSha256) continue
     reasons.add('conflicting-selection-identity')
     if (SELECTION_STATUS_RANK[file.selectionStatus] > SELECTION_STATUS_RANK[existing.selectionStatus]) {
       existing.selectionStatus = file.selectionStatus
     }
     if (existing.sizeBytes !== file.sizeBytes) existing.sizeBytes = null
+    if (existing.contentSha256 !== file.contentSha256) existing.contentSha256 = undefined
   }
   return [...byPath.values()].sort((a, b) => compareText(a.relPath, b.relPath))
 }
@@ -358,7 +360,7 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
       reasons.add('noncanonical-selected-path')
       continue
     }
-    const projection = projectFile(entry, summariesByPath.get(entry.relPath), input.fileHashes.get(entry.relPath), sourceRoots)
+    const projection = projectFile(entry, summariesByPath.get(entry.relPath), input.fileHashes.get(entry.relPath) ?? entry.contentSha256, sourceRoots)
     files.push(projection.record)
     if (projection.unreadable) unreadableFileCount += 1
     if (projection.record.status === 'unsupported') unsupportedFileCount += 1

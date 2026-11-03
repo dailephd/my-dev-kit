@@ -237,7 +237,15 @@ export function registerSourceCommand(program: Command): void {
 
 function createSourceAuthority(options: SourceCommandOptions): (root: string, file: string) => void {
   let current: ReturnType<typeof loadSourceArtifacts> | undefined
+  let audit: ReturnType<typeof readSourceAuditEvidence> | undefined
   return (root, file) => {
+    // Only exact-file occurrence mode may use selected raw content absent from the symbol inventory.
+    if (options.file !== undefined && options.contains !== undefined) {
+      audit ??= readSourceAuditEvidence(options.index)
+      if (path.relative(path.resolve(audit.source.projectRoot), root) === '' &&
+          audit.files.some(record => record.path === file && record.contentSha256 !== null)) return
+      throw new UnsafeSourceError('File lacks a verified selected source-audit content identity.')
+    }
     current ??= loadSourceArtifacts({ indexDir: options.index, loadSymbolIndex: true,
       loadCodeGraph: !!options.node || options.resource !== undefined || options.androidRoute !== undefined || options.androidUi !== undefined })
     if (path.relative(path.resolve(current.resolved.manifest.projectRoot), root) !== '' ||

@@ -45,6 +45,11 @@ export function ensureInsideProjectRoot(projectRoot: string, filePath: string): 
  * These checks detect substitutions; they are not an atomic filesystem sandbox.
  */
 export function readSourceText(projectRoot: string, filePath: string): string {
+  return readSourceBytes(projectRoot, filePath).toString('utf8')
+}
+
+/** The same descriptor authority for bounded raw content; no alternate filesystem read path. */
+export function readSourceBytes(projectRoot: string, filePath: string, maxBytes = Infinity): Buffer {
   const lexical = ensureInsideProjectRoot(projectRoot, filePath)
   let descriptor: number | undefined
   try {
@@ -56,12 +61,24 @@ export function readSourceText(projectRoot: string, filePath: string): string {
     const before = fs.fstatSync(descriptor)
     const same = (a: fs.Stats, b: fs.Stats) => a.isFile() && b.isFile() && a.ino !== 0 && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs
     if (!same(expected, before) || fs.realpathSync(lexical) !== physical || fs.realpathSync(projectRoot) !== root) throw new UnsafeSourceError('Unsafe source substitution; retry after re-indexing.')
-    const text = fs.readFileSync(descriptor, 'utf8')
+    if (before.size > maxBytes) throw new UnsafeSourceError('Source file exceeds the bounded content limit. Re-index the selected source.')
+    let bytes: Buffer
+    if (Number.isFinite(maxBytes)) {
+      bytes = Buffer.alloc(before.size)
+      let offset = 0
+      while (offset < bytes.length) {
+        const count = fs.readSync(descriptor, bytes, offset, bytes.length - offset, offset)
+        if (count === 0) throw new UnsafeSourceError('Unsafe source substitution; retry after re-indexing.')
+        offset += count
+      }
+    } else {
+      bytes = fs.readFileSync(descriptor)
+    }
     if (!same(before, fs.fstatSync(descriptor)) || !same(before, fs.statSync(physical)) || fs.realpathSync(lexical) !== physical || fs.realpathSync(projectRoot) !== root) throw new UnsafeSourceError('Unsafe source substitution; retry after re-indexing.')
-    return text
+    return bytes
   } catch (error) {
     if (error instanceof UnsafeSourceError) throw error
-    throw new UnsafeSourceError('Source file is missing, unreadable, or has an unsafe unresolved symlink. Re-index the selected source.')
+    throw new UnsafeSourceError('Source file is missing, unreadable, or has an unsafe unresolved symlink. Re-index the selected source.', { cause: error })
   } finally {
     if (descriptor !== undefined) fs.closeSync(descriptor)
   }

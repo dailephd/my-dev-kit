@@ -1,7 +1,11 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createHash } from 'node:crypto'
+import { TextDecoder } from 'node:util'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { createDefaultRegistry, type LanguageRegistry } from '../languages/registry.js'
+import { readSourceBytes } from '../lookup/getSourceSlice.js'
+import { AUDIT_CONTENT_MAX_BYTES } from '../symbol-index/auditEvidenceTypes.js'
 
 export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
   'node_modules',
@@ -90,6 +94,19 @@ export interface AuditSelectedFile {
   absPath: string
   sizeBytes: number | null
   selectionStatus: AuditSelectionStatus
+  /** Raw content identity only; never makes an unsupported file a semantic indexing input. */
+  contentSha256?: string
+}
+
+/** Narrow raw test-input eligibility, separate from the programming-language registry. */
+export function isAuditJsonContentPath(relPath: string): boolean {
+  const segments = toForwardSlash(relPath).split('/').map(segment => segment.toLowerCase())
+  const basename = segments.pop() ?? ''
+  if (!basename.endsWith('.json') || ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'tsconfig.json', 'jsconfig.json'].includes(basename) || basename.endsWith('.lock.json')) return false
+  if (segments.some(segment => segment === 'generated' || segment === 'vendor' ||
+    (DEFAULT_IGNORED_DIRECTORY_NAMES as readonly string[]).includes(segment) ||
+    DEFAULT_IGNORED_DIRECTORY_PREFIXES.some(prefix => segment.startsWith(prefix)))) return false
+  return segments.some(segment => ['test', 'tests', '__tests__', 'fixtures'].includes(segment))
 }
 
 /**
@@ -257,7 +274,18 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
 
     if (!state.registry.supportsFile(entry.name)) {
       recordSkipped(state, relPath, 'unsupported')
-      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported' })
+      let contentSha256: string | undefined
+      if (isAuditJsonContentPath(relPath) && stat.size <= AUDIT_CONTENT_MAX_BYTES) {
+        try {
+          const bytes = readSourceBytes(state.repoRoot, relPath, AUDIT_CONTENT_MAX_BYTES)
+          // Fatal decoding rejects invalid UTF-8 instead of authenticating replacement-character text.
+          new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+          if (!bytes.includes(0) && bytes.length === stat.size) contentSha256 = createHash('sha256').update(bytes).digest('hex')
+        } catch {
+          // Keep the selected unsupported record without a hash; absence can never be complete.
+        }
+      }
+      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported', contentSha256 })
       continue
     }
 
@@ -298,7 +326,7 @@ function recordSelected(state: DiscoveryState, file: AuditSelectedFile): void {
     state.selectedByPath.set(file.relPath, file)
     return
   }
-  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes) {
+  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes || existing.contentSha256 !== file.contentSha256) {
     state.incompleteReasons.add('conflicting-selection-identity')
   }
 }

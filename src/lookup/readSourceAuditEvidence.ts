@@ -19,7 +19,7 @@ import {
   validateSourceAuditFilePage,
   validateSourceAuditInventoryPage,
 } from '../symbol-index/validateAuditEvidence.js'
-import { ensureInsideProjectRoot, UnsafeSourceError } from './getSourceSlice.js'
+import { readSourceBytes, UnsafeSourceError } from './getSourceSlice.js'
 
 export type SourceAuditErrorCode =
   | 'AUDIT_EVIDENCE_UNAVAILABLE'
@@ -214,12 +214,20 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
  */
 export function assertSourceAuditFileFresh(artifact: SourceAuditEvidenceArtifact, file: Pick<SourceAuditFile, 'path' | 'contentSha256'>): void {
   if (file.contentSha256 === null) return
+  readSourceAuditFileBytes(artifact, file)
+}
+
+/** Hash verification and descriptor-safe retrieval share one read, including unsupported raw content. */
+export function readSourceAuditFileBytes(artifact: SourceAuditEvidenceArtifact, file: Pick<SourceAuditFile, 'path' | 'contentSha256'>, maxBytes = Infinity): Buffer {
   const projectRoot = artifact.source.projectRoot
   let bytes: Buffer
   try {
-    const resolved = ensureInsideProjectRoot(projectRoot, file.path)
-    bytes = fs.readFileSync(resolved)
+    bytes = readSourceBytes(projectRoot, file.path, maxBytes)
   } catch (error) {
+    if ((error instanceof Error && (error.cause as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') ||
+        (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new SourceAuditEvidenceError('STALE_SOURCE_EVIDENCE', `Selected source file "${file.path}" no longer exists. Re-index before relying on this evidence.`)
+    }
     if (error instanceof UnsafeSourceError) {
       throw new SourceAuditEvidenceError('INVALID_AUDIT_PATH', error.message)
     }
@@ -231,4 +239,5 @@ export function assertSourceAuditFileFresh(artifact: SourceAuditEvidenceArtifact
   if (sha256Hex(bytes) !== file.contentSha256) {
     throw new SourceAuditEvidenceError('STALE_SOURCE_EVIDENCE', `Selected source file "${file.path}" changed after it was indexed. Re-index before relying on this evidence.`)
   }
+  return bytes
 }

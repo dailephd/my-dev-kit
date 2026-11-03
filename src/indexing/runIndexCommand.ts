@@ -724,7 +724,26 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
 
   // v1.15.0: a no-change result may only claim complete audit evidence when the persisted artifact is present and exact.
   try {
-    readSourceAuditEvidence(outputDir)
+    const previousAudit = readSourceAuditEvidence(outputDir)
+    // Unsupported content is not a semantic cache entry. Its discovery-ledger identity must still
+    // be projected on every incremental run, even when every programming-language file is reused.
+    const sourceAudit = serializeSourceAuditEvidence(buildSourceAuditEvidence({
+      projectRoot,
+      sourceRoots: normalizedSourceRoots,
+      excludes: options.exclude ?? [],
+      discovery,
+      symbolIndex: baseline.baseline.symbolIndex,
+      fileHashes: new Map(currentFileEntries.map(file => [file.path, file.contentHash])),
+      producerVersion: VERSION,
+    }).artifact)
+    if (sourceAudit.reference.snapshotId !== previousAudit.source.snapshotId) {
+      existingManifest.sourceAuditEvidence = sourceAudit.reference
+      // Reuse the managed writer and byte-identical semantic artifacts; publish the manifest last.
+      writeIndexArtifacts({ outputDir, manifest: existingManifest,
+        symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
+        callGraph: null, sourceAuditEvidenceJson: sourceAudit.json })
+      writeCacheMetadata(outputDir, { ...cacheRead.metadata, baselineArtifacts: computeBaselineArtifactIdentity(outputDir) })
+    }
   } catch (error) {
     return fullRebuild(
       'incremental-full-cache-incompatible',

@@ -15,6 +15,8 @@ export const SOURCE_AUDIT_FILENAME = 'source-audit-evidence.json'
 export const AUDIT_INVENTORY_PAGE_SIZE = 64
 export const AUDIT_FACT_PAGE_SIZE = 128
 export const AUDIT_LITERAL_MAX_CHARS = 256
+/** Shared bound for selected raw test-content identity and exact-file occurrence retrieval. */
+export const AUDIT_CONTENT_MAX_BYTES = 200000
 
 export const SOURCE_AUDIT_ROLES = ['source', 'test', 'script', 'unknown'] as const
 export type SourceAuditRole = (typeof SOURCE_AUDIT_ROLES)[number]

@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto'
 import { readSourceText } from '../lookup/getSourceSlice.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import {
-  assertSourceAuditFileFresh,
+  readSourceAuditFileBytes,
   isCanonicalAuditRelativePath,
   SourceAuditEvidenceError,
 } from '../lookup/readSourceAuditEvidence.js'
-import { SOURCE_AUDIT_SCHEMA_VERSION, type SourceAuditEvidenceArtifact } from '../symbol-index/auditEvidenceTypes.js'
+import { AUDIT_CONTENT_MAX_BYTES, SOURCE_AUDIT_SCHEMA_VERSION, type SourceAuditEvidenceArtifact } from '../symbol-index/auditEvidenceTypes.js'
 import type { FrontendSemanticArtifact, FrontendFileResult } from '../frontend/frontendTypes.js'
 import type { SymbolIndex } from '../symbol-index/types.js'
 
@@ -138,7 +138,7 @@ export function findExactMatches(options: {
 }
 
 /** Maximum bytes of one selected file examined by an exact-file occurrence query. */
-export const MAX_EXACT_FILE_SCAN_BYTES = 200000
+export const MAX_EXACT_FILE_SCAN_BYTES = AUDIT_CONTENT_MAX_BYTES
 
 /** Raw literal-text occurrences in one selected file. Interpretation (imports, fixtures, policy) belongs to the consumer. */
 export interface AuditFileOccurrenceResult {
@@ -195,10 +195,10 @@ export function findExactFileOccurrences(options: {
     return result({ scannedBytes: 0, complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE', matchCount: 0, matches: [] })
   }
   // Rejects missing, replaced, changed and root-escaping files before any content is released.
-  assertSourceAuditFileFresh(artifact, file)
-  const text = readSourceText(artifact.source.projectRoot, file.path)
-  const bytes = Buffer.from(text, 'utf8')
-  const validUtf8 = createHash('sha256').update(bytes).digest('hex') === file.contentSha256
+  const jsonContent = file.path.toLowerCase().endsWith('.json')
+  const bytes = readSourceAuditFileBytes(artifact, file, jsonContent ? MAX_EXACT_FILE_SCAN_BYTES : Infinity)
+  const text = bytes.toString('utf8')
+  const validUtf8 = createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex') === file.contentSha256 && (!jsonContent || !bytes.includes(0))
   const withinLimit = bytes.length <= MAX_EXACT_FILE_SCAN_BYTES
   const scanned = withinLimit ? text : bytes.subarray(0, MAX_EXACT_FILE_SCAN_BYTES).toString('utf8')
 
