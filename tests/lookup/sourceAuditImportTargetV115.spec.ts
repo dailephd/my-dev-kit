@@ -75,6 +75,91 @@ const TS_FILES: Record<string, string> = {
   'lib/o.ts': 'export const o = 1\n',
 }
 
+describe('qualified JVM declaration-domain proofs', () => {
+  it('proves arbitrary-filename and nested Java declarations and static owners without member binding', async () => {
+    const root = makeProject({
+      'src/Beta.java': 'package com.example;\npublic class Widget {\n public class Nested {}\n}\n',
+      'src/Test.java': 'package com.example;\nimport com.example.Widget;\nimport com.example.Widget.Nested;\nimport com.example.Absent;\nimport static com.example.Widget.unverifiedMember;\nimport com.external.Unknown;\npublic class Test {}\n',
+    })
+    const out = await build(root)
+    const proof = (name: string) => resolveAuditImportTarget(out, importId(out, 'src/Test.java', name))
+    expect(proof('com.example.Widget')).toMatchObject({ status: 'present', candidatePaths: [], declarationProof: { scope: 'selected-ordinary-jvm-sources', matchingQualifiedNames: ['com.example.Widget'], matchingSourcePaths: ['src/Beta.java'] } })
+    expect(proof('com.example.Widget.Nested')).toMatchObject({ status: 'present', declarationProof: { matchingQualifiedNames: ['com.example.Widget.Nested'] } })
+    expect(proof('com.example.Widget.unverifiedMember')).toMatchObject({ status: 'present', declarationProof: { targetKind: 'java-static-owner', targetQualifiedName: 'com.example.Widget' } })
+    expect(proof('com.example.Absent')).toMatchObject({ status: 'proven-missing', candidatePaths: [], declarationProof: { domainComplete: true, targetPackageName: 'com.example', matchingDeclarationFactIds: [], incompletenessReasons: [] } })
+    expect(proof('com.example.Absent').declarationProof!.packageWitnessFactIds.length).toBeGreaterThan(0)
+    expect(proof('com.external.Unknown').status).toBe('indeterminate')
+    rewriteArtifact(out, artifact => { artifact.coverage.inventoryComplete = false })
+    expect(proof('com.example.Absent')).toMatchObject({ status: 'indeterminate', declarationProof: { domainComplete: false } })
+  })
+
+  it('preserves duplicate Kotlin identities, top-level roles, nested owners and script uncertainty', async () => {
+    const root = makeProject({
+      'src/Alpha.kt': 'package com.example\nclass Widget {\n class Nested\n}\nfun topLevel() = 1\nval property = 1\nobject Singleton { companion object Holder {} }\n',
+      'src/Beta.kt': 'package com.example\nclass Widget\n',
+      'src/script.kts': 'class ScriptWidget\n',
+      'src/Test.kt': 'package com.example\nimport com.example.Widget\nimport com.example.Widget.Nested\nimport com.example.topLevel\nimport com.example.property\nimport com.example.Singleton.Holder\nimport com.example.Absent\nimport com.example.ScriptWidget\nimport com.example.Widget as Alias\nclass Test\n',
+    })
+    const out = await build(root)
+    const proof = (name: string) => resolveAuditImportTarget(out, importId(out, 'src/Test.kt', name))
+    expect(proof('com.example.Widget').declarationProof?.matchingDeclarationFactIds).toHaveLength(2)
+    for (const name of ['Widget.Nested', 'topLevel', 'property', 'Singleton.Holder']) expect(proof(`com.example.${name}`).status).toBe('present')
+    expect(proof('com.example.Absent').status).toBe('proven-missing')
+    expect(proof('com.example.ScriptWidget').status).toBe('proven-missing')
+    const artifact = readSourceAuditEvidence(out)
+    expect(artifact.files.find(file => file.path.endsWith('.kts'))?.capabilities.jvmDeclarations).toBe('unsupported')
+    expect(artifact.files.find(file => file.path === 'src/Alpha.kt')?.facts.find(fact => fact.name === 'topLevel')?.jvmDeclaration?.role).toBe('kotlin-top-level-function')
+    const alias = artifact.files.find(file => file.path === 'src/Test.kt')!.facts.filter(fact => fact.kind === 'import' && fact.sourceSpecifier === 'com.example.Widget').at(-1)!
+    expect(resolveAuditImportTarget(out, alias.id)).toMatchObject({ status: 'indeterminate', declarationProof: { targetKind: 'unsupported' } })
+  })
+
+  it.each([
+    ['src/Unknown.java', 'package invalid package;\nclass Unknown {}\n'],
+    ['src/Partial.java', 'package com.example;\nclass Partial { class Hidden {} }\n'],
+    ['src/Unsupported.kt', 'package com.example\ntypealias Alias = Missing\n'],
+    ['src/Unicode.kt', 'package com.example\nclass Éligible\n'],
+    ['src/Annotated.java', 'package com.example;\n@Deprecated class Hidden {}\n'],
+    ['src/Annotated.kt', 'package com.example\n@Deprecated class Hidden\n'],
+    ['src/Identifier.java', 'package com.example;\nclass Truncated$Name {}\n'],
+  ])('never proves absence with incomplete eligible coverage: %s', async (file, source) => {
+    const root = makeProject({ 'src/Test.java': 'package com.example;\nimport com.example.Absent;\nclass Test {}\n', [file]: source })
+    const out = await build(root)
+    expect(resolveAuditImportTarget(out, importId(out, 'src/Test.java', 'com.example.Absent')).status).toBe('indeterminate')
+  })
+
+  it('distinguishes known default package from unknown and rejects malformed closed JVM identities', async () => {
+    const root = makeProject({ 'src/Default.java': 'class Default {}\n' })
+    const out = await build(root)
+    const artifact = readSourceAuditEvidence(out)
+    expect(artifact.files[0]).toMatchObject({ jvmPackageName: '', capabilities: { jvmDeclarations: 'complete' } })
+    expect(artifact.files[0]!.facts[0]!.jvmDeclaration).toMatchObject({ packageName: '', qualifiedName: 'Default' })
+    rewriteArtifact(out, artifact => { artifact.files[0].facts[0].jvmDeclaration.role = 'invented' })
+    expect(() => readSourceAuditEvidence(out)).toThrow()
+  })
+  it.each(['package', 'owner', 'role', 'extra', 'completeness', 'import-target'])('rejects malformed canonical JVM %s evidence', async (invalid) => {
+    const out = await build(makeProject({ 'src/Outer.java': 'package com.example;\nimport com.example.Other;\nclass Outer {\n class Nested {}\n}\n' }))
+    rewriteArtifact(out, artifact => {
+      const file = artifact.files[0]
+      const nested = file.facts.find((fact: any) => fact.name === 'Nested' && fact.kind === 'declaration')
+      if (invalid === 'package') nested.jvmDeclaration.packageName = 'other'
+      if (invalid === 'owner') nested.jvmDeclaration.qualifiedName = 'com.example.Other.Nested'
+      if (invalid === 'role') nested.jvmDeclaration.role = 'kotlin-top-level-function'
+      if (invalid === 'extra') nested.jvmDeclaration.extra = true
+      if (invalid === 'completeness') delete nested.jvmDeclaration
+      if (invalid === 'import-target') file.facts.find((fact: any) => fact.kind === 'import').jvmImportTarget.qualifiedName = 'com.example.Guessed'
+    })
+    expect(() => readSourceAuditEvidence(out)).toThrow()
+  })
+  it.each([
+    ['src/Test.java', 'package com.example;\nimport com.example.*;\nclass Test {}\n', 'com.example.*'],
+    ['src/Test.java', 'package com.example;\nimport static com.example.Test.*;\nclass Test {}\n', 'com.example.Test.*'],
+    ['src/Test.kt', 'package com.example\nimport com.example.*\nclass Test\n', 'com.example.*'],
+  ])('keeps unsupported wildcard syntax indeterminate: %s %s', async (file, source, specifier) => {
+    const out = await build(makeProject({ [file]: source }))
+    expect(resolveAuditImportTarget(out, importId(out, file, specifier))).toMatchObject({ status: 'indeterminate', declarationProof: { targetKind: 'unsupported', targetQualifiedName: null, domainComplete: false } })
+  })
+})
+
 describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
   it('preserves the frozen Gate 4B peer.mjs counterexample as present', async () => {
     // Lab kitSourceReaderReplacement.test.ts: exact counterexample for ambiguous::test-rot.
@@ -167,7 +252,7 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     const proofOf = (specifier: string) => resolveAuditImportTarget(out, importId(out, 'src/a.ts', specifier))
 
     expect(proofOf('./b')).toMatchObject({
-      schemaVersion: '1.0.0', mode: 'audit-import-target', originFile: 'src/a.ts', sourceSpecifier: './b',
+      schemaVersion: '1.1.0', mode: 'audit-import-target', originFile: 'src/a.ts', sourceSpecifier: './b',
       status: 'present', selectionComplete: true, reasonCode: 'TARGET_IN_SELECTED_INVENTORY',
     })
     expect(proofOf('./b').candidatePaths).toContain('src/b.ts')
@@ -286,22 +371,18 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
       kotlinSourceSet: resolveAuditImportTarget(out, importId(out, 'src/main/kotlin/com/acme/Kc.kt', 'com.acme.Dupk')),
       kotlinOutsideRoot: resolveAuditImportTarget(out, importId(out, 'src/main/kotlin/com/acme/Kc.kt', 'com.other.Outk')),
     }
-    // Duplicated source-set classes are decided by the existing resolvers; existence is never reported missing, and a
-    // class under an unselected root is indeterminate because the JVM resolvers cannot enumerate candidates.
+    // Every qualified duplicate is preserved; unobserved package namespaces remain indeterminate.
     for (const proof of [proofs.javaSourceSet, proofs.kotlinSourceSet]) expect(['present', 'indeterminate']).toContain(proof.status)
     for (const proof of [proofs.javaOutsideRoot, proofs.kotlinOutsideRoot]) {
-      expect(proof).toMatchObject({ status: 'indeterminate', reasonCode: 'JVM_CANDIDATES_NOT_ENUMERABLE', candidatePaths: [] })
+      expect(proof).toMatchObject({ status: 'indeterminate', reasonCode: 'JVM_DECLARATION_DOMAIN_INCOMPLETE', candidatePaths: [] })
     }
     expect(Object.values(proofs).some((proof) => proof.status === 'proven-missing')).toBe(false)
-    // Measured: both resolvers pick one existing source-set file when two define the class, so source-set ambiguity is not surfaced.
-    expect(proofs.javaSourceSet.candidatePaths).toEqual(['src/main/java/com/acme/Dup.java'])
-    // Existence proof is not unique target identity: `present` only establishes that at least one eligible candidate exists.
-    // src/test also defines the class, yet candidatePaths lists only the resolver's single choice (it may be incomplete for JVM).
-    expect(proofs.javaSourceSet).toMatchObject({ status: 'present', reasonCode: 'TARGET_IN_SELECTED_INVENTORY' })
-    expect(proofs.kotlinSourceSet).toMatchObject({ status: 'present', reasonCode: 'TARGET_IN_SELECTED_INVENTORY' })
-    expect(proofs.kotlinSourceSet.candidatePaths).toEqual(['src/main/kotlin/com/acme/Dupk.kt'])
-    expect(proofs.javaSourceSet.candidatePaths).not.toContain('src/test/java/com/acme/Dup.java')
-    expect(proofs.kotlinSourceSet.candidatePaths).not.toContain('src/test/kotlin/com/acme/Dupk.kt')
+    // Declaration mode reports every selected definition rather than the legacy resolver's single file.
+    expect(proofs.javaSourceSet.declarationProof?.matchingSourcePaths).toEqual(['src/main/java/com/acme/Dup.java', 'src/test/java/com/acme/Dup.java'])
+    // Presence is not unique compiler binding, and no filesystem candidate is fabricated.
+    expect(proofs.javaSourceSet).toMatchObject({ status: 'present', reasonCode: 'QUALIFIED_DECLARATION_MATCH' })
+    expect(proofs.kotlinSourceSet).toMatchObject({ status: 'present', reasonCode: 'QUALIFIED_DECLARATION_MATCH' })
+    expect(proofs.kotlinSourceSet.declarationProof?.matchingSourcePaths).toEqual(['src/main/kotlin/com/acme/Dupk.kt', 'src/test/kotlin/com/acme/Dupk.kt'])
   })
 
   it('is read-only and returns a stable identity across repeated runs', async () => {
@@ -344,7 +425,7 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     expect(resolveAuditImportTarget(out, missing)).toMatchObject({ status: 'indeterminate', selectionComplete: false })
   })
 
-  it('keeps Java and Kotlin source-set and nested cases indeterminate unless a selected file resolves', async () => {
+  it('keeps the domain indeterminate when an inline nested declaration cannot be completely qualified', async () => {
     const root = makeProject({
       'src/main/java/com/acme/Util.java': 'package com.acme;\npublic class Util { public static class Inner {} }\n',
       'src/main/java/com/acme/App.java': 'package com.acme;\nimport com.acme.Util;\nimport com.acme.Util.Inner;\nimport com.acme.Missing;\nimport java.util.List;\npublic class App {}\n',
@@ -354,10 +435,10 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     const out = await build(root)
     const java = (specifier: string) => resolveAuditImportTarget(out, importId(out, 'src/main/java/com/acme/App.java', specifier))
     const kotlin = (specifier: string) => resolveAuditImportTarget(out, importId(out, 'src/main/kotlin/com/acme/Use.kt', specifier))
-    expect(java('com.acme.Util').status).toBe('present')
-    expect(kotlin('com.acme.Tool').status).toBe('present')
+    expect(java('com.acme.Util').status).toBe('indeterminate')
+    expect(kotlin('com.acme.Tool').status).toBe('indeterminate')
     for (const proof of [java('com.acme.Missing'), java('java.util.List'), kotlin('com.acme.Absent'), kotlin('kotlin.collections.List')]) {
-      expect(proof).toMatchObject({ status: 'indeterminate', reasonCode: 'JVM_CANDIDATES_NOT_ENUMERABLE', candidatePaths: [] })
+      expect(proof).toMatchObject({ status: 'indeterminate', reasonCode: 'JVM_DECLARATION_DOMAIN_INCOMPLETE', candidatePaths: [] })
     }
     // Nested declaration import: whatever the resolver reports, it is never proven-missing.
     expect(java('com.acme.Util.Inner').status).not.toBe('proven-missing')

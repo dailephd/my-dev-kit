@@ -13,7 +13,7 @@ import { ensureInsideProjectRoot, UnsafeSourceError } from './getSourceSlice.js'
  * binds semantically; the fact's own importResolution and targetPaths keep their meanings.
  */
 export interface AuditImportTargetProof {
-  schemaVersion: '1.0.0'
+  schemaVersion: '1.1.0'
   mode: 'audit-import-target'
   snapshotId: string
   importFactId: string
@@ -23,6 +23,18 @@ export interface AuditImportTargetProof {
   candidatePaths: string[]
   selectionComplete: boolean
   reasonCode: string
+  declarationProof?: {
+    scope: 'selected-ordinary-jvm-sources'
+    targetKind: NonNullable<SourceAuditFact['jvmImportTarget']>['kind']
+    targetQualifiedName: string | null
+    targetPackageName: string | null
+    domainComplete: boolean
+    packageWitnessFactIds: string[]
+    matchingDeclarationFactIds: string[]
+    matchingSourcePaths: string[]
+    matchingQualifiedNames: string[]
+    incompletenessReasons: string[]
+  }
 }
 
 const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
@@ -118,6 +130,48 @@ export function resolveAuditImportTarget(indexDir: string, importFactId: string)
   })
 
   if (!specifier) return proof('indeterminate', [], 'NO_STATIC_SPECIFIER')
+
+  if (file.language === 'java' || file.language === 'kotlin') {
+    const target = fact.jvmImportTarget
+    const targetName = target?.qualifiedName ?? null
+    const ordinary = artifact.files.filter((entry) => /\.(java|kt)$/i.test(entry.path))
+    const reasons: string[] = []
+    if (!selectionComplete) reasons.push('SELECTION_INCOMPLETE')
+    if (!target || target.kind === 'unsupported' || !targetName) reasons.push('UNSUPPORTED_JVM_TARGET')
+    if (!/\.(java|kt)$/i.test(file.path)) reasons.push('SCRIPT_SEMANTICS_UNSUPPORTED')
+    for (const entry of ordinary) {
+      assertSourceAuditFileFresh(artifact, entry)
+      if (entry.jvmPackageName === undefined) reasons.push(`UNKNOWN_PACKAGE:${entry.path}`)
+      if (entry.capabilities.jvmDeclarations !== 'complete') reasons.push(`INCOMPLETE_DECLARATIONS:${entry.path}`)
+      if (entry.diagnostics.some((diagnostic) => /truncat|dropped/.test(diagnostic.code))) reasons.push(`TRUNCATED_EVIDENCE:${entry.path}`)
+    }
+    const declarations = ordinary.flatMap((entry) => entry.facts.filter((candidate) => candidate.kind === 'declaration' && candidate.jvmDeclaration).map((candidate) => ({ file: entry, fact: candidate, identity: candidate.jvmDeclaration! })))
+    const matches = (targetName && target?.kind !== 'unsupported' && /\.(java|kt)$/i.test(file.path)
+      ? declarations.filter((candidate) => candidate.identity.qualifiedName === targetName && (target?.kind === 'kotlin-direct' || candidate.identity.role === 'type')) : []
+    ).sort((a, b) => compareText(a.fact.id, b.fact.id))
+    // A nested type's package cannot be inferred by splitting its final component. Use observed
+    // package identities, preserving uncertainty when more than one package partition is possible.
+    const packages = [...new Set(ordinary.flatMap((entry) => entry.jvmPackageName !== undefined && targetName && (entry.jvmPackageName === '' ? !targetName.includes('.') : targetName.startsWith(`${entry.jvmPackageName}.`)) ? [entry.jvmPackageName] : []))]
+    const matchingPackages = [...new Set(matches.map((candidate) => candidate.identity.packageName))]
+    const targetPackage = matchingPackages.length === 1 ? matchingPackages[0]! : packages.length === 1 ? packages[0]! : null
+    const witnesses = targetPackage === null ? [] : declarations.filter((candidate) => candidate.identity.packageName === targetPackage)
+    if (targetPackage === null) reasons.push('TARGET_PACKAGE_UNESTABLISHED')
+    if (witnesses.length === 0) reasons.push('NO_PACKAGE_WITNESS')
+    const domainComplete = reasons.length === 0
+    const status = domainComplete ? matches.length > 0 ? 'present' : 'proven-missing' : 'indeterminate'
+    return {
+      ...proof(status, [], status === 'present' ? 'QUALIFIED_DECLARATION_MATCH' : status === 'proven-missing' ? 'ABSENT_IN_COMPLETE_JVM_DECLARATION_DOMAIN' : 'JVM_DECLARATION_DOMAIN_INCOMPLETE'),
+      declarationProof: {
+        scope: 'selected-ordinary-jvm-sources', targetKind: target?.kind ?? 'unsupported', targetQualifiedName: targetName,
+        targetPackageName: targetPackage, domainComplete,
+        packageWitnessFactIds: witnesses.map((candidate) => candidate.fact.id).sort(compareText),
+        matchingDeclarationFactIds: matches.map((candidate) => candidate.fact.id),
+        matchingSourcePaths: matches.map((candidate) => candidate.file.path),
+        matchingQualifiedNames: matches.map((candidate) => candidate.identity.qualifiedName),
+        incompletenessReasons: [...new Set(reasons)].sort(compareText),
+      },
+    }
+  }
 
   const registry = createDefaultRegistry(projectRoot)
   const adapter = registry.adapterForFile(file.path)

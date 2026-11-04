@@ -142,7 +142,7 @@ export const MAX_EXACT_FILE_SCAN_BYTES = AUDIT_CONTENT_MAX_BYTES
 
 /** Raw literal-text occurrences in one selected file. Interpretation (imports, fixtures, policy) belongs to the consumer. */
 export interface AuditFileOccurrenceResult {
-  schemaVersion: '1.0.0'
+  schemaVersion: typeof SOURCE_AUDIT_SCHEMA_VERSION
   mode: 'exact-file-occurrence'
   snapshotId: string
   filePath: string

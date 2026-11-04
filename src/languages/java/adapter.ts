@@ -166,6 +166,10 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
   const scopes: JavaScope[] = []
   let pending: PendingScope | null = null
   const seenQualified = new Set<string>()
+  const packageName = parseJavaPackageName(sourceText)
+  let packageKnown = packageName !== null ? /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(packageName) : !/\bpackage\b/.test(sourceText)
+  let jvmCoverageComplete = true
+  let packageDeclarations = 0
 
   const state: LineScanState = { depth: 0, inBlockComment: false, pendingAnnotations: [] }
   const base = { id: '', extractionMethod: 'java-lexical' as const }
@@ -179,10 +183,12 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
     exported: boolean | null,
     ownerKey: string | null,
     symbolId: string,
+    qualified = true,
   ): void => {
     target.push({
       ...base, kind: 'declaration', span: javaSpan(filePath, lineNumber), name, symbolId, declarationKind: kind, ownerKey,
       visibility, exported, exportOrigin: visibility === 'unknown' ? 'unknown' : 'visibility-inferred',
+      ...(packageKnown && qualified ? { jvmDeclaration: { packageName: packageName ?? '', qualifiedName: [packageName, ...scopes.map((scope) => scope.name), name].filter(Boolean).join('.'), role: 'type' as const } } : {}),
     })
     if (exported === true) {
       target.push({ ...base, kind: 'export', span: javaSpan(filePath, lineNumber), name, exportOrigin: 'visibility-inferred', visibility, exported: true, ...(symbolId ? { symbolId } : {}) })
@@ -210,7 +216,9 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
     line = stripLineComment(line)
 
     const trimmed = line.trim()
+    if ((trimmed.match(/\b(?:class|interface|enum|record)\s+[A-Za-z_]\w*/g)?.length ?? 0) > 1) jvmCoverageComplete = false
     const depthBeforeLine = state.depth
+    if (depthBeforeLine === 0 && /^(?:open\s+)?module\b/.test(trimmed)) jvmCoverageComplete = false
     state.depth += countNetBraces(line)
 
     if (trimmed.length === 0) continue
@@ -238,7 +246,11 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
     }
 
     if (depthBeforeLine === 0) {
-      if (PACKAGE_PATTERN.test(trimmed)) continue
+      if (PACKAGE_PATTERN.test(trimmed)) {
+        if (++packageDeclarations > 1 || !/^package\s+[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*;\s*$/.test(trimmed)) packageKnown = false
+        continue
+      }
+      if (/^package\b/.test(trimmed)) packageKnown = false
 
       const importMatch = trimmed.match(IMPORT_PATTERN)
       if (importMatch) {
@@ -250,6 +262,7 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
         topFacts.push({
           ...base, kind: 'import', span: javaSpan(filePath, lineNumber), sourceSpecifier: importMatch[2],
           importedNames: [segments[segments.length - 1]!], importResolution: 'observed',
+          jvmImportTarget: importMatch[2].includes('*') || !/^import\s+(?:static\s+)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\s*;\s*$/.test(trimmed) ? { kind: 'unsupported', qualifiedName: null } : importMatch[1] ? { kind: 'java-static-owner', qualifiedName: segments.length > 2 ? segments.slice(0, -1).join('.') : null } : { kind: 'java-type', qualifiedName: importMatch[2] },
         })
         continue
       }
@@ -257,6 +270,7 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
 
     const isAnnotationTypeDeclaration = ANNOTATION_TYPE_PATTERN.test(trimmed)
     if (trimmed.startsWith('@') && !isAnnotationTypeDeclaration) {
+      if (CLASS_LIKE_PATTERN.test(trimmed)) jvmCoverageComplete = false
       state.pendingAnnotations.push(trimmed)
       continue
     }
@@ -265,6 +279,8 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
       const classMatch = trimmed.match(CLASS_LIKE_PATTERN)
 
       if (classMatch) {
+        const qualified = NESTED_DECLARATION_PATTERN.test(trimmed) && !/[$\p{L}\p{N}_]/u.test(trimmed[(classMatch.index ?? 0) + classMatch[0].length] ?? '')
+        if (!qualified) jvmCoverageComplete = false
         const [, keyword, name] = classMatch
         const kind = classifyClassLikeKind(keyword)
         const exported = !PRIVATE_MODIFIER_PATTERN.test(trimmed)
@@ -278,7 +294,7 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
         if (exported) exports.push(name)
         // Explicit visibility from the modifiers before the keyword; no modifier means package-private, never public.
         const visibility = javaVisibility(trimmed.slice(0, classMatch.index ?? 0)) ?? 'package'
-        declarationFacts(topFacts, lineNumber, name, kind, visibility, visibility === 'public', null, '')
+        declarationFacts(topFacts, lineNumber, name, kind, visibility, visibility === 'public', null, '', qualified)
         const next: PendingScope = {
           name, kind, keyword: isAnnotationTypeDeclaration ? '@interface' : keyword, depth: depthBeforeLine, waited: 0, qualified: name,
           effectivelyPublic: visibility === 'public',
@@ -300,6 +316,8 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
       const looksClassLike = CLASS_LIKE_PATTERN.test(trimmed)
       const strict = trimmed.match(NESTED_DECLARATION_PATTERN)
       if (strict) {
+        const qualifiedIdentity = !/[$\p{L}\p{N}_]/u.test(trimmed[strict[0].length] ?? '')
+        if (!qualifiedIdentity) jvmCoverageComplete = false
         const [, head, keyword, name] = strict
         const annotationType = keyword.startsWith('@')
         const kind = classifyClassLikeKind(annotationType ? 'interface' : keyword)
@@ -312,6 +330,7 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
         declarationFacts(
           nestedFacts, lineNumber, name, kind, visibility, effectivelyPublic, `java/${chain}`,
           `audit-symbol:${encodeURIComponent(filePath)}#${encodeURIComponent(qualified)}`,
+          qualifiedIdentity,
         )
         const next: PendingScope = {
           name, kind, keyword: annotationType ? '@interface' : keyword, depth: depthBeforeLine, waited: 0, qualified, effectivelyPublic,
@@ -324,12 +343,15 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
         } else if (!line.includes('{')) {
           pending = next
         }
+        state.pendingAnnotations = []
+        continue
       } else if (looksClassLike) {
         uncertain.set('unrecognized-nested-declaration', 'A member line mentions a class-like keyword in a form the scanner cannot classify.')
       }
     }
 
     state.pendingAnnotations = []
+    if (/\b(?:class|interface|enum|record)\b/.test(trimmed)) jvmCoverageComplete = false
   }
 
   if (state.depth !== 0) uncertain.set('unbalanced-braces', 'Brace depth did not return to zero at the end of the file.')
@@ -340,6 +362,7 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
   const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
   const settled = uncertain.size === 0
   capabilities.declarations = settled ? 'complete' : 'partial'
+  capabilities.jvmDeclarations = settled && packageKnown && jvmCoverageComplete ? 'complete' : 'partial'
   capabilities.imports = settled ? 'complete' : 'partial'
   capabilities.exports = 'partial'
   capabilities['source-ranges'] = 'partial'
@@ -348,9 +371,10 @@ export function extractJavaSource(filePath: string, sourceText: string): Extract
   for (const [code, message] of [...uncertain].sort(([a], [b]) => (a < b ? -1 : 1))) diagnostics.push({ code, message, span: null })
   // Nested facts are published only when the lexical nesting is certain.
   const facts = settled ? [...topFacts, ...nestedFacts] : topFacts
+  if (!packageKnown || !jvmCoverageComplete || !settled) for (const fact of facts) delete fact.jvmDeclaration
 
   return {
-    sourceAudit: { facts, capabilities, diagnostics },
+    sourceAudit: { facts, capabilities, diagnostics, ...(packageKnown ? { jvmPackageName: packageName ?? '' } : {}) },
     language: 'java',
     lineCount,
     imports: dedupe(imports),

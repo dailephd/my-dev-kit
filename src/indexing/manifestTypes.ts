@@ -4,7 +4,7 @@ import type { IncrementalRefreshSummary } from './incrementalRefreshTypes.js'
 /** v1.15.0: identity of the serialized source-audit artifact written next to this manifest. */
 export interface SourceAuditEvidenceReference {
   path: 'source-audit-evidence.json'
-  schemaVersion: '1.0.0'
+  schemaVersion: '1.1.0'
   /** Lowercase SHA-256 of the exact serialized artifact bytes (UTF-8 JSON.stringify(value, null, 2) + LF). */
   sha256: string
   /** Semantic snapshot identity; equals artifact.source.snapshotId and is not a file checksum. */

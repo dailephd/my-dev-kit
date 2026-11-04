@@ -237,7 +237,7 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     const selected = artifact.files.find(file => file.path === 'src/left.mjs')!
     expect(selected).toMatchObject({ language: 'javascript', status: 'parsed', analyzerId: 'typescript-ast', contentSha256: createHash('sha256').update(source).digest('hex') })
     expect(selected.capabilities).toEqual({
-      declarations: 'complete', imports: 'complete', exports: 'complete', 'identifier-literals': 'complete',
+      declarations: 'complete', jvmDeclarations: 'unsupported', imports: 'complete', exports: 'complete', 'identifier-literals': 'complete',
       'test-observations': 'not-applicable', 'fixture-references': 'not-applicable', 'process-observations': 'complete',
       'api-client-calls': 'unsupported', 'source-ranges': 'complete',
     })

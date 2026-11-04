@@ -173,11 +173,11 @@ const LITERAL_FIELDS = ['name', 'observationKind', 'value', 'valueSha256', 'valu
 
 const FACT_FIELDS: Record<SourceAuditFactKind, { allowed: string[]; required: string[] }> = {
   declaration: {
-    allowed: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId'],
+    allowed: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId', 'jvmDeclaration'],
     required: ['name', 'symbolId', 'declarationKind'],
   },
   import: {
-    allowed: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId'],
+    allowed: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId', 'jvmImportTarget'],
     required: ['sourceSpecifier', 'importResolution'],
   },
   export: {
@@ -214,6 +214,30 @@ function validateFact(
   }
 
   if (fact.name !== undefined) requireText(fact.name, `${path}.name`)
+  if (fact.jvmDeclaration !== undefined) {
+    const identity = requireObj(fact.jvmDeclaration, `${path}.jvmDeclaration`)
+    requireClosed(identity, `${path}.jvmDeclaration`, ['packageName', 'qualifiedName', 'role'], ['packageName', 'qualifiedName', 'role'])
+    validateJvmName(identity.packageName, `${path}.jvmDeclaration.packageName`, true)
+    validateJvmName(identity.qualifiedName, `${path}.jvmDeclaration.qualifiedName`)
+    requireOneOf(identity.role, ['type', 'kotlin-top-level-function', 'kotlin-top-level-property'], `${path}.jvmDeclaration.role`)
+    const prefix = identity.packageName === '' ? '' : `${identity.packageName}.`
+    const qualified = identity.qualifiedName as string
+    if (!qualified.startsWith(prefix) || qualified.slice(prefix.length).split('.').at(-1) !== fact.name) fail(path, 'JVM declaration identity must match its package and declared name')
+    if (fact.ownerKey && qualified.slice(prefix.length).split('.').length < 2) fail(path, 'nested JVM declaration requires its enclosing owner identity')
+    if (typeof fact.ownerKey === 'string') {
+      const owners = fact.ownerKey.split('/').slice(1).map((part) => part.slice(part.indexOf(':') + 1))
+      if (qualified !== [identity.packageName, ...owners, fact.name].filter(Boolean).join('.')) fail(path, 'JVM declaration identity must preserve its exact enclosing owner chain')
+    }
+    if (!fact.ownerKey && qualified.slice(prefix.length) !== fact.name) fail(path, 'top-level JVM declaration must have no enclosing owner')
+    if (identity.role !== 'type' && fact.ownerKey) fail(path, 'Kotlin top-level roles cannot have an enclosing owner')
+  }
+  if (fact.jvmImportTarget !== undefined) {
+    const target = requireObj(fact.jvmImportTarget, `${path}.jvmImportTarget`)
+    requireClosed(target, `${path}.jvmImportTarget`, ['kind', 'qualifiedName'], ['kind', 'qualifiedName'])
+    requireOneOf(target.kind, ['java-type', 'java-static-owner', 'kotlin-direct', 'unsupported'], `${path}.jvmImportTarget.kind`)
+    if (target.qualifiedName !== null) validateJvmName(target.qualifiedName, `${path}.jvmImportTarget.qualifiedName`)
+    if (target.kind === 'unsupported' && target.qualifiedName !== null) fail(path, 'unsupported JVM target cannot claim a qualified name')
+  }
   if (fact.observationKind !== undefined) {
     requireOneOf(fact.observationKind, SOURCE_AUDIT_OBSERVATION_KINDS, `${path}.observationKind`)
   }
@@ -316,10 +340,15 @@ const FILE_BASE_KEYS = [
   'warnings',
 ]
 
+function validateJvmName(value: unknown, path: string, allowDefault = false): void {
+  if (typeof value !== 'string' || !(allowDefault && value === '') && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value)) fail(path, 'must be a qualified JVM identifier')
+}
+
 function validateFileRecord(value: unknown, path: string, mode: FileMode): Obj {
   const file = requireObj(value, path)
   const extra = mode === 'full' ? ['facts', 'diagnostics'] : mode === 'file-page' ? ['diagnostics'] : []
-  requireClosed(file, path, [...FILE_BASE_KEYS, ...extra], [...FILE_BASE_KEYS, ...extra])
+  requireClosed(file, path, [...FILE_BASE_KEYS, ...extra, 'jvmPackageName'], [...FILE_BASE_KEYS, ...extra])
+  if (file.jvmPackageName !== undefined) validateJvmName(file.jvmPackageName, `${path}.jvmPackageName`, true)
   const filePath = requirePath(file.path, `${path}.path`)
   requireText(file.language, `${path}.language`)
   requireOneOf(file.role, SOURCE_AUDIT_ROLES, `${path}.role`)
@@ -343,6 +372,9 @@ function validateFileRecord(value: unknown, path: string, mode: FileMode): Obj {
   }
 
   requireStringArray(file.warnings, `${path}.warnings`, false)
+  if (capabilities.jvmDeclarations === 'complete') {
+    if (!/\.(java|kt)$/i.test(filePath) || file.jvmPackageName === undefined || capabilities.declarations !== 'complete') fail(path, 'complete JVM declarations require an ordinary JVM file, known package and complete declarations')
+  }
 
   if (mode !== 'inventory') {
     requireArray(file.diagnostics, `${path}.diagnostics`).forEach((entry, i) => {
@@ -451,6 +483,24 @@ export function validateSourceAuditEvidence(value: unknown): asserts value is So
     if (file.status === 'unsupported') unsupported++
     if (file.status === 'failed') failed++
     const facts = validateFacts(file.facts, `${path}.facts`, filePath, file.capabilities as Obj)
+    for (const fact of facts) {
+      if (fact.jvmDeclaration !== undefined) {
+        const identity = fact.jvmDeclaration as Obj
+        if (identity.packageName !== file.jvmPackageName || !/\.(java|kt)$/i.test(filePath)) fail(path, 'JVM declaration package must match its ordinary source file')
+        if (file.language === 'java' && identity.role !== 'type') fail(path, 'Java declarations must use type role')
+        if (identity.role === 'kotlin-top-level-function' && fact.declarationKind !== 'function' || identity.role === 'kotlin-top-level-property' && fact.declarationKind !== 'const' && fact.declarationKind !== 'variable') fail(path, 'JVM declaration role contradicts its declaration kind')
+        if (fact.ownerKey && !(fact.ownerKey as string).startsWith(`${file.language}/`)) fail(path, 'JVM enclosing owner reference must belong to its language')
+      }
+      if (fact.jvmImportTarget !== undefined) {
+        const target = fact.jvmImportTarget as Obj
+        if (!/\.(java|kt|kts)$/i.test(filePath) || file.language === 'java' && target.kind === 'kotlin-direct' || file.language === 'kotlin' && (target.kind === 'java-type' || target.kind === 'java-static-owner')) fail(path, 'JVM import target kind contradicts its source language')
+        if (target.qualifiedName !== null && target.kind !== 'unsupported') {
+          const specifier = fact.sourceSpecifier as string
+          if (target.kind === 'java-static-owner' ? !specifier.startsWith(`${target.qualifiedName}.`) || specifier.slice((target.qualifiedName as string).length + 1).includes('.') : specifier !== target.qualifiedName) fail(path, 'JVM target identity contradicts its import fact')
+        }
+      }
+      if ((file.capabilities as Obj).jvmDeclarations === 'complete' && fact.kind === 'declaration' && !fact.jvmDeclaration) fail(path, 'complete JVM declaration extraction cannot omit declaration identity')
+    }
     for (const fact of facts) {
       const id = fact.id as string
       if (seenFactIds.has(id)) fail(`${path}.facts`, 'contains a fact id duplicated across the artifact')

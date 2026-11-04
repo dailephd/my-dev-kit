@@ -37,7 +37,12 @@ const PREFIX = /^INVALID_SOURCE_AUDIT_EVIDENCE: /
 const SHA = 'c'.repeat(64)
 
 function fixture(name: string): unknown {
-  return JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8')) as unknown
+  // Historical 1.0 fixtures remain immutable; exercise their existing meanings in the additive schema.
+  const value = JSON.parse(readFileSync(join(FIXTURE_DIR, name), 'utf8'))
+  if (value.schemaVersion === '1.0.0') value.schemaVersion = SOURCE_AUDIT_SCHEMA_VERSION
+  for (const file of value.files ?? []) if (file.capabilities) file.capabilities.jvmDeclarations = 'not-applicable'
+  if (value.file?.capabilities) value.file.capabilities.jvmDeclarations = 'not-applicable'
+  return value as unknown
 }
 
 function clone<T>(value: T): T {
@@ -64,6 +69,7 @@ function expectInvalidArtifact(value: unknown, fragment?: string): void {
 
 const noCapabilities = (): SourceAuditFile['capabilities'] => ({
   declarations: 'not-applicable',
+  jvmDeclarations: 'not-applicable',
   imports: 'not-applicable',
   exports: 'not-applicable',
   'identifier-literals': 'not-applicable',
@@ -114,7 +120,7 @@ function inventoryPage(totalItems: number, pageIndex: number): SourceAuditInvent
   const count = Math.min(AUDIT_INVENTORY_PAGE_SIZE, Math.max(0, totalItems - pageIndex * AUDIT_INVENTORY_PAGE_SIZE))
   const start = pageIndex * AUDIT_INVENTORY_PAGE_SIZE
   return {
-    schemaVersion: '1.0.0',
+    schemaVersion: '1.1.0',
     snapshotId: SHA,
     pageIndex,
     pageSize: AUDIT_INVENTORY_PAGE_SIZE,
@@ -133,7 +139,7 @@ function filePage(totalFacts: number, pageIndex: number): SourceAuditFilePage {
   const count = Math.min(AUDIT_FACT_PAGE_SIZE, Math.max(0, totalFacts - pageIndex * AUDIT_FACT_PAGE_SIZE))
   const start = pageIndex * AUDIT_FACT_PAGE_SIZE
   return {
-    schemaVersion: '1.0.0',
+    schemaVersion: '1.1.0',
     snapshotId: SHA,
     pageIndex,
     pageSize: AUDIT_FACT_PAGE_SIZE,
@@ -159,7 +165,7 @@ function expectInvalidFilePage(value: unknown, fragment?: string): void {
 
 describe('v1.15.0 source-audit contract constants', () => {
   it('materializes the exact frozen constants', () => {
-    expect(SOURCE_AUDIT_SCHEMA_VERSION).toBe('1.0.0')
+    expect(SOURCE_AUDIT_SCHEMA_VERSION).toBe('1.1.0')
     expect(SOURCE_AUDIT_ARTIFACT_KIND).toBe('my-dev-kit-v1-source-audit-evidence')
     expect(SOURCE_AUDIT_FILENAME).toBe('source-audit-evidence.json')
     expect(AUDIT_INVENTORY_PAGE_SIZE).toBe(64)
@@ -171,7 +177,7 @@ describe('v1.15.0 source-audit contract constants', () => {
     expect([...SOURCE_AUDIT_ROLES]).toEqual(['source', 'test', 'script', 'unknown'])
     expect([...SOURCE_AUDIT_FILE_STATUSES]).toEqual(['parsed', 'partial', 'file-level-only', 'unsupported', 'failed', 'skipped'])
     expect([...SOURCE_AUDIT_CAPABILITIES]).toEqual([
-      'declarations', 'imports', 'exports', 'identifier-literals', 'test-observations',
+      'declarations', 'jvmDeclarations', 'imports', 'exports', 'identifier-literals', 'test-observations',
       'fixture-references', 'process-observations', 'api-client-calls', 'source-ranges',
     ])
     expect([...SOURCE_AUDIT_CAPABILITY_STATUSES]).toEqual(['complete', 'partial', 'unsupported', 'failed', 'not-applicable'])
@@ -466,7 +472,7 @@ describe('source-audit page validation (RSP-007)', () => {
 
   it('defines not-selected results as a single empty terminal page', () => {
     const notSelected: SourceAuditFilePage = {
-      schemaVersion: '1.0.0', snapshotId: SHA, pageIndex: 0, pageSize: AUDIT_FACT_PAGE_SIZE,
+      schemaVersion: '1.1.0', snapshotId: SHA, pageIndex: 0, pageSize: AUDIT_FACT_PAGE_SIZE,
       totalItems: 0, totalPages: 1, nextPageIndex: null, mode: 'audit-file', status: 'not-selected', file: null, facts: [],
     }
     expect(() => validateSourceAuditFilePage(notSelected)).not.toThrow()

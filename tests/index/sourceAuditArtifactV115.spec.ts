@@ -51,7 +51,7 @@ describe('v1.15.0 Batch 4 source-audit artifact generation', () => {
     expect(manifest.version).toBe('1.0.0')
     expect(manifest.sourceAuditEvidence).toEqual({
       path: 'source-audit-evidence.json',
-      schemaVersion: '1.0.0',
+      schemaVersion: '1.1.0',
       sha256: sha256(bytes),
       snapshotId: artifact.source.snapshotId,
     })
@@ -190,7 +190,7 @@ describe('v1.15.0 Batch 4 write order and failure safety', () => {
       codeGraph: { summary: { edgeCount: 0 }, schemaVersion: '1.1.0', nodes: [], edges: [] } as never,
       warnings: [],
       errors: [],
-      ...(reference ? { sourceAuditEvidence: { path: 'source-audit-evidence.json', schemaVersion: '1.0.0', ...reference } } : {}),
+      ...(reference ? { sourceAuditEvidence: { path: 'source-audit-evidence.json', schemaVersion: '1.1.0', ...reference } } : {}),
     })
 
   it('never publishes a manifest that points at a mismatched artifact', () => {

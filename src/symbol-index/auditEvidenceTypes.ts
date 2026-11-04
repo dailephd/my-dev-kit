@@ -8,7 +8,7 @@
  * symbol-index schema 3, code-graph schema 1.1.0 or index manifest 1.0.0.
  */
 
-export const SOURCE_AUDIT_SCHEMA_VERSION = '1.0.0'
+export const SOURCE_AUDIT_SCHEMA_VERSION = '1.1.0'
 export const SOURCE_AUDIT_ARTIFACT_KIND = 'my-dev-kit-v1-source-audit-evidence'
 export const SOURCE_AUDIT_FILENAME = 'source-audit-evidence.json'
 
@@ -33,6 +33,7 @@ export type SourceAuditFileStatus = (typeof SOURCE_AUDIT_FILE_STATUSES)[number]
 
 export const SOURCE_AUDIT_CAPABILITIES = [
   'declarations',
+  'jvmDeclarations',
   'imports',
   'exports',
   'identifier-literals',
@@ -135,12 +136,25 @@ export interface SourceAuditSpan {
   endColumn: number | null
 }
 
+export interface JvmDeclarationIdentity {
+  packageName: string
+  qualifiedName: string
+  role: 'type' | 'kotlin-top-level-function' | 'kotlin-top-level-property'
+}
+
+export interface JvmImportTarget {
+  kind: 'java-type' | 'java-static-owner' | 'kotlin-direct' | 'unsupported'
+  qualifiedName: string | null
+}
+
 export interface SourceAuditFact {
   id: string
   kind: SourceAuditFactKind
   span: SourceAuditSpan
   extractionMethod: SourceAuditExtractionMethod
   name?: string
+  jvmDeclaration?: JvmDeclarationIdentity
+  jvmImportTarget?: JvmImportTarget
   observationKind?: SourceAuditObservationKind
   symbolId?: string
   declarationKind?: string
@@ -164,6 +178,8 @@ export interface SourceAuditFact {
 export interface SourceAuditFile {
   path: string
   language: string
+  /** Missing means unknown; empty string is a positively qualified default package. */
+  jvmPackageName?: string
   role: SourceAuditRole
   status: SourceAuditFileStatus
   contentSha256: string | null
@@ -209,7 +225,7 @@ export interface SourceAuditEvidenceArtifact {
 }
 
 export interface SourceAuditPageEnvelope {
-  schemaVersion: '1.0.0'
+  schemaVersion: typeof SOURCE_AUDIT_SCHEMA_VERSION
   snapshotId: string
   pageIndex: number
   pageSize: number

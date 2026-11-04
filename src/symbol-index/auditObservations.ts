@@ -34,6 +34,7 @@ import {
 import type { ExtractionResult } from './symbolExtractor.js'
 
 export interface SourceAuditExtractionPayload {
+  jvmPackageName?: string
   facts: SourceAuditFact[]
   capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus>
   diagnostics: SourceAuditFile['diagnostics']
@@ -50,6 +51,7 @@ const MAX_MESSAGE_CHARS = 240
 /** Capabilities a producer may report beyond `unsupported`. api-client-calls is Batch 6. */
 export const AUDIT_PRODUCER_CAPABILITIES = [
   ...BATCH2_AUDIT_CAPABILITIES,
+  'jvmDeclarations',
   'identifier-literals',
   'test-observations',
   'fixture-references',
@@ -92,8 +94,8 @@ const ALLOWED_FIELDS: Record<ProducedKind, readonly (keyof SourceAuditFact)[]> =
   'test-observation': LITERAL_FIELDS,
   'fixture-reference': LITERAL_FIELDS,
   'process-observation': LITERAL_FIELDS,
-  declaration: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId'],
-  import: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId'],
+  declaration: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId', 'jvmDeclaration'],
+  import: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId', 'jvmImportTarget'],
   export: ['name', 'symbolId', 'visibility', 'exported', 'exportOrigin', 'sourceSpecifier', 'owningSymbolId'],
 }
 
@@ -331,6 +333,8 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
     if (capabilities[capability] === 'complete') capabilities[capability] = 'partial'
   }
   for (const capability of droppedKinds) downgrade(capability)
+  if (droppedKinds.has('declarations') || counters.downgraded.has('declarations')) downgrade('jvmDeclarations')
+  if (capabilities.jvmDeclarations === 'complete' && facts.some((fact) => fact.kind === 'declaration' && !fact.jvmDeclaration)) downgrade('jvmDeclarations')
   for (const capability of counters.downgraded) downgrade(capability)
   for (const kind of PRODUCED_KINDS as readonly ProducedKind[]) {
     const capability = KIND_CAPABILITY[kind]
@@ -350,9 +354,10 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
     diagnostics.push({ code: 'audit-span-adjusted', message: `${count} adjustment(s): ${reason}.`, span: null })
   }
   if (diagnostics.length > MAX_AUDIT_DIAGNOSTICS) {
+    downgrade('jvmDeclarations')
     const kept = diagnostics.slice(0, MAX_AUDIT_DIAGNOSTICS - 1)
     kept.push({ code: 'diagnostics-truncated', message: `${diagnostics.length - kept.length} further diagnostic(s) omitted.`, span: null })
-    return { facts, capabilities, diagnostics: kept }
+    return { facts, capabilities, diagnostics: kept, ...(typeof raw.jvmPackageName === 'string' ? { jvmPackageName: raw.jvmPackageName } : {}) }
   }
-  return { facts, capabilities, diagnostics }
+  return { facts, capabilities, diagnostics, ...(typeof raw.jvmPackageName === 'string' ? { jvmPackageName: raw.jvmPackageName } : {}) }
 }

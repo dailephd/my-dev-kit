@@ -66,7 +66,7 @@ describe('v1.15.0 KIT-FACTS-01 exact-file source occurrences', () => {
     const out = await build(makeProject(FILES))
     const result = occurrences(out, 'tests/one.test.ts', 'seed.json', 1)
     expect(result).toMatchObject({
-      schemaVersion: '1.0.0', mode: 'exact-file-occurrence', filePath: 'tests/one.test.ts', value: 'seed.json',
+      schemaVersion: '1.1.0', mode: 'exact-file-occurrence', filePath: 'tests/one.test.ts', value: 'seed.json',
       complete: true, reasonCode: null, matchCount: 1, returnedMatches: 1, truncated: false,
     })
     expect(result.snapshotId).toBe(readSourceAuditEvidence(out).source.snapshotId)

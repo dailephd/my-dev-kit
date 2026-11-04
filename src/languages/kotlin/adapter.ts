@@ -197,6 +197,10 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   const scopes: KotlinScope[] = []
   const hold: { pending: PendingKotlinScope | null } = { pending: null }
   const seenQualified = new Set<string>()
+  const packageName = parseKotlinPackageName(sourceText)
+  let packageKnown = packageName !== null ? /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(packageName) : !/\bpackage\b/.test(sourceText)
+  let jvmCoverageComplete = true
+  let packageDeclarations = 0
 
   const state: LineScanState = { depth: 0, inBlockComment: false, pendingAnnotations: [] }
   const base = { id: '', extractionMethod: 'kotlin-lexical' as const }
@@ -218,10 +222,12 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
     exported: boolean | null,
     ownerKey: string | null,
     symbolId: string,
+    qualified = true,
   ): void => {
     target.push({
       ...base, kind: 'declaration', span: kotlinSpan(filePath, lineNumber), name, symbolId, declarationKind: kind, ownerKey,
       visibility, exported, exportOrigin: exported === null || visibility === 'unknown' ? 'unknown' : 'visibility-inferred',
+      ...(!isScript && packageKnown && qualified ? { jvmDeclaration: { packageName: packageName ?? '', qualifiedName: [packageName, ...(ownerKey ? ownerKey.split('/').slice(1).map((part) => part.slice(part.indexOf(':') + 1)) : []), name].filter(Boolean).join('.'), role: kind === 'function' ? 'kotlin-top-level-function' as const : kind === 'const' || kind === 'variable' ? 'kotlin-top-level-property' as const : 'type' as const } } : {}),
     })
     if (exported === true) {
       target.push({ ...base, kind: 'export', span: kotlinSpan(filePath, lineNumber), name, exportOrigin: 'visibility-inferred', visibility, exported: true, ...(symbolId ? { symbolId } : {}) })
@@ -259,7 +265,11 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
     line = stripLineComment(line)
 
     const trimmed = line.trim()
+    const inlineCompanion = trimmed.match(/^(?:(?:public|internal|private)\s+)?object\s+([A-Za-z_]\w*)\s*\{\s*companion\s+object\s+([A-Za-z_]\w*)\s*\{\s*\}\s*\}\s*$/)
+    if (!inlineCompanion && (trimmed.match(/\b(?:class|interface|object)\s+[A-Za-z_]\w*/g)?.length ?? 0) > 1) jvmCoverageComplete = false
+    if (/\btypealias\b|`/.test(trimmed) || /;\s*(?:fun|val|var)\b/.test(trimmed)) jvmCoverageComplete = false
     const depthBeforeLine = state.depth
+    if (CLASS_LIKE_PATTERN.test(trimmed) && depthBeforeLine > 0 && (!scopes.length || depthBeforeLine !== scopes[scopes.length - 1]!.bodyDepth)) jvmCoverageComplete = false
     state.depth += countNetBraces(line)
 
     if (trimmed.length === 0) continue
@@ -291,7 +301,11 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
     }
 
     if (depthBeforeLine === 0) {
-      if (PACKAGE_PATTERN.test(trimmed)) continue
+      if (PACKAGE_PATTERN.test(trimmed)) {
+        if (++packageDeclarations > 1 || !/^package\s+[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*;?\s*$/.test(trimmed)) packageKnown = false
+        continue
+      }
+      if (/^package\b/.test(trimmed)) packageKnown = false
 
       const importMatch = trimmed.match(IMPORT_PATTERN)
       if (importMatch) {
@@ -300,12 +314,14 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         topFacts.push({
           ...base, kind: 'import', span: kotlinSpan(filePath, lineNumber), sourceSpecifier: importMatch[1],
           importedNames: [segments[segments.length - 1]!], importResolution: 'observed',
+          jvmImportTarget: importMatch[1].includes('*') || /\bas\b/.test(trimmed) || !/^import\s+[\w.]+\s*;?$/.test(trimmed) ? { kind: 'unsupported', qualifiedName: null } : { kind: 'kotlin-direct', qualifiedName: importMatch[1] },
         })
         continue
       }
     }
 
     if (trimmed.startsWith('@')) {
+      if (/\b(?:class|interface|object|fun|val|var)\b/.test(trimmed)) jvmCoverageComplete = false
       state.pendingAnnotations.push(trimmed)
       continue
     }
@@ -327,7 +343,9 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         if (exported) exports.push(name)
         const explicit = explicitKotlinVisibility(trimmed.slice(0, matchIndex))
         const visibility: SourceAuditFact['visibility'] = explicit ?? implicitVisibility(null)
-        declarationFacts(topFacts, lineNumber, name, kind, visibility, topExportState(visibility), null, '')
+        const qualified = trimmed.slice(0, matchIndex).trim().split(/\s+/).filter(Boolean).every((modifier) => MODIFIER_KEYWORDS.has(modifier)) && (!classMatch || !/[$\p{L}\p{N}_]/u.test(trimmed[matchIndex + classMatch[0].length] ?? ''))
+        if (!qualified) jvmCoverageComplete = false
+        declarationFacts(topFacts, lineNumber, name, kind, visibility, topExportState(visibility), null, '', qualified)
         state.pendingAnnotations = []
       }
 
@@ -335,6 +353,12 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         const [, keyword, name] = classMatch
         const kind = classifyClassLikeKind(trimmed, keyword)
         topLevel(name, kind, classMatch.index ?? 0)
+        if (inlineCompanion) {
+          const nestedName = inlineCompanion[2]!
+          const visibility = explicitKotlinVisibility(trimmed.slice(0, classMatch.index ?? 0)) ?? implicitVisibility(null)
+          declarationFacts(nestedFacts, lineNumber, nestedName, 'object', 'public', topExportState(visibility), `kotlin/object:${name}`,
+            `audit-symbol:${encodeURIComponent(filePath)}#${encodeURIComponent(`${name}.${nestedName}`)}`)
+        }
         const visibility = explicitKotlinVisibility(trimmed.slice(0, classMatch.index ?? 0)) ?? implicitVisibility(null)
         openScope(
           { name, keyword, depth: depthBeforeLine, parens: netBy(line, '(', ')'), qualified: name, effectivelyPublic: topExportState(visibility) },
@@ -354,6 +378,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         continue
       }
       if (isScript) uncertain.set('kotlin-script-statement', 'An executable or unrecognized top-level script statement is outside the explicit declaration profile.')
+      if (/\b(?:class|interface|object|fun|val|var)\b/.test(trimmed)) jvmCoverageComplete = false
     } else if (scopes.length > 0 && depthBeforeLine === scopes[scopes.length - 1]!.bodyDepth) {
       const owner = scopes[scopes.length - 1]!
       const companion = trimmed.match(COMPANION_PATTERN)
@@ -393,6 +418,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
   const settled = uncertain.size === 0
   capabilities.declarations = settled ? 'complete' : 'partial'
+  capabilities.jvmDeclarations = isScript ? 'unsupported' : settled && packageKnown && jvmCoverageComplete ? 'complete' : 'partial'
   capabilities.imports = settled ? 'complete' : 'partial'
   capabilities.exports = 'partial'
   capabilities['source-ranges'] = 'partial'
@@ -402,9 +428,10 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   for (const [code, message] of [...uncertain].sort(([a], [b]) => (a < b ? -1 : 1))) diagnostics.push({ code, message, span: null })
   // Nested facts are published only when the lexical nesting is certain.
   const facts = settled ? [...topFacts, ...nestedFacts] : topFacts
+  if (!packageKnown || !jvmCoverageComplete || !settled) for (const fact of facts) delete fact.jvmDeclaration
 
   return {
-    sourceAudit: { facts, capabilities, diagnostics },
+    sourceAudit: { facts, capabilities, diagnostics, ...(!isScript && packageKnown ? { jvmPackageName: packageName ?? '' } : {}) },
     language: 'kotlin',
     lineCount,
     imports: dedupe(imports),
