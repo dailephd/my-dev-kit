@@ -405,7 +405,7 @@ describe('v1.15.0 Batch 1 hash and snapshot identity', () => {
     expect(first.files[0]!.contentSha256).toBe(sha256(text))
     expect(first.source.snapshotId).toMatch(/^[0-9a-f]{64}$/)
     expect(second).toEqual(first)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.3.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.4.0')
   })
 
   it('hashes raw bytes rather than decoded text (BOM and invalid UTF-8 stay distinguishable)', () => {

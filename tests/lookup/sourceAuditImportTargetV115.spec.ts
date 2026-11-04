@@ -219,13 +219,13 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     expect(resolveAuditImportTarget(out, id)).toMatchObject({ status: 'indeterminate', selectionComplete: false, reasonCode: 'SELECTION_INCOMPLETE' })
   })
 
-  it('rejects dynamic imports, unknown ids and non-import facts', async () => {
+  it('qualifies literal dynamic imports while rejecting unknown ids and non-import facts', async () => {
     const root = makeProject(TS_FILES)
     const out = await build(root)
     const record = readSourceAuditEvidence(out).files.find((entry) => entry.path === 'src/a.ts')!
-    // import("./dyn") is not enumerated as a static import fact; the file reports it as partial imports.
-    expect(record.facts.some((fact) => fact.sourceSpecifier === './dyn')).toBe(false)
-    expect(record.capabilities.imports).toBe('partial')
+    expect(record.facts.some((fact) => fact.sourceSpecifier === './dyn')).toBe(true)
+    expect(record.capabilities.imports).toBe('complete')
+    expect(resolveAuditImportTarget(out, importId(out, 'src/a.ts', './dyn')).status).toBe('proven-missing')
     expect(failure(() => resolveAuditImportTarget(out, 'import:does-not-exist')).code).toBe('AUDIT_FACT_NOT_FOUND')
     const declaration = record.facts.find((fact) => fact.kind !== 'import')!
     expect(failure(() => resolveAuditImportTarget(out, declaration.id)).code).toBe('AUDIT_FACT_NOT_IMPORT')
@@ -329,6 +329,19 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     expect(proofOf('os')).toMatchObject({ status: 'indeterminate', reasonCode: 'PYTHON_CANDIDATES_NOT_ENUMERABLE' })
     // `from . import helper` may name an attribute of the package __init__, so absence is never proven.
     expect(proofOf('.').status).toBe('indeterminate')
+  })
+
+  it('qualifies targets of literal nested imports without turning incomplete selection into absence', async () => {
+    const root = makeProject({
+      'src/main.ts': "function load() { require('./present.mjs'); return import('./missing.mjs') }\n",
+      'src/present.mjs': 'export const value = 1\n',
+    })
+    const out = await build(root)
+    expect(resolveAuditImportTarget(out, importId(out, 'src/main.ts', './present.mjs')).status).toBe('present')
+    const missing = importId(out, 'src/main.ts', './missing.mjs')
+    expect(resolveAuditImportTarget(out, missing).status).toBe('proven-missing')
+    rewriteArtifact(out, artifact => { artifact.coverage.inventoryComplete = false })
+    expect(resolveAuditImportTarget(out, missing)).toMatchObject({ status: 'indeterminate', selectionComplete: false })
   })
 
   it('keeps Java and Kotlin source-set and nested cases indeterminate unless a selected file resolves', async () => {

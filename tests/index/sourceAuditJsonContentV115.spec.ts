@@ -53,7 +53,7 @@ describe('selected JSON test-content source evidence', () => {
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     expect(manifest.sourceAuditEvidence.snapshotId).toBe(artifact.source.snapshotId)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.3.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.4.0')
   })
 
   it('uses the same exact-file CLI authority without exposing JSON through other source modes', async () => {

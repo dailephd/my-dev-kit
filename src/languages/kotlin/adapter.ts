@@ -148,7 +148,7 @@ interface KotlinScope {
   keyword: string
   bodyDepth: number
   qualified: string
-  effectivelyPublic: boolean
+  effectivelyPublic: boolean | null
 }
 
 interface PendingKotlinScope extends Omit<KotlinScope, 'bodyDepth'> {
@@ -203,6 +203,11 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
 
   // Kotlin declarations without a modifier are public; scripts have a different top-level scope, so they stay unknown.
   const implicitVisibility = (scope: KotlinScope | null): SourceAuditFact['visibility'] => (scope === null && isScript ? 'unknown' : 'public')
+  // Script-owner accessibility is not a qualified external API boundary.
+  // Keep explicit nonpublic evidence, but do not turn a public modifier on
+  // a script member into a known ordinary compilation-unit export.
+  const topExportState = (visibility: SourceAuditFact['visibility']): boolean | null =>
+    visibility === 'unknown' || isScript && visibility === 'public' ? null : visibility === 'public'
 
   const declarationFacts = (
     target: SourceAuditFact[],
@@ -216,7 +221,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   ): void => {
     target.push({
       ...base, kind: 'declaration', span: kotlinSpan(filePath, lineNumber), name, symbolId, declarationKind: kind, ownerKey,
-      visibility, exported, exportOrigin: visibility === 'unknown' ? 'unknown' : 'visibility-inferred',
+      visibility, exported, exportOrigin: exported === null || visibility === 'unknown' ? 'unknown' : 'visibility-inferred',
     })
     if (exported === true) {
       target.push({ ...base, kind: 'export', span: kotlinSpan(filePath, lineNumber), name, exportOrigin: 'visibility-inferred', visibility, exported: true, ...(symbolId ? { symbolId } : {}) })
@@ -259,6 +264,12 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
 
     if (trimmed.length === 0) continue
 
+    if (isScript && (trimmed.startsWith('#!') || trimmed.startsWith('@file:'))) {
+      uncertain.set('kotlin-script-directive', 'Script directives and file annotations are outside the explicit declaration profile.')
+    }
+    if (isScript && (line.includes(';') || (line.match(/\b(?:class|interface|object)\b/g)?.length ?? 0) > 1)) {
+      uncertain.set('kotlin-script-multiple-statements', 'Multiple or inline script declarations cannot be enumerated by the line profile.')
+    }
     if (line.includes('"""')) uncertain.set('raw-string-literal', 'A raw string literal can hide braces from the depth scanner.')
     if (literalBraceImbalance(line)) uncertain.set('brace-in-literal', 'A string or character literal contains an unbalanced brace that can corrupt scope depth.')
 
@@ -266,6 +277,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
 
     const waiting = hold.pending
     if (waiting) {
+      if (isScript && waiting.parens > 0) uncertain.set('kotlin-script-multiline-declaration', 'A multiline script declaration header is outside the explicit line profile.')
       waiting.parens += netBy(line, '(', ')')
       if (waiting.parens <= 0 && !CONTINUATION_PATTERN.test(trimmed) && !trimmed.startsWith('{') && depthBeforeLine === waiting.depth) {
         // A body-less declaration (for example a data class) ends where a non-continuation line begins.
@@ -315,7 +327,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         if (exported) exports.push(name)
         const explicit = explicitKotlinVisibility(trimmed.slice(0, matchIndex))
         const visibility: SourceAuditFact['visibility'] = explicit ?? implicitVisibility(null)
-        declarationFacts(topFacts, lineNumber, name, kind, visibility, visibility === 'unknown' ? null : visibility === 'public', null, '')
+        declarationFacts(topFacts, lineNumber, name, kind, visibility, topExportState(visibility), null, '')
         state.pendingAnnotations = []
       }
 
@@ -325,7 +337,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         topLevel(name, kind, classMatch.index ?? 0)
         const visibility = explicitKotlinVisibility(trimmed.slice(0, classMatch.index ?? 0)) ?? implicitVisibility(null)
         openScope(
-          { name, keyword, depth: depthBeforeLine, parens: netBy(line, '(', ')'), qualified: name, effectivelyPublic: visibility === 'public' },
+          { name, keyword, depth: depthBeforeLine, parens: netBy(line, '(', ')'), qualified: name, effectivelyPublic: topExportState(visibility) },
           state.depth,
           line.includes('{'),
         )
@@ -341,6 +353,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         topLevel(propertyMatch[3], propertyMatch[1] === 'val' ? 'const' : 'variable', propertyMatch.index ?? 0)
         continue
       }
+      if (isScript) uncertain.set('kotlin-script-statement', 'An executable or unrecognized top-level script statement is outside the explicit declaration profile.')
     } else if (scopes.length > 0 && depthBeforeLine === scopes[scopes.length - 1]!.bodyDepth) {
       const owner = scopes[scopes.length - 1]!
       const companion = trimmed.match(COMPANION_PATTERN)
@@ -354,7 +367,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
         if (seenQualified.has(qualified)) uncertain.set('duplicate-nested-declaration', 'Two nested declarations share one lexical path.')
         seenQualified.add(qualified)
         const visibility = explicitKotlinVisibility(head) ?? 'public'
-        const effectivelyPublic = owner.effectivelyPublic && visibility === 'public'
+        const effectivelyPublic = visibility === 'public' ? owner.effectivelyPublic : false
         const chain = scopes.map((scope) => `${scope.keyword}:${scope.name}`).join('/')
         declarationFacts(
           nestedFacts, lineNumber, name, kind, visibility, effectivelyPublic, `kotlin/${chain}`,
@@ -375,7 +388,6 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
 
   if (state.depth !== 0) uncertain.set('unbalanced-braces', 'Brace depth did not return to zero at the end of the file.')
   if (state.inBlockComment) uncertain.set('unterminated-block-comment', 'A block comment was not closed.')
-  if (isScript) uncertain.set('kotlin-script-scope', 'Kotlin script top-level scope and implicit visibility are not modeled.')
 
   const capabilities = auditCapabilityMap('unsupported')
   const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
@@ -386,6 +398,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   capabilities['source-ranges'] = 'partial'
   diagnostics.push({ code: 'lexical-line-ranges', message: 'The lexical scanner records declaration start lines only; columns and end ranges are unknown.', span: null })
   diagnostics.push({ code: 'visibility-inferred-exports', message: 'Kotlin exports are inferred from explicit or default visibility and do not reflect module boundaries.', span: null })
+  if (isScript) diagnostics.push({ code: 'kotlin-script-visibility-unknown', message: 'Explicit script declarations are enumerated lexically; implicit script-owner accessibility remains unknown and is not an ordinary compilation-unit export claim.', span: null })
   for (const [code, message] of [...uncertain].sort(([a], [b]) => (a < b ? -1 : 1))) diagnostics.push({ code, message, span: null })
   // Nested facts are published only when the lexical nesting is certain.
   const facts = settled ? [...topFacts, ...nestedFacts] : topFacts

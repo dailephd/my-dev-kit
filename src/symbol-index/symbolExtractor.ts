@@ -117,7 +117,7 @@ export function extractFromSource(
   const importBindings: ImportBinding[] = []
   const commonJsExports: CommonJsExportFact[] = []
   extractDocumentation(sourceFile, filePath, symbols, warnings, endLineLimit)
-  const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false }
+  const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false, unsafeRequireBinding: false }
   extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings, auditCollector)
   const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
   const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
@@ -629,6 +629,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     ts.forEachChild(n, scan)
   }
   scan(sf)
+  if (audit) audit.unsafeRequireBinding = shadowed.has('require') || mutated.has('require')
   const span = (n: ts.Node) => ({ startLine: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1 })
   const binding = (n: ts.Node, localName: string, importedName: string, sourceSpecifier: string, syntaxKind: 'esm' | 'commonjs', wholeModule = false) => {
     bindings.push({ localName, importedName, sourceSpecifier, syntaxKind, ...(wholeModule ? { wildcard: true } : {}), ...span(n), resolutionStatus: mutated.has(localName) ? 'unresolved' : 'observed' })
@@ -731,6 +732,7 @@ interface TsAuditCollector {
   commonJsExports: Array<{ node: ts.Node; fact: CommonJsExportFact }>
   unsupportedExportMutation: boolean
   unsupportedRequire: boolean
+  unsafeRequireBinding: boolean
 }
 
 /**
@@ -860,22 +862,31 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   }
   if (uncertainCommonJs) partial('exports', 'commonjs-export-uncertain', 'CommonJS exports include conditional, mutated, aliased or competing assignments.')
 
-  // Whole-tree scan for dynamic constructs the static profile cannot enumerate.
-  let dynamicImports = 0
-  let requireCalls = 0
+  // Reuse the parsed tree for literal calls outside the top-level binding
+  // profile. Keep those existing facts/spans unchanged and never duplicate them.
+  const recordedRequires = new Set(collector.requires.map(({ node }) => {
+    const call = ts.isVariableDeclaration(node) ? node.initializer : ts.isExpressionStatement(node) ? node.expression : node
+    return call?.getStart(sf)
+  }))
   const scan = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      if (node.expression.kind === ts.SyntaxKind.ImportKeyword) dynamicImports++
-      else if (ts.isIdentifier(node.expression) && node.expression.text === 'require') requireCalls++
+      const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
+      const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require'
+      if (dynamicImport || requireCall && !recordedRequires.has(node.getStart(sf))) {
+        if (requireCall && collector.unsafeRequireBinding) {
+          partial('imports', 'unsupported-require', 'A shadowed or assigned require binding cannot establish a module import.', node)
+        } else if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) {
+          partial('imports', dynamicImport ? 'unsupported-dynamic-import' : 'unsupported-require', 'The import target is outside the single string-literal call profile.', node)
+        } else {
+          facts.push({ ...base, kind: 'import', span: span(node), sourceSpecifier: node.arguments[0].text,
+            importedNames: ts.isExpressionStatement(node.parent) ? [] : ['*'], importResolution: 'observed' })
+        }
+      }
     }
     ts.forEachChild(node, scan)
   }
   scan(sf)
-  if (dynamicImports > 0) partial('imports', 'dynamic-import-not-enumerated', `${dynamicImports} dynamic import() call(s) are not enumerated as static imports.`)
   if (collector.unsupportedRequire) partial('imports', 'unsupported-require', 'A require call or binding form is outside the static profile.')
-  else if (requireCalls > collector.requires.length) {
-    partial('imports', 'require-not-enumerated', 'Some require calls are nested, conditional or not top-level and are not enumerated.')
-  }
   collectTsObservations(sf, filePath, exact, facts, capabilities, diagnostics)
   return { facts, capabilities, diagnostics }
 }

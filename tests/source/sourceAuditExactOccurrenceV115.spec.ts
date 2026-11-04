@@ -111,6 +111,18 @@ describe('v1.15.0 KIT-FACTS-01 exact-file source occurrences', () => {
     expect(absent).toMatchObject({ matchCount: 0, complete: false, reasonCode: 'FILE_EXCEEDS_SCAN_LIMIT' })
   })
 
+  it('qualifies the exact byte bound but never interprets the next byte as complete absence', async () => {
+    const exact = '//' + 'x'.repeat(MAX_EXACT_FILE_SCAN_BYTES - 2)
+    const out = await build(makeProject({ ...FILES, 'src/exact.ts': exact, 'src/over.ts': exact + 'x' }))
+    const artifact = readSourceAuditEvidence(out)
+    for (const [file, complete] of [['src/exact.ts', true], ['src/over.ts', false]] as const) {
+      const result = occurrences(out, file, 'absent')
+      expect(result).toMatchObject({ complete, matchCount: 0, scannedBytes: MAX_EXACT_FILE_SCAN_BYTES, snapshotId: artifact.source.snapshotId })
+      expect(artifact.files.find(f => f.path === file)?.contentSha256).toBe(createHash('sha256').update(file.endsWith('exact.ts') ? exact : exact + 'x').digest('hex'))
+      expect(result.reasonCode).toBe(complete ? null : 'FILE_EXCEEDS_SCAN_LIMIT')
+    }
+  })
+
   it('returns exactly 200 matches completely and caps beyond 200 with truncation', async () => {
     const lines = (count: number) => Array.from({ length: count }, (_, i) => `// m${i} NEEDLE`).join('\n') + '\n'
     const out = await build(makeProject({ ...FILES, 'tests/c200.test.ts': lines(200), 'tests/c201.test.ts': lines(201) }))

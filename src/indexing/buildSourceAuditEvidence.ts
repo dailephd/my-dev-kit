@@ -36,7 +36,7 @@ import { validateSourceAuditEvidence } from '../symbol-index/validateAuditEviden
 import type { SourceAuditEvidenceReference } from './manifestTypes.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.3.0'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.4.0'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string

@@ -244,10 +244,8 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     expect(selected.facts.find(fact => fact.kind === 'declaration' && fact.name === 'left'))
       .toMatchObject({ extractionMethod: 'typescript-ast', span: { path: 'src/left.mjs' } })
     const partial = artifact.files.find(file => file.path === 'src/partial.mjs')!
-    // Successful parsing is distinct from complete import observations.
-    expect(partial).toMatchObject({ language: 'javascript', status: 'parsed', analyzerId: 'typescript-ast', contentSha256: createHash('sha256').update(dynamicSource).digest('hex'), capabilities: { imports: 'partial', 'api-client-calls': 'unsupported' } })
-    expect(partial.diagnostics.map(diagnostic => diagnostic.code)).toContain('dynamic-import-not-enumerated')
-    expect(partial.facts.filter(fact => fact.kind === 'import')).toEqual([])
+    expect(partial).toMatchObject({ language: 'javascript', status: 'parsed', analyzerId: 'typescript-ast', contentSha256: createHash('sha256').update(dynamicSource).digest('hex'), capabilities: { imports: 'complete', 'api-client-calls': 'unsupported' } })
+    expect(importOf(partial, './left.mjs')).toMatchObject({ importResolution: 'resolved-local', targetPaths: ['src/left.mjs'] })
     expect(registry.adapterForFile('src/unsupported.txt')).toBeNull()
     expect(built.index.files.map(file => file.path)).not.toContain('src/unsupported.txt')
     const unsupported = artifact.files.find(file => file.path === 'src/unsupported.txt')!
@@ -262,10 +260,35 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     expect(payload.facts.every((fact) => fact.kind === 'import' || fact.kind === 'declaration' || fact.kind === 'export')).toBe(true)
   })
 
+  it.each(['ts', 'js'])('enumerates literal nested and conditional imports once with exact provenance in %s', extension => {
+    const source = "import './static.js'\nconst top = require('./top.js')\nfunction load() { if (true) require('./nested.js'); return import('./lazy.js') }\n"
+    const { payload } = audit(`src/calls.${extension}`, source)
+    expect(payload.capabilities.imports).toBe('complete')
+    const facts = ofKind(payload, 'import')
+    expect(facts.map(f => f.sourceSpecifier).sort()).toEqual(['./lazy.js', './nested.js', './static.js', './top.js'])
+    for (const fact of facts) {
+      expect(fact.span.path).toBe(`src/calls.${extension}`)
+      expect(fact.span.startLine).toBeGreaterThan(0)
+      expect(fact.extractionMethod).toBe('typescript-ast')
+    }
+  })
+
+  it.each([
+    'const name = "./peer.js"; import(name)',
+    'function load(require) { return require("./peer.js") }',
+    'require = custom; function load() { return require("./peer.js") }',
+    'import(`./peer.js`)',
+  ])('does not qualify nonliteral or unsafe import calls: %s', source => {
+    const { payload } = audit('src/unsafe.js', source)
+    expect(payload.capabilities.imports).toBe('partial')
+    expect(ofKind(payload, 'import')).toEqual([])
+  })
+
   it('marks imports and exports partial for dynamic constructs and syntax errors', () => {
     const dynamic = audit('src/dyn.js', "const lazy = () => import('./lazy.js')\nconst name = 'x'\nconst mod = require(name)\nexports[name] = 1\nmodule.exports.ok = 1\n").payload
     expect(dynamic.capabilities.imports).toBe('partial')
-    expect(dynamic.diagnostics.map((d) => d.code)).toEqual(expect.arrayContaining(['dynamic-import-not-enumerated', 'unsupported-require']))
+    expect(dynamic.diagnostics.map((d) => d.code)).toContain('unsupported-require')
+    expect(importOf(dynamic, './lazy.js')).toBeDefined()
     expect(dynamic.capabilities.exports).toBe('partial')
 
     const broken = audit('src/broken.ts', 'export function ok() {}\nexport const = ;\nimport { from "x"\n').payload
@@ -449,10 +472,26 @@ describe('v1.15.0 Batch 2 Kotlin facts', () => {
     expect(registry.adapterForFile('build.gradle.kts')).toBeInstanceOf(KotlinAdapter)
     const { payload } = audit('src/script.kts', fixture('language-kotlin-script.kts'))
     expect(payload.capabilities).toMatchObject({ declarations: 'partial', imports: 'partial' })
-    expect(payload.diagnostics.map((d) => d.code)).toContain('kotlin-script-scope')
+    expect(payload.diagnostics.map((d) => d.code)).toContain('kotlin-script-statement')
     expect(named(payload, 'declaration', 'greeting')).toMatchObject({ visibility: 'unknown', exported: null, exportOrigin: 'unknown' })
     const { artifact } = artifactFor(root)
     expect(artifact.files.find((file) => file.path === 'src/script.kts')).toMatchObject({ language: 'kotlin', status: 'parsed', analyzerId: 'kotlin-lexical' })
+  })
+
+  it('qualifies lexical script declarations without assuming compilation-unit visibility', () => {
+    const { payload } = audit('src/declarations.kts', 'import java.io.File\nval marker = 1\nclass Outer {\n  class Inner\n  private class Hidden\n}\n')
+    expect(payload.capabilities).toMatchObject({ declarations: 'complete', imports: 'complete', exports: 'partial' })
+    for (const name of ['marker', 'Outer', 'Inner']) {
+      expect(named(payload, 'declaration', name)).toMatchObject({ exported: null, exportOrigin: 'unknown' })
+    }
+    expect(named(payload, 'declaration', 'Hidden')).toMatchObject({ exported: false })
+    expect(importOf(payload, 'java.io.File').span.path).toBe('src/declarations.kts')
+    const ordinary = audit('src/declarations.kt', 'class Outer\n').payload
+    expect(named(ordinary, 'declaration', 'Outer')).toMatchObject({ exported: true, exportOrigin: 'visibility-inferred' })
+  })
+
+  it.each(['println(1)\n', '@file:DependsOn("library")\nval value = 1\n', 'val a = 1; val b = 2\n'])('retains partial script evidence for unsupported statements: %s', body => {
+    expect(audit('src/unsupported.kts', body).payload.capabilities.declarations).toBe('partial')
   })
 
   it('does not publish nested identities from uncertain Kotlin nesting', () => {
