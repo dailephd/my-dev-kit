@@ -1,4 +1,5 @@
 import type { FrontendSourceRef } from '../frontend/frontendTypes.js'
+import type { ApiRelationshipNode, ApiRelationshipKind, ApiRelationshipQualification, ApiRelationshipWitness } from '../symbol-index/apiRelationshipEvidenceTypes.js'
 
 export const GRAPH_DIFF_REPORT_KIND = 'my-dev-kit-v1-graph-diff'
 
@@ -134,6 +135,7 @@ export interface GraphDiffSummary {
 }
 
 export interface GraphDiffResult {
+  apiRelationshipImpact?: ApiRelationshipImpactSection
   reportKind: typeof GRAPH_DIFF_REPORT_KIND
   before: GraphDiffSide
   after: GraphDiffSide
@@ -149,5 +151,57 @@ export interface GraphDiffResult {
     frontendReachability: SemanticSummaryDiffSection
   }
   apiContractChanges?: ApiContractChangeSection
+  warnings: string[]
+}
+
+export interface ApiImpactSubjectRef {
+  id: string
+  kind: ApiRelationshipNode['kind'] | ApiRelationshipKind
+}
+export interface ApiImpactEvidenceRef {
+  side: 'before' | 'after'
+  snapshotId: string
+  artifactIdentity: string
+  subject: ApiImpactSubjectRef
+  witnesses: ApiRelationshipWitness[]
+  availableWitnessCount: number
+  returnedWitnessCount: number
+}
+export interface ApiRelationshipChange {
+  id: string
+  changeKind: 'ADDED' | 'REMOVED' | 'MODIFIED'
+  subjectKind: ApiImpactSubjectRef['kind']
+  before?: ApiImpactSubjectRef
+  after?: ApiImpactSubjectRef
+  changedFields: string[]
+  evidence: ApiImpactEvidenceRef[]
+  qualification: ApiRelationshipQualification
+  reasonCodes: string[]
+}
+export interface ApiPotentialImpact {
+  id: string
+  changedSubject: ApiImpactSubjectRef
+  associatedSubject: ApiImpactSubjectRef
+  relationshipKind: ApiRelationshipKind
+  evidence: ApiImpactEvidenceRef[]
+  qualification: ApiRelationshipQualification
+  reasonCodes: string[]
+}
+export interface ApiRelationshipImpactSection {
+  availability: Exclude<ArtifactAvailability, 'neither'>
+  status: 'COMPARABLE' | 'PARTIAL' | 'UNAVAILABLE'
+  changes: ApiRelationshipChange[]
+  potentialImpacts: ApiPotentialImpact[]
+  summary: {
+    availableChangeCount: number
+    returnedChangeCount: number
+    availableImpactCount: number
+    returnedImpactCount: number
+    availableWarningCount: number
+    returnedWarningCount: number
+    truncated: boolean
+    complete: boolean
+    qualification: ApiRelationshipQualification
+  }
   warnings: string[]
 }

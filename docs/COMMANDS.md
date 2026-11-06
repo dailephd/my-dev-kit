@@ -700,6 +700,16 @@ Flags are exactly `--before <index-dir>`, `--after <index-dir>`, and `--json`. B
 
 The result reports added/removed/changed graph nodes and edges, supported symbol-index changes, manifest/analyzer metadata changes, classification changes where available, and warnings. Comparison uses existing stable identities, not fuzzy rename inference. A rename or incompatible identity may appear as removal/addition. It does not enumerate and recursively diff every arbitrary file in the directory.
 
+In the unreleased v1.15.0 development checkout, a manifest-registered API relationship
+artifact on either side also produces the optional `apiRelationshipImpact` section.
+It validates persisted snapshot integrity and source-universe identity, reports
+bounded observed contract/relationship changes and directly associated potential
+impacts, and preserves unresolved/unsupported evidence. Each collection is capped
+at 64 with explicit counts and incomplete/truncated qualifications. Neither artifact
+registered leaves the original output shape intact. One-sided or untrustworthy
+evidence does not establish additions/removals. This section certifies no runtime
+compatibility or breakage; see [CONTRACTS.md](CONTRACTS.md#kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased).
+
 Exit 0 means a valid comparison, including one with differences. Graph equality is not runtime equivalence. Dependency upgrades, configuration, dynamic behavior, or omitted source roots can change behavior without a useful graph delta. Use Git differences, project tests, and runtime evidence as required.
 
 ## Cross-tool command composition

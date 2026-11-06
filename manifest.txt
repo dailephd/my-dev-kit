@@ -72,6 +72,7 @@ src/ — PRODUCTION implementation, never scratch, generated index, report, or t
   src/source/ — source rendering, source bundles, exact source matches, React/local-component source extraction. Also owns v1.15 exact-file raw occurrence retrieval (findExactMatches.ts) beside unchanged cross-file exact matching, source rendering and continuation.
   src/graph/ — code graph nodes/edges and structural graph operations. buildCodeGraph.ts is the one code-graph producer, including deterministic file-dependency edge identities.
   src/graph-diff/ — deterministic old/new artifact comparisons.
+  src/graph-diff/buildApiRelationshipImpact.ts — KIT-API-01 pure bounded projection of authenticated before/after relationship evidence; existing graph-diff loader owns persisted snapshot validation.
   src/classification/ — static classification and edit guidance; no automatic editing authority.
   src/retrievalRegression/ — internal deterministic retrieval benchmark runner/assertions/reporting; do not invent parallel benchmark runtime.
   src/semantics/ — compact roles and artifact references.
@@ -92,6 +93,7 @@ tests/ — tracked regression/integration tests and fixtures; mirror existing ow
   tests/cli/, tests/slice/, tests/view/, tests/security/, tests/integration/, tests/docs/, tests/scripts/, tests/helpers/ — existing tool-level/integration/test helper owners.
   tests/fixtures/ — deliberate miniature source projects; the nested android/, kotlin/, java/, context/, data-model/, lineage/, compose-retrieval/, android-* trees are FIXTURES, not misplaced production.
   tests/fixtures/api-relationships/v1/ — KIT-API-01 static relationship fixtures; Batch 2 adds only express-mounted-router/, react-request-route/, next-app-route/ and typed-handler-model/ under this owner.
+  tests/fixtures/api-relationships/v1/contract-impact/ — KIT-API-01 Batch 3 authentic before/ and after/ source fixtures for existing graph-diff comparison; generated indexes remain task-local, never stored here.
   tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
 
 benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.

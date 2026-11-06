@@ -282,6 +282,56 @@ Uncertainty, ambiguity, skipped evidence, and unsupported patterns remain
 observable. [SECURITY.md](SECURITY.md) owns path containment, subprocess,
 untrusted-input, and generated-output safety.
 
+### KIT-API-01 contract-oriented graph-diff evidence (v1.15.0 unreleased)
+
+The existing `graph-diff` result optionally adds `apiRelationshipImpact`. It is
+omitted when neither manifest registers API relationship evidence. No command,
+flag, indexing pass or persisted relationship schema is added. The existing
+`apiContractChanges` type reservation and all original result fields are retained.
+
+- `availability` is `both`, `before-only` or `after-only`, describing registration,
+  not successful validation. `status` is `COMPARABLE`, `PARTIAL` or `UNAVAILABLE`.
+  One-sided or invalid evidence never becomes fabricated additions/removals.
+- Each snapshot must pass existing manifest and persisted source-audit validation,
+  relationship kind/schema/producer/structure and integrity validation, serialized
+  SHA-256 verification, and registration/snapshot/file-inventory/selection checks.
+  Both snapshots must have the same recorded project root and selection identity.
+  Distinct checkout roots are conservatively incomparable. Historical source bytes
+  need not match the live filesystem; graph-diff never refreshes either snapshot.
+- `changes` contain deterministic IDs, `ADDED`/`REMOVED`/`MODIFIED` kinds, existing
+  node or relationship subject kinds, available before/after references, proven
+  `changedFields`, side-qualified snapshot/artifact/witness evidence, qualification
+  and reason codes. Declaration changes cover recorded declaration metadata;
+  relationship changes cover supported method/path, targets, explicit schema/model
+  references and UI handler witnesses. Source byte changes alone do not establish
+  a contract delta. Full signatures, schema bodies and arbitrary implementation
+  changes are not inferred from hashes or the compact declaration metadata.
+  Node additions/removals describe projection membership, not proof that a schema
+  or declaration was physically created/deleted; reason codes preserve this boundary.
+- Exact IDs take precedence, guarded by authenticated source/declaration identity.
+  Equal unique declaration-associated semantic records can cancel location churn;
+  equal semantic multisets can cancel repeated-site movement without pairing sites.
+  One unmatched relationship per exact source identity and family can be associated.
+  Other incompatible identities remain additions/removals. No fuzzy rename matching,
+  line proximity or similar filenames establish identity.
+- `potentialImpacts` contain deterministic IDs, changed and associated subjects,
+  the existing relationship kind, before/after evidence, qualification and reason
+  codes. Each association has an actual direct relationship witness. Unresolved
+  candidates retain their uncertainty. There is no recursive dependency traversal.
+- `summary` reports available/returned change, impact and warning counts, truncation,
+  `complete` and the inherited `RESOLVED`/`AMBIGUOUS`/`UNRESOLVED`/`UNSUPPORTED`
+  qualification. Collections are deterministically ordered and capped at 64;
+  evidence references include available/returned witness counts. Truncated metadata,
+  incomplete capabilities/selection and unresolved/unsupported evidence prevent a
+  complete negative. Completeness covers only the supported selected static profile.
+- `warnings` retain validation diagnostics and unsupported/ambiguous reasons with
+  side identity; they remain inside this section, preserving original warning order.
+  A changed relationship is not a compatibility verdict, and a source change does
+  not prove runtime failure. Missing static dependencies do not prove independence.
+
+This is bounded static association evidence, without breaking/nonbreaking verdicts,
+risk scores, authorization decisions, runtime reachability or migration inference.
+
 ## Ecosystem responsibility boundary
 
 - my-dev-kit owns repository indexing, bounded retrieval, and static evidence.
