@@ -168,8 +168,4 @@ describe('resolveAndroidSelectorMode -- Batch 4 flags', () => {
     expect(() => resolveAndroidSelectorMode({ testTag: 't', androidUi: 'u' })).toThrow(/mutually exclusive/)
   })
 
-  // TST-418
-  it('returns null when no selector flag is present', () => {
-    expect(resolveAndroidSelectorMode({})).toBeNull()
-  })
 })

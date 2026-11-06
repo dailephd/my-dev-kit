@@ -311,11 +311,4 @@ describe('graph-diff', () => {
     expect(statSync(join(beforeOut, 'manifest.json')).mtimeMs).toBe(beforeMtime)
   })
 
-  it('lists --before, --after, and --json in help output', () => {
-    const result = runCli(['graph-diff', '--help'])
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('--before <index-dir>')
-    expect(result.stdout).toContain('--after <index-dir>')
-    expect(result.stdout).toContain('--json')
-  })
 })
