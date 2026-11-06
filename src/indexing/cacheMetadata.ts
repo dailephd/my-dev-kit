@@ -201,6 +201,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     jsTsExtractionRevision: 'v1.14.0-b05',
     jsTsCandidateRevision: JS_TS_CANDIDATE_REVISION,
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
+    apiRelationshipRevision: 'api-relationship-v1.0.0-qualified-receiver',
     frontendFrameworkRevision: 'v1.14.0-b07',
     configuredImportsRevision: 'v1.14.0-configured-imports',
     // v1.15.0: private extraction/capability contract that produced FileSummary.sourceAudit.

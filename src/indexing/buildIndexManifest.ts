@@ -5,6 +5,7 @@ import type { CacheMode, ChangedFileSummary } from './cacheMetadata.js'
 import type { IncrementalRefreshSummary } from './incrementalRefreshTypes.js'
 
 export interface BuildIndexManifestOptions {
+  apiRelationshipEvidence?: import('../symbol-index/apiRelationshipEvidenceTypes.js').ApiRelationshipEvidenceReference
   projectRoot: string
   sourceRoots: string[]
   languages: string[]
@@ -49,6 +50,7 @@ export function buildIndexManifest(options: BuildIndexManifestOptions): IndexMan
     },
     analyzers: options.analyzers ?? buildDefaultAnalyzerStatuses(options),
     ...(options.sourceAuditEvidence !== undefined ? { sourceAuditEvidence: options.sourceAuditEvidence } : {}),
+    ...(options.apiRelationshipEvidence !== undefined ? { apiRelationshipEvidence: options.apiRelationshipEvidence } : {}),
     summary: {
       fileCount: options.symbolIndex.fileCount,
       symbolCount: options.symbolIndex.symbolCount,

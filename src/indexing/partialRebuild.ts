@@ -186,8 +186,11 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const unresolvedJsBindings = previous && ['typescript', 'javascript'].includes(previous.language) &&
       previous.importBindings?.some(b => b.resolutionStatus === 'unresolved')
     const missingJsFrameworkEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.frameworkRouteFacts === undefined
+    // Preserve identity-only reuse for legacy direct callers, as with framework facts.
+    // Managed pre-producer caches are already rejected by the configuration fingerprint.
+    const missingApiEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.apiRelationships === undefined
     const missingRustEvidence = previous?.language === 'rust' && previous.rustSyntaxFacts === undefined
-    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence && !missingRustEvidence) {
+    if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence && !missingRustEvidence && !missingApiEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
       if (!previousSummary) continue // eligibility check already guards this; defensive only
       const previousCacheEntry = input.previousCacheEntriesByPath.get(relPath)
@@ -209,6 +212,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
         ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
         ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
         ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
+        ...(previousSummary.apiRelationships ? { apiRelationships: structuredClone(previousSummary.apiRelationships) } : {}),
         ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
         exports: previousSummary.exports,
         symbols: cleanSymbols,
@@ -226,6 +230,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
           ...(previousSummary.rustSyntaxFacts ? { rustSyntaxFacts: structuredClone(previousSummary.rustSyntaxFacts) } : {}),
           ...(previousSummary.pythonOrmFacts ? { pythonOrmFacts: previousSummary.pythonOrmFacts } : {}),
           ...(frameworkRouteFacts ? { frameworkRouteFacts } : {}),
+          ...(previousSummary.apiRelationships ? { apiRelationships: structuredClone(previousSummary.apiRelationships) } : {}),
           ...(previousSummary.warnings?.length ? { warnings: previousSummary.warnings } : {}),
           exports: previousSummary.exports,
           symbols: cleanSymbols,
@@ -275,6 +280,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
       ...(extraction.rustSyntaxFacts ? { rustSyntaxFacts: extraction.rustSyntaxFacts } : {}),
       ...(extraction.pythonOrmFacts ? { pythonOrmFacts: extraction.pythonOrmFacts } : {}),
       ...(extraction.frameworkRouteFacts ? { frameworkRouteFacts: extraction.frameworkRouteFacts } : {}),
+      ...(extraction.apiRelationships ? { apiRelationships: extraction.apiRelationships } : {}),
       ...(extraction.warnings?.length ? { warnings: extraction.warnings } : {}),
       exports: extraction.exports,
       symbols: extraction.symbols,

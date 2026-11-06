@@ -24,6 +24,7 @@ export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
 ] as const
 
 export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
+  'api-relationship-evidence.json',
   CALL_GRAPH_FILENAME,
   DATA_MODEL_FILENAME,
   DATA_MODEL_GRAPH_FILENAME,

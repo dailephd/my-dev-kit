@@ -12,6 +12,7 @@ export interface SourceAuditEvidenceReference {
 }
 
 export interface IndexManifest {
+  apiRelationshipEvidence?: import('../symbol-index/apiRelationshipEvidenceTypes.js').ApiRelationshipEvidenceReference
   artifactKind: 'my-dev-kit-v1-manifest'
   version: '1.0.0'
   createdAt: string

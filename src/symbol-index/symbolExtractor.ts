@@ -16,6 +16,7 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { auditCapabilityMap, type SourceAuditExtractionPayload } from './auditObservations.js'
 import type { SourceAuditFact } from './auditEvidenceTypes.js'
+import { API_RELATIONSHIP_PRODUCER, API_RELATIONSHIP_METHODS, type ApiSourceObservations, type ApiSourceObservation } from './apiRelationshipEvidenceTypes.js'
 import {
   type SymbolDefinition,
   type SymbolKind,
@@ -33,6 +34,7 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  apiRelationships?: ApiSourceObservations
   rustSyntaxFacts?: import('./types.js').RustSyntaxFact[]
   commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: import('./types.js').PythonOrmFact[]
@@ -123,6 +125,7 @@ export function extractFromSource(
   const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
 
   return {
+    apiRelationships: extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null),
     sourceAudit,
     importBindings,
     commonJsExports,
@@ -136,6 +139,85 @@ export function extractFromSource(
     reExportSpecifiers: dedup(reExportSpecifiers),
     exportAllSpecifiers: dedup(exportAllSpecifiers),
   }
+}
+
+/** Reuses this analyzer's parsed AST. No source IO, runtime execution or type checker. */
+function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], bindings: ImportBinding[], routes: FrameworkRouteFact[], parsed: boolean): ApiSourceObservations {
+  if (!parsed) return { revision: API_RELATIONSHIP_PRODUCER, status: 'failed', observations: [] }
+  const observations: ApiSourceObservation[] = []
+  const declarations = new Map<string, number>()
+  const unsafe = new Set<string>()
+  const declare = (name: string) => declarations.set(name, (declarations.get(name) ?? 0) + 1)
+  const scan = (n: ts.Node): void => {
+    if ((ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name)) declare(n.name.text)
+    if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassDeclaration(n) || ts.isInterfaceDeclaration(n) || ts.isTypeAliasDeclaration(n)) && n.name) declare(n.name.text)
+    if (ts.isTypeParameterDeclaration(n)) declare(n.name.text)
+    if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n) || ts.isImportClause(n) && n.name) declare(n.name!.text)
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) unsafe.add(n.left.text)
+    const globalFetch = (node: ts.Node): boolean => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && ['globalThis', 'window', 'global', 'self'].includes(node.expression.text) && node.name.text === 'fetch' || ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && ['globalThis', 'window', 'global', 'self'].includes(node.expression.text) && !!node.argumentExpression && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === 'fetch'
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && globalFetch(n.left) || ts.isDeleteExpression(n) && globalFetch(n.expression)) unsafe.add('fetch')
+    ts.forEachChild(n, scan)
+  }
+  scan(sf)
+  const literal = (n: ts.Node | undefined): string | null => n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text.length <= 1024 ? n.text : null
+  const owner = (n: ts.Node): SymbolDefinition | undefined => {
+    let current: ts.Node | undefined = n.parent
+    while (current && current !== sf) {
+      const named = (ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current) || ts.isVariableDeclaration(current)) && current.name && ts.isIdentifier(current.name) ? current.name.text : null
+      if (named) {
+        const line = sf.getLineAndCharacterOfPosition(current.getStart(sf)).line + 1
+        const found = symbols.filter(s => s.name === named && s.location.line === line)
+        if (found.length === 1) return found[0]
+      }
+      current = current.parent
+    }
+    return undefined
+  }
+  const add = (n: ts.Node, partial: Pick<ApiSourceObservation, 'kind' | 'name' | 'method' | 'path' | 'reason'>) => {
+    const pos = sf.getLineAndCharacterOfPosition(n.getStart(sf))
+    const containing = owner(n)
+    observations.push({ ...partial, line: pos.line + 1, column: pos.character, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1, ownerName: containing?.name ?? null, ownerLine: containing?.location.line ?? null })
+  }
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+      const name = n.expression.text
+      if (name === 'fetch') {
+        let reason: string | null = declarations.has('fetch') || unsafe.has('fetch') ? 'shadowed-or-mutated-fetch' : null
+        let method: ApiSourceObservation['method'] = 'GET'
+        const url = literal(n.arguments[0])
+        const options = n.arguments[1]
+        if (n.arguments.length > 2) reason = 'unsupported-fetch-arguments'
+        if (options) {
+          if (!ts.isObjectLiteralExpression(options) || options.properties.some(p => !ts.isPropertyAssignment(p) || p.name && !ts.isIdentifier(p.name) && !ts.isStringLiteral(p.name))) { method = null; reason = 'dynamic-fetch-options' }
+          else {
+            const methods = options.properties.filter(p => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === 'method')
+            if (methods.length > 1) { method = null; reason = 'duplicate-fetch-method' }
+            else if (methods.length === 1 && ts.isPropertyAssignment(methods[0])) {
+              const raw = literal(methods[0].initializer)?.toUpperCase()
+              method = API_RELATIONSHIP_METHODS.find(m => m === raw) ?? null
+              if (!method) reason = 'dynamic-or-unsupported-method'
+            }
+          }
+        }
+        add(n, { kind: 'request', name, method, path: url, reason: reason ?? (url === null ? 'dynamic-url' : null) })
+      } else if (bindings.some(b => b.localName === name) || symbols.some(s => s.name === name)) {
+        add(n, { kind: 'call', name, method: null, path: null, reason: declarations.get(name) === 1 && !unsafe.has(name) ? null : 'ambiguous-or-mutated-binding' })
+      }
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ['get', 'post', 'put', 'patch', 'delete'].includes(n.expression.name.text)) {
+      const p = sf.getLineAndCharacterOfPosition(n.getStart(sf))
+      const receiver = ts.isIdentifier(n.expression.expression) ? n.expression.expression.text : null
+      const authenticated = receiver !== null && routes.some(r => r.framework === 'express' && r.kind === 'router' && r.status === 'static' && r.name === receiver)
+      if (authenticated && !routes.some(r => r.kind === 'route' && r.framework === 'express' && r.line === p.line + 1 && r.column === p.character)) add(n, { kind: 'unsupported-route', name: n.expression.name.text, method: null, path: literal(n.arguments[0]), reason: 'unsupported-express-registration-syntax' })
+    }
+    if (ts.isTypeReferenceNode(n)) {
+      const name = ts.isIdentifier(n.typeName) ? n.typeName.text : null
+      add(n, { kind: 'type-reference', name, method: null, path: null, reason: name && declarations.get(name) === 1 ? null : 'missing-or-unsupported-declaration-identity' })
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return { revision: API_RELATIONSHIP_PRODUCER, status: 'complete', observations }
 }
 
 // ---------------------------------------------------------------------------

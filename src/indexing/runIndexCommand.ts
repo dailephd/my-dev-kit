@@ -22,6 +22,8 @@ import {
 } from './discoverSourceFiles.js'
 import { writeIndexArtifacts } from './writeIndexManifest.js'
 import { buildSourceAuditEvidence, serializeSourceAuditEvidence } from './buildSourceAuditEvidence.js'
+import { buildApiRelationshipEvidence, serializeApiRelationshipEvidence } from './buildApiRelationshipEvidence.js'
+import { createHash } from 'node:crypto'
 import { readSourceAuditEvidence } from '../lookup/readSourceAuditEvidence.js'
 import { VERSION } from '../version.js'
 import { computePreflightWarnings, type PreflightWarning } from './preflight.js'
@@ -725,6 +727,8 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
   // v1.15.0: a no-change result may only claim complete audit evidence when the persisted artifact is present and exact.
   try {
     const previousAudit = readSourceAuditEvidence(outputDir)
+    // Regenerate cheaply from current authenticated summaries even on a no-change source run.
+    // The new config fingerprint prevents reuse of pre-producer summaries.
     // Unsupported content is not a semantic cache entry. Its discovery-ledger identity must still
     // be projected on every incremental run, even when every programming-language file is reused.
     const sourceAudit = serializeSourceAuditEvidence(buildSourceAuditEvidence({
@@ -736,12 +740,19 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
       fileHashes: new Map(currentFileEntries.map(file => [file.path, file.contentHash])),
       producerVersion: VERSION,
     }).artifact)
-    if (sourceAudit.reference.snapshotId !== previousAudit.source.snapshotId) {
+    const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
+      symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
+      sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+    }))
+    const apiPath = path.join(outputDir, apiEvidence.reference.path)
+    const apiCurrent = fs.existsSync(apiPath) && createHash('sha256').update(fs.readFileSync(apiPath)).digest('hex') === apiEvidence.reference.sha256
+    if (sourceAudit.reference.snapshotId !== previousAudit.source.snapshotId || !apiCurrent || existingManifest.apiRelationshipEvidence?.sha256 !== apiEvidence.reference.sha256) {
       existingManifest.sourceAuditEvidence = sourceAudit.reference
+      existingManifest.apiRelationshipEvidence = apiEvidence.reference
       // Reuse the managed writer and byte-identical semantic artifacts; publish the manifest last.
       writeIndexArtifacts({ outputDir, manifest: existingManifest,
         symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
-        callGraph: null, sourceAuditEvidenceJson: sourceAudit.json })
+        callGraph: null, sourceAuditEvidenceJson: sourceAudit.json, apiRelationshipEvidenceJson: apiEvidence.json })
       writeCacheMetadata(outputDir, { ...cacheRead.metadata, baselineArtifacts: computeBaselineArtifactIdentity(outputDir) })
     }
   } catch (error) {
@@ -1281,6 +1292,10 @@ function finishIndexBuild(
     }).artifact
   )
 
+  const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
+    symbolIndex: finalSymbolIndex, codeGraph: finalCodeGraph,
+    sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+  }))
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -1293,6 +1308,7 @@ function finishIndexBuild(
     errors,
     createdAt,
     sourceAuditEvidence: sourceAudit.reference,
+    apiRelationshipEvidence: apiEvidence.reference,
     semanticArtifacts: semanticResult.semanticArtifacts,
     analyzers: replaceAnalyzerStatuses(
       [
@@ -1332,6 +1348,7 @@ function finishIndexBuild(
     codeGraph: finalCodeGraph,
     callGraph,
     sourceAuditEvidenceJson: sourceAudit.json,
+    apiRelationshipEvidenceJson: apiEvidence.json,
     classification: finalClassification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,

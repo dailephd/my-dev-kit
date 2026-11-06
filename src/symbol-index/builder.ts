@@ -171,6 +171,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
       ...(result.rustSyntaxFacts ? { rustSyntaxFacts: result.rustSyntaxFacts } : {}),
       ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
       ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
+      ...(result.apiRelationships ? { apiRelationships: result.apiRelationships } : {}),
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       exports: result.exports,
       symbols: result.symbols,

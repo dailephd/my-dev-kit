@@ -42,6 +42,7 @@ import {
 } from './managedArtifacts.js'
 
 export interface WriteIndexArtifactsOptions {
+  apiRelationshipEvidenceJson?: string | null
   outputDir: string
   manifest: IndexManifest
   symbolIndex: SymbolIndex
@@ -65,6 +66,9 @@ export interface WriteIndexArtifactsOptions {
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
+  const apiReference = options.manifest.apiRelationshipEvidence
+  // Validate supplied bytes before touching the managed output.
+  if (apiReference && options.apiRelationshipEvidenceJson != null && createHash('sha256').update(options.apiRelationshipEvidenceJson).digest('hex') !== apiReference.sha256) throw new Error('API relationship artifact checksum mismatch.')
   fs.mkdirSync(options.outputDir, { recursive: true })
   // The manifest is the publication pointer: it is written last so it never references a missing or partial artifact.
   writeJson(path.join(options.outputDir, SYMBOL_INDEX_FILENAME), options.symbolIndex)
@@ -126,6 +130,12 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
     if (written !== reference.sha256) {
       throw new Error('The written source-audit artifact does not match the SHA-256 recorded for the manifest.')
     }
+  }
+  if (apiReference) {
+    const target = path.join(options.outputDir, apiReference.path)
+    if (apiReference.path !== 'api-relationship-evidence.json') throw new Error('Invalid API relationship artifact path.')
+    if (options.apiRelationshipEvidenceJson != null) fs.writeFileSync(target, options.apiRelationshipEvidenceJson, 'utf8')
+    if (!fs.existsSync(target) || createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== apiReference.sha256) throw new Error('Missing or invalid managed API relationship artifact.')
   }
   writeJson(path.join(options.outputDir, INDEX_MANIFEST_FILENAME), options.manifest)
 }
