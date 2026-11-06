@@ -727,6 +727,7 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
   // v1.15.0: a no-change result may only claim complete audit evidence when the persisted artifact is present and exact.
   try {
     const previousAudit = readSourceAuditEvidence(outputDir)
+    if (baseline.baseline.symbolIndex.files.some(f => ['typescript', 'javascript'].includes(f.language) && f.apiRelationships?.crossLayerRevision !== 'cross-layer-v1')) throw new Error('API cross-layer source capability requires re-extraction')
     // Regenerate cheaply from current authenticated summaries even on a no-change source run.
     // The new config fingerprint prevents reuse of pre-producer summaries.
     // Unsupported content is not a semantic cache entry. Its discovery-ledger identity must still
@@ -743,6 +744,8 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
     const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
       symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
       sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+      frontendReachability: existingManifest.semanticArtifacts?.frontendReachability ? JSON.parse(fs.readFileSync(path.join(outputDir, 'frontend-reachability.json'), 'utf8')) : undefined,
+      dataModel: existingManifest.semanticArtifacts?.dataModel ? JSON.parse(fs.readFileSync(path.join(outputDir, 'data-model.json'), 'utf8')) : undefined,
     }))
     const apiPath = path.join(outputDir, apiEvidence.reference.path)
     const apiCurrent = fs.existsSync(apiPath) && createHash('sha256').update(fs.readFileSync(apiPath)).digest('hex') === apiEvidence.reference.sha256
@@ -1295,6 +1298,8 @@ function finishIndexBuild(
   const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
     symbolIndex: finalSymbolIndex, codeGraph: finalCodeGraph,
     sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+    frontendReachability: semanticResult.frontendReachabilityResult.artifact,
+    dataModel: semanticResult.dataModelResult.dataModel,
   }))
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),

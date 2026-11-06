@@ -15,6 +15,18 @@ function empty(): ApiRelationshipEvidence {
   })
 }
 describe('API relationship artifact contract (RSP-001)', () => {
+  it('does not accept a fabricated cross-layer relationship enum under schema 1.0.0', () => {
+    const { integrity: _, ...body } = empty()
+    const span = { path: 'src/app.ts', startLine: 1, startColumn: 0, endLine: 1, endColumn: null }
+    const w: ApiRelationshipWitness = { id: 'w', span, contentSha256: 'c'.repeat(64), symbolId: 'source', factId: null, provenance: 'typescript-ast' }
+    const relationship: ApiRelationship = { id: '', kind: 'api-client-invokes-request', source: 'source', target: 'target', qualification: 'RESOLVED', witnesses: [w], limitations: [], method: null, path: null, unresolvedTargetKey: null }
+    relationship.id = apiRelationshipId(relationship)
+    const valid = { ...body, sourceSnapshot: { ...body.sourceSnapshot, files: [{ path: span.path, contentSha256: w.contentSha256 }] }, nodes: ['source', 'target'].map(id => ({ id, kind: 'source-symbol' as const, file: span.path, symbolId: id, location: span, value: id, provenance: [w] })), relationships: [relationship] }
+    expect(validateApiRelationshipEvidence(sealApiRelationshipEvidence(valid)).valid).toBe(true)
+    const fabricated = { ...relationship, kind: 'react-event-executes-api' } as unknown as ApiRelationship
+    fabricated.id = apiRelationshipId(fabricated)
+    expect(validateApiRelationshipEvidence(sealApiRelationshipEvidence({ ...valid, relationships: [fabricated] })).errors).toEqual(['relationship-endpoint'])
+  })
   it('validates the separate versioned truthful empty contract', () => {
     const a = empty()
     expect(validateApiRelationshipEvidence(a)).toEqual({ valid: true, errors: [] })

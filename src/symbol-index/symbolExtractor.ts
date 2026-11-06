@@ -143,7 +143,7 @@ export function extractFromSource(
 
 /** Reuses this analyzer's parsed AST. No source IO, runtime execution or type checker. */
 function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], bindings: ImportBinding[], routes: FrameworkRouteFact[], parsed: boolean): ApiSourceObservations {
-  if (!parsed) return { revision: API_RELATIONSHIP_PRODUCER, status: 'failed', observations: [] }
+  if (!parsed) return { revision: API_RELATIONSHIP_PRODUCER, crossLayerRevision: 'cross-layer-v1', status: 'failed', observations: [] }
   const observations: ApiSourceObservation[] = []
   const declarations = new Map<string, number>()
   const unsafe = new Set<string>()
@@ -179,6 +179,15 @@ function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], 
     observations.push({ ...partial, line: pos.line + 1, column: pos.character, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1, ownerName: containing?.name ?? null, ownerLine: containing?.location.line ?? null })
   }
   const visit = (n: ts.Node): void => {
+    if (ts.isJsxAttribute(n) && ['onClick', 'onSubmit'].includes(n.name.getText(sf))) {
+      const expression = n.initializer && ts.isJsxExpression(n.initializer) ? n.initializer.expression : undefined
+      const name = expression && ts.isIdentifier(expression) ? expression.text : null
+      add(n, { kind: 'ui-event', name, method: null, path: n.name.getText(sf), reason: name && declarations.get(name) === 1 && !unsafe.has(name) ? null : 'unresolved-ui-handler' })
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ts.isIdentifier(n.expression.expression)) {
+      const name = n.expression.expression.text
+      if (bindings.some(b => b.localName === name && b.sourceSpecifier === 'next/server') && declarations.get(name) === 1 && !unsafe.has(name)) add(n, { kind: 'framework-reference', name, method: null, path: null, reason: null })
+    }
     if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
       const name = n.expression.text
       if (name === 'fetch') {
@@ -209,6 +218,7 @@ function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], 
       const receiver = ts.isIdentifier(n.expression.expression) ? n.expression.expression.text : null
       const authenticated = receiver !== null && routes.some(r => r.framework === 'express' && r.kind === 'router' && r.status === 'static' && r.name === receiver)
       if (authenticated && !routes.some(r => r.kind === 'route' && r.framework === 'express' && r.line === p.line + 1 && r.column === p.character)) add(n, { kind: 'unsupported-route', name: n.expression.name.text, method: null, path: literal(n.arguments[0]), reason: 'unsupported-express-registration-syntax' })
+      if (!authenticated && n.arguments.length >= 2 && literal(n.arguments[0])?.startsWith('/')) add(n, { kind: 'unsupported-route', name: n.expression.name.text, method: null, path: literal(n.arguments[0]), reason: 'unsupported-router-profile' })
     }
     if (ts.isTypeReferenceNode(n)) {
       const name = ts.isIdentifier(n.typeName) ? n.typeName.text : null
@@ -217,7 +227,7 @@ function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], 
     ts.forEachChild(n, visit)
   }
   visit(sf)
-  return { revision: API_RELATIONSHIP_PRODUCER, status: 'complete', observations }
+  return { revision: API_RELATIONSHIP_PRODUCER, crossLayerRevision: 'cross-layer-v1', status: 'complete', observations }
 }
 
 // ---------------------------------------------------------------------------

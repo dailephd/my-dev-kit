@@ -244,6 +244,37 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 
 ## Static-evidence boundary
 
+### KIT-API-01 bounded cross-layer projection (v1.15.0 unreleased)
+
+The managed `api-relationship-evidence.json` projection keeps artifact kind
+`kit-api-relationship-evidence-v1`, schema `1.0.0` and producer
+`api-relationship-v1.0.0`. Batch 2 uses the existing node/relationship vocabulary;
+it adds no public command or runtime-execution claim.
+
+- Express effective paths compose only authenticated static mount edges and exact
+  route/handler identities. Multiple mounting contexts remain ambiguous; dynamic
+  prefixes and nested mounting semantics remain unresolved or unsupported.
+- Next endpoints require existing App Router handler declarations, a static
+  `app/api/.../route.ts` or `.js` convention (also under `src/`), exact named
+  exported HTTP handlers, and an actual reference to a `next/server` import.
+  Filename similarity, dynamic/catch-all/parallel/intercepting conventions and
+  `.tsx`/`.jsx` route files do not qualify this profile.
+- Same-origin root-relative literal requests match exact method/path pairs,
+  preserving case and source URL evidence. Query strings/fragments are excluded
+  only from matching. External origins, unknown paths and ambiguous candidates
+  never receive resolved local dispatch claims.
+- Explicit `onClick`/`onSubmit` references in a React-import context can link a
+  component, exact handler and request through bounded, cycle-safe static call
+  references. Callback/event execution is not proven; unresolved handlers and
+  exceeded bounds remain explicit.
+- Exact imported class references can bridge a handler to a uniquely identified
+  existing data-model source record. Interfaces retain their explicit declaration/
+  schema associations. Neither association proves validation, ORM operations,
+  table equivalence, serialization, authorization or runtime schema compatibility.
+- Lookup includes witness-file associations within its existing caps. Relevant
+  unresolved/unsupported evidence prevents a complete negative claim. Source
+  selection and changed-byte freshness remain owned by source-audit evidence.
+
 All produced evidence is conservative static repository evidence. It does not
 prove runtime behavior, test success, UI visibility, route reachability,
 dependency injection, database/network behavior, Android builds, or security.

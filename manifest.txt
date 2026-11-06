@@ -91,6 +91,7 @@ tests/ — tracked regression/integration tests and fixtures; mirror existing ow
   tests/security/ also owns v1.15 source-audit containment and freshness regressions (symlink, junction, traversal, stale source).
   tests/cli/, tests/slice/, tests/view/, tests/security/, tests/integration/, tests/docs/, tests/scripts/, tests/helpers/ — existing tool-level/integration/test helper owners.
   tests/fixtures/ — deliberate miniature source projects; the nested android/, kotlin/, java/, context/, data-model/, lineage/, compose-retrieval/, android-* trees are FIXTURES, not misplaced production.
+  tests/fixtures/api-relationships/v1/ — KIT-API-01 static relationship fixtures; Batch 2 adds only express-mounted-router/, react-request-route/, next-app-route/ and typed-handler-model/ under this owner.
   tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
 
 benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.

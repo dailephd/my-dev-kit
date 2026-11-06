@@ -30,6 +30,11 @@ async function project(fixture?: string, sources: Record<string, string> = {}) {
 const targets = (a: Awaited<ReturnType<typeof project>>['artifact']) => a.relationships.filter(r => r.kind === 'api-call-targets-route')
 
 describe('static API relationship producer (RSP-002 through RSP-005)', () => {
+  it('matches only the root-relative pathname while retaining literal request evidence', async () => {
+    const { artifact } = await project(undefined, { 'app.ts': "import express from 'express'; const app=express(); function h(){}; app.get('/Case',h); export function load(){return fetch('/Case?q=one#two')}" })
+    expect(targets(artifact)).toEqual([expect.objectContaining({ qualification: 'RESOLVED', path: '/Case?q=one#two' })])
+    expect(artifact.nodes.find(n => n.kind === 'api-client-call')?.value).toBe('/Case?q=one#two')
+  })
   it('publishes static method/path, exact cross-file handler and imported wrapper/UI witnesses', async () => {
     const { artifact: a, out } = await project('client-server-static')
     const [edge] = targets(a)

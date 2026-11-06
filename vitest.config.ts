@@ -7,6 +7,7 @@ export default defineConfig({
       'tests/**/*.spec.ts',
       'tests/symbol-index/apiRelationshipEvidenceTypes.test.ts',
       'tests/indexing/buildApiRelationshipEvidence.test.ts',
+      'tests/indexing/apiRelationshipCrossLayerIntegration.test.ts',
       'tests/lookup/apiRelationshipLookup.test.ts',
     ],
     exclude: ['tests/**/fixtures/**'],

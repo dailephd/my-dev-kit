@@ -15,6 +15,15 @@ async function fixture(extraFiles = 0) {
   return { root, out, source, artifact: readApiRelationshipEvidence(out) }
 }
 describe('bounded authenticated API relationship lookup (RSP-005/RSP-006)', () => {
+  it('does not report an unsupported route universe as a complete negative', async () => {
+    const { root, out } = await fixture()
+    fs.writeFileSync(join(root, 'src/app.ts'), "const server={get(...args:unknown[]){}}; function h(){}; server.get('/x',h)")
+    await runIndexCommand({ root, src: ['src'], out })
+    const result = apiRelationshipLookup(readApiRelationshipEvidence(out), { kind: 'api-call-targets-route' })
+    expect(result.relationships).toEqual([])
+    expect(result.unresolved).toEqual([expect.objectContaining({ qualification: 'UNSUPPORTED' })])
+    expect(result.complete).toBe(false)
+  })
   it('filters exact source, target, kind and bounded file sets with witnesses and identity', async () => {
     const { artifact: a } = await fixture()
     const edge = a.relationships.find(r => r.kind === 'api-call-targets-route')!

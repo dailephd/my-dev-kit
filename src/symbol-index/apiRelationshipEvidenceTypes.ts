@@ -18,7 +18,7 @@ export type ApiRelationshipMethod = typeof API_RELATIONSHIP_METHODS[number]
 
 /** Raw observations from the existing AST, before declaration IDs are assigned. */
 export interface ApiSourceObservation {
-  kind: 'request' | 'call' | 'type-reference' | 'unsupported-route'
+  kind: 'request' | 'call' | 'type-reference' | 'unsupported-route' | 'ui-event' | 'framework-reference'
   line: number
   column: number
   endLine: number
@@ -30,6 +30,8 @@ export interface ApiSourceObservation {
   reason: string | null
 }
 export interface ApiSourceObservations {
+  /** Private extraction capability; not part of the relationship artifact schema. */
+  crossLayerRevision?: 'cross-layer-v1'
   revision: typeof API_RELATIONSHIP_PRODUCER
   status: 'complete' | 'unsupported' | 'failed'
   observations: ApiSourceObservation[]

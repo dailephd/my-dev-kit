@@ -188,7 +188,7 @@ export function buildPartialSymbolIndex(input: BuildPartialSymbolIndexInput): Bu
     const missingJsFrameworkEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.frameworkRouteFacts === undefined
     // Preserve identity-only reuse for legacy direct callers, as with framework facts.
     // Managed pre-producer caches are already rejected by the configuration fingerprint.
-    const missingApiEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.apiRelationships === undefined
+    const missingApiEvidence = previous && ['typescript', 'javascript'].includes(previous.language) && previous.commonJsExports !== undefined && previous.apiRelationships?.crossLayerRevision !== 'cross-layer-v1'
     const missingRustEvidence = previous?.language === 'rust' && previous.rustSyntaxFacts === undefined
     if (input.unchangedPaths.has(relPath) && !forcedPaths.has(relPath) && !missingPythonEvidence && !unresolvedJsBindings && !missingJsFrameworkEvidence && !missingRustEvidence && !missingApiEvidence) {
       const previousSummary = input.previousFileSummariesByPath.get(relPath)
