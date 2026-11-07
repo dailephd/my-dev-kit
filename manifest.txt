@@ -94,11 +94,14 @@ tests/ — tracked regression/integration tests and fixtures; mirror existing ow
   tests/fixtures/ — deliberate miniature source projects; the nested android/, kotlin/, java/, context/, data-model/, lineage/, compose-retrieval/, android-* trees are FIXTURES, not misplaced production.
   tests/fixtures/api-relationships/v1/ — KIT-API-01 static relationship fixtures; Batch 2 adds only express-mounted-router/, react-request-route/, next-app-route/ and typed-handler-model/ under this owner.
   tests/fixtures/api-relationships/v1/contract-impact/ — KIT-API-01 Batch 3 authentic before/ and after/ source fixtures for existing graph-diff comparison; generated indexes remain task-local, never stored here.
+  tests/fixtures/api-relationships/v1/qualification/ — KIT-API-01 Batch 4 independently source-annotated expected-facts.json and held-out static negative/uncertain source fixtures; no generated artifacts.
+  tests/qualification/apiRelationshipQualification.spec.ts — KIT-API-01 Batch 4 qualification measurement, independent witness and harness regression checks; existing Vitest discovery applies.
   tests/fixtures/**/src/, app/, tests/, java/, kotlin/, res/, gradle/, node_modules-like test data — respect fixture contracts; no tidy/migrate without exact approval.
 
 benchmarks/retrieval/v1.7/ — TRACKED internal retrieval benchmark task CONFIGURATION and fixtures; NEVER generated benchmark runs.
 benchmarks/retrieval/v1.13/ — TRACKED internal Android retrieval benchmark CONFIGURATION (android.json) and its maintainer README.md; NEVER generated benchmark runs. Reuses the existing src/retrievalRegression/ runner and existing tests/fixtures/ Android fixtures; not part of the npm package.
 scripts/docs/checkDocs.ts — thin source-checkout entrypoint for the existing docs preservation checks. No second checker.
+scripts/qualification/v115ApiRelationshipQualification.mjs — KIT-API-01 Batch 4 source-grounded qualification entrypoint; reuses existing index, authenticated reader/validator, lookup and graph-diff owners and qualification containment convention. Generated evidence stays in the explicitly authorized local Batch 4 task root.
 examples/ — tracked public sample input projects: basic-ts/, basic-python/, basic-react-tsx/, basic-data-model-ts/, basic-android-kotlin/; not generated runtime workspaces.
   examples/basic-android-kotlin/ — public Android/Kotlin/Compose sample project and documentation for v1.13.0 retrieval workflows. Tracked public example included in the npm package by explicit package.json "files" allowlist entries (README.md, the three Gradle .kts files, app/src); not an internal fixture and not a build workspace.
 contracts/ecosystem/ — frozen coordinated ecosystem reference contracts and v1 fixtures; no modification for a local retrieval patch absent explicit dependency approval.
