@@ -245,7 +245,48 @@ v1.14.0 tests write generated fixtures and indexes through `tests/helpers/v114Ou
 
 The allocator rejects a relative path, a path outside the repository, a symlink escape and a path under an earlier v1.14.0 task directory. Set the variable per run; do not commit it. The installed-package qualification script keeps its own fixed output directory.
 
+## v1.15.0 API relationship qualification (unreleased)
+
+The source-checkout entrypoint is
+`scripts/qualification/v115ApiRelationshipQualification.mjs`. From the repository
+root, its supported invocation is:
+
+```sh
+node --import tsx scripts/qualification/v115ApiRelationshipQualification.mjs --out .my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification
+```
+
+The script accepts only that fixed Batch 4 output root; it is not a generic
+output-directory option or installed CLI command. Run it only with authority to
+write that task's evidence. It retains prior measurements in runtime history,
+checks source hashes against independently authored expected facts, and uses
+the existing indexer, authenticated reader, bounded lookup and graph-diff.
+Generated evidence, indexes, caches and logs remain ignored and uncommitted.
+
+The six measured profiles cover endpoints, exact request matching, React event
+associations, explicit schema references, conservative model references and
+scoped direct potential impacts. Precision is TP/(TP+FP), recall TP/(TP+FN);
+zero denominators are reported as null. Negative, uncertain and unsupported
+populations remain distinct. Results describe small synthetic fixture
+populations, not universal accuracy or real-project prevalence. Returned-impact
+recall includes omissions caused by the documented 64-record cap; truthful
+truncation is not itself a demonstrated correctness defect. Detailed accepted
+metrics remain in the local canonical Batch 4 report.
+
+Focused validation uses the existing Vitest discovery:
+
+```sh
+npm test -- --no-cache --maxWorkers=6 tests/qualification/apiRelationshipQualification.spec.ts tests/symbol-index/apiRelationshipEvidenceTypes.test.ts tests/indexing/buildApiRelationshipEvidence.test.ts tests/indexing/apiRelationshipCrossLayerIntegration.test.ts tests/lookup/apiRelationshipLookup.test.ts tests/graph-diff/apiRelationshipImpact.spec.ts
+```
+
+These implementation checks are separate from standardized pre-release
+readiness, installed-package acceptance and publication gates. `npm run verify`
+runs typecheck, build and documentation checks; it does not run this qualification,
+benchmarks or the canonical full test suite. Documentation-only reconciliation
+can inherit accepted functional evidence for unchanged source while recording
+that no new full canonical run occurred.
+
 ## Build
+
 Build the distributable CLI:
 
     npm run build

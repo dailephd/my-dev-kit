@@ -138,6 +138,19 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 
+### v1.15.0 development status (unreleased)
+
+The v1.15.0 implementation is complete locally; release readiness has not yet
+been established. Package metadata and the CLI still report the published
+baseline, `1.14.0`. The development implementation adds authenticated source-audit
+evidence and managed `api-relationship-evidence.json` for qualified static
+Express, Next.js, React, request, schema and model associations. Existing
+`graph-diff` optionally reports bounded `apiRelationshipImpact` evidence from
+compatible snapshots. Dynamic and ambiguous patterns remain explicit, and
+truncated output cannot prove absence. These associations do not prove runtime
+execution, reachability or API breakage. See the [command reference](docs/COMMANDS.md)
+and [architecture](docs/ARCHITECTURE.md) for current development behavior.
+
 ### v1.12.6 bounded retrieval precision
 
 Version 1.12.6 is a bounded retrieval-precision patch over the existing graph-guided workflow. Ownership search helps surface grounded production owners while retaining relevant tests and supporting evidence. Optional parser-derived `endLine` values let source retrieval and local source bundles return complete known symbols and keep continuation within their boundaries. Raw relevance search and conservative behavior for unknown or older-index boundaries remain supported. See [ROADMAP.md](docs/ROADMAP.md#version-1126).

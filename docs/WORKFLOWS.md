@@ -152,6 +152,13 @@ npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-
 
 Keep the before snapshot unchanged. `graph-diff` does not index, edit inputs, or fail because a valid difference exists. It is reporting-only. Inspect stable-identity changes, availability and warnings, and combine them with Git diffs and tests.
 
+In a built unreleased v1.15.0 checkout, use `node dist/cli.js graph-diff` with
+the same arguments to inspect optional `apiRelationshipImpact` from registered
+compatible relationship snapshots. Check available/returned counts, truncation,
+qualification and completeness before interpreting an empty result. Direct
+static potential impacts do not establish runtime breakage; see the
+[command contract](COMMANDS.md#graph-diff).
+
 Graph equality does not prove runtime equivalence. For visible regressions, use the [commit-to-commit recipe](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md#910-commit-to-commit-regression-localization) and preserve Observer comparability requirements.
 
 ## Workflow 10: Index and retrieve Android/Kotlin/Java projects

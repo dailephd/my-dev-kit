@@ -27,6 +27,18 @@ Version 1.14.0 is the current release. It broadens Python, JavaScript/TypeScript
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 
+The v1.15.0 development implementation is complete and unreleased; package
+metadata remains `1.14.0` and release readiness is not yet established. It adds
+managed source-audit and API relationship evidence, qualified static
+UI/client/endpoint/schema/model associations, and optional bounded direct
+potential impacts in the existing `graph-diff` result. It preserves ambiguity,
+unsupported profiles, source freshness and truncation rather than claiming
+runtime execution, reachability or compatibility. See
+[CONTRACTS.md](CONTRACTS.md#kit-api-01-bounded-cross-layer-projection-v1150-unreleased),
+[GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#api-relationship-evidencejson-v1150-unreleased)
+and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for the development contracts
+and implementation status.
+
 ### v1.14.0 language and framework coverage
 
 v1.14.0 includes richer Python extraction (structured imports, nested owners, decorators, grounded local calls), Django, SQLAlchemy and FastAPI static evidence, JSDoc and CommonJS handling, configured `tsconfig.json`/`jsconfig.json` path aliases, Express and NestJS routes, Next.js App Router and Playwright/Vitest static associations, and Rust structural indexing and retrieval (Cargo packages and targets, modules, traits, impls, unique local imports, qualified same-name methods, bounded source and context). It is static analysis only: nothing is executed, and Rust call inference and Prisma are deferred. See [ROADMAP.md](ROADMAP.md#version-1140), [ARCHITECTURE.md](ARCHITECTURE.md) and [the public Rust example](../examples/basic-rust-workspace/README.md).

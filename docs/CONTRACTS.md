@@ -227,13 +227,13 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 
 **Status:** implemented in the v1.15.0 development branch (KIT-FACTS-01 producer); not released. The published package is 1.14.0 and does not contain these contracts. This section is the canonical contract summary; the artifact is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), commands in [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased), ownership in [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased). They are not repeated here.
 
-- **Additive, not replacing.** Symbol-index schema `3`, code-graph `1.1.0` and manifest `1.0.0` are unchanged; the artifact is `source-audit-evidence.json` (kind `my-dev-kit-v1-source-audit-evidence`, schema `1.0.0`), referenced by an optional `manifest.json` `sourceAuditEvidence` field. No new command family exists.
+- **Additive, not replacing.** Symbol-index schema `3`, code-graph `1.1.0` and manifest `1.0.0` are unchanged; the artifact is `source-audit-evidence.json` (kind `my-dev-kit-v1-source-audit-evidence`, schema `1.1.0`), referenced by an optional `manifest.json` `sourceAuditEvidence` field. No new command family exists.
 - **Source selection and coverage.** The evidence records the selected source roots, the effective exclusion rules and coverage counts. `inventoryComplete` and `exclusionsAreExplicit` state whether the selected inventory and its exclusions are fully accounted for. An unselected or excluded path is not evidence that a file is absent or clean.
 - **Hashes and identity.** Each file carries a content SHA-256 where available. The manifest records the exact serialized artifact SHA-256 and a semantic `snapshotId`; they are different identities. Files without a trusted hash are never claimed authenticated.
 - **Stable fact IDs.** Fact IDs are opaque, deterministic and taken from output; consumers must not reconstruct them.
 - **Capability completeness.** Each file and capability is reported as complete, partial, unsupported, failed, skipped or not applicable. Partial or unsupported evidence is explicit, and a missing fact there is not absence. A complete selected inventory does not imply complete parsing or semantic resolution.
 - **Managed artifact and manifest integrity.** `index` validates the artifact, writes it, then writes the manifest last. Readers verify the manifest reference, hash and snapshot and fail closed on a missing, unregistered or mismatched artifact. Multi-artifact publication is not atomic: an interrupted write can leave incomplete output, which must fail closed.
-- **Cache compatibility.** The private cache (schema `1.4.0`) records the extractor revision (`source-audit-v1.2.0`) and capability set; an incompatible older cache causes one full rebuild. Legacy indexes without the artifact stay valid for all other commands, and the audit selectors report the evidence unavailable.
+- **Cache compatibility.** The private cache (schema `1.4.0`) records the extractor revision (`source-audit-v1.5.0`) and capability set; an incompatible older cache causes one full rebuild. Legacy indexes without the artifact stay valid for all other commands, and the audit selectors report the evidence unavailable.
 - **Complete inventory and exact-fact pagination.** Audit pagination is zero-based with fixed page sizes (64 files, 128 facts), a `null` `nextPageIndex` on the terminal page, an error for a page beyond it, and an explicit `not-selected` result for an unselected path. Ranked search and context capsules are not a substitute for this enumeration.
 - **Import-target existence states.** `present` (candidate existence only), `proven-missing` (complete enumerated candidates in a complete, explicit selection, none on disk), `outside-selected-roots` and `indeterminate`. The last two are never missing-file proof. `present` does not establish unique semantic binding, and Java/Kotlin `candidatePaths` can be incomplete.
 - **Raw occurrence completeness.** The exact-file query returns literal occurrences with `complete`, scan limit 200000 bytes, 200 matches and 40 context lines. A zero-match result is absence evidence only when `complete` is true; truncated, oversized, invalid or unhashed content is never reported as complete absence.
@@ -245,6 +245,37 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 ## Static-evidence boundary
 
 ### KIT-API-01 bounded cross-layer projection (v1.15.0 unreleased)
+
+The relationship foundation is an optional managed projection in the existing
+index lifecycle. `manifest.json` registers `apiRelationshipEvidence` with the
+fixed artifact path, schema version, serialized SHA-256 and source snapshot ID.
+Legacy indexes without this registration retain their existing behavior;
+unregistered leftover files are not trusted evidence. There is no public
+relationship lookup command.
+
+The persisted artifact contains `schemaVersion`, `artifactKind`, `producer`,
+`sourceSnapshot`, `selection`, `capabilities`, `nodes`, `relationships`,
+`unresolved`, `limitations` and `integrity`. Producer identity includes package
+name/version and revision. Snapshot identity includes the selection fingerprint
+and file/hash inventory; selection records roots, exclusions, completeness and
+production state. Witnesses retain source spans, content hashes, symbol/fact
+references and AST, framework-graph or symbol/import-graph provenance. Node and
+relationship IDs and ordering are deterministic; source identity is not a
+runtime execution identity. Private extraction observations, including
+`crossLayerRevision`, are not additional persisted artifact fields.
+
+The validator rejects incompatible kind/schema/producer, invalid structure,
+identities, witness hashes and sealed integrity. The internal bounded reader
+also authenticates manifest registration and source-audit snapshot/selection,
+then uses inherited selected-source freshness checks: changed bytes invalidate
+live lookup even when Git HEAD is unchanged. Internal lookup supports exact
+node IDs, relationship kinds, witness-file filters and a bounded result count.
+Candidate enumeration is capped at 64; omitted results and metadata remain
+explicit. `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED` and `UNSUPPORTED` preserve the
+strength of the available evidence. Missing selectors, incomplete selection or
+production, unsupported capabilities, relevant uncertainty and truncation
+prevent a complete negative. Neither an empty result nor a complete file
+inventory alone proves absence of a relationship.
 
 The managed `api-relationship-evidence.json` projection keeps artifact kind
 `kit-api-relationship-evidence-v1`, schema `1.0.0` and producer

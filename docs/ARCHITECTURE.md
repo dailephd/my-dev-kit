@@ -764,6 +764,46 @@ Ownership:
 
 Boundaries: the evidence is static and bounded. It supports enumeration of the selected inventory, but a complete inventory is not complete parsing, and an exact occurrence is not a syntactic reference. Import-target `present` proves candidate existence only, and Java/Kotlin source-set ambiguity is not surfaced because those resolvers return one candidate. Kit produces facts and existence/occurrence evidence only; it produces no audit findings, severities or policy, does not execute the target, and makes no runtime or security claims. Detail: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased), [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
 
+## API relationship evidence architecture (v1.15.0, unreleased)
+
+KIT-API-01 is implemented locally and unreleased. It extends the existing
+pipeline rather than creating another parser, graph engine or public command:
+
+```text
+Existing TypeScript AST observations and symbol/import identities
+  -> Existing framework graph, frontend and data-model evidence
+  -> buildApiRelationshipEvidence (authenticated source-audit inputs)
+  -> Managed api-relationship-evidence.json and manifest registration
+  -> Authenticated internal bounded reader/query
+  -> Optional graph-diff apiRelationshipImpact projection
+```
+
+`src/symbol-index/apiRelationshipEvidenceTypes.ts` owns the versioned persisted
+contract and validator, separately from private extraction observations.
+`src/indexing/buildApiRelationshipEvidence.ts` composes existing facts without
+source I/O; the existing full/partial/no-change indexing lifecycle owns production,
+repair, managed writes and manifest publication. The projection retains source
+witnesses and deterministic identities without changing source-audit or core
+graph schemas.
+
+`src/lookup/apiRelationshipLookup.ts` authenticates registered evidence and uses
+the existing source-audit freshness authority for live queries. Its internal
+lookup returns bounded, content-free relationships and uncertainty. Qualified
+Express mounts, static Next.js App Router handlers, exact local requests, React
+event-handler references and explicit schema/model references are static
+associations; dynamic patterns, ambiguous candidates and unsupported ORM/SQL
+inference do not become runtime claims.
+
+`src/graph-diff/loadGraphDiffArtifacts.ts` authenticates optional persisted
+snapshots without requiring their historical source bytes to match live files.
+`src/graph-diff/buildApiRelationshipImpact.ts` is the pure bounded comparison
+owner; `runGraphDiff.ts` adds its optional result to the existing command.
+Neither snapshot is refreshed or mutated. The projection follows direct
+associations, preserves uncertainty and reports available/returned counts and
+64-record caps. It does not prove runtime API breakage or recursive reachability.
+See [CONTRACTS.md](CONTRACTS.md#kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased)
+for compatibility, completeness and result details.
+
 ## Design boundaries
 
 my-dev-kit uses conservative static analysis throughout.
