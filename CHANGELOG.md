@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 1.15.0 - 2026-11-09
+## 1.15.0 - 2026-11-10
 
 - API relationship evidence (v1.15.0): authenticated managed static relationships for qualified Express mounts, Next.js App Router handlers, exact local requests, React handler/request associations, explicit schemas and conservative model references. Dynamic, ambiguous and unsupported patterns retain uncertainty; no new public command or runtime execution claim.
 - Existing `graph-diff` optionally returns `apiRelationshipImpact` for compatible registered snapshots, with deterministic observed changes, direct potential impacts, available/returned counts and 64-record caps. Truncation prevents complete negative claims; static changes do not certify runtime API breakage. Source-grounded fixture qualification is maintainer evidence, not a universal accuracy guarantee.

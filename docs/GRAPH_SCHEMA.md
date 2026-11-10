@@ -131,8 +131,8 @@ Current versioned artifact kinds:
 - `my-dev-kit-v1-data-model`
 - `my-dev-kit-v1-data-model-graph`
 - `my-dev-kit-v1-model-view-lineage`
-- `my-dev-kit-v1-source-audit-evidence` (v1.15.0, unreleased; `source-audit-evidence.json`)
-- `kit-api-relationship-evidence-v1` (v1.15.0, unreleased; `api-relationship-evidence.json`)
+- `my-dev-kit-v1-source-audit-evidence` (v1.15.0; `source-audit-evidence.json`)
+- `kit-api-relationship-evidence-v1` (v1.15.0; `api-relationship-evidence.json`)
 
 `code-graph.json` uses:
 
