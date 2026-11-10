@@ -1915,6 +1915,15 @@ Implemented boundaries:
 
 This milestone supports later full-stack contract assurance but is not required for Android v1.13.0 work. The implemented producer contracts are in [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased), [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#version-1150).
 
+### KIT-FACTS-01 source evidence for Lab audits
+
+**Kit-side status: implemented in v1.15.0; Lab cutover remains planned.**
+
+- The existing index pipeline writes authenticated, manifest-registered `source-audit-evidence.json` with selected-source inventory, per-language capabilities, parse outcomes, declarations, imports, exports, source occurrences and uncertainty.
+- Existing `lookup` source-audit selectors page the selected inventory and exact facts; existing `source --file --contains --json` retrieves bounded exact-file occurrences. A top-ranked search or context capsule cannot substitute for full declared audit coverage.
+- Freshness, coverage, unsupported/partial analysis, ambiguous import resolution, and truncation remain visible. An exact occurrence is not necessarily a resolved language reference; Lab remains responsible for audit rules, severity, findings and reports.
+- No Kit-specific audit-policy engine, duplicate analyzer registry, target execution or new public command family is added. The full implemented contract and known language limitations are documented in the linked source-evidence contracts above.
+
 **Ecosystem handoff, not another Kit version.** KIT-FACTS-01 supplies the Kit side of the separately planned Kit-backed Lab source-audit migration. The next implementation for eliminating duplicate source analyzers is **LAB-KIT-01, the first workstream of my-dev-kit-lab v0.10.0**: qualify the managed Kit evidence consumer, compare existing language audit results, retire duplicate Lab production extraction only after parity, then prove Rust reuse. Kit v1.16.0 retains its independent KIT-OPS-01 reservation; v1.17.0 retains frontend retrieval completion; v2.0.0 retains the broader schema/plugin program. See the [Lab roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#first-workstream-kit-backed-source-audit-migration-lab-kit-01). Kit producer completion alone is not ecosystem cutover.
 
 ## Version 1.16.0
