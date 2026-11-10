@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.15.0 is the version represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence and adds Rust structural retrieval, retaining the existing Android and bounded graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#shipped-v1140) and [COMMANDS.md](COMMANDS.md).
+Version 1.15.0 is the current published release represented by this package. It adds managed source-audit and static API relationship/change-impact evidence to the Python, JavaScript/TypeScript, framework, and Rust structural retrieval coverage shipped in v1.14.0. Existing Android and bounded graph-guided workflows remain supported. See [ROADMAP.md](ROADMAP.md#version-1150), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md#version-1150) and [COMMANDS.md](COMMANDS.md).
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 
