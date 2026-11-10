@@ -152,7 +152,7 @@ npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-
 
 Keep the before snapshot unchanged. `graph-diff` does not index, edit inputs, or fail because a valid difference exists. It is reporting-only. Inspect stable-identity changes, availability and warnings, and combine them with Git diffs and tests.
 
-In a built unreleased v1.15.0 checkout, use `node dist/cli.js graph-diff` with
+In v1.15.0, use `my-dev-kit graph-diff` with
 the same arguments to inspect optional `apiRelationshipImpact` from registered
 compatible relationship snapshots. Check available/returned counts, truncation,
 qualification and completeness before interpreting an empty result. Direct
