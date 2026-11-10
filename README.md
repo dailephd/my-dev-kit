@@ -134,7 +134,7 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 ## Version 1.15.0
 
-`@dailephd/my-dev-kit@1.15.0` is the version represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence, and adds Rust structural indexing and bounded retrieval. It retains the existing Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
+`@dailephd/my-dev-kit@1.15.0` is the version represented by this package. It adds managed source-audit evidence and conservative API/client/schema/model relationships, with optional bounded change-impact evidence in `graph-diff`. It retains v1.14.0 Python, JavaScript/TypeScript, framework and Rust coverage and the existing Android and graph-guided workflows. See the [changelog](CHANGELOG.md), [command reference](docs/COMMANDS.md) and [v1.15.0 roadmap](docs/ROADMAP.md#version-1150). Install with `npm install -g @dailephd/my-dev-kit`.
 
 The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 

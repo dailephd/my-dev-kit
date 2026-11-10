@@ -1172,7 +1172,9 @@ Canonical compatibility test implementation and sanitized reports:
 
 ECO-00 adoption is a documentation/contract-only repository change. It changes no runtime package version, dependency, command, native artifact schema, release, tag, or publication state.
 
-## 14. Immediate next work
+## 14. ECO-00 implementation sequence (historical)
+
+This section preserves the original September 2026 ECO-00 sequence; it is not a live queue of unfinished versions. Kit v1.15.0 now contains the KIT-FACTS-01 source-evidence producer and KIT-API-01 relationship evidence. The next implementation for source-audit consolidation is **LAB-KIT-01 in Lab v0.10.0**, before that version's LAB-EVIDENCE-01 workstream; it must qualify the consumer, preserve five-language findings and retire duplicate Lab analyzers only after parity, then prove Rust reuse. This is distinct from Kit's unchanged v1.16.0 KIT-OPS-01, v1.17.0 frontend retrieval and v2.0.0 plugin reservations. The [Lab v0.10.0 roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#first-workstream-kit-backed-source-audit-migration-lab-kit-01) and [Kit v1.15.0 roadmap](ROADMAP.md#version-1150) govern the current producer and consumer status; this historical ECO-00 section does not override the separately maintained source-audit migration plan.
 
 ECO-00 is complete as a contract/roadmap freeze. The shared v1 contracts are reference and compatibility contracts only; they do not replace native artifacts.
 
