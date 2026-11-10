@@ -11,6 +11,7 @@ import { API_RELATIONSHIP_FILENAME, validateApiRelationshipEvidence } from '../.
 import { SOURCE_AUDIT_SCHEMA_VERSION } from '../../src/symbol-index/auditEvidenceTypes.js'
 import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
 import { CACHE_SCHEMA_VERSION } from '../../src/indexing/cacheMetadata.js'
+import { VERSION } from '../../src/version.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 
@@ -24,7 +25,7 @@ async function project(fixture?: string, sources: Record<string, string> = {}) {
   const out = join(root, 'out')
   await runIndexCommand({ root, src: ['src'], out, incremental: true })
   const artifact = readApiRelationshipEvidence(out)
-  const input = { sourceAudit: readSourceAuditEvidence(out), symbolIndex: json<SymbolIndex>(join(out, 'symbol-index.json')), codeGraph: json<CodeGraph>(join(out, 'code-graph.json')), producerVersion: '1.14.0' }
+  const input = { sourceAudit: readSourceAuditEvidence(out), symbolIndex: json<SymbolIndex>(join(out, 'symbol-index.json')), codeGraph: json<CodeGraph>(join(out, 'code-graph.json')), producerVersion: VERSION }
   return { root, out, artifact, input }
 }
 const targets = (a: Awaited<ReturnType<typeof project>>['artifact']) => a.relationships.filter(r => r.kind === 'api-call-targets-route')

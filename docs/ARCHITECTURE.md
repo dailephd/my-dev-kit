@@ -735,9 +735,11 @@ Security-relevant design rules:
 - artifact path containment is enforced for index, data-model, and lineage artifacts
 - Graphviz is only used by `view`
 
-## Source-audit evidence architecture (v1.15.0, unreleased)
+<a id="source-audit-evidence-architecture-v1150-unreleased"></a>
 
-**Status: implemented in the v1.15.0 development branch (KIT-FACTS-01 producer); not published.** The published package is 1.14.0. This is the Kit half of ECO-SOURCE-01: Kit is the planned sole source-analysis provider for Lab's source audits after the Lab migration (LAB-KIT-01, Lab v0.10.0). That migration is not complete: Lab has not yet consumed this evidence, passed five-language comparisons, retired its own analyzers, or proven Rust reuse, so Lab still owns its current analyzers. See [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
+## Source-audit evidence architecture (v1.15.0)
+
+**Status: implemented in v1.15.0 (KIT-FACTS-01 producer).** This is the Kit half of ECO-SOURCE-01: Kit is the planned sole source-analysis provider for Lab's source audits after the Lab migration (LAB-KIT-01, Lab v0.10.0). That migration is not complete: Lab has not yet consumed this evidence, passed five-language comparisons, retired its own analyzers, or proven Rust reuse, so Lab still owns its current analyzers. See [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
 
 Flow, all inside the existing managed index lifecycle:
 
@@ -764,9 +766,11 @@ Ownership:
 
 Boundaries: the evidence is static and bounded. It supports enumeration of the selected inventory, but a complete inventory is not complete parsing, and an exact occurrence is not a syntactic reference. Import-target `present` proves candidate existence only, and Java/Kotlin source-set ambiguity is not surfaced because those resolvers return one candidate. Kit produces facts and existence/occurrence evidence only; it produces no audit findings, severities or policy, does not execute the target, and makes no runtime or security claims. Detail: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased), [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
 
-## API relationship evidence architecture (v1.15.0, unreleased)
+<a id="api-relationship-evidence-architecture-v1150-unreleased"></a>
 
-KIT-API-01 is implemented locally and unreleased. It extends the existing
+## API relationship evidence architecture (v1.15.0)
+
+KIT-API-01 is implemented in v1.15.0. It extends the existing
 pipeline rather than creating another parser, graph engine or public command:
 
 ```text

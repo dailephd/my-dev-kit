@@ -11,7 +11,21 @@ import { contained, verifyCheckout } from './v114RustMatrix.mjs'
 // Run: node --import tsx scripts/qualification/v115ApiRelationshipQualification.mjs --out <approved-task-root>
 // New runtime outputs are exclusive-created; prior canonical measurements are
 // copied to retained runtime history before replacement. No target source runs.
-export const approvedRoot = '.my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification'
+const historicalRoot = '.my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification'
+const releaseRoot = '.my-dev-kit-workflow/tmp/v115-kit-api-01/release-preparation/runtime/qualification'
+export function selectQualificationRoot(override = process.env.MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT) {
+ const repo = process.cwd()
+ if (override !== undefined && (typeof override !== 'string' || override.split(/[\\/]/).includes('..') || path.resolve(repo, override) !== path.resolve(repo, releaseRoot))) throw Error('Unapproved qualification output override')
+ const selected = path.resolve(repo, override === undefined ? historicalRoot : releaseRoot)
+ for (let p = selected;; p = path.dirname(p)) {
+  try { if (fs.lstatSync(p).isSymbolicLink()) throw Error('Reparse qualification output path is not authorized: ' + p) }
+  catch (error) { if (error.code !== 'ENOENT') throw error }
+  if (p === repo) break
+  if (path.dirname(p) === p) throw Error('Qualification output escapes repository')
+ }
+ return selected
+}
+export const approvedRoot = selectQualificationRoot()
 const fixtureRoot = 'tests/fixtures/api-relationships/v1'
 const read = p => JSON.parse(fs.readFileSync(p, 'utf8'))
 const hash = p => createHash('sha256').update(fs.readFileSync(p)).digest('hex')
@@ -59,7 +73,7 @@ export function calculateMetrics(tp, fp, fn) {
 }
 export async function qualify(out) {
  const repo=process.cwd(); verifyCheckout(repo, new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1'))
- if(path.resolve(out)!==path.resolve(repo,approvedRoot))throw Error('Only the Batch 4 task root is authorized')
+ if(path.resolve(out)!==selectQualificationRoot())throw Error('Only the selected qualification task root is authorized')
  contained(repo,out)
  const runtime=path.join(out,'runtime')
  for(const [name,value] of Object.entries({TEMP:path.join(runtime,'temp'),TMP:path.join(runtime,'temp'),TMPDIR:path.join(runtime,'temp'),npm_config_cache:path.join(runtime,'npm-cache'),npm_config_logs_dir:path.join(runtime,'npm-logs'),npm_config_logs_max:'100000',TSX_DISABLE_CACHE:'1'}))process.env[name]=value

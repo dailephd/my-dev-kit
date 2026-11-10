@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-- API relationship evidence (v1.15.0 development): authenticated managed static relationships for qualified Express mounts, Next.js App Router handlers, exact local requests, React handler/request associations, explicit schemas and conservative model references. Dynamic, ambiguous and unsupported patterns retain uncertainty; no new public command or runtime execution claim.
+## 1.15.0 - 2026-11-09
+
+- API relationship evidence (v1.15.0): authenticated managed static relationships for qualified Express mounts, Next.js App Router handlers, exact local requests, React handler/request associations, explicit schemas and conservative model references. Dynamic, ambiguous and unsupported patterns retain uncertainty; no new public command or runtime execution claim.
 - Existing `graph-diff` optionally returns `apiRelationshipImpact` for compatible registered snapshots, with deterministic observed changes, direct potential impacts, available/returned counts and 64-record caps. Truncation prevents complete negative claims; static changes do not certify runtime API breakage. Source-grounded fixture qualification is maintainer evidence, not a universal accuracy guarantee.
-- Source-audit evidence (v1.15.0 development, not yet published): `index` writes a managed `source-audit-evidence.json` registered in `manifest.json`; `lookup` gains `--audit-files`, `--audit-file` and `--audit-import-target` (existence proof: present, proven-missing, outside-selected-roots, indeterminate); `source --file <path> --contains <literal> --json` returns bounded raw occurrences in one selected file. No new command family. Existing symbol-index, code-graph and manifest schemas are unchanged.
+- Source-audit evidence (v1.15.0): `index` writes a managed `source-audit-evidence.json` registered in `manifest.json`; `lookup` gains `--audit-files`, `--audit-file` and `--audit-import-target` (existence proof: present, proven-missing, outside-selected-roots, indeterminate); `source --file <path> --contains <literal> --json` returns bounded raw occurrences in one selected file. No new command family. Existing symbol-index, code-graph and manifest schemas are unchanged.
 - Code graph: file-dependency edge IDs are now unique when one file imports and re-exports the same target; the first statement kind keeps its historical ID.
 
 ## 1.14.0 - 2026-10-30

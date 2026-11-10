@@ -1,12 +1,12 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The v1.14.0 public surface has nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The v1.15.0 public surface has nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
 **v1.12.6 release additions.** `search --query "<text>" --intent ownership` and known-symbol-boundary behavior for `source` are available in the published package. No new command, public schema major, or artifact was added.
 
-**v1.15.0 development additions (unreleased).** The `lookup` source-audit selectors (`--audit-files`, `--audit-file`, `--audit-import-target`, `--page`) and the exact-file `source --file <path> --contains <literal> --json` form exist in the v1.15.0 development source checkout only. They are not in the published 1.14.0 npm package, whose `lookup --help` and `source --help` do not list them. Examples for these additions use `node dist/cli.js` from a built checkout. No new command family was added; see [lookup source-audit selectors](#source-audit-selectors-v1150-unreleased) and [exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
+**v1.15.0 additions.** The installed `lookup` source-audit selectors (`--audit-files`, `--audit-file`, `--audit-import-target`, `--page`) and exact-file `source --file <path> --contains <literal> --json` form extend the existing command families. Built-checkout examples below can also use the installed `my-dev-kit` command. See [lookup source-audit selectors](#source-audit-selectors-v1150-unreleased) and [exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
@@ -283,16 +283,18 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1
 - Alternative Android selector: `--android-component <name>`.
 - `--depth <n>`: graph traversal depth, default 1.
 - `--resolve-classification`: resolve the full available classification entry for node lookup.
-- `--audit-files`, `--audit-file <relative-path>`, `--audit-import-target <fact-id>` and `--page <n>` (v1.15.0, unreleased): source-audit selectors, described in [Source-audit selectors](#source-audit-selectors-v1150-unreleased).
+- `--audit-files`, `--audit-file <relative-path>`, `--audit-import-target <fact-id>` and `--page <n>` (v1.15.0): source-audit selectors, described in [Source-audit selectors](#source-audit-selectors-v1150-unreleased).
 - `--json`: structured result.
 
 Do not combine a fact selector with `--node`. Do not assume every `search` selector is also a `lookup` flag. For example, find a composable/resource/test fact with `search`, then pass its exact returned node ID to `lookup`.
 
 Node lookup reports the node, incoming/outgoing edges, neighbors, and available semantic/classification/Android metadata. Component lookup reports explicit found/not-found/ambiguous outcomes and related manifest/source evidence. Preserve ambiguous candidates. Neither a classification role nor a unique textual label proves runtime ownership.
 
-### Source-audit selectors (v1.15.0, unreleased)
+<a id="source-audit-selectors-v1150-unreleased"></a>
 
-Available only in the v1.15.0 development source checkout (not in published 1.14.0). These selectors read the managed `source-audit-evidence.json` artifact that `index` registers in `manifest.json`; see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased) for the artifact and [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased) for the contract.
+### Source-audit selectors (v1.15.0)
+
+Available in v1.15.0. These selectors read the managed `source-audit-evidence.json` artifact that `index` registers in `manifest.json`; see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased) for the artifact and [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased) for the contract.
 
 ```powershell
 node dist/cli.js lookup --index .my-dev-kit --audit-files --page 0 --json
@@ -348,7 +350,7 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region "<indexed-reg
 - `--node <node-id>`: source-capable graph node.
 - `--file <path>` with `--symbol <name>`: exact symbol in a file.
 - `--file <path>` with `--start <n>` and `--end <n>`: bounded numbered range.
-- `--contains <string>`: exact text matches across indexed source files, including test files indexed beneath a selected `--src` root. Files outside the indexed roots are not searched. With `--file <path>` and `--json` (v1.15.0, unreleased) it instead searches exactly one selected file; see [Exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
+- `--contains <string>`: exact text matches across indexed source files, including test files indexed beneath a selected `--src` root. Files outside the indexed roots are not searched. With `--file <path>` and `--json` (v1.15.0) it instead searches exactly one selected file; see [Exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
 - `--context <n>`: bounded context around exact matches. Use installed help for its documented default and maximum.
 - `--path <prefix>`: indexed source-path prefix filter for `--contains` (for example `--path tests` or a specific test file path).
 - `--react-region <region>`: indexed React component/hook/JSX/prop-type region name, not a new arbitrary region taxonomy.
@@ -374,9 +376,11 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region "<indexed-reg
 
 Select one coherent source mode. Do not combine unrelated web/Android selectors or invent source flags from another command. `--android-component` and `--permission` are not direct `source` selectors in this surface. Retrieve a supported exact node instead. Paths remain contained by the indexed project root.
 
-### Exact-file occurrences (v1.15.0, unreleased)
+<a id="exact-file-occurrences-v1150-unreleased"></a>
 
-Available only in the v1.15.0 development source checkout (not in published 1.14.0). It reuses the existing `source` family and `--contains`; it is distinct from the cross-file `source --contains <literal>` above, which is unchanged.
+### Exact-file occurrences (v1.15.0)
+
+Available in v1.15.0. It reuses the existing `source` family and `--contains`; it is distinct from the cross-file `source --contains <literal>` above, which is unchanged.
 
 ```powershell
 node dist/cli.js source --index .my-dev-kit --file tests/one.test.ts --contains "seed.json" --context 2 --json
@@ -700,7 +704,7 @@ Flags are exactly `--before <index-dir>`, `--after <index-dir>`, and `--json`. B
 
 The result reports added/removed/changed graph nodes and edges, supported symbol-index changes, manifest/analyzer metadata changes, classification changes where available, and warnings. Comparison uses existing stable identities, not fuzzy rename inference. A rename or incompatible identity may appear as removal/addition. It does not enumerate and recursively diff every arbitrary file in the directory.
 
-In the unreleased v1.15.0 development checkout, a manifest-registered API relationship
+In v1.15.0, a manifest-registered API relationship
 artifact on either side also produces the optional `apiRelationshipImpact` section.
 It validates persisted snapshot integrity and source-universe identity, reports
 bounded observed contract/relationship changes and directly associated potential

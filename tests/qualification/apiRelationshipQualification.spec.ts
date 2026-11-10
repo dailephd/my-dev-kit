@@ -1,9 +1,9 @@
-﻿import { readFileSync } from 'node:fs'
+﻿import fs, { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 // Qualification is an internal executable JS harness, not a production TS API.
 // @ts-ignore No declaration file is published for internal qualification scripts.
-import { calculateMetrics, matches, qualify, approvedRoot } from '../../scripts/qualification/v115ApiRelationshipQualification.mjs'
+import { calculateMetrics, matches, qualify, approvedRoot, selectQualificationRoot } from '../../scripts/qualification/v115ApiRelationshipQualification.mjs'
 
 describe('source-grounded API relationship qualification', () => {
   let result: any
@@ -56,5 +56,38 @@ describe('source-grounded API relationship qualification', () => {
     const artifact = { nodes: [], relationships: [] }
     expect(matches({ method: 'POST', path: '/users' }, { method: 'GET', path: '/users', witnesses: [] }, artifact)).toBe(false)
     expect(matches({ method: 'GET', path: '/Users' }, { method: 'GET', path: '/users', witnesses: [] }, artifact)).toBe(false)
+  })
+})
+
+describe('qualification output-root contract', () => {
+  const release = '.my-dev-kit-workflow/tmp/v115-kit-api-01/release-preparation/runtime/qualification'
+  it('preserves the historical default without executing it', () => {
+    const saved = process.env.MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT
+    delete process.env.MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT
+    try { expect(selectQualificationRoot()).toBe(resolve('.my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification')) }
+    finally { if (saved !== undefined) process.env.MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT = saved }
+  })
+  it('selects only the exact release root and keeps the exported selection coherent', () => {
+    expect(selectQualificationRoot(release)).toBe(resolve(release))
+    expect(approvedRoot).toBe(selectQualificationRoot())
+  })
+  it('rejects outside, unapproved local, historical override and traversal paths', () => {
+    for (const value of [resolve('..', 'outside'), '.my-dev-kit-workflow/tmp/unapproved', '.my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification', release + '/../qualification']) {
+      expect(() => selectQualificationRoot(value)).toThrow(/Unapproved/)
+    }
+  })
+  it('rejects reparse redirection before writing', () => {
+    const original = fs.lstatSync
+    const spy = vi.spyOn(fs, 'lstatSync').mockImplementation(((p: any, ...args: any[]) => {
+      if (String(p) === resolve(release)) return { isSymbolicLink: () => true }
+      return (original as any)(p, ...args)
+    }) as any)
+    try { expect(() => selectQualificationRoot(release)).toThrow(/Reparse/) }
+    finally { spy.mockRestore() }
+  })
+  it('rejects historical qualification execution when the override is active', async () => {
+    if (process.env.MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT !== undefined) {
+      await expect(qualify(resolve('.my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification'))).rejects.toThrow(/selected qualification/)
+    }
   })
 })

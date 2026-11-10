@@ -245,7 +245,9 @@ v1.14.0 tests write generated fixtures and indexes through `tests/helpers/v114Ou
 
 The allocator rejects a relative path, a path outside the repository, a symlink escape and a path under an earlier v1.14.0 task directory. Set the variable per run; do not commit it. The installed-package qualification script keeps its own fixed output directory.
 
-## v1.15.0 API relationship qualification (unreleased)
+<a id="v1150-api-relationship-qualification-unreleased"></a>
+
+## v1.15.0 API relationship qualification
 
 The source-checkout entrypoint is
 `scripts/qualification/v115ApiRelationshipQualification.mjs`. From the repository
@@ -255,8 +257,11 @@ root, its supported invocation is:
 node --import tsx scripts/qualification/v115ApiRelationshipQualification.mjs --out .my-dev-kit-workflow/tmp/v115-kit-api-01/batch4-qualification
 ```
 
-The script accepts only that fixed Batch 4 output root; it is not a generic
-output-directory option or installed CLI command. Run it only with authority to
+The default is the historical Batch 4 output root. Release preparation may set
+`MY_DEV_KIT_API_QUALIFICATION_OUTPUT_ROOT` to
+`.my-dev-kit-workflow/tmp/v115-kit-api-01/release-preparation/runtime/qualification`
+and pass that same path to `--out`. Other overrides and reparse redirection
+are rejected. This is not a generic output-directory option or installed CLI command. Run it only with authority to
 write that task's evidence. It retains prior measurements in runtime history,
 checks source hashes against independently authored expected facts, and uses
 the existing indexer, authenticated reader, bounded lookup and graph-diff.

@@ -223,9 +223,11 @@ improvements remain v1.14.0 scope.
 
 The retrieval-regression runner gains additive `search` and `source` task execution and a `commandResult` expectation; tasks without `execution` behave as before. This is internal maintainer tooling, not a public command or published artifact schema.
 
-## v1.15.0 source-evidence contracts (unreleased)
+<a id="v1150-source-evidence-contracts-unreleased"></a>
 
-**Status:** implemented in the v1.15.0 development branch (KIT-FACTS-01 producer); not released. The published package is 1.14.0 and does not contain these contracts. This section is the canonical contract summary; the artifact is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), commands in [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased), ownership in [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased). They are not repeated here.
+## v1.15.0 source-evidence contracts
+
+**Status:** implemented in v1.15.0 (KIT-FACTS-01 producer). This section is the canonical contract summary; the artifact is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), commands in [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased), ownership in [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased). They are not repeated here.
 
 - **Additive, not replacing.** Symbol-index schema `3`, code-graph `1.1.0` and manifest `1.0.0` are unchanged; the artifact is `source-audit-evidence.json` (kind `my-dev-kit-v1-source-audit-evidence`, schema `1.1.0`), referenced by an optional `manifest.json` `sourceAuditEvidence` field. No new command family exists.
 - **Source selection and coverage.** The evidence records the selected source roots, the effective exclusion rules and coverage counts. `inventoryComplete` and `exclusionsAreExplicit` state whether the selected inventory and its exclusions are fully accounted for. An unselected or excluded path is not evidence that a file is absent or clean.
@@ -244,7 +246,9 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 
 ## Static-evidence boundary
 
-### KIT-API-01 bounded cross-layer projection (v1.15.0 unreleased)
+<a id="kit-api-01-bounded-cross-layer-projection-v1150-unreleased"></a>
+
+### KIT-API-01 bounded cross-layer projection (v1.15.0)
 
 The relationship foundation is an optional managed projection in the existing
 index lifecycle. `manifest.json` registers `apiRelationshipEvidence` with the
@@ -313,7 +317,9 @@ Uncertainty, ambiguity, skipped evidence, and unsupported patterns remain
 observable. [SECURITY.md](SECURITY.md) owns path containment, subprocess,
 untrusted-input, and generated-output safety.
 
-### KIT-API-01 contract-oriented graph-diff evidence (v1.15.0 unreleased)
+<a id="kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased"></a>
+
+### KIT-API-01 contract-oriented graph-diff evidence (v1.15.0)
 
 The existing `graph-diff` result optionally adds `apiRelationshipImpact`. It is
 omitted when neither manifest registers API relationship evidence. No command,

@@ -117,7 +117,7 @@ The lineage layer (`model-view-lineage.json`) carries conservative static relati
 
 The bridge between layers is artifact references (`artifactRefs`) and evidence references (`evidenceRefs`). Compact metadata on structural artifacts links to detailed records in semantic artifacts.
 
-The v1.15.0 source-audit evidence artifact (`source-audit-evidence.json`, unreleased) is a separate managed artifact registered through the manifest's `sourceAuditEvidence` reference. It is a per-file, paged evidence projection beside the structural layer, not a slice of `code-graph.json` and not a replacement for `symbol-index.json`; it carries its own fact identities and is read only through the audit `lookup` selectors.
+The v1.15.0 source-audit evidence artifact (`source-audit-evidence.json`) is a separate managed artifact registered through the manifest's `sourceAuditEvidence` reference. It is a per-file, paged evidence projection beside the structural layer, not a slice of `code-graph.json` and not a replacement for `symbol-index.json`; it carries its own fact identities and is read only through the audit `lookup` selectors.
 
 `data-model-graph.json` is a derived semantic graph, not a slice of `code-graph.json`. The code graph describes static source structure. The data-model graph describes data entities and fields. The model-view-lineage artifact describes static usage and flow paths. The `view` command can render each graph artifact independently with `--graph code`, `--graph data-model`, or `--graph model-view-lineage`.
 
@@ -165,8 +165,8 @@ Main fields:
 - `changedFileSummary` (v1.8.0): added/changed/removed/unchanged counts and bounded samples from the incremental change-detection pass that produced this build; `null` when not applicable (a plain full run, or an incremental run whose cache had no prior baseline to diff against)
 - `partialRebuildFallbackArtifacts` (v1.8.0 Batch 3): artifact families fully regenerated rather than partially reused during a partial rebuild (currently only ever `["call-graph"]`, when `--call-graph` was requested); `[]` outside the two `incremental-partial*` cache modes
 - `incrementalRefresh` (v1.12.5): additive optional `IncrementalRefreshSummary` object. See "incrementalRefresh (v1.12.5)" below.
-- `sourceAuditEvidence` (v1.15.0, unreleased): additive optional reference to the managed `source-audit-evidence.json`; absent on legacy indexes. See [source-audit-evidence.json](#source-audit-evidencejson-v1150-unreleased).
-- `apiRelationshipEvidence` (v1.15.0, unreleased): additive optional authenticated reference to [API relationship evidence](#api-relationship-evidencejson-v1150-unreleased).
+- `sourceAuditEvidence` (v1.15.0): additive optional reference to the managed `source-audit-evidence.json`; absent on legacy indexes. See [source-audit-evidence.json](#source-audit-evidencejson-v1150-unreleased).
+- `apiRelationshipEvidence` (v1.15.0): additive optional authenticated reference to [API relationship evidence](#api-relationship-evidencejson-v1150-unreleased).
 
 ### artifacts
 
@@ -1231,9 +1231,11 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 **Determinism, empty-view, and Graphviz behavior are entirely inherited, unmodified.** Node/edge sorting (`localeCompare` on `id`), the DOT serializer, SVG/PNG rendering via Graphviz, `--allow-dot-fallback`, and the JSON `GraphViewResult` shape (`nodeCount`/`edgeCount`/`graphvizUsed`/`dotFallbackUsed`/`fallbackStatus`/`warnings`) are the same code path every other `--graph` value already uses — Batch 6 adds no new summary field, and a non-Android/Compose/test-evidence-free index simply produces zero selected nodes and zero edges at exit 0, never an error and never an invented placeholder node.
 
-## source-audit-evidence.json (v1.15.0, unreleased)
+<a id="source-audit-evidencejson-v1150-unreleased"></a>
 
-Status: implemented in the v1.15.0 development branch (KIT-FACTS-01 producer); not in the published 1.14.0 package. Artifact kind `my-dev-kit-v1-source-audit-evidence`, schema version `1.1.0`. Types: `src/symbol-index/auditEvidenceTypes.ts`; validator: `src/symbol-index/validateAuditEvidence.ts`; producer: `src/indexing/buildSourceAuditEvidence.ts`. Commands: [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
+## source-audit-evidence.json (v1.15.0)
+
+Status: implemented in v1.15.0 (KIT-FACTS-01 producer). Artifact kind `my-dev-kit-v1-source-audit-evidence`, schema version `1.1.0`. Types: `src/symbol-index/auditEvidenceTypes.ts`; validator: `src/symbol-index/validateAuditEvidence.ts`; producer: `src/indexing/buildSourceAuditEvidence.ts`. Commands: [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
 
 Schema versions around it: manifest `1.0.0`, symbol index `3`, code graph `1.1.0` (all unchanged), private cache metadata `1.4.0` (advanced from `1.3.0`), extractor contract revision `source-audit-v1.5.0`.
 
@@ -1258,7 +1260,9 @@ Lifecycle. `index` projects the artifact from one source-discovery traversal and
 
 Not claimed: the artifact does not prove complete semantic resolution, runtime behavior, test success, security findings or policy compliance; Lab audit policy, severity and finding categories are not part of it.
 
-## api-relationship-evidence.json (v1.15.0, unreleased)
+<a id="api-relationship-evidencejson-v1150-unreleased"></a>
+
+## api-relationship-evidence.json (v1.15.0)
 
 Kind `kit-api-relationship-evidence-v1`, schema `1.0.0`, producer revision
 `api-relationship-v1.0.0`. `manifest.json.apiRelationshipEvidence` is optional and

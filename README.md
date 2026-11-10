@@ -132,24 +132,24 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Latest release: v1.14.0
+## Version 1.15.0
 
-`@dailephd/my-dev-kit@1.14.0` is the release represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence, and adds Rust structural indexing and bounded retrieval. It retains the existing Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
+`@dailephd/my-dev-kit@1.15.0` is the version represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence, and adds Rust structural indexing and bounded retrieval. It retains the existing Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
 
 The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 
-### v1.15.0 development status (unreleased)
+<a id="v1150-development-status-unreleased"></a>
 
-The v1.15.0 implementation is complete locally; release readiness has not yet
-been established. Package metadata and the CLI still report the published
-baseline, `1.14.0`. The development implementation adds authenticated source-audit
+### v1.15.0 static evidence
+
+Version 1.15.0 adds authenticated source-audit
 evidence and managed `api-relationship-evidence.json` for qualified static
 Express, Next.js, React, request, schema and model associations. Existing
 `graph-diff` optionally reports bounded `apiRelationshipImpact` evidence from
 compatible snapshots. Dynamic and ambiguous patterns remain explicit, and
 truncated output cannot prove absence. These associations do not prove runtime
 execution, reachability or API breakage. See the [command reference](docs/COMMANDS.md)
-and [architecture](docs/ARCHITECTURE.md) for current development behavior.
+and [architecture](docs/ARCHITECTURE.md) for the implemented contracts.
 
 ### v1.12.6 bounded retrieval precision
 
@@ -638,7 +638,7 @@ Rust call inference and Prisma are not implemented. Try it with the [Rust worksp
 
 ## Roadmap
 
-Version 1.14.0 is the current release represented by this package. The planned scopes and ordering for v1.15.0, v1.16.0, v1.17.0 and v2.0.0 remain unchanged. Optional Rust direct-call inference (R7) and Prisma remain deferred. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack) and [changelog](CHANGELOG.md) for scope and release history.
+Version 1.15.0 retains this coverage. The planned scopes and ordering for v1.16.0, v1.17.0 and v2.0.0 remain unchanged. Optional Rust direct-call inference (R7) and Prisma remain deferred. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack) and [changelog](CHANGELOG.md) for scope and release history.
 
 ## Support the project
 
