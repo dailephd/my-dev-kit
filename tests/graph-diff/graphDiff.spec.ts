@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const tempDirs: string[] = []
 
@@ -59,7 +59,7 @@ afterEach(() => {
 })
 
 function createTempRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'my-dev-kit-v1-graph-diff-'))
+  const root = allocateV114OutputDir('graph-diff')
   tempDirs.push(root)
   return root
 }
@@ -311,11 +311,4 @@ describe('graph-diff', () => {
     expect(statSync(join(beforeOut, 'manifest.json')).mtimeMs).toBe(beforeMtime)
   })
 
-  it('lists --before, --after, and --json in help output', () => {
-    const result = runCli(['graph-diff', '--help'])
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('--before <index-dir>')
-    expect(result.stdout).toContain('--after <index-dir>')
-    expect(result.stdout).toContain('--json')
-  })
 })

@@ -735,6 +735,79 @@ Security-relevant design rules:
 - artifact path containment is enforced for index, data-model, and lineage artifacts
 - Graphviz is only used by `view`
 
+<a id="source-audit-evidence-architecture-v1150-unreleased"></a>
+
+## Source-audit evidence architecture (v1.15.0)
+
+**Status: implemented in v1.15.0 (KIT-FACTS-01 producer).** This is the Kit half of ECO-SOURCE-01: Kit is the planned sole source-analysis provider for Lab's source audits after the Lab migration (LAB-KIT-01, Lab v0.10.0). That migration is not complete: Lab has not yet consumed this evidence, passed five-language comparisons, retired its own analyzers, or proven Rust reuse, so Lab still owns its current analyzers. See [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
+
+Flow, all inside the existing managed index lifecycle:
+
+```text
+Configured source selection (--src roots, effective excludes)
+  -> Existing language adapters (typescript, python, java, kotlin, rust)
+  -> Existing source and observation facts
+  -> Existing index builder (symbol-index, code-graph)
+  -> Source-audit evidence projection (buildSourceAuditEvidence.ts)
+  -> Managed artifact writer (source-audit-evidence.json, verified before manifest)
+  -> Manifest identity (manifest.json sourceAuditEvidence: sha256 + snapshotId)
+  -> Validated, bounded lookup/source retrieval (audit selectors)
+```
+
+Ownership:
+
+- `src/indexing/` — one source-discovery traversal (`discoverSourceFiles.ts`) that also keeps the discovery ledger of selected and excluded paths; the projection (`buildSourceAuditEvidence.ts`); the managed artifact writer and manifest linkage (`writeIndexManifest.ts`, `manifestTypes.ts`, `managedArtifacts.ts`); and cache schema `1.4.0` and invalidation (`cacheMetadata.ts`). `runIndexCommand.ts` coordinates full and incremental builds; the shared finishing pipeline writes the artifact in both.
+- `src/symbol-index/` — `auditEvidenceTypes.ts` (versioned types, limits), `validateAuditEvidence.ts` (the artifact and page validators, run before writing and on read) and `auditObservations.ts` (observation normalization). Source spans and stable fact IDs are part of this contract.
+- `src/languages/` — the existing adapters extract the language-specific facts and declare partial or unsupported capabilities. No new general language parser was added, and Lab needs none.
+- `src/lookup/` — `readSourceAuditEvidence.ts` is the only reader: it verifies the manifest reference, the artifact hash and the snapshot, then serves exact-file inventory and fact pages, and provides the freshness check that rejects stale, deleted, replaced or symlink-escaping source. `resolveAuditImportTarget.ts` is a read-only import-target existence proof that reuses the existing language resolvers over the recorded inventory, plus a read-only `lstat` of already-enumerated, root-contained candidates. It never re-parses source, rebuilds the index or writes anything.
+- `src/source/findExactMatches.ts` — exact-file raw occurrence retrieval, added beside the unchanged cross-file exact matcher, using the same freshness authority and bounded limits.
+- `src/commands/` — `lookupCommand.ts` and `sourceCommand.ts` gain additive selectors in their existing families and only parse arguments and map exit codes; there is no parallel CLI router.
+- `src/graph/buildCodeGraph.ts` — the existing code-graph producer. File-dependency edge IDs were not unique when one file both imported and re-exported (or export-all'd) the same target, which the framework-route validator correctly rejected. For each from/to pair the first statement kind in the order import, re-export, export-all keeps the historical `--imports-->` ID and the others get a `#<kind>` suffix, independent of file order. The validator was not changed or weakened.
+
+Boundaries: the evidence is static and bounded. It supports enumeration of the selected inventory, but a complete inventory is not complete parsing, and an exact occurrence is not a syntactic reference. Import-target `present` proves candidate existence only, and Java/Kotlin source-set ambiguity is not surfaced because those resolvers return one candidate. Kit produces facts and existence/occurrence evidence only; it produces no audit findings, severities or policy, does not execute the target, and makes no runtime or security claims. Detail: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased), [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
+
+<a id="api-relationship-evidence-architecture-v1150-unreleased"></a>
+
+## API relationship evidence architecture (v1.15.0)
+
+KIT-API-01 is implemented in v1.15.0. It extends the existing
+pipeline rather than creating another parser, graph engine or public command:
+
+```text
+Existing TypeScript AST observations and symbol/import identities
+  -> Existing framework graph, frontend and data-model evidence
+  -> buildApiRelationshipEvidence (authenticated source-audit inputs)
+  -> Managed api-relationship-evidence.json and manifest registration
+  -> Authenticated internal bounded reader/query
+  -> Optional graph-diff apiRelationshipImpact projection
+```
+
+`src/symbol-index/apiRelationshipEvidenceTypes.ts` owns the versioned persisted
+contract and validator, separately from private extraction observations.
+`src/indexing/buildApiRelationshipEvidence.ts` composes existing facts without
+source I/O; the existing full/partial/no-change indexing lifecycle owns production,
+repair, managed writes and manifest publication. The projection retains source
+witnesses and deterministic identities without changing source-audit or core
+graph schemas.
+
+`src/lookup/apiRelationshipLookup.ts` authenticates registered evidence and uses
+the existing source-audit freshness authority for live queries. Its internal
+lookup returns bounded, content-free relationships and uncertainty. Qualified
+Express mounts, static Next.js App Router handlers, exact local requests, React
+event-handler references and explicit schema/model references are static
+associations; dynamic patterns, ambiguous candidates and unsupported ORM/SQL
+inference do not become runtime claims.
+
+`src/graph-diff/loadGraphDiffArtifacts.ts` authenticates optional persisted
+snapshots without requiring their historical source bytes to match live files.
+`src/graph-diff/buildApiRelationshipImpact.ts` is the pure bounded comparison
+owner; `runGraphDiff.ts` adds its optional result to the existing command.
+Neither snapshot is refreshed or mutated. The projection follows direct
+associations, preserves uncertainty and reports available/returned counts and
+64-record caps. It does not prove runtime API breakage or recursive reachability.
+See [CONTRACTS.md](CONTRACTS.md#kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased)
+for compatibility, completeness and result details.
+
 ## Design boundaries
 
 my-dev-kit uses conservative static analysis throughout.

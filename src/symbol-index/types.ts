@@ -109,6 +109,9 @@ export interface SymbolDefinition {
  * - symbol discovery and location
  */
 export interface FileSummary {
+  apiRelationships?: import('./apiRelationshipEvidenceTypes.js').ApiSourceObservations
+  /** Normalized source-audit evidence (v1.15.0). Absent in artifacts written before it existed; absence never implies completeness. */
+  sourceAudit?: import('./auditObservations.js').SourceAuditExtractionPayload
   rustSyntaxFacts?: RustSyntaxFact[]
   commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: PythonOrmFact[]

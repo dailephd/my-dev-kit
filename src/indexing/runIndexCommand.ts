@@ -21,6 +21,11 @@ import {
   type SourceDiscoveryResult,
 } from './discoverSourceFiles.js'
 import { writeIndexArtifacts } from './writeIndexManifest.js'
+import { buildSourceAuditEvidence, serializeSourceAuditEvidence } from './buildSourceAuditEvidence.js'
+import { buildApiRelationshipEvidence, serializeApiRelationshipEvidence } from './buildApiRelationshipEvidence.js'
+import { createHash } from 'node:crypto'
+import { readSourceAuditEvidence } from '../lookup/readSourceAuditEvidence.js'
+import { VERSION } from '../version.js'
 import { computePreflightWarnings, type PreflightWarning } from './preflight.js'
 import {
   buildCacheFileEntries,
@@ -661,6 +666,8 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
         changedFileSummary,
         partialRebuildFallbackArtifacts,
         incrementalRefresh,
+        auditDiscovery: discovery,
+        auditFileHashes: partial.fileContentHashes,
         androidResult,
         androidGradleResult,
         androidManifestResult,
@@ -714,6 +721,48 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
       'incremental-full-cache-incompatible',
       'Cache metadata is valid but the existing index artifacts are missing or unreadable.',
       'existing-artifacts-unavailable'
+    )
+  }
+
+  // v1.15.0: a no-change result may only claim complete audit evidence when the persisted artifact is present and exact.
+  try {
+    const previousAudit = readSourceAuditEvidence(outputDir)
+    if (baseline.baseline.symbolIndex.files.some(f => ['typescript', 'javascript'].includes(f.language) && f.apiRelationships?.crossLayerRevision !== 'cross-layer-v1')) throw new Error('API cross-layer source capability requires re-extraction')
+    // Regenerate cheaply from current authenticated summaries even on a no-change source run.
+    // The new config fingerprint prevents reuse of pre-producer summaries.
+    // Unsupported content is not a semantic cache entry. Its discovery-ledger identity must still
+    // be projected on every incremental run, even when every programming-language file is reused.
+    const sourceAudit = serializeSourceAuditEvidence(buildSourceAuditEvidence({
+      projectRoot,
+      sourceRoots: normalizedSourceRoots,
+      excludes: options.exclude ?? [],
+      discovery,
+      symbolIndex: baseline.baseline.symbolIndex,
+      fileHashes: new Map(currentFileEntries.map(file => [file.path, file.contentHash])),
+      producerVersion: VERSION,
+    }).artifact)
+    const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
+      symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
+      sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+      frontendReachability: existingManifest.semanticArtifacts?.frontendReachability ? JSON.parse(fs.readFileSync(path.join(outputDir, 'frontend-reachability.json'), 'utf8')) : undefined,
+      dataModel: existingManifest.semanticArtifacts?.dataModel ? JSON.parse(fs.readFileSync(path.join(outputDir, 'data-model.json'), 'utf8')) : undefined,
+    }))
+    const apiPath = path.join(outputDir, apiEvidence.reference.path)
+    const apiCurrent = fs.existsSync(apiPath) && createHash('sha256').update(fs.readFileSync(apiPath)).digest('hex') === apiEvidence.reference.sha256
+    if (sourceAudit.reference.snapshotId !== previousAudit.source.snapshotId || !apiCurrent || existingManifest.apiRelationshipEvidence?.sha256 !== apiEvidence.reference.sha256) {
+      existingManifest.sourceAuditEvidence = sourceAudit.reference
+      existingManifest.apiRelationshipEvidence = apiEvidence.reference
+      // Reuse the managed writer and byte-identical semantic artifacts; publish the manifest last.
+      writeIndexArtifacts({ outputDir, manifest: existingManifest,
+        symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
+        callGraph: null, sourceAuditEvidenceJson: sourceAudit.json, apiRelationshipEvidenceJson: apiEvidence.json })
+      writeCacheMetadata(outputDir, { ...cacheRead.metadata, baselineArtifacts: computeBaselineArtifactIdentity(outputDir) })
+    }
+  } catch (error) {
+    return fullRebuild(
+      'incremental-full-cache-incompatible',
+      `Source-audit evidence is missing, stale, corrupt or incompatible: ${(error as Error).message}`,
+      'source-audit-evidence-unavailable'
     )
   }
 
@@ -904,6 +953,8 @@ function runFullIndexBuild(params: RunFullIndexBuildParams): RunFullIndexBuildRe
     callGraph: buildResult.callGraph,
     preflightWarnings,
     incrementalRefresh,
+    auditDiscovery: buildResult.discovery,
+    auditFileHashes: buildResult.fileContentHashes,
   })
   const result = { ...built, incrementalRefresh: incrementalRefresh ?? null }
 
@@ -935,6 +986,9 @@ interface FinishIndexBuildParams {
   partialRebuildFallbackArtifacts: string[] | undefined
   /** Public refresh evidence recorded additively on the manifest; absent for a plain (non-incremental) index. */
   incrementalRefresh?: IncrementalRefreshSummary | undefined
+  /** Discovery ledger and analyzed-content hashes from the same validated source state as `index`. */
+  auditDiscovery: SourceDiscoveryResult
+  auditFileHashes: ReadonlyMap<string, string>
   androidResult: DetectAndroidProjectResult
   androidGradleResult: BuildAndroidGradleProjectResult
   androidManifestResult: BuildAndroidManifestProjectResult
@@ -960,6 +1014,8 @@ function finishIndexBuild(
     changedFileSummary,
     partialRebuildFallbackArtifacts,
     incrementalRefresh,
+    auditDiscovery,
+    auditFileHashes,
     androidResult,
     androidGradleResult,
     androidManifestResult,
@@ -1225,6 +1281,26 @@ function finishIndexBuild(
   ])
   const finalSymbolIndex = symbolIndexWithMergedRoles
 
+  // v1.15.0: source-audit evidence from the same discovery ledger, summaries and analyzed-content hashes.
+  // Built and validated before any managed output is removed, so an invalid artifact leaves the old index untouched.
+  const sourceAudit = serializeSourceAuditEvidence(
+    buildSourceAuditEvidence({
+      projectRoot,
+      sourceRoots: normalizedSourceRoots,
+      excludes: options.exclude ?? [],
+      discovery: auditDiscovery,
+      symbolIndex: finalSymbolIndex,
+      fileHashes: auditFileHashes,
+      producerVersion: VERSION,
+    }).artifact
+  )
+
+  const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
+    symbolIndex: finalSymbolIndex, codeGraph: finalCodeGraph,
+    sourceAudit: JSON.parse(sourceAudit.json), producerVersion: VERSION,
+    frontendReachability: semanticResult.frontendReachabilityResult.artifact,
+    dataModel: semanticResult.dataModelResult.dataModel,
+  }))
   const manifest = buildIndexManifest({
     projectRoot: toForwardSlash(projectRoot),
     sourceRoots: normalizedSourceRoots,
@@ -1236,6 +1312,8 @@ function finishIndexBuild(
     warnings,
     errors,
     createdAt,
+    sourceAuditEvidence: sourceAudit.reference,
+    apiRelationshipEvidence: apiEvidence.reference,
     semanticArtifacts: semanticResult.semanticArtifacts,
     analyzers: replaceAnalyzerStatuses(
       [
@@ -1274,6 +1352,8 @@ function finishIndexBuild(
     symbolIndex: finalSymbolIndex,
     codeGraph: finalCodeGraph,
     callGraph,
+    sourceAuditEvidenceJson: sourceAudit.json,
+    apiRelationshipEvidenceJson: apiEvidence.json,
     classification: finalClassification,
     dataModel: semanticResult.dataModelResult.dataModel,
     dataModelGraph: semanticResult.dataModelResult.dataModelGraph,

@@ -3,7 +3,13 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     globals: true,
-    include: ['tests/**/*.spec.ts'],
+    include: [
+      'tests/**/*.spec.ts',
+      'tests/symbol-index/apiRelationshipEvidenceTypes.test.ts',
+      'tests/indexing/buildApiRelationshipEvidence.test.ts',
+      'tests/indexing/apiRelationshipCrossLayerIntegration.test.ts',
+      'tests/lookup/apiRelationshipLookup.test.ts',
+    ],
     exclude: ['tests/**/fixtures/**'],
     testTimeout: 30000,
     hookTimeout: 20000,

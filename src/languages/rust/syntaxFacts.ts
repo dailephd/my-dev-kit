@@ -2,6 +2,8 @@ import type { Node, Tree } from 'web-tree-sitter'
 import type { ExtractionResult } from '../../symbol-index/symbolExtractor.js'
 import type { RustSyntaxFact, SymbolDefinition, SymbolKind } from '../../symbol-index/types.js'
 import { RUST_MAX_SOURCE_BYTES } from './parser.js'
+import { auditCapabilityMap, type SourceAuditExtractionPayload } from '../../symbol-index/auditObservations.js'
+import type { SourceAuditFact, SourceAuditSpan, SourceAuditVisibility } from '../../symbol-index/auditEvidenceTypes.js'
 
 const children = (node: Node): Node[] => node.namedChildren.filter((child): child is Node => child !== null)
 
@@ -10,6 +12,18 @@ const kinds: Readonly<Record<string, SymbolKind>> = {
   union_item: 'union', enum_item: 'enum', enum_variant: 'variant', trait_item: 'trait',
   type_item: 'type', const_item: 'const', static_item: 'variable', mod_item: 'module',
   macro_definition: 'macro', field_declaration: 'field',
+}
+
+/** Rust visibility as written; contexts that inherit visibility from a parent are `unknown`, never guessed. */
+function rustVisibility(written: string, inherited: boolean): { visibility: SourceAuditVisibility; exported: boolean | null; origin: SourceAuditFact['exportOrigin'] } {
+  if (inherited) return { visibility: 'unknown', exported: null, origin: 'unknown' }
+  const text = written.replace(/\s+/g, '')
+  if (text === '') return { visibility: 'private', exported: false, origin: 'none' }
+  if (text === 'pub') return { visibility: 'public', exported: true, origin: 'declared-export' }
+  if (text === 'pub(crate)') return { visibility: 'internal', exported: false, origin: 'declared-export' }
+  if (text === 'pub(super)' || text.startsWith('pub(in')) return { visibility: 'module', exported: false, origin: 'declared-export' }
+  if (text === 'pub(self)') return { visibility: 'private', exported: false, origin: 'declared-export' }
+  return { visibility: 'unknown', exported: null, origin: 'unknown' }
 }
 
 /** Iterative CST traversal. All retained values are plain, bounded syntax observations. */
@@ -30,12 +44,31 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
   const imports: string[] = []
   const warnings: string[] = []
   const lines = source.split('\n')
+  // v1.15.0 source-audit facts come from this one traversal of the one parse.
+  const auditFacts: SourceAuditFact[] = []
+  const auditBase = { id: '', extractionMethod: 'rust-tree-sitter' as const }
+  const traitImplOwners = new Set<string>()
+  let itemMacroSeen = false
+  let conditionalSeen = false
+  let unsupportedUseSeen = false
+  let externCrateSeen = false
   const starts: number[] = [0]
   for (let i = 0; i < source.length; i++) if (source[i] === '\n') starts.push(i + 1)
   const text = (node: Node | null | undefined, limit = 2048): string => {
     if (!node) return ''
     if (node.endIndex - node.startIndex > limit) throw new Error(`Rust syntax evidence exceeds bounded text storage: ${file}`)
     return source.slice(node.startIndex, node.endIndex)
+  }
+  const auditSpan = (node: Node, contaminated: boolean, startNode: Node = node): SourceAuditSpan => {
+    const start = startNode.startPosition, end = node.endPosition
+    const startsValid = startNode.startIndex >= 0 && starts[start.row] !== undefined && starts[start.row]! + start.column === startNode.startIndex
+    const endsValid = startsValid && node.endIndex <= source.length && starts[end.row] !== undefined && starts[end.row]! + end.column === node.endIndex && !contaminated && !node.hasError && !startNode.hasError
+    return { path: file, startLine: start.row + 1, startColumn: startsValid ? start.column : null, endLine: endsValid ? end.row + 1 : null, endColumn: endsValid ? end.column : null }
+  }
+  const auditDeclaration = (span: SourceAuditSpan, name: string, kind: string, written: string, inherited: boolean, ownerKey: string | undefined): void => {
+    const { visibility, exported, origin } = rustVisibility(written, inherited)
+    auditFacts.push({ ...auditBase, kind: 'declaration', span, name, symbolId: '', declarationKind: kind, ownerKey: ownerKey ?? null, visibility, exported, exportOrigin: origin })
+    if (exported === true) auditFacts.push({ ...auditBase, kind: 'export', span, name, exportOrigin: 'declared-export', visibility, exported: true })
   }
   const location = (node: Node, contaminated: boolean): { line: number; endLine?: number } => {
     const start = node.startPosition, end = node.endPosition
@@ -85,6 +118,8 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
       const shape = node.type === 'struct_item' || node.type === 'enum_variant'
         ? body?.type === 'ordered_field_declaration_list' ? 'tuple' as const : body ? 'named' as const : 'unit' as const : undefined
       const modifiers = children(node).filter(n => n.type === 'function_modifiers' || n.type === 'extern_modifier' || n.type === 'mutable_specifier').map(n => text(n))
+      const inherited = declaredKind === 'variant' || context === 'trait' || (!!owner && traitImplOwners.has(owner))
+      auditDeclaration(auditSpan(node, contaminated), name, kind, visibility, inherited, owner)
       addSymbol({ name, kind, location: { file, ...loc }, exported: visibility === 'pub', signature,
         ...(owner ? { ownerKey: owner, qualifiedName: `${owner}::${name}` } : {}),
         declarationMetadata: { rust: { syntaxKind: node.type, visibility, attributes, declarationOnly: !body, modifiers, ...(shape ? { shape } : {}) } },
@@ -99,6 +134,7 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
       const genericParameters = node.childForFieldName('type_parameters')
       childOwner = scope(`impl:${typePath}${traitPath ? ':trait:' + traitPath : ''}`)
       childContext = 'impl'
+      if (traitPath) traitImplOwners.add(childOwner)
       addFact({ kind: 'impl', syntaxKind: node.type, ...base, ownerKey: childOwner,
         ...(owner ? { parentOwnerKey: owner } : {}), genericParameters: text(genericParameters),
         genericParameterNames: (genericParameters ? children(genericParameters) : []).filter(n => n.type === 'type_parameter' || n.type === 'const_parameter').map(n => text(n.childForFieldName('name'))),
@@ -143,12 +179,30 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
             line: part.startPosition.row + 1, sourceIndex: part.startIndex })
         }
       }
+      const useSpan = auditSpan(node, contaminated)
+      const lastSegment = (path: string): string => path.split('::').filter(Boolean).pop() ?? path
+      auditFacts.push({
+        ...auditBase, kind: 'import', span: useSpan, sourceSpecifier: observed.replace(/\s+/g, ' ').trim(),
+        importedNames: useLeaves.map((leaf) => (leaf.glob ? '*' : lastSegment(leaf.path))), importResolution: 'observed',
+      })
+      if (visibility.replace(/\s+/g, '') === 'pub') {
+        for (const leaf of useLeaves) {
+          auditFacts.push({
+            ...auditBase, kind: 'export', span: useSpan, name: leaf.glob ? '*' : leaf.alias || lastSegment(leaf.path),
+            exportOrigin: 're-export', sourceSpecifier: leaf.path, visibility: 'public', exported: true,
+          })
+        }
+      }
+      if (unsupportedUse) unsupportedUseSeen = true
       addFact({ kind: 'use', syntaxKind: visibility ? 're-export' : 'use', text: observed, forms: [...new Set(forms)], ...base, attributes, visibility, useLeaves, ...(unsupportedUse ? { unsupportedUse } : {}) })
     }
     if (node.type === 'foreign_mod_item') {
       addFact({ kind: 'ffi', syntaxKind: node.type, text: source.slice(node.startIndex, node.childForFieldName('body')?.startIndex ?? node.endIndex).trim().slice(0, 120), ...base, attributes })
       childOwner = scope('extern'); childContext = 'extern'
     }
+    if (node.type === 'extern_crate_declaration') externCrateSeen = true
+    if (node.type === 'macro_definition' || (node.type === 'macro_invocation' && (node.parent?.type === 'source_file' || node.parent?.type === 'declaration_list'))) itemMacroSeen = true
+    if (attributes.some(value => /\bcfg(?:_attr)?\s*\(/.test(value)) || (node.type === 'inner_attribute_item' && /\bcfg(?:_attr)?\s*\(/.test(text(node)))) conditionalSeen = true
     if (node.type === 'macro_invocation') addFact({ kind: 'macro', syntaxKind: node.type, name: text(node.childForFieldName('macro')), ...base })
     if (attributes.length) addFact({ kind: 'attribute', syntaxKind: node.type, ...base, attributes, ...(name ? { name } : {}) })
     // Macro token trees/rules are opaque; never manufacture generated declarations.
@@ -160,6 +214,7 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
         const fieldIndex = siblings.findIndex(sibling => sibling.id === field.id)
         const preceding = siblings[fieldIndex - 1]
         const fieldVisibility = preceding?.type === 'visibility_modifier' ? text(preceding) : ''
+        auditDeclaration(auditSpan(field, contaminated || node.hasError, fieldVisibility && preceding ? preceding : field), String(index), 'field', fieldVisibility, false, owner)
         addSymbol({ name: String(index), kind: 'field', location: { file, ...fieldLoc, ...(fieldVisibility ? { line: preceding.startPosition.row + 1 } : {}) }, exported: fieldVisibility === 'pub', ...(owner ? { ownerKey: owner } : {}), signature: text(field).slice(0, 120),
           declarationMetadata: { rust: { syntaxKind: 'positional_field', visibility: fieldVisibility, attributes: [], declarationOnly: true, modifiers: [] } } })
       })
@@ -169,6 +224,28 @@ export function extractRustSyntax(file: string, source: string, tree: Tree): Ext
   }
   if (tree.rootNode.hasError) warnings.push(`Rust parser recovery in ${file}; contaminated declaration boundaries are unknown; syntax evidence is incomplete`)
   if (diagnosticCount > 32) warnings.push(`Rust parser diagnostics capped at 32 in ${file} (${diagnosticCount} observed)`)
+  const capabilities = auditCapabilityMap('unsupported')
+  const auditDiagnostics: SourceAuditExtractionPayload['diagnostics'] = []
+  const note = (code: string, message: string): void => { auditDiagnostics.push({ code, message, span: null }) }
+  capabilities.declarations = 'complete'
+  capabilities.imports = 'complete'
+  capabilities.exports = 'partial'
+  capabilities['source-ranges'] = 'complete'
+  note('rust-reachability-not-modeled', 'Rust exports record written visibility only; module reachability and crate public API are not resolved.')
+  note('rust-use-resolution-not-attempted', 'Use paths are observed syntax; external crates and local module targets are not resolved here.')
+  const weaken = (code: string, message: string, capabilitiesToWeaken: Array<'declarations' | 'imports' | 'exports'>): void => {
+    for (const capability of capabilitiesToWeaken) capabilities[capability] = 'partial'
+    note(code, message)
+  }
+  if (tree.rootNode.hasError) {
+    weaken('rust-parser-recovery', 'The parser recovered from syntax errors; declaration boundaries are incomplete.', ['declarations', 'imports', 'exports'])
+    capabilities['source-ranges'] = 'partial'
+  }
+  if (itemMacroSeen) weaken('rust-macro-may-generate-items', 'Item-position macros or macro definitions may generate declarations that are not expanded.', ['declarations', 'imports', 'exports'])
+  if (conditionalSeen) weaken('rust-conditional-compilation', 'cfg or cfg_attr attributes make item presence depend on unevaluated configuration.', ['declarations', 'imports', 'exports'])
+  if (unsupportedUseSeen) weaken('rust-unsupported-use-form', 'A use declaration contains a form that is not fully enumerated.', ['imports'])
+  if (externCrateSeen) weaken('rust-extern-crate-not-enumerated', 'extern crate declarations are not enumerated as imports.', ['imports'])
   return { language: 'rust', lineCount: lines.length, imports, exports: symbols.filter(s => s.exported).map(s => s.name), symbols,
-    reExportSpecifiers: [], exportAllSpecifiers: [], rustSyntaxFacts: facts, warnings }
+    reExportSpecifiers: [], exportAllSpecifiers: [], rustSyntaxFacts: facts, warnings,
+    sourceAudit: { facts: auditFacts, capabilities, diagnostics: auditDiagnostics } }
 }

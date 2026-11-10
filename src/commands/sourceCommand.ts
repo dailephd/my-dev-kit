@@ -14,9 +14,11 @@ import {
 } from '../source/renderSourceOutput.js'
 import {
   findExactMatches,
+  findExactFileOccurrences,
   DEFAULT_CONTEXT_LINES,
   MAX_CONTEXT_LINES,
 } from '../source/findExactMatches.js'
+import { readSourceAuditEvidence } from '../lookup/readSourceAuditEvidence.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRegion.js'
@@ -73,7 +75,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--symbol <name>', 'symbol name, qualified declaration name, or exact declaration ID')
     .option('--include-local-component-tree', 'include a bounded local React component-tree source bundle for --symbol')
     .option('--prop <name>', 'highlight a prop name inside --include-local-component-tree output')
-    .option('--contains <string>', 'exact string to search for across indexed source files')
+    .option('--contains <string>', 'exact string to search for across indexed source files; with --file and --json, search exactly that one selected file')
     .option('--react-region <region>', 'React region name (component, hook, JSX region, or prop type) to retrieve')
     .option(
       '--context <n>',
@@ -129,6 +131,11 @@ export function registerSourceCommand(program: Command): void {
 
       if (mode === 'exact-match') {
         handleExactMatch(options, format)
+        return
+      }
+
+      if (mode === 'exact-file-occurrence') {
+        handleExactFileOccurrence(options, format)
         return
       }
 
@@ -230,7 +237,15 @@ export function registerSourceCommand(program: Command): void {
 
 function createSourceAuthority(options: SourceCommandOptions): (root: string, file: string) => void {
   let current: ReturnType<typeof loadSourceArtifacts> | undefined
+  let audit: ReturnType<typeof readSourceAuditEvidence> | undefined
   return (root, file) => {
+    // Only exact-file occurrence mode may use selected raw content absent from the symbol inventory.
+    if (options.file !== undefined && options.contains !== undefined) {
+      audit ??= readSourceAuditEvidence(options.index)
+      if (path.relative(path.resolve(audit.source.projectRoot), root) === '' &&
+          audit.files.some(record => record.path === file && record.contentSha256 !== null)) return
+      throw new UnsafeSourceError('File lacks a verified selected source-audit content identity.')
+    }
     current ??= loadSourceArtifacts({ indexDir: options.index, loadSymbolIndex: true,
       loadCodeGraph: !!options.node || options.resource !== undefined || options.androidRoute !== undefined || options.androidUi !== undefined })
     if (path.relative(path.resolve(current.resolved.manifest.projectRoot), root) !== '' ||
@@ -269,6 +284,22 @@ function createSourceAuthority(options: SourceCommandOptions): (root: string, fi
           value.kind.startsWith('android-navigation-') ? 'android-navigation' : 'android-manifest'))) return
     throw new UnsafeSourceError('File is absent from the selected source inventory or lacks a current trusted artifact source reference. Re-index with the intended source selection.')
   }
+}
+
+/** `--file <path> --contains <literal> --json`: bounded raw-text occurrences in one exact selected file. */
+function handleExactFileOccurrence(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
+  if (format !== 'json') throw new Error('--file with --contains requires --json.')
+  if (options.out !== undefined) throw new Error('--file with --contains does not support --out.')
+  if (options.context < 0) throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
+  // Read-only: the identity-verified artifact selects the file; content is read only through the containment-safe reader.
+  const artifact = readSourceAuditEvidence(options.index)
+  const result = findExactFileOccurrences({
+    artifact,
+    filePath: options.file!,
+    value: options.contains!,
+    contextLines: options.context,
+  })
+  console.log(JSON.stringify(result, null, 2))
 }
 
 function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
@@ -1373,7 +1404,7 @@ function hasBundleFlags(options: SourceCommandOptions): boolean {
   )
 }
 
-function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'react-region' | 'local-component-tree' | 'continue-from' | 'node-continue' | 'symbol-continue' | 'source-bundle' {
+function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'symbol' | 'exact-match' | 'exact-file-occurrence' | 'react-region' | 'local-component-tree' | 'continue-from' | 'node-continue' | 'symbol-continue' | 'source-bundle' {
   const hasContains = options.contains !== undefined
   const hasReactRegion = options.reactRegion !== undefined
   const hasLocalComponentTree = options.includeLocalComponentTree === true
@@ -1437,8 +1468,12 @@ function selectMode(options: SourceCommandOptions): 'node' | 'line-range' | 'sym
   if (hasContains && hasNode) throw new Error('--contains cannot be combined with --node.')
   if (hasContains && hasSymbol) throw new Error('--contains cannot be combined with --symbol.')
   if (hasContains && hasStartEnd) throw new Error('--contains cannot be combined with --start or --end.')
-  if (hasContains && options.file !== undefined) throw new Error('--contains cannot be combined with --file. Use --contains alone to search all indexed files.')
   if (hasContains && hasBundleFlags(options)) throw new Error('Bundle flags cannot be combined with --contains.')
+  if (hasContains && options.file !== undefined) {
+    // --file --contains is the exact selected-file occurrence query; it never falls back to a cross-file search.
+    if (options.path !== undefined) throw new Error('--path cannot be combined with --file. --file --contains searches exactly one selected file.')
+    return 'exact-file-occurrence'
+  }
   if (!hasContains && options.path !== undefined) throw new Error('--path is only valid when combined with --contains.')
   if (hasContains) return 'exact-match'
 

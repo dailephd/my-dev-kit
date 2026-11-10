@@ -1,0 +1,130 @@
+{
+  "artifactKind": "my-dev-kit-v1-source-audit-evidence",
+  "schemaVersion": "1.0.0",
+  "producer": {
+    "packageName": "@dailephd/my-dev-kit",
+    "packageVersion": "1.15.0"
+  },
+  "source": {
+    "projectRoot": "/work/sample-project",
+    "sourceRoots": [
+      "src",
+      "tests"
+    ],
+    "excludes": [],
+    "symbolIndexSchemaVersion": "3",
+    "codeGraphSchemaVersion": "1.1.0",
+    "selectionFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "snapshotId": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  },
+  "coverage": {
+    "selectedFileCount": 3,
+    "recordedFileCount": 3,
+    "unreadableFileCount": 1,
+    "excludedPathCount": 0,
+    "unsupportedFileCount": 1,
+    "inventoryComplete": true,
+    "exclusionsAreExplicit": true
+  },
+  "files": [
+    {
+      "path": "scripts/run.sh",
+      "language": "shell",
+      "role": "script",
+      "status": "unsupported",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": null,
+      "capabilities": {
+        "declarations": "unsupported",
+        "imports": "unsupported",
+        "exports": "not-applicable",
+        "identifier-literals": "not-applicable",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "unsupported",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "not-applicable"
+      },
+      "facts": [],
+      "warnings": [
+        "no analyzer registered for shell"
+      ],
+      "diagnostics": []
+    },
+    {
+      "path": "src/lib.rs",
+      "language": "rust",
+      "role": "source",
+      "status": "partial",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": "rust-tree-sitter",
+      "capabilities": {
+        "declarations": "partial",
+        "imports": "partial",
+        "exports": "unsupported",
+        "identifier-literals": "not-applicable",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "partial"
+      },
+      "facts": [
+        {
+          "id": "src/lib.rs#declaration:2:0",
+          "kind": "declaration",
+          "span": {
+            "path": "src/lib.rs",
+            "startLine": 2,
+            "startColumn": 0,
+            "endLine": null,
+            "endColumn": null
+          },
+          "extractionMethod": "rust-tree-sitter",
+          "name": "parse",
+          "symbolId": "symbol:src/lib.rs#parse",
+          "declarationKind": "function",
+          "visibility": "unknown"
+        }
+      ],
+      "warnings": [
+        "parse recovery used; imports may be incomplete"
+      ],
+      "diagnostics": []
+    },
+    {
+      "path": "src/missing.ts",
+      "language": "typescript",
+      "role": "source",
+      "status": "failed",
+      "contentSha256": null,
+      "sizeBytes": null,
+      "lineCount": null,
+      "analyzerId": null,
+      "capabilities": {
+        "declarations": "failed",
+        "imports": "failed",
+        "exports": "failed",
+        "identifier-literals": "failed",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "failed"
+      },
+      "facts": [],
+      "warnings": [],
+      "diagnostics": [
+        {
+          "code": "READ_FAILED",
+          "message": "Selected file could not be read",
+          "span": null
+        }
+      ]
+    }
+  ]
+}

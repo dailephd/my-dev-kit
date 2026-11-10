@@ -125,7 +125,15 @@ describe('index Android project detection', () => {
     const dryRun = runCli(['index', '--root', root, '--src', 'app', '--out', 'out-dry', '--dry-run', '--json'])
     expect(dryRun.status).toBe(0)
     const parsed = JSON.parse(dryRun.stdout)
-    expect(parsed.sampleIndexedFiles.some((p: string) => p.includes('build'))).toBe(false)
+    // Path-segment-aware: a "build" directory segment is generated output, while the file name
+    // build.gradle.kts is a legitimate Kotlin script under the selected root (v1.15 .kts support).
+    const indexed: string[] = parsed.sampleIndexedFiles
+    expect(indexed.some((p) => p.split('/').slice(0, -1).includes('build'))).toBe(false)
+    expect(indexed.some((p) => p.endsWith('app/build.gradle.kts') || p === 'app/build.gradle.kts')).toBe(true)
+    expect(indexed.some((p) => p.includes('GeneratedStray') || p.includes('Generated.java'))).toBe(false)
+    // The indexed build script does not change Android module evidence, which stays owned by the Gradle detector.
+    const androidProject = JSON.parse(readFileSync(join(root, 'out', 'android-project.json'), 'utf8'))
+    expect(androidProject.modules.map((m: { path: string }) => m.path)).toEqual(['app'])
     expect(parsed.skippedByDefaultIgnore).toBeGreaterThan(0)
     expect(
       parsed.sampleSkippedFiles.some((f: { path: string; reason: string }) => f.path.endsWith('app/build') && f.reason === 'default-ignore')

@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
+import { apiRelationshipLookup, readApiRelationshipEvidence } from '../../src/lookup/apiRelationshipLookup.js'
 
 // B16 end-to-end witness: one task-owned project spanning Python, TypeScript, FastAPI, Express and Rust.
 // Every expected identity below is derived from the independently authored fixture text, never from generated output.
@@ -87,7 +88,18 @@ describe('B16 cross-language implementation completeness', () => {
     expect(graph.schemaVersion).toBe('1.1.0')
     expect(manifest.artifactKind).toBe('my-dev-kit-v1-manifest')
     expect(manifest.artifacts).toMatchObject({ symbolIndex: 'symbol-index.json', codeGraph: 'code-graph.json', callGraph: null })
-    expect(readdirSync(index).sort()).toEqual(['classification.json', 'code-graph.json', 'data-model-graph.json', 'data-model.json', 'frontend-reachability.json', 'frontend-semantic.json', 'manifest.json', 'symbol-index.json'])
+    expect(readdirSync(index).sort()).toEqual(['api-relationship-evidence.json', 'classification.json', 'code-graph.json', 'data-model-graph.json', 'data-model.json', 'frontend-reachability.json', 'frontend-semantic.json', 'manifest.json', 'source-audit-evidence.json', 'symbol-index.json'])
+    expect(manifest.apiRelationshipEvidence).toMatchObject({ path: 'api-relationship-evidence.json', schemaVersion: '1.0.0', sha256: expect.stringMatching(/^[a-f0-9]{64}$/) })
+    const before = readFileSync(join(root, 'src/web.ts'), 'utf8')
+    const evidence = readApiRelationshipEvidence(index)
+    expect(evidence.sourceSnapshot.snapshotId).toBe(manifest.apiRelationshipEvidence.snapshotId)
+    const result = apiRelationshipLookup(evidence, { files: ['src/web.ts'], maxResults: 1 })
+    expect(result.relationships).toEqual([expect.objectContaining({
+      kind: 'api-endpoint-handled-by', qualification: 'RESOLVED',
+      target: 'symbol:src/web.ts#listItems',
+    })])
+    expect(result.relationships.length + result.unresolved.length).toBeLessThanOrEqual(1)
+    expect(readFileSync(join(root, 'src/web.ts'), 'utf8')).toBe(before)
     expect(manifest.analyzers.map((a: { id: string }) => a.id)).toContain('rust-structure')
   })
 

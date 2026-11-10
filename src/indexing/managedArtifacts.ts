@@ -15,6 +15,7 @@ export const ANDROID_RESOURCES_FILENAME = 'android-resources.json'
 export const ANDROID_NAVIGATION_FILENAME = 'android-navigation.json'
 export const ANDROID_COMPOSE_SEMANTIC_FILENAME = 'android-compose-semantic.json'
 export const ANDROID_TEST_SEMANTIC_FILENAME = 'android-test-semantic.json'
+export const SOURCE_AUDIT_EVIDENCE_FILENAME = 'source-audit-evidence.json'
 
 export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
   INDEX_MANIFEST_FILENAME,
@@ -23,6 +24,7 @@ export const REQUIRED_INDEX_ARTIFACT_FILENAMES = [
 ] as const
 
 export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
+  'api-relationship-evidence.json',
   CALL_GRAPH_FILENAME,
   DATA_MODEL_FILENAME,
   DATA_MODEL_GRAPH_FILENAME,
@@ -37,6 +39,7 @@ export const OPTIONAL_INDEX_ARTIFACT_FILENAMES = [
   ANDROID_NAVIGATION_FILENAME,
   ANDROID_COMPOSE_SEMANTIC_FILENAME,
   ANDROID_TEST_SEMANTIC_FILENAME,
+  SOURCE_AUDIT_EVIDENCE_FILENAME,
 ] as const
 
 export const MANAGED_INDEX_ARTIFACT_FILENAMES = [

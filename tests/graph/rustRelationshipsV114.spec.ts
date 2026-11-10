@@ -16,6 +16,8 @@ import { adaptCodeGraph } from '../../src/graph/adaptGraphArtifact.js'
 import { computeConfigFingerprint } from '../../src/indexing/cacheMetadata.js'
 import { RUST_PARSER_REVISION } from '../../src/languages/rust/parser.js'
 import { createHash } from 'node:crypto'
+import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
+import { AUDIT_PRODUCER_CAPABILITIES } from '../../src/symbol-index/auditObservations.js'
 import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const task = allocateV114OutputDir('rust-relationships-v114')
@@ -367,7 +369,7 @@ describe('B10 generic consumers, complete reconstruction and cache', () => {
   })
   it('fingerprints the B10 relationship revision while retaining every previous semantic revision', () => {
     const input={sourceRoots:['src'],excludePatterns:[],callGraphEnabled:false,language:null,defaultIgnoredDirectoryNames:[],defaultIgnoredDirectoryPrefixes:[],defaultFileExcludePatterns:[],androidEvidenceFingerprint:'none',androidGradleEvidenceFingerprint:'none',androidManifestEvidenceFingerprint:'none',androidResourcesEvidenceFingerprint:'none',androidNavigationXmlEvidenceFingerprint:'none',androidTestEvidenceFingerprint:'none'}
-    const expected={rustParserRevision:RUST_PARSER_REVISION,rustCargoStructureRevision:'v1.14.0-b09',rustRelationshipRevision:'v1.14.0-b14-doc-comments',rustCargoFingerprint:null,pythonExtractionRevision:'v1.14.0-b04',jsTsExtractionRevision:'v1.14.0-b05',jsFrameworkExtractionRevision:'v1.14.0-b06',frontendFrameworkRevision:'v1.14.0-b07',configuredImportsRevision:'v1.14.0-configured-imports',configuredImportsFingerprint:null,...input}
+    const expected={rustParserRevision:RUST_PARSER_REVISION,rustCargoStructureRevision:'v1.14.0-b09',rustRelationshipRevision:'v1.14.0-b14-doc-comments',rustCargoFingerprint:null,pythonExtractionRevision:'v1.14.0-b04',jsTsExtractionRevision:'v1.14.0-b05',jsTsCandidateRevision:'v1.15.0-import-proof-correction-02',jsFrameworkExtractionRevision:'v1.14.0-b06',apiRelationshipRevision:'api-relationship-v1.0.0-qualified-receiver',frontendFrameworkRevision:'v1.14.0-b07',configuredImportsRevision:'v1.14.0-configured-imports',sourceAuditExtractorRevision:SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION,sourceAuditSchemaVersion:'1.1.0',sourceAuditCapabilities:[...AUDIT_PRODUCER_CAPABILITIES],configuredImportsFingerprint:null,...input}
     expect(computeConfigFingerprint(input)).toBe(createHash('sha256').update(JSON.stringify(expected)).digest('hex'))
   })
   it('matches serialized full/partial graphs after every relationship, selection and Cargo edit', async () => {

@@ -331,8 +331,8 @@
   "statusBoundaries": {
     "documentKeywords": {
       "README.md": [
-        "Latest release: v1.14.0",
-        "@dailephd/my-dev-kit@1.14.0",
+        "Version 1.15.0",
+        "@dailephd/my-dev-kit@1.15.0",
         "planned scopes",
         "v1.12.6 bounded retrieval precision",
         "## v1.14.0 language, framework and Rust coverage"
@@ -354,7 +354,7 @@
         "**Status: deferred for separate future authorization; not implemented.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.14.0 is the current release",
+        "Version 1.15.0 is the version represented by this package",
         "### v1.12.6 bounded retrieval precision",
         "Version 1.12.6 was the current release before v1.13.0",
         "### v1.14.0 language and framework coverage"

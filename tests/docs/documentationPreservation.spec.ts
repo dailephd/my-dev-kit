@@ -511,7 +511,7 @@ describe('documentation preservation checker', () => {
     })
 
     it('documents the implemented surface while preserving ecosystem ownership boundaries', () => {
-      expect(readme).toContain(`## Latest release: v${loadPackageVersion()}`)
+      expect(readme).toContain(`## Version ${loadPackageVersion()}`)
       expect(readme).toContain('## Stage-specific bounded context retrieval')
       expect(readme).toContain('Version 1.10.1 introduced this shipped capability')
       expect(readme).toContain('The command syntax and artifact schema major remain unchanged.')

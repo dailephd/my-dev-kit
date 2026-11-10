@@ -1,4 +1,5 @@
 import { RUST_PARSER_REVISION } from '../languages/rust/parser.js'
+import { JS_TS_CANDIDATE_REVISION } from '../languages/typescript/adapter.js'
 /**
  * Internal incremental-indexing cache metadata.
  *
@@ -35,9 +36,12 @@ import { createHash } from 'node:crypto'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { VERSION } from '../version.js'
 import { readIndexManifest } from './readIndexManifest.js'
+import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from './buildSourceAuditEvidence.js'
+import { SOURCE_AUDIT_SCHEMA_VERSION } from '../symbol-index/auditEvidenceTypes.js'
+import { AUDIT_PRODUCER_CAPABILITIES } from '../symbol-index/auditObservations.js'
 
 export const CACHE_METADATA_FILENAME = 'cache-metadata.json'
-export const CACHE_SCHEMA_VERSION = '1.3.0'
+export const CACHE_SCHEMA_VERSION = '1.4.0'
 export const INDEX_ARTIFACT_SCHEMA_VERSION = '1.0.0'
 
 const SAMPLE_LIMIT = 20
@@ -195,9 +199,15 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     rustCargoFingerprint: input.rustCargoFingerprint ?? null,
     pythonExtractionRevision: 'v1.14.0-b04',
     jsTsExtractionRevision: 'v1.14.0-b05',
+    jsTsCandidateRevision: JS_TS_CANDIDATE_REVISION,
     jsFrameworkExtractionRevision: 'v1.14.0-b06',
+    apiRelationshipRevision: 'api-relationship-v1.0.0-qualified-receiver',
     frontendFrameworkRevision: 'v1.14.0-b07',
     configuredImportsRevision: 'v1.14.0-configured-imports',
+    // v1.15.0: private extraction/capability contract that produced FileSummary.sourceAudit.
+    sourceAuditExtractorRevision: SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION,
+    sourceAuditSchemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    sourceAuditCapabilities: [...AUDIT_PRODUCER_CAPABILITIES],
     configuredImportsFingerprint: input.configuredImportsFingerprint ?? null,
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),
     excludePatterns: [...input.excludePatterns].map((value) => value.trim()).sort(),

@@ -1,0 +1,228 @@
+{
+  "artifactKind": "my-dev-kit-v1-source-audit-evidence",
+  "schemaVersion": "1.0.0",
+  "producer": {
+    "packageName": "@dailephd/my-dev-kit",
+    "packageVersion": "1.15.0"
+  },
+  "source": {
+    "projectRoot": "/work/sample-project",
+    "sourceRoots": [
+      "src",
+      "tests"
+    ],
+    "excludes": [
+      "node_modules"
+    ],
+    "symbolIndexSchemaVersion": "3",
+    "codeGraphSchemaVersion": "1.1.0",
+    "selectionFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "snapshotId": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  },
+  "coverage": {
+    "selectedFileCount": 3,
+    "recordedFileCount": 3,
+    "unreadableFileCount": 0,
+    "excludedPathCount": 1,
+    "unsupportedFileCount": 0,
+    "inventoryComplete": true,
+    "exclusionsAreExplicit": true
+  },
+  "files": [
+    {
+      "path": "src/app.ts",
+      "language": "typescript",
+      "role": "source",
+      "status": "parsed",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": "typescript-ast",
+      "capabilities": {
+        "declarations": "complete",
+        "imports": "complete",
+        "exports": "complete",
+        "identifier-literals": "complete",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "complete",
+        "source-ranges": "complete"
+      },
+      "facts": [
+        {
+          "id": "src/app.ts#import:1:0",
+          "kind": "import",
+          "span": {
+            "path": "src/app.ts",
+            "startLine": 1,
+            "startColumn": 0,
+            "endLine": 1,
+            "endColumn": 34
+          },
+          "extractionMethod": "typescript-ast",
+          "sourceSpecifier": "./util.js",
+          "importedNames": [
+            "helper"
+          ],
+          "importResolution": "resolved-local",
+          "targetPaths": [
+            "src/util.ts"
+          ]
+        },
+        {
+          "id": "src/app.ts#declaration:3:0",
+          "kind": "declaration",
+          "span": {
+            "path": "src/app.ts",
+            "startLine": 3,
+            "startColumn": 0,
+            "endLine": 8,
+            "endColumn": 1
+          },
+          "extractionMethod": "typescript-ast",
+          "name": "run",
+          "symbolId": "symbol:src/app.ts#run",
+          "declarationKind": "function",
+          "ownerKey": null,
+          "visibility": "public",
+          "exported": true,
+          "exportOrigin": "declared-export"
+        },
+        {
+          "id": "src/app.ts#identifier-literal:4:14",
+          "kind": "identifier-literal",
+          "span": {
+            "path": "src/app.ts",
+            "startLine": 4,
+            "startColumn": 14,
+            "endLine": 4,
+            "endColumn": 26
+          },
+          "extractionMethod": "typescript-ast",
+          "observationKind": "source-literal",
+          "value": "/api/items",
+          "valueSha256": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+          "valueTruncated": false,
+          "owningSymbolId": "symbol:src/app.ts#run"
+        },
+        {
+          "id": "src/app.ts#api-client-call:5:2",
+          "kind": "api-client-call",
+          "span": {
+            "path": "src/app.ts",
+            "startLine": 5,
+            "startColumn": 2,
+            "endLine": 5,
+            "endColumn": 28
+          },
+          "extractionMethod": "typescript-ast",
+          "httpMethod": "GET",
+          "httpClientKind": "fetch",
+          "staticUrl": "/api/items",
+          "owningSymbolId": "symbol:src/app.ts#run"
+        },
+        {
+          "id": "src/app.ts#export:10:0",
+          "kind": "export",
+          "span": {
+            "path": "src/app.ts",
+            "startLine": 10,
+            "startColumn": 0,
+            "endLine": 10,
+            "endColumn": 20
+          },
+          "extractionMethod": "typescript-ast",
+          "name": "run",
+          "exported": true,
+          "exportOrigin": "declared-export"
+        }
+      ],
+      "warnings": [],
+      "diagnostics": []
+    },
+    {
+      "path": "src/util.ts",
+      "language": "typescript",
+      "role": "source",
+      "status": "parsed",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": "typescript-ast",
+      "capabilities": {
+        "declarations": "complete",
+        "imports": "not-applicable",
+        "exports": "not-applicable",
+        "identifier-literals": "not-applicable",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "complete"
+      },
+      "facts": [
+        {
+          "id": "src/app.ts#declaration:3:0",
+          "kind": "declaration",
+          "span": {
+            "path": "src/util.ts",
+            "startLine": 1,
+            "startColumn": 0,
+            "endLine": 3,
+            "endColumn": 1
+          },
+          "extractionMethod": "typescript-ast",
+          "name": "helper",
+          "symbolId": "symbol:src/util.ts#helper",
+          "declarationKind": "function",
+          "ownerKey": null,
+          "visibility": "internal",
+          "exported": false,
+          "exportOrigin": "none"
+        }
+      ],
+      "warnings": [],
+      "diagnostics": []
+    },
+    {
+      "path": "tests/app.spec.ts",
+      "language": "typescript",
+      "role": "test",
+      "status": "parsed",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": "typescript-ast",
+      "capabilities": {
+        "declarations": "not-applicable",
+        "imports": "not-applicable",
+        "exports": "not-applicable",
+        "identifier-literals": "not-applicable",
+        "test-observations": "complete",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "complete"
+      },
+      "facts": [
+        {
+          "id": "tests/app.spec.ts#test-observation:4:2",
+          "kind": "test-observation",
+          "span": {
+            "path": "tests/app.spec.ts",
+            "startLine": 4,
+            "startColumn": 2,
+            "endLine": 4,
+            "endColumn": 20
+          },
+          "extractionMethod": "typescript-ast",
+          "observationKind": "test-title",
+          "value": "runs the app"
+        }
+      ],
+      "warnings": [],
+      "diagnostics": []
+    }
+  ]
+}

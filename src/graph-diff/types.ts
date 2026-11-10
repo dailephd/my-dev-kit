@@ -1,3 +1,6 @@
+import type { FrontendSourceRef } from '../frontend/frontendTypes.js'
+import type { ApiRelationshipNode, ApiRelationshipKind, ApiRelationshipQualification, ApiRelationshipWitness } from '../symbol-index/apiRelationshipEvidenceTypes.js'
+
 export const GRAPH_DIFF_REPORT_KIND = 'my-dev-kit-v1-graph-diff'
 
 export interface GraphDiffSide {
@@ -90,6 +93,32 @@ export interface SemanticSummaryDiffSection {
   changedFields: ChangedFieldEntry[]
 }
 
+/** Maximum number of API contract changes returned in one GraphDiffResult section. */
+export const MAX_API_CONTRACT_CHANGES = 200
+
+export type ApiContractChangeKind = 'route' | 'client-call' | 'schema' | 'data-field' | 'relationship'
+export type ApiContractChangeType = 'added' | 'removed' | 'changed' | 'unresolved'
+export type ApiContractChangeCertainty = 'explicit-static' | 'partial' | 'unknown'
+
+export interface ApiContractChange {
+  kind: ApiContractChangeKind
+  change: ApiContractChangeType
+  subjectId: string
+  affectedNodeIds: string[]
+  sourceRefs: FrontendSourceRef[]
+  certainty: ApiContractChangeCertainty
+}
+
+export interface ApiContractChangeSection {
+  available: ArtifactAvailability
+  complete: boolean
+  totalChanges: number
+  returnedChanges: number
+  omittedChanges: number
+  changes: ApiContractChange[]
+  warnings: string[]
+}
+
 export interface GraphDiffSummary {
   nodesAdded: number
   nodesRemoved: number
@@ -106,6 +135,7 @@ export interface GraphDiffSummary {
 }
 
 export interface GraphDiffResult {
+  apiRelationshipImpact?: ApiRelationshipImpactSection
   reportKind: typeof GRAPH_DIFF_REPORT_KIND
   before: GraphDiffSide
   after: GraphDiffSide
@@ -119,6 +149,59 @@ export interface GraphDiffResult {
     dataModel: SemanticSummaryDiffSection
     frontendSemantic: SemanticSummaryDiffSection
     frontendReachability: SemanticSummaryDiffSection
+  }
+  apiContractChanges?: ApiContractChangeSection
+  warnings: string[]
+}
+
+export interface ApiImpactSubjectRef {
+  id: string
+  kind: ApiRelationshipNode['kind'] | ApiRelationshipKind
+}
+export interface ApiImpactEvidenceRef {
+  side: 'before' | 'after'
+  snapshotId: string
+  artifactIdentity: string
+  subject: ApiImpactSubjectRef
+  witnesses: ApiRelationshipWitness[]
+  availableWitnessCount: number
+  returnedWitnessCount: number
+}
+export interface ApiRelationshipChange {
+  id: string
+  changeKind: 'ADDED' | 'REMOVED' | 'MODIFIED'
+  subjectKind: ApiImpactSubjectRef['kind']
+  before?: ApiImpactSubjectRef
+  after?: ApiImpactSubjectRef
+  changedFields: string[]
+  evidence: ApiImpactEvidenceRef[]
+  qualification: ApiRelationshipQualification
+  reasonCodes: string[]
+}
+export interface ApiPotentialImpact {
+  id: string
+  changedSubject: ApiImpactSubjectRef
+  associatedSubject: ApiImpactSubjectRef
+  relationshipKind: ApiRelationshipKind
+  evidence: ApiImpactEvidenceRef[]
+  qualification: ApiRelationshipQualification
+  reasonCodes: string[]
+}
+export interface ApiRelationshipImpactSection {
+  availability: Exclude<ArtifactAvailability, 'neither'>
+  status: 'COMPARABLE' | 'PARTIAL' | 'UNAVAILABLE'
+  changes: ApiRelationshipChange[]
+  potentialImpacts: ApiPotentialImpact[]
+  summary: {
+    availableChangeCount: number
+    returnedChangeCount: number
+    availableImpactCount: number
+    returnedImpactCount: number
+    availableWarningCount: number
+    returnedWarningCount: number
+    truncated: boolean
+    complete: boolean
+    qualification: ApiRelationshipQualification
   }
   warnings: string[]
 }

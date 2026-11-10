@@ -223,7 +223,92 @@ improvements remain v1.14.0 scope.
 
 The retrieval-regression runner gains additive `search` and `source` task execution and a `commandResult` expectation; tasks without `execution` behave as before. This is internal maintainer tooling, not a public command or published artifact schema.
 
+<a id="v1150-source-evidence-contracts-unreleased"></a>
+
+## v1.15.0 source-evidence contracts
+
+**Status:** implemented in v1.15.0 (KIT-FACTS-01 producer). This section is the canonical contract summary; the artifact is in [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), commands in [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased), ownership in [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased). They are not repeated here.
+
+- **Additive, not replacing.** Symbol-index schema `3`, code-graph `1.1.0` and manifest `1.0.0` are unchanged; the artifact is `source-audit-evidence.json` (kind `my-dev-kit-v1-source-audit-evidence`, schema `1.1.0`), referenced by an optional `manifest.json` `sourceAuditEvidence` field. No new command family exists.
+- **Source selection and coverage.** The evidence records the selected source roots, the effective exclusion rules and coverage counts. `inventoryComplete` and `exclusionsAreExplicit` state whether the selected inventory and its exclusions are fully accounted for. An unselected or excluded path is not evidence that a file is absent or clean.
+- **Hashes and identity.** Each file carries a content SHA-256 where available. The manifest records the exact serialized artifact SHA-256 and a semantic `snapshotId`; they are different identities. Files without a trusted hash are never claimed authenticated.
+- **Stable fact IDs.** Fact IDs are opaque, deterministic and taken from output; consumers must not reconstruct them.
+- **Capability completeness.** Each file and capability is reported as complete, partial, unsupported, failed, skipped or not applicable. Partial or unsupported evidence is explicit, and a missing fact there is not absence. A complete selected inventory does not imply complete parsing or semantic resolution.
+- **Managed artifact and manifest integrity.** `index` validates the artifact, writes it, then writes the manifest last. Readers verify the manifest reference, hash and snapshot and fail closed on a missing, unregistered or mismatched artifact. Multi-artifact publication is not atomic: an interrupted write can leave incomplete output, which must fail closed.
+- **Cache compatibility.** The private cache (schema `1.4.0`) records the extractor revision (`source-audit-v1.5.0`) and capability set; an incompatible older cache causes one full rebuild. Legacy indexes without the artifact stay valid for all other commands, and the audit selectors report the evidence unavailable.
+- **Complete inventory and exact-fact pagination.** Audit pagination is zero-based with fixed page sizes (64 files, 128 facts), a `null` `nextPageIndex` on the terminal page, an error for a page beyond it, and an explicit `not-selected` result for an unselected path. Ranked search and context capsules are not a substitute for this enumeration.
+- **Import-target existence states.** `present` (candidate existence only), `proven-missing` (complete enumerated candidates in a complete, explicit selection, none on disk), `outside-selected-roots` and `indeterminate`. The last two are never missing-file proof. `present` does not establish unique semantic binding, and Java/Kotlin `candidatePaths` can be incomplete.
+- **Raw occurrence completeness.** The exact-file query returns literal occurrences with `complete`, scan limit 200000 bytes, 200 matches and 40 context lines. A zero-match result is absence evidence only when `complete` is true; truncated, oversized, invalid or unhashed content is never reported as complete absence.
+- **Containment and freshness.** Source reads stay inside the indexed project root; a changed, deleted, replaced or symlink-escaping selected file is rejected as stale. Targets are never modified.
+- **Failure behavior.** Successful results are JSON. Argument and evidence errors exit with code 2 and print a code-prefixed plain-text message; a JSON error object is not guaranteed.
+- **Kit facts versus Lab policy.** Kit supplies source facts, existence and occurrence evidence. Lab keeps audit rules, severity, policy, findings and reports. An exact occurrence is not automatically a syntactic reference, and a candidate's existence is not proof of unique semantic binding.
+- **Graph identity.** File-dependency edge IDs in `code-graph.json` stay unique when a file depends on one target through several statement kinds: the first kind (import, re-export, export-all) keeps the historical ID and the others receive a `#<kind>` suffix. Node and edge validation was not weakened.
+
 ## Static-evidence boundary
+
+<a id="kit-api-01-bounded-cross-layer-projection-v1150-unreleased"></a>
+
+### KIT-API-01 bounded cross-layer projection (v1.15.0)
+
+The relationship foundation is an optional managed projection in the existing
+index lifecycle. `manifest.json` registers `apiRelationshipEvidence` with the
+fixed artifact path, schema version, serialized SHA-256 and source snapshot ID.
+Legacy indexes without this registration retain their existing behavior;
+unregistered leftover files are not trusted evidence. There is no public
+relationship lookup command.
+
+The persisted artifact contains `schemaVersion`, `artifactKind`, `producer`,
+`sourceSnapshot`, `selection`, `capabilities`, `nodes`, `relationships`,
+`unresolved`, `limitations` and `integrity`. Producer identity includes package
+name/version and revision. Snapshot identity includes the selection fingerprint
+and file/hash inventory; selection records roots, exclusions, completeness and
+production state. Witnesses retain source spans, content hashes, symbol/fact
+references and AST, framework-graph or symbol/import-graph provenance. Node and
+relationship IDs and ordering are deterministic; source identity is not a
+runtime execution identity. Private extraction observations, including
+`crossLayerRevision`, are not additional persisted artifact fields.
+
+The validator rejects incompatible kind/schema/producer, invalid structure,
+identities, witness hashes and sealed integrity. The internal bounded reader
+also authenticates manifest registration and source-audit snapshot/selection,
+then uses inherited selected-source freshness checks: changed bytes invalidate
+live lookup even when Git HEAD is unchanged. Internal lookup supports exact
+node IDs, relationship kinds, witness-file filters and a bounded result count.
+Candidate enumeration is capped at 64; omitted results and metadata remain
+explicit. `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED` and `UNSUPPORTED` preserve the
+strength of the available evidence. Missing selectors, incomplete selection or
+production, unsupported capabilities, relevant uncertainty and truncation
+prevent a complete negative. Neither an empty result nor a complete file
+inventory alone proves absence of a relationship.
+
+The managed `api-relationship-evidence.json` projection keeps artifact kind
+`kit-api-relationship-evidence-v1`, schema `1.0.0` and producer
+`api-relationship-v1.0.0`. Batch 2 uses the existing node/relationship vocabulary;
+it adds no public command or runtime-execution claim.
+
+- Express effective paths compose only authenticated static mount edges and exact
+  route/handler identities. Multiple mounting contexts remain ambiguous; dynamic
+  prefixes and nested mounting semantics remain unresolved or unsupported.
+- Next endpoints require existing App Router handler declarations, a static
+  `app/api/.../route.ts` or `.js` convention (also under `src/`), exact named
+  exported HTTP handlers, and an actual reference to a `next/server` import.
+  Filename similarity, dynamic/catch-all/parallel/intercepting conventions and
+  `.tsx`/`.jsx` route files do not qualify this profile.
+- Same-origin root-relative literal requests match exact method/path pairs,
+  preserving case and source URL evidence. Query strings/fragments are excluded
+  only from matching. External origins, unknown paths and ambiguous candidates
+  never receive resolved local dispatch claims.
+- Explicit `onClick`/`onSubmit` references in a React-import context can link a
+  component, exact handler and request through bounded, cycle-safe static call
+  references. Callback/event execution is not proven; unresolved handlers and
+  exceeded bounds remain explicit.
+- Exact imported class references can bridge a handler to a uniquely identified
+  existing data-model source record. Interfaces retain their explicit declaration/
+  schema associations. Neither association proves validation, ORM operations,
+  table equivalence, serialization, authorization or runtime schema compatibility.
+- Lookup includes witness-file associations within its existing caps. Relevant
+  unresolved/unsupported evidence prevents a complete negative claim. Source
+  selection and changed-byte freshness remain owned by source-audit evidence.
 
 All produced evidence is conservative static repository evidence. It does not
 prove runtime behavior, test success, UI visibility, route reachability,
@@ -231,6 +316,58 @@ dependency injection, database/network behavior, Android builds, or security.
 Uncertainty, ambiguity, skipped evidence, and unsupported patterns remain
 observable. [SECURITY.md](SECURITY.md) owns path containment, subprocess,
 untrusted-input, and generated-output safety.
+
+<a id="kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased"></a>
+
+### KIT-API-01 contract-oriented graph-diff evidence (v1.15.0)
+
+The existing `graph-diff` result optionally adds `apiRelationshipImpact`. It is
+omitted when neither manifest registers API relationship evidence. No command,
+flag, indexing pass or persisted relationship schema is added. The existing
+`apiContractChanges` type reservation and all original result fields are retained.
+
+- `availability` is `both`, `before-only` or `after-only`, describing registration,
+  not successful validation. `status` is `COMPARABLE`, `PARTIAL` or `UNAVAILABLE`.
+  One-sided or invalid evidence never becomes fabricated additions/removals.
+- Each snapshot must pass existing manifest and persisted source-audit validation,
+  relationship kind/schema/producer/structure and integrity validation, serialized
+  SHA-256 verification, and registration/snapshot/file-inventory/selection checks.
+  Both snapshots must have the same recorded project root and selection identity.
+  Distinct checkout roots are conservatively incomparable. Historical source bytes
+  need not match the live filesystem; graph-diff never refreshes either snapshot.
+- `changes` contain deterministic IDs, `ADDED`/`REMOVED`/`MODIFIED` kinds, existing
+  node or relationship subject kinds, available before/after references, proven
+  `changedFields`, side-qualified snapshot/artifact/witness evidence, qualification
+  and reason codes. Declaration changes cover recorded declaration metadata;
+  relationship changes cover supported method/path, targets, explicit schema/model
+  references and UI handler witnesses. Source byte changes alone do not establish
+  a contract delta. Full signatures, schema bodies and arbitrary implementation
+  changes are not inferred from hashes or the compact declaration metadata.
+  Node additions/removals describe projection membership, not proof that a schema
+  or declaration was physically created/deleted; reason codes preserve this boundary.
+- Exact IDs take precedence, guarded by authenticated source/declaration identity.
+  Equal unique declaration-associated semantic records can cancel location churn;
+  equal semantic multisets can cancel repeated-site movement without pairing sites.
+  One unmatched relationship per exact source identity and family can be associated.
+  Other incompatible identities remain additions/removals. No fuzzy rename matching,
+  line proximity or similar filenames establish identity.
+- `potentialImpacts` contain deterministic IDs, changed and associated subjects,
+  the existing relationship kind, before/after evidence, qualification and reason
+  codes. Each association has an actual direct relationship witness. Unresolved
+  candidates retain their uncertainty. There is no recursive dependency traversal.
+- `summary` reports available/returned change, impact and warning counts, truncation,
+  `complete` and the inherited `RESOLVED`/`AMBIGUOUS`/`UNRESOLVED`/`UNSUPPORTED`
+  qualification. Collections are deterministically ordered and capped at 64;
+  evidence references include available/returned witness counts. Truncated metadata,
+  incomplete capabilities/selection and unresolved/unsupported evidence prevent a
+  complete negative. Completeness covers only the supported selected static profile.
+- `warnings` retain validation diagnostics and unsupported/ambiguous reasons with
+  side identity; they remain inside this section, preserving original warning order.
+  A changed relationship is not a compatibility verdict, and a source change does
+  not prove runtime failure. Missing static dependencies do not prove independence.
+
+This is bounded static association evidence, without breaking/nonbreaking verdicts,
+risk scores, authorization decisions, runtime reachability or migration inference.
 
 ## Ecosystem responsibility boundary
 

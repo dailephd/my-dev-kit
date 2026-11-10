@@ -1,0 +1,1463 @@
+{
+  "version": 1,
+  "method": "Authored from source declarations before candidate generation (60 initial cases); six additional independently source-authored impact cells cover schema, model, UI, request edits and negative handlers. Unit: distinct source association; duplicate type occurrences collapse. Impact scope is ten positive and two negative explicitly annotated direct-candidate cells, not the entire impact graph.",
+  "gap": "Accepted fixtures contain no standalone negative/uncertain source corpus; held-out syntax probes fill this demonstrated gap without changing accepted fixtures.",
+  "facts": [
+    {
+      "id": "B4-001",
+      "fixture": "express-mounted-router",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/express-mounted-router/router.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "router.get('/users', listUsers)",
+      "sourceSha256": "96509e6f481657f22ac7a54f7cd39351484599edd62d461a52fc2bf0f2c6d1e3",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/api/users",
+        "target": "symbol:src/handler.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-002",
+      "fixture": "express-mounted-router",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/express-mounted-router/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/api/users?active=true#list') }",
+      "sourceSha256": "b062989818adc205c10f16544c63b1dfbaba8a9be66279963432ae1234a50ecd",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "method": "GET",
+        "path": "/api/users?active=true#list",
+        "targetPath": "/api/users",
+        "targetFile": "src/router.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-003",
+      "fixture": "next-app-route",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/next-app-route/app/api/users/route.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function GET() { return NextResponse.json([]) }",
+      "sourceSha256": "f0fa7cb171f39b9ac4dfbd9bcb489d8635173864d4bd8ee07392b525f14efc76",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/api/users",
+        "target": "symbol:src/app/api/users/route.ts#GET"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-004",
+      "fixture": "next-app-route",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/next-app-route/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/api/users') }",
+      "sourceSha256": "b467a3f76eb7816405f517dc165b1092f42b0b053aa901e77e8af53dd0956b19",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "method": "GET",
+        "path": "/api/users",
+        "targetPath": "/api/users",
+        "targetFile": "src/app/api/users/route.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-005",
+      "fixture": "react-request-route",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/react-request-route/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "app.get('/users', users)",
+      "sourceSha256": "a9ca7fe8206919c02a503f426d78ba6e9a80a9992594d7964c7083c60008caf1",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/users",
+        "target": "symbol:src/server.ts#users"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-006",
+      "fixture": "react-request-route",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/react-request-route/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/users') }",
+      "sourceSha256": "a5984b44ce468d5c638bf18fe6d0cf3cc44c1f1cc42cc43ec98d4c96e5497d9d",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "method": "GET",
+        "path": "/users",
+        "targetPath": "/users",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-007",
+      "fixture": "react-request-route",
+      "profile": "React UI handler/request associations",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/react-request-route/view.tsx",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "  return <form onSubmit={handleSubmit}><button onClick={handleClick}>Load</button></form>",
+      "sourceSha256": "371e97009f71aa3b738e7c070f9b8bb0f8a78193edb2e28ac8bcd626c2a46bd9",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "source": "symbol:src/view.tsx#Users",
+        "targetFile": "src/client.ts",
+        "targetLine": 1,
+        "handler": "symbol:src/view.tsx#handleClick"
+      },
+      "reason": "React onClick/onSubmit identifier follows exact named calls to loadUsers"
+    },
+    {
+      "id": "B4-008",
+      "fixture": "react-request-route",
+      "profile": "React UI handler/request associations",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/react-request-route/view.tsx",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "  return <form onSubmit={handleSubmit}><button onClick={handleClick}>Load</button></form>",
+      "sourceSha256": "371e97009f71aa3b738e7c070f9b8bb0f8a78193edb2e28ac8bcd626c2a46bd9",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "source": "symbol:src/view.tsx#Users",
+        "targetFile": "src/client.ts",
+        "targetLine": 1,
+        "handler": "symbol:src/handlers.ts#handleSubmit"
+      },
+      "reason": "React onClick/onSubmit identifier follows exact named calls to loadUsers"
+    },
+    {
+      "id": "B4-009",
+      "fixture": "typed-handler-model",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/typed-handler-model/server.ts",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "app.get('/users', listUsers)",
+      "sourceSha256": "c98665ccfb96f285e731ed24502e8bdaf184f04b73460abf68e28bb618e35e8e",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/users",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-010",
+      "fixture": "typed-handler-model",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/typed-handler-model/client.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function loadUsers(): Promise<User[]> { return fetch('/users') as unknown as Promise<User[]> }",
+      "sourceSha256": "cb8999dddd2c12ed71227c0f746612e81032e2647959eca2868a8a0f72e72724",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 2,
+        "method": "GET",
+        "path": "/users",
+        "targetPath": "/users",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-011",
+      "fixture": "typed-handler-model",
+      "profile": "Handler/schema references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/typed-handler-model/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "function listUsers(): User[] { return [] }",
+      "sourceSha256": "c98665ccfb96f285e731ed24502e8bdaf184f04b73460abf68e28bb618e35e8e",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#User"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-012",
+      "fixture": "typed-handler-model",
+      "profile": "Data-model references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/typed-handler-model/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "function listUsers(): User[] { return [] }",
+      "sourceSha256": "c98665ccfb96f285e731ed24502e8bdaf184f04b73460abf68e28bb618e35e8e",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#User"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-013",
+      "fixture": "typed-handler-model",
+      "profile": "Data-model references",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/typed-handler-model/decoy.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export interface User { unrelated: boolean }",
+      "sourceSha256": "2478e78171a7f47b4059b5b7d320ed71db4917810c122ffb3c69f5dca9772bc6",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "target": "symbol:src/decoy.ts#User"
+      },
+      "reason": "Same-named unimported interface is not the referenced model"
+    },
+    {
+      "id": "B4-014",
+      "fixture": "contract-impact/before",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "app.get('/users', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/users",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-015",
+      "fixture": "contract-impact/before",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/removed', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/removed",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-016",
+      "fixture": "contract-impact/before",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 8,
+        "endLine": 8
+      },
+      "witness": "app.get('/method', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/method",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-017",
+      "fixture": "contract-impact/before",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 9,
+        "endLine": 9
+      },
+      "witness": "app.get('/handler', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/handler",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-018",
+      "fixture": "contract-impact/before",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/users') }",
+      "sourceSha256": "771596bb9b1aaf4981c7343f4db80c3653a7957d68f532c4e3073478a1082b1b",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "method": "GET",
+        "path": "/users",
+        "targetPath": "/users",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-019",
+      "fixture": "contract-impact/before",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/client.ts",
+      "range": {
+        "startLine": 3,
+        "endLine": 3
+      },
+      "witness": "export function loadMethod() { return fetch('/method') }",
+      "sourceSha256": "771596bb9b1aaf4981c7343f4db80c3653a7957d68f532c4e3073478a1082b1b",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 3,
+        "method": "GET",
+        "path": "/method",
+        "targetPath": "/method",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-020",
+      "fixture": "contract-impact/before",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/client.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function loadHandler() { return fetch('/handler') }",
+      "sourceSha256": "771596bb9b1aaf4981c7343f4db80c3653a7957d68f532c4e3073478a1082b1b",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 4,
+        "method": "GET",
+        "path": "/handler",
+        "targetPath": "/handler",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-021",
+      "fixture": "contract-impact/before",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/client.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function loadRemoved() { return fetch('/removed') }",
+      "sourceSha256": "771596bb9b1aaf4981c7343f4db80c3653a7957d68f532c4e3073478a1082b1b",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 2,
+        "method": "GET",
+        "path": "/removed",
+        "targetPath": "/removed",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-022",
+      "fixture": "contract-impact/before",
+      "profile": "Handler/schema references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): User { return new User() }",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#User"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-023",
+      "fixture": "contract-impact/before",
+      "profile": "Data-model references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): User { return new User() }",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#User"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-024",
+      "fixture": "contract-impact/before",
+      "profile": "React UI handler/request associations",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/view.tsx",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function Users() { return <button onClick={clickUsers}>Load</button> }",
+      "sourceSha256": "3c47f43de30c0c7863655481ec8ae64ba3dbbd6ae02469027c0d665b1e6cb83d",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "source": "symbol:src/view.tsx#Users",
+        "targetFile": "src/client.ts",
+        "targetLine": 1,
+        "handler": "symbol:src/view.tsx#clickUsers"
+      },
+      "reason": "Explicit React event handler and imported request chain"
+    },
+    {
+      "id": "B4-025",
+      "fixture": "contract-impact/after",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "app.get('/users-v2', listUsers)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/users-v2",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-026",
+      "fixture": "contract-impact/after",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/added', listAccounts)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/added",
+        "target": "symbol:src/server.ts#listAccounts"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-027",
+      "fixture": "contract-impact/after",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 8,
+        "endLine": 8
+      },
+      "witness": "app.post('/method', listUsers)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "POST",
+        "path": "/method",
+        "target": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-028",
+      "fixture": "contract-impact/after",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 9,
+        "endLine": 9
+      },
+      "witness": "app.get('/handler', listAccounts)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/handler",
+        "target": "symbol:src/server.ts#listAccounts"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-029",
+      "fixture": "contract-impact/after",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/users-v2') }",
+      "sourceSha256": "850e189483f857fd4384b57351e87847ba72511045c4e579fc95649a49bc05ef",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "method": "GET",
+        "path": "/users-v2",
+        "targetPath": "/users-v2",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-030",
+      "fixture": "contract-impact/after",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/client.ts",
+      "range": {
+        "startLine": 3,
+        "endLine": 3
+      },
+      "witness": "export function loadMethod() { return fetch('/method', { method: 'POST' }) }",
+      "sourceSha256": "850e189483f857fd4384b57351e87847ba72511045c4e579fc95649a49bc05ef",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 3,
+        "method": "POST",
+        "path": "/method",
+        "targetPath": "/method",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-031",
+      "fixture": "contract-impact/after",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/client.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function loadHandler() { return fetch('/handler') }",
+      "sourceSha256": "850e189483f857fd4384b57351e87847ba72511045c4e579fc95649a49bc05ef",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 4,
+        "method": "GET",
+        "path": "/handler",
+        "targetPath": "/handler",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-032",
+      "fixture": "contract-impact/after",
+      "profile": "Client/server request matching",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/client.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function loadRemoved() { return fetch('/removed') }",
+      "sourceSha256": "850e189483f857fd4384b57351e87847ba72511045c4e579fc95649a49bc05ef",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 2
+      },
+      "reason": "Removed endpoint leaves a literal request unresolved"
+    },
+    {
+      "id": "B4-033",
+      "fixture": "contract-impact/after",
+      "profile": "Handler/schema references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#Account"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-034",
+      "fixture": "contract-impact/after",
+      "profile": "Data-model references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#Account"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-035",
+      "fixture": "contract-impact/after",
+      "profile": "Handler/schema references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function listAccounts(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "source": "symbol:src/server.ts#listAccounts",
+        "target": "symbol:src/model.ts#Account"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-036",
+      "fixture": "contract-impact/after",
+      "profile": "Data-model references",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function listAccounts(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "source": "symbol:src/server.ts#listAccounts",
+        "target": "symbol:src/model.ts#Account"
+      },
+      "reason": "Explicit imported declaration reference in an authenticated handler"
+    },
+    {
+      "id": "B4-037",
+      "fixture": "contract-impact/after",
+      "profile": "React UI handler/request associations",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/view.tsx",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function Users() { return <button onClick={clickMethod}>Load</button> }",
+      "sourceSha256": "4c5f637e0679a06f00a01104cabda96204f1942c1eae7fc0be67658a0e7b1627",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "source": "symbol:src/view.tsx#Users",
+        "targetFile": "src/client.ts",
+        "targetLine": 3,
+        "handler": "symbol:src/view.tsx#clickMethod"
+      },
+      "reason": "Explicit React event handler and imported request chain"
+    },
+    {
+      "id": "B4-038",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/ok', ok)",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/ok",
+        "target": "symbol:src/server.ts#ok"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-039",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 8,
+        "endLine": 8
+      },
+      "witness": "app.get('/dupe', ok)",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/dupe",
+        "target": "symbol:src/server.ts#ok"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-040",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 9,
+        "endLine": 9
+      },
+      "witness": "app.get('/dupe', other)",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/dupe",
+        "target": "symbol:src/server.ts#other"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-041",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 10,
+        "endLine": 10
+      },
+      "witness": "app.get('/case', ok)",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/case",
+        "target": "symbol:src/server.ts#ok"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-042",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 11,
+        "endLine": 11
+      },
+      "witness": "app.get('/ambiguous', ambiguous)",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "method": "GET",
+        "path": "/ambiguous",
+        "target": "symbol:src/server.ts#ambiguous"
+      },
+      "reason": "Authenticated static framework declaration and exact handler binding"
+    },
+    {
+      "id": "B4-043",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function valid() { return fetch('/ok') }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 2,
+        "method": "GET",
+        "path": "/ok",
+        "targetPath": "/ok",
+        "targetFile": "src/server.ts"
+      },
+      "reason": "Literal same-origin method/path matches the unique static endpoint"
+    },
+    {
+      "id": "B4-044",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 3,
+        "endLine": 3
+      },
+      "witness": "export function duplicate() { return fetch('/dupe') }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "AMBIGUOUS",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 3
+      },
+      "reason": "Two distinct exact handlers share the same method/path"
+    },
+    {
+      "id": "B4-045",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function wrongCase() { return fetch('/Case') }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 4
+      },
+      "reason": "Path case differs"
+    },
+    {
+      "id": "B4-046",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function wrongMethod() { return fetch('/ok', { method: 'POST' }) }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 5
+      },
+      "reason": "POST does not match GET"
+    },
+    {
+      "id": "B4-047",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "export function absent() { return fetch('/absent') }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 6
+      },
+      "reason": "No endpoint in selected universe"
+    },
+    {
+      "id": "B4-048",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "export function dynamic() { return fetch(url) }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 7
+      },
+      "reason": "Dynamic URL cannot establish a static route"
+    },
+    {
+      "id": "B4-049",
+      "fixture": "held-out",
+      "profile": "Client/server request matching",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/client.ts",
+      "range": {
+        "startLine": 8,
+        "endLine": 8
+      },
+      "witness": "export function external() { return fetch('https://example.test/ok') }",
+      "sourceSha256": "0cf6379a47516743439f1cbf1b0cefd65a87035f354fd6537becf31694c1bc3a",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "qualification": "UNRESOLVED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 8
+      },
+      "reason": "External origin cannot establish local dispatch"
+    },
+    {
+      "id": "B4-050",
+      "fixture": "held-out",
+      "profile": "Handler/schema references",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "export function ambiguous(): Twin { return {} as Twin }",
+      "sourceSha256": "5c359693fc4f2db3053fcab4fc42742816cbea77b0eb7de9edd11ddb52c93476",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "source": "symbol:src/server.ts#ambiguous",
+        "qualification": "AMBIGUOUS"
+      },
+      "reason": "Two source declarations named Twin cannot establish a unique schema"
+    },
+    {
+      "id": "B4-051",
+      "fixture": "held-out",
+      "profile": "React UI handler/request associations",
+      "group": "uncertain",
+      "classification": "uncertain",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/view.tsx",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function View() { return <button onClick={missing}>Load</button> }",
+      "sourceSha256": "954dbf7599f71816bcf03325e1df94289b465fc0089c0b61a0c0674fc32bbeda",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "source": "symbol:src/view.tsx#View",
+        "qualification": "UNRESOLVED"
+      },
+      "reason": "Declared missing handler has no request call body"
+    },
+    {
+      "id": "B4-052",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "unsupported",
+      "classification": "unsupported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/fake.ts",
+      "range": {
+        "startLine": 3,
+        "endLine": 3
+      },
+      "witness": "app.get('/fake', fake)",
+      "sourceSha256": "14817abb98c1011c26f54850db139d82eb0e770adc105d27269496abc2d674e4",
+      "expected": {
+        "qualification": "UNSUPPORTED",
+        "reason": "unsupported-router-profile",
+        "forbidKind": "api-endpoint-handled-by"
+      },
+      "reason": "Arbitrary object get is not authenticated Express"
+    },
+    {
+      "id": "B4-053",
+      "fixture": "held-out",
+      "profile": "Data-model references",
+      "group": "unsupported",
+      "classification": "unsupported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/orm.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function load() { return db[table].findMany() }",
+      "sourceSha256": "fc108a799598f9d88830d110d828e5d7c1084aee6bf0ce6ac1c669ccc6cb32a8",
+      "expected": {
+        "qualification": "UNSUPPORTED",
+        "reason": "unsupported-dynamic-data-access-profile",
+        "forbidKind": "api-handler-uses-data-entity"
+      },
+      "reason": "Dynamic ORM property lookup has no proven entity identity"
+    },
+    {
+      "id": "B4-054",
+      "fixture": "held-out",
+      "profile": "API endpoints",
+      "group": "unsupported",
+      "classification": "unsupported",
+      "source": "tests/fixtures/api-relationships/v1/qualification/held-out/app/api/[id]/route.ts",
+      "range": {
+        "startLine": 2,
+        "endLine": 2
+      },
+      "witness": "export function GET() { return NextResponse.json([]) }",
+      "sourceSha256": "f0fa7cb171f39b9ac4dfbd9bcb489d8635173864d4bd8ee07392b525f14efc76",
+      "expected": {
+        "qualification": "UNSUPPORTED",
+        "forbidKind": "api-endpoint-handled-by"
+      },
+      "reason": "Next dynamic route convention is outside the supported static path profile"
+    },
+    {
+      "id": "B4-055",
+      "fixture": "contract-impact/before",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "app.get('/users', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "REMOVED",
+        "path": "/users",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listUsers",
+        "associated": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-056",
+      "fixture": "contract-impact/before",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/before/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/removed', listUsers)",
+      "sourceSha256": "c282d32ab8208078a4b654255b5bb7b7fe95d9a46a987647a309315a5a11bdb4",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "REMOVED",
+        "path": "/removed",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listUsers",
+        "associated": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-057",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "app.get('/users-v2', listUsers)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "ADDED",
+        "path": "/users-v2",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listUsers",
+        "associated": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-058",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/added', listAccounts)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "ADDED",
+        "path": "/added",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listAccounts",
+        "associated": "symbol:src/server.ts#listAccounts"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-059",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 8,
+        "endLine": 8
+      },
+      "witness": "app.post('/method', listUsers)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "MODIFIED",
+        "path": "/method",
+        "method": "POST",
+        "target": "symbol:src/server.ts#listUsers",
+        "associated": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-060",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 9,
+        "endLine": 9
+      },
+      "witness": "app.get('/handler', listAccounts)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "MODIFIED",
+        "path": "/handler",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listAccounts",
+        "associated": "symbol:src/server.ts#listAccounts"
+      },
+      "reason": "Source route addition/removal/method/handler edit directly associates its named handler",
+      "impact": true
+    },
+    {
+      "id": "B4-061",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-references-schema",
+        "changeKind": "MODIFIED",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#Account",
+        "associated": "symbol:src/model.ts#Account"
+      },
+      "reason": "Handler/schema source edit: before/after source explicitly changes the imported declaration, React handler, or request route",
+      "impact": true
+    },
+    {
+      "id": "B4-062",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 4,
+        "endLine": 4
+      },
+      "witness": "export function listUsers(): Account { return new Account() }",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-handler-uses-data-entity",
+        "changeKind": "MODIFIED",
+        "source": "symbol:src/server.ts#listUsers",
+        "target": "symbol:src/model.ts#Account",
+        "associated": {
+          "kind": "api-data-entity-ref",
+          "symbolId": "symbol:src/model.ts#Account"
+        }
+      },
+      "reason": "Data-model source edit: before/after source explicitly changes the imported declaration, React handler, or request route",
+      "impact": true
+    },
+    {
+      "id": "B4-063",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/view.tsx",
+      "range": {
+        "startLine": 5,
+        "endLine": 5
+      },
+      "witness": "export function Users() { return <button onClick={clickMethod}>Load</button> }",
+      "sourceSha256": "4c5f637e0679a06f00a01104cabda96204f1942c1eae7fc0be67658a0e7b1627",
+      "expected": {
+        "kind": "api-client-invokes-request",
+        "changeKind": "MODIFIED",
+        "source": "symbol:src/view.tsx#Users",
+        "targetFile": "src/client.ts",
+        "targetLine": 3,
+        "associated": {
+          "kind": "api-client-call",
+          "file": "src/client.ts",
+          "line": 3
+        }
+      },
+      "reason": "UI event source edit: before/after source explicitly changes the imported declaration, React handler, or request route",
+      "impact": true
+    },
+    {
+      "id": "B4-064",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "positive",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/client.ts",
+      "range": {
+        "startLine": 1,
+        "endLine": 1
+      },
+      "witness": "export function loadUsers() { return fetch('/users-v2') }",
+      "sourceSha256": "850e189483f857fd4384b57351e87847ba72511045c4e579fc95649a49bc05ef",
+      "expected": {
+        "kind": "api-call-targets-route",
+        "changeKind": "MODIFIED",
+        "sourceFile": "src/client.ts",
+        "sourceLine": 1,
+        "path": "/users-v2",
+        "method": "GET",
+        "associated": {
+          "kind": "framework-route",
+          "file": "src/server.ts",
+          "value": "/users-v2"
+        }
+      },
+      "reason": "Request target source edit: before/after source explicitly changes the imported declaration, React handler, or request route",
+      "impact": true
+    },
+    {
+      "id": "B4-065",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 7,
+        "endLine": 7
+      },
+      "witness": "app.get('/added', listAccounts)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "ADDED",
+        "path": "/added",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listAccounts",
+        "associated": "symbol:src/server.ts#listUsers"
+      },
+      "reason": "The new route names a different handler; no direct association to this unrelated handler is declared",
+      "impact": true
+    },
+    {
+      "id": "B4-066",
+      "fixture": "contract-impact/after",
+      "profile": "Source-change impact candidates",
+      "group": "negative",
+      "classification": "supported",
+      "source": "tests/fixtures/api-relationships/v1/contract-impact/after/server.ts",
+      "range": {
+        "startLine": 6,
+        "endLine": 6
+      },
+      "witness": "app.get('/users-v2', listUsers)",
+      "sourceSha256": "ba9bdcdd9d42ee2116f25f7fcead61231b855e8fb141e27e1e0f23616805f723",
+      "expected": {
+        "kind": "api-endpoint-handled-by",
+        "changeKind": "ADDED",
+        "path": "/users-v2",
+        "method": "GET",
+        "target": "symbol:src/server.ts#listUsers",
+        "associated": "symbol:src/server.ts#listAccounts"
+      },
+      "reason": "The new route names a different handler; no direct association to this unrelated handler is declared",
+      "impact": true
+    }
+  ]
+}

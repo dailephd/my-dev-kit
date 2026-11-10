@@ -117,6 +117,8 @@ The lineage layer (`model-view-lineage.json`) carries conservative static relati
 
 The bridge between layers is artifact references (`artifactRefs`) and evidence references (`evidenceRefs`). Compact metadata on structural artifacts links to detailed records in semantic artifacts.
 
+The v1.15.0 source-audit evidence artifact (`source-audit-evidence.json`) is a separate managed artifact registered through the manifest's `sourceAuditEvidence` reference. It is a per-file, paged evidence projection beside the structural layer, not a slice of `code-graph.json` and not a replacement for `symbol-index.json`; it carries its own fact identities and is read only through the audit `lookup` selectors.
+
 `data-model-graph.json` is a derived semantic graph, not a slice of `code-graph.json`. The code graph describes static source structure. The data-model graph describes data entities and fields. The model-view-lineage artifact describes static usage and flow paths. The `view` command can render each graph artifact independently with `--graph code`, `--graph data-model`, or `--graph model-view-lineage`.
 
 ## Versioned artifact kinds
@@ -129,6 +131,8 @@ Current versioned artifact kinds:
 - `my-dev-kit-v1-data-model`
 - `my-dev-kit-v1-data-model-graph`
 - `my-dev-kit-v1-model-view-lineage`
+- `my-dev-kit-v1-source-audit-evidence` (v1.15.0; `source-audit-evidence.json`)
+- `kit-api-relationship-evidence-v1` (v1.15.0; `api-relationship-evidence.json`)
 
 `code-graph.json` uses:
 
@@ -161,6 +165,8 @@ Main fields:
 - `changedFileSummary` (v1.8.0): added/changed/removed/unchanged counts and bounded samples from the incremental change-detection pass that produced this build; `null` when not applicable (a plain full run, or an incremental run whose cache had no prior baseline to diff against)
 - `partialRebuildFallbackArtifacts` (v1.8.0 Batch 3): artifact families fully regenerated rather than partially reused during a partial rebuild (currently only ever `["call-graph"]`, when `--call-graph` was requested); `[]` outside the two `incremental-partial*` cache modes
 - `incrementalRefresh` (v1.12.5): additive optional `IncrementalRefreshSummary` object. See "incrementalRefresh (v1.12.5)" below.
+- `sourceAuditEvidence` (v1.15.0): additive optional reference to the managed `source-audit-evidence.json`; absent on legacy indexes. See [source-audit-evidence.json](#source-audit-evidencejson-v1150-unreleased).
+- `apiRelationshipEvidence` (v1.15.0): additive optional authenticated reference to [API relationship evidence](#api-relationship-evidencejson-v1150-unreleased).
 
 ### artifacts
 
@@ -1224,6 +1230,95 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 **No legend for the three new views**, matching the exact existing precedent the three Batch 5 Android views already established: `buildRenderableDotGraph` only appends the edge-kind legend when `graph.id === 'code'`, and this batch does not change that condition for any Android/Compose/test graph. `--edge-style semantic`/`labeled`/`minimal` all work unchanged, since edge rendering is entirely driven by `RenderableGraphEdge.kind`/`.label`, not by which specialized view produced the edge list.
 
 **Determinism, empty-view, and Graphviz behavior are entirely inherited, unmodified.** Node/edge sorting (`localeCompare` on `id`), the DOT serializer, SVG/PNG rendering via Graphviz, `--allow-dot-fallback`, and the JSON `GraphViewResult` shape (`nodeCount`/`edgeCount`/`graphvizUsed`/`dotFallbackUsed`/`fallbackStatus`/`warnings`) are the same code path every other `--graph` value already uses — Batch 6 adds no new summary field, and a non-Android/Compose/test-evidence-free index simply produces zero selected nodes and zero edges at exit 0, never an error and never an invented placeholder node.
+
+<a id="source-audit-evidencejson-v1150-unreleased"></a>
+
+## source-audit-evidence.json (v1.15.0)
+
+Status: implemented in v1.15.0 (KIT-FACTS-01 producer). Artifact kind `my-dev-kit-v1-source-audit-evidence`, schema version `1.1.0`. Types: `src/symbol-index/auditEvidenceTypes.ts`; validator: `src/symbol-index/validateAuditEvidence.ts`; producer: `src/indexing/buildSourceAuditEvidence.ts`. Commands: [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
+
+Schema versions around it: manifest `1.0.0`, symbol index `3`, code graph `1.1.0` (all unchanged), private cache metadata `1.4.0` (advanced from `1.3.0`), extractor contract revision `source-audit-v1.5.0`.
+
+Manifest linkage. `manifest.json` gains an optional `sourceAuditEvidence` object: `path` (always `source-audit-evidence.json`), `schemaVersion` (`1.1.0`), `sha256` and `snapshotId`. The writer validates the artifact, writes it, and writes `manifest.json` last. `sha256` is the SHA-256 of the exact serialized artifact bytes (UTF-8 `JSON.stringify(value, null, 2)` plus a trailing LF); `snapshotId` is a semantic identity, a SHA-256 over the schema version, the selection fingerprint, the extractor contract revision and the per-file path, content hash, selection status, language, role and status. They have different meanings: one authenticates the file bytes, the other identifies the evidence content, and neither equals the other. Readers verify the manifest reference, the hash and the snapshot before trusting any page. The write is not claimed to be atomic across artifacts: an interrupted write can leave incomplete output, which fails closed (the reader reports the evidence unavailable or invalid) rather than being used.
+
+Top-level shape:
+
+- `artifactKind`, `schemaVersion`, `producer` (`packageName`, `packageVersion`).
+- `source`: `projectRoot`, `sourceRoots`, `excludes` (the effective exclusion rules), `symbolIndexSchemaVersion`, `codeGraphSchemaVersion`, `selectionFingerprint`, `snapshotId`.
+- `coverage`: `selectedFileCount`, `recordedFileCount`, `unreadableFileCount`, `excludedPathCount`, `unsupportedFileCount`, `inventoryComplete`, `exclusionsAreExplicit`. A complete selected inventory does not imply complete parsing or complete semantic resolution, and it does not authenticate the contents of unsupported or unhashed files.
+- `files[]`: one record per selected file, sorted by path: `path`, `language`, `role` (`source`, `test`, `script`, `unknown`), `status` (`parsed`, `partial`, `file-level-only`, `unsupported`, `failed`, `skipped`), `contentSha256` (or `null` when unavailable), `sizeBytes`, `lineCount`, `analyzerId`, `capabilities`, `facts[]`, `warnings[]` and `diagnostics[]`.
+
+Capabilities. Each file reports a status per capability: `declarations`, `jvmDeclarations`, `imports`, `exports`, `identifier-literals`, `test-observations`, `fixture-references`, `process-observations`, `api-client-calls` and `source-ranges`. Each is `complete`, `partial`, `unsupported`, `failed` or `not-applicable`. Partial and unsupported evidence is explicit; a missing fact in an unsupported or partial capability is not evidence of absence. Java and Kotlin facts use lexical extraction, not compiler parsing.
+
+Fact categories. A fact has a `kind`: `declaration`, `import`, `export`, `identifier-literal`, `test-observation`, `fixture-reference`, `process-observation` or `api-client-call`, with an `extractionMethod` (`typescript-ast`, `python-ast`, `rust-tree-sitter`, `java-lexical`, `kotlin-lexical`, `lexical`, `metadata`). Optional fields include `name`, `observationKind`, `symbolId`, `declarationKind`, `ownerKey`, `visibility`, `exported`, `exportOrigin`, `sourceSpecifier`, `importedNames`, `importResolution` (`resolved-local`, `ambiguous`, `unresolved`, `external`, `outside-selected-roots`, `observed`), `targetPaths`, and bounded literal values (`value`, `valueSha256`, `valueTruncated`). KIT-API-01 relationships are implemented in the separate managed projection below; its private AST observation transport is not an additional source-audit fact schema.
+
+Spans and identities. Every fact has a `span` (`path`, `startLine`, `startColumn`, `endLine`, `endColumn`; columns and end may be `null`). Fact IDs are opaque, deterministic strings of the form `audit-fact:<encoded path>#<kind>#...`; consumers take them from page output and must not reconstruct them. They are stable for identical content and selection.
+
+Paging. Page envelopes carry `schemaVersion`, `snapshotId`, `pageIndex`, `pageSize`, `totalItems`, `totalPages` and `nextPageIndex`. Inventory pages (`mode: "audit-files"`, 64 files per page) omit per-file facts and diagnostics; file pages (`mode: "audit-file"`, 128 facts per page) carry `status` of `found` or `not-selected`, the file record and the page's facts. Import-target proofs (`mode: "audit-import-target"`) and exact-file occurrence results (`mode: "exact-file-occurrence"`) are command results, not persisted artifacts.
+
+Lifecycle. `index` projects the artifact from one source-discovery traversal and the existing adapters and writes it in every full or incremental run. The private `cache-metadata.json` (schema `1.4.0`, never registered in the manifest) records the source-audit extractor revision, schema version and producer capability set alongside each reusable file analysis, so an incremental run does not reuse per-file evidence produced under a different contract. The advance from cache schema `1.3.0` to `1.4.0` makes an older cache incompatible, which causes one full rebuild. Incremental runs follow the existing changed-file, selection and exclusion invalidation rules and still write a complete, validated artifact; full and incremental output are intended to be equivalent apart from timestamps. An index written without the artifact (any pre-v1.15.0 index) remains valid for every other command; the audit selectors report it unavailable rather than inventing evidence. A stale or deleted selected source file is rejected at read time against its recorded `contentSha256`.
+
+Not claimed: the artifact does not prove complete semantic resolution, runtime behavior, test success, security findings or policy compliance; Lab audit policy, severity and finding categories are not part of it.
+
+<a id="api-relationship-evidencejson-v1150-unreleased"></a>
+
+## api-relationship-evidence.json (v1.15.0)
+
+Kind `kit-api-relationship-evidence-v1`, schema `1.0.0`, producer revision
+`api-relationship-v1.0.0`. `manifest.json.apiRelationshipEvidence` is optional and
+contains `path` (fixed `api-relationship-evidence.json`), `schemaVersion`, `sha256`
+(serialized bytes) and `snapshotId`. Unregistered files are not trusted, and
+legacy indexes without the reference retain their existing command behavior.
+
+Persisted top-level fields:
+
+- `schemaVersion`, `artifactKind`, `producer` (`packageName`, `packageVersion`, `revision`).
+- `sourceSnapshot`: `snapshotId`, `selectionFingerprint`, `files[]` (`path`, nullable `contentSha256`).
+- `selection`: `sourceRoots`, `excludes`, `complete`, `production` (`complete`, `partial`, `unsupported`, `failed`).
+- `capabilities[]`: `file`, `profile` (`js-ts-static-v1`, `unsupported`), `status` (`complete`, `unsupported`, `failed`).
+- `nodes[]`, `relationships[]`, `unresolved[]`, `limitations[]` (`code`, `scope`).
+- `integrity`: `algorithm: "sha256"`, `digest` sealing the artifact body.
+
+Nodes contain `id`, `kind`, `file`, nullable `symbolId`, `location`, nullable
+`value` and `provenance[]`. Kinds are `api-client-call`, `framework-route`,
+`source-symbol`, `schema-declaration`, `api-data-entity-ref`, `api-data-field-ref`.
+Witnesses contain `id`, `span`, `contentSha256`, nullable `symbolId`/`factId`, and
+`provenance` (`typescript-ast`, `framework-graph`, `symbol-import-graph`).
+
+Relationships contain `id`, `kind`, `source`, nullable `target`, `qualification`,
+nullable `method`/`path`/`unresolvedTargetKey`, `witnesses[]` and `limitations[]`.
+Kinds are `api-call-originates-in-component`, `api-call-targets-route`,
+`api-handler-references-schema`, `api-handler-uses-data-entity`,
+`api-schema-maps-data-entity`, `api-entity-has-field`, `api-endpoint-handled-by`,
+`api-client-invokes-request` and `api-call-references-declaration`. Defined kinds
+are a vocabulary, not a promise that every kind is produced: the qualified model
+bridge covers imported class references, without general schema-to-entity or
+field mapping. Methods are
+GET/POST/PUT/PATCH/DELETE. Qualification is `RESOLVED`, `AMBIGUOUS`, `UNRESOLVED`
+or `UNSUPPORTED`; resolved records have a target and no unresolved key, while
+other states retain an unresolved key and no selected target. `unresolved[]`
+records contain nullable `source`, `location`, `family`, `qualification`, `reason`,
+bounded `candidates[]` and `missingEvidence[]`.
+
+IDs, ordering and duplicate suppression are deterministic. Validation checks
+the contract, source witnesses, referenced identities and sealed integrity;
+live internal lookup also authenticates manifest/source-audit identity and
+selected-source freshness. Private extraction observations and
+`crossLayerRevision` are not persisted fields here. Candidate enumeration is
+capped at 64. Internal lookup defaults to 64 results and accepts `maxResults`
+from 1 through 256; its file filter accepts at most 64 paths, and capability and
+limitation metadata are separately capped at 256. It reports omissions;
+incomplete selection, production, capabilities,
+uncertainty or truncation prevents a complete negative.
+
+Qualified static profiles and exclusions are defined in
+[CONTRACTS.md](CONTRACTS.md#kit-api-01-bounded-cross-layer-projection-v1150-unreleased).
+The existing `graph-diff` result can add `apiRelationshipImpact` for registered
+compatible snapshots; it is command output, not another persisted artifact.
+See its [result contract](CONTRACTS.md#kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased)
+for immutable snapshot validation, direct potential impacts, 64-record collection
+caps and completeness. Static associations do not prove runtime execution,
+reachability, authorization, database access or API compatibility.
 
 ## Schema limitations
 

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { CodeGraph } from '../graph/codeGraphTypes.js'
 import type { CallGraph, SymbolIndex } from '../symbol-index/types.js'
 import type { DataModelGraphArtifact } from '../data-model/dataModelGraphTypes.js'
@@ -36,10 +37,12 @@ import {
   FRONTEND_REACHABILITY_FILENAME,
   FRONTEND_SEMANTIC_FILENAME,
   INDEX_MANIFEST_FILENAME,
+  SOURCE_AUDIT_EVIDENCE_FILENAME,
   SYMBOL_INDEX_FILENAME,
 } from './managedArtifacts.js'
 
 export interface WriteIndexArtifactsOptions {
+  apiRelationshipEvidenceJson?: string | null
   outputDir: string
   manifest: IndexManifest
   symbolIndex: SymbolIndex
@@ -58,11 +61,16 @@ export interface WriteIndexArtifactsOptions {
   androidNavigation?: AndroidNavigationArtifact | null
   androidComposeSemantic?: AndroidComposeSemanticArtifact | null
   androidTestSemantic?: AndroidTestSemanticArtifact | null
+  /** Exact serialized source-audit artifact; its SHA-256 must equal manifest.sourceAuditEvidence.sha256. */
+  sourceAuditEvidenceJson?: string | null
 }
 
 export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
+  const apiReference = options.manifest.apiRelationshipEvidence
+  // Validate supplied bytes before touching the managed output.
+  if (apiReference && options.apiRelationshipEvidenceJson != null && createHash('sha256').update(options.apiRelationshipEvidenceJson).digest('hex') !== apiReference.sha256) throw new Error('API relationship artifact checksum mismatch.')
   fs.mkdirSync(options.outputDir, { recursive: true })
-  writeJson(path.join(options.outputDir, INDEX_MANIFEST_FILENAME), options.manifest)
+  // The manifest is the publication pointer: it is written last so it never references a missing or partial artifact.
   writeJson(path.join(options.outputDir, SYMBOL_INDEX_FILENAME), options.symbolIndex)
   writeJson(path.join(options.outputDir, CODE_GRAPH_FILENAME), options.codeGraph)
   if (options.callGraph) {
@@ -110,6 +118,26 @@ export function writeIndexArtifacts(options: WriteIndexArtifactsOptions): void {
   if (options.androidTestSemantic) {
     writeJson(path.join(options.outputDir, ANDROID_TEST_SEMANTIC_FILENAME), options.androidTestSemantic)
   }
+  const reference = options.manifest.sourceAuditEvidence
+  if (reference) {
+    if (options.sourceAuditEvidenceJson === undefined || options.sourceAuditEvidenceJson === null) {
+      throw new Error('The manifest references source-audit evidence but no serialized artifact was supplied.')
+    }
+    const target = path.join(options.outputDir, SOURCE_AUDIT_EVIDENCE_FILENAME)
+    fs.writeFileSync(target, options.sourceAuditEvidenceJson, 'utf8')
+    // Verify the bytes on disk before the manifest can point at them.
+    const written = createHash('sha256').update(fs.readFileSync(target)).digest('hex')
+    if (written !== reference.sha256) {
+      throw new Error('The written source-audit artifact does not match the SHA-256 recorded for the manifest.')
+    }
+  }
+  if (apiReference) {
+    const target = path.join(options.outputDir, apiReference.path)
+    if (apiReference.path !== 'api-relationship-evidence.json') throw new Error('Invalid API relationship artifact path.')
+    if (options.apiRelationshipEvidenceJson != null) fs.writeFileSync(target, options.apiRelationshipEvidenceJson, 'utf8')
+    if (!fs.existsSync(target) || createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== apiReference.sha256) throw new Error('Missing or invalid managed API relationship artifact.')
+  }
+  writeJson(path.join(options.outputDir, INDEX_MANIFEST_FILENAME), options.manifest)
 }
 
 function writeJson(filePath: string, value: unknown): void {

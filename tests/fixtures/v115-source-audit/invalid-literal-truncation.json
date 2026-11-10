@@ -1,0 +1,73 @@
+{
+  "artifactKind": "my-dev-kit-v1-source-audit-evidence",
+  "schemaVersion": "1.0.0",
+  "producer": {
+    "packageName": "@dailephd/my-dev-kit",
+    "packageVersion": "1.15.0"
+  },
+  "source": {
+    "projectRoot": "/work/sample-project",
+    "sourceRoots": [
+      "src",
+      "tests"
+    ],
+    "excludes": [
+      "node_modules"
+    ],
+    "symbolIndexSchemaVersion": "3",
+    "codeGraphSchemaVersion": "1.1.0",
+    "selectionFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "snapshotId": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  },
+  "coverage": {
+    "selectedFileCount": 1,
+    "recordedFileCount": 1,
+    "unreadableFileCount": 0,
+    "excludedPathCount": 1,
+    "unsupportedFileCount": 0,
+    "inventoryComplete": true,
+    "exclusionsAreExplicit": true
+  },
+  "files": [
+    {
+      "path": "src/consts.ts",
+      "language": "typescript",
+      "role": "source",
+      "status": "parsed",
+      "contentSha256": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "sizeBytes": 120,
+      "lineCount": 12,
+      "analyzerId": "typescript-ast",
+      "capabilities": {
+        "declarations": "not-applicable",
+        "imports": "not-applicable",
+        "exports": "not-applicable",
+        "identifier-literals": "complete",
+        "test-observations": "not-applicable",
+        "fixture-references": "not-applicable",
+        "process-observations": "not-applicable",
+        "api-client-calls": "not-applicable",
+        "source-ranges": "not-applicable"
+      },
+      "facts": [
+        {
+          "id": "src/consts.ts#identifier-literal:1:0",
+          "kind": "identifier-literal",
+          "span": {
+            "path": "src/consts.ts",
+            "startLine": 1,
+            "startColumn": 0,
+            "endLine": 1,
+            "endColumn": 40
+          },
+          "extractionMethod": "typescript-ast",
+          "value": "short",
+          "valueSha256": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+          "valueTruncated": true
+        }
+      ],
+      "warnings": [],
+      "diagnostics": []
+    }
+  ]
+}

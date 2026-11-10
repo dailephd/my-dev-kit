@@ -6,6 +6,7 @@ import { buildManifestDiff } from './buildManifestDiff.js'
 import { buildClassificationDiff } from './buildClassificationDiff.js'
 import { buildDataModelDiff, buildFrontendReachabilityDiff, buildFrontendSemanticDiff } from './buildSemanticSummaryDiff.js'
 import { GRAPH_DIFF_REPORT_KIND, type GraphDiffResult } from './types.js'
+import { buildApiRelationshipImpact } from './buildApiRelationshipImpact.js'
 
 export interface RunGraphDiffOptions {
   before: string
@@ -35,6 +36,7 @@ export function runGraphDiff(options: RunGraphDiffOptions): GraphDiffResult {
   const dataModel = buildDataModelDiff(before.dataModel, after.dataModel)
   const frontendSemantic = buildFrontendSemanticDiff(before.frontendSemantic, after.frontendSemantic)
   const frontendReachability = buildFrontendReachabilityDiff(before.frontendReachability, after.frontendReachability)
+  const apiRelationshipImpact = buildApiRelationshipImpact(before.apiRelationship, after.apiRelationship)
 
   return {
     reportKind: GRAPH_DIFF_REPORT_KIND,
@@ -65,6 +67,7 @@ export function runGraphDiff(options: RunGraphDiffOptions): GraphDiffResult {
       frontendReachability,
     },
     warnings,
+    ...(apiRelationshipImpact ? { apiRelationshipImpact } : {}),
   }
 }
 

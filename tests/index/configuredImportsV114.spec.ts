@@ -24,6 +24,14 @@ function deps(root: string, roots = ['src']) { return buildIndex({ repoRoot: roo
 const edge = (to: string, from = 'src/main.ts') => ({ from, to, kind: 'import' })
 
 describe('configured imports: selected local dependency producer', () => {
+  it('keeps configured aliases distinct from relative .mjs source candidates', () => {
+    const root = fixture({
+      'tsconfig.json': config({ '@/*': ['./src/*'] }),
+      'src/main.ts': 'import "@/a"; import "./peer.mjs";',
+      'src/a.ts': source, 'src/peer.mts': source,
+    })
+    expect(deps(root)).toEqual([edge('src/a.ts'), edge('src/peer.mts')])
+  })
   it('persists both independent incident endpoints with ordinary imports and stable IDs', () => {
     const index = buildIndex({ repoRoot: resolve('tests/fixtures/v114-path-alias'), sourceRoots: ['src'] }).index
     const from = 'src/app/tool/[slug]/page.tsx'

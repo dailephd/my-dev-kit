@@ -14,6 +14,9 @@
 
 import * as ts from 'typescript'
 import * as path from 'path'
+import { auditCapabilityMap, type SourceAuditExtractionPayload } from './auditObservations.js'
+import type { SourceAuditFact } from './auditEvidenceTypes.js'
+import { API_RELATIONSHIP_PRODUCER, API_RELATIONSHIP_METHODS, type ApiSourceObservations, type ApiSourceObservation } from './apiRelationshipEvidenceTypes.js'
 import {
   type SymbolDefinition,
   type SymbolKind,
@@ -31,11 +34,18 @@ import {
 
 /** Result of extracting symbols from one source file. */
 export interface ExtractionResult {
+  apiRelationships?: ApiSourceObservations
   rustSyntaxFacts?: import('./types.js').RustSyntaxFact[]
   commonJsExports?: CommonJsExportFact[]
   pythonOrmFacts?: import('./types.js').PythonOrmFact[]
   frameworkRouteFacts?: import('./types.js').FrameworkRouteFact[]
   importBindings?: ImportBinding[]
+  /**
+   * Language-owned source-audit evidence (v1.15.0 Batch 2). Adapters attach raw
+   * facts here; `extractAuditObservations` normalizes them. Optional so older
+   * artifacts and third-party adapters remain valid.
+   */
+  sourceAudit?: import('./auditObservations.js').SourceAuditExtractionPayload
   warnings?: string[]
   language: SourceLanguage
   lineCount: number
@@ -109,10 +119,14 @@ export function extractFromSource(
   const importBindings: ImportBinding[] = []
   const commonJsExports: CommonJsExportFact[] = []
   extractDocumentation(sourceFile, filePath, symbols, warnings, endLineLimit)
-  extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings)
+  const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false, unsafeRequireBinding: false }
+  extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings, auditCollector)
   const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
+  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
 
   return {
+    apiRelationships: extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null),
+    sourceAudit,
     importBindings,
     commonJsExports,
     frameworkRouteFacts,
@@ -125,6 +139,95 @@ export function extractFromSource(
     reExportSpecifiers: dedup(reExportSpecifiers),
     exportAllSpecifiers: dedup(exportAllSpecifiers),
   }
+}
+
+/** Reuses this analyzer's parsed AST. No source IO, runtime execution or type checker. */
+function extractApiObservations(sf: ts.SourceFile, symbols: SymbolDefinition[], bindings: ImportBinding[], routes: FrameworkRouteFact[], parsed: boolean): ApiSourceObservations {
+  if (!parsed) return { revision: API_RELATIONSHIP_PRODUCER, crossLayerRevision: 'cross-layer-v1', status: 'failed', observations: [] }
+  const observations: ApiSourceObservation[] = []
+  const declarations = new Map<string, number>()
+  const unsafe = new Set<string>()
+  const declare = (name: string) => declarations.set(name, (declarations.get(name) ?? 0) + 1)
+  const scan = (n: ts.Node): void => {
+    if ((ts.isVariableDeclaration(n) || ts.isParameter(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name)) declare(n.name.text)
+    if ((ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassDeclaration(n) || ts.isInterfaceDeclaration(n) || ts.isTypeAliasDeclaration(n)) && n.name) declare(n.name.text)
+    if (ts.isTypeParameterDeclaration(n)) declare(n.name.text)
+    if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n) || ts.isImportClause(n) && n.name) declare(n.name!.text)
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) unsafe.add(n.left.text)
+    const globalFetch = (node: ts.Node): boolean => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && ['globalThis', 'window', 'global', 'self'].includes(node.expression.text) && node.name.text === 'fetch' || ts.isElementAccessExpression(node) && ts.isIdentifier(node.expression) && ['globalThis', 'window', 'global', 'self'].includes(node.expression.text) && !!node.argumentExpression && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === 'fetch'
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && globalFetch(n.left) || ts.isDeleteExpression(n) && globalFetch(n.expression)) unsafe.add('fetch')
+    ts.forEachChild(n, scan)
+  }
+  scan(sf)
+  const literal = (n: ts.Node | undefined): string | null => n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text.length <= 1024 ? n.text : null
+  const owner = (n: ts.Node): SymbolDefinition | undefined => {
+    let current: ts.Node | undefined = n.parent
+    while (current && current !== sf) {
+      const named = (ts.isFunctionDeclaration(current) || ts.isMethodDeclaration(current) || ts.isVariableDeclaration(current)) && current.name && ts.isIdentifier(current.name) ? current.name.text : null
+      if (named) {
+        const line = sf.getLineAndCharacterOfPosition(current.getStart(sf)).line + 1
+        const found = symbols.filter(s => s.name === named && s.location.line === line)
+        if (found.length === 1) return found[0]
+      }
+      current = current.parent
+    }
+    return undefined
+  }
+  const add = (n: ts.Node, partial: Pick<ApiSourceObservation, 'kind' | 'name' | 'method' | 'path' | 'reason'>) => {
+    const pos = sf.getLineAndCharacterOfPosition(n.getStart(sf))
+    const containing = owner(n)
+    observations.push({ ...partial, line: pos.line + 1, column: pos.character, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1, ownerName: containing?.name ?? null, ownerLine: containing?.location.line ?? null })
+  }
+  const visit = (n: ts.Node): void => {
+    if (ts.isJsxAttribute(n) && ['onClick', 'onSubmit'].includes(n.name.getText(sf))) {
+      const expression = n.initializer && ts.isJsxExpression(n.initializer) ? n.initializer.expression : undefined
+      const name = expression && ts.isIdentifier(expression) ? expression.text : null
+      add(n, { kind: 'ui-event', name, method: null, path: n.name.getText(sf), reason: name && declarations.get(name) === 1 && !unsafe.has(name) ? null : 'unresolved-ui-handler' })
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ts.isIdentifier(n.expression.expression)) {
+      const name = n.expression.expression.text
+      if (bindings.some(b => b.localName === name && b.sourceSpecifier === 'next/server') && declarations.get(name) === 1 && !unsafe.has(name)) add(n, { kind: 'framework-reference', name, method: null, path: null, reason: null })
+    }
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) {
+      const name = n.expression.text
+      if (name === 'fetch') {
+        let reason: string | null = declarations.has('fetch') || unsafe.has('fetch') ? 'shadowed-or-mutated-fetch' : null
+        let method: ApiSourceObservation['method'] = 'GET'
+        const url = literal(n.arguments[0])
+        const options = n.arguments[1]
+        if (n.arguments.length > 2) reason = 'unsupported-fetch-arguments'
+        if (options) {
+          if (!ts.isObjectLiteralExpression(options) || options.properties.some(p => !ts.isPropertyAssignment(p) || p.name && !ts.isIdentifier(p.name) && !ts.isStringLiteral(p.name))) { method = null; reason = 'dynamic-fetch-options' }
+          else {
+            const methods = options.properties.filter(p => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === 'method')
+            if (methods.length > 1) { method = null; reason = 'duplicate-fetch-method' }
+            else if (methods.length === 1 && ts.isPropertyAssignment(methods[0])) {
+              const raw = literal(methods[0].initializer)?.toUpperCase()
+              method = API_RELATIONSHIP_METHODS.find(m => m === raw) ?? null
+              if (!method) reason = 'dynamic-or-unsupported-method'
+            }
+          }
+        }
+        add(n, { kind: 'request', name, method, path: url, reason: reason ?? (url === null ? 'dynamic-url' : null) })
+      } else if (bindings.some(b => b.localName === name) || symbols.some(s => s.name === name)) {
+        add(n, { kind: 'call', name, method: null, path: null, reason: declarations.get(name) === 1 && !unsafe.has(name) ? null : 'ambiguous-or-mutated-binding' })
+      }
+    }
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && ['get', 'post', 'put', 'patch', 'delete'].includes(n.expression.name.text)) {
+      const p = sf.getLineAndCharacterOfPosition(n.getStart(sf))
+      const receiver = ts.isIdentifier(n.expression.expression) ? n.expression.expression.text : null
+      const authenticated = receiver !== null && routes.some(r => r.framework === 'express' && r.kind === 'router' && r.status === 'static' && r.name === receiver)
+      if (authenticated && !routes.some(r => r.kind === 'route' && r.framework === 'express' && r.line === p.line + 1 && r.column === p.character)) add(n, { kind: 'unsupported-route', name: n.expression.name.text, method: null, path: literal(n.arguments[0]), reason: 'unsupported-express-registration-syntax' })
+      if (!authenticated && n.arguments.length >= 2 && literal(n.arguments[0])?.startsWith('/')) add(n, { kind: 'unsupported-route', name: n.expression.name.text, method: null, path: literal(n.arguments[0]), reason: 'unsupported-router-profile' })
+    }
+    if (ts.isTypeReferenceNode(n)) {
+      const name = ts.isIdentifier(n.typeName) ? n.typeName.text : null
+      add(n, { kind: 'type-reference', name, method: null, path: null, reason: name && declarations.get(name) === 1 ? null : 'missing-or-unsupported-declaration-identity' })
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return { revision: API_RELATIONSHIP_PRODUCER, crossLayerRevision: 'cross-layer-v1', status: 'complete', observations }
 }
 
 // ---------------------------------------------------------------------------
@@ -341,7 +444,7 @@ function briefSignature(node: ts.Node, sourceFile: ts.SourceFile): string {
  */
 function languageOf(filePath: string): SourceLanguage {
   const ext = path.extname(filePath).toLowerCase()
-  if (ext === '.ts' || ext === '.tsx') return 'typescript'
+  if (ext === '.ts' || ext === '.tsx' || ext === '.mts' || ext === '.cts') return 'typescript'
   return 'javascript'
 }
 
@@ -593,7 +696,7 @@ function extractJsFrameworkEvidence(sf: ts.SourceFile, file: string, symbols: Sy
   return facts
 }
 
-function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[]): void {
+function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[], audit?: TsAuditCollector): void {
   const shadowed = new Set<string>()
   const mutated = new Set<string>()
   let unsupportedExportMutation = false
@@ -618,6 +721,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     ts.forEachChild(n, scan)
   }
   scan(sf)
+  if (audit) audit.unsafeRequireBinding = shadowed.has('require') || mutated.has('require')
   const span = (n: ts.Node) => ({ startLine: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, endLine: sf.getLineAndCharacterOfPosition(n.end - 1).line + 1 })
   const binding = (n: ts.Node, localName: string, importedName: string, sourceSpecifier: string, syntaxKind: 'esm' | 'commonjs', wholeModule = false) => {
     bindings.push({ localName, importedName, sourceSpecifier, syntaxKind, ...(wholeModule ? { wildcard: true } : {}), ...span(n), resolutionStatus: mutated.has(localName) ? 'unresolved' : 'observed' })
@@ -625,6 +729,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
   const literalRequire = (n: ts.Node | undefined): string | undefined => {
     if (!n || !ts.isCallExpression(n) || !ts.isIdentifier(n.expression) || n.expression.text !== 'require') return
     if (shadowed.has('require') || mutated.has('require') || n.arguments.length !== 1 || !ts.isStringLiteral(n.arguments[0])) {
+      if (audit) audit.unsupportedRequire = true
       warnings.push(`Unsupported require at line ${span(n).startLine}.`); return
     }
     return n.arguments[0].text
@@ -643,14 +748,21 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       const spec = literalRequire(d.initializer)
       if (spec === undefined) continue
       imports.push(spec)
-      if (ts.isIdentifier(d.name)) binding(d, d.name.text, '*', spec, 'commonjs', true)
+      const auditNames: string[] = []
+      if (ts.isIdentifier(d.name)) { binding(d, d.name.text, '*', spec, 'commonjs', true); auditNames.push('*') }
       else if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) {
-        if (!el.dotDotDotToken && !el.initializer && ts.isIdentifier(el.name) && (!el.propertyName || ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName))) binding(el, el.name.text, el.propertyName?.getText(sf).replace(/^['"]|['"]$/g, '') ?? el.name.text, spec, 'commonjs')
+        if (!el.dotDotDotToken && !el.initializer && ts.isIdentifier(el.name) && (!el.propertyName || ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName))) {
+          const imported = el.propertyName?.getText(sf).replace(/^['"]|['"]$/g, '') ?? el.name.text
+          binding(el, el.name.text, imported, spec, 'commonjs')
+          auditNames.push(imported)
+        } else if (audit) audit.unsupportedRequire = true
       }
+      else if (audit) audit.unsupportedRequire = true
+      audit?.requires.push({ node: d, specifier: spec, names: auditNames })
     }
     if (ts.isExpressionStatement(n)) {
       const spec = literalRequire(n.expression)
-      if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs') }
+      if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs'); audit?.requires.push({ node: n, specifier: spec, names: [] }) }
     }
   }
   const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
@@ -669,7 +781,10 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
         if (kind === 'module-exports') wholeModuleAssignments++
         const unconditional = ts.isExpressionStatement(n.parent) && ts.isSourceFile(n.parent.parent)
         const safe = unconditional && !shadowed.has(global) && !mutated.has(global)
-        const add = (exportedName: string | null, rhs: ts.Node) => facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
+        const add = (exportedName: string | null, rhs: ts.Node) => {
+          facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
+          audit?.commonJsExports.push({ node: n, fact: facts[facts.length - 1]! })
+        }
         if (name === null && ts.isObjectLiteralExpression(n.right)) {
           for (const p of n.right.properties) {
             if (ts.isShorthandPropertyAssignment(p)) add(p.name.text, p.name)
@@ -682,6 +797,7 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     ts.forEachChild(n, visit)
   }
   visit(sf)
+  if (audit) audit.unsupportedExportMutation = unsupportedExportMutation
   for (const fact of facts) {
     if (unsupportedExportMutation) { fact.resolutionStatus = 'unresolved'; fact.reason = 'Unsupported CommonJS mutation or alias.'; continue }
     if (wholeModuleAssignments > 1 || wholeModuleAssignments && facts.some(f => f.assignmentKind === 'exports-member')) {
@@ -697,4 +813,543 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       exports.push(fact.exportedName ?? fact.bindingName)
     } else { fact.resolutionStatus = matches.length > 1 ? 'ambiguous' : 'unresolved'; fact.reason = 'No unique immutable local declaration.' }
   }
+}
+
+// ---------------------------------------------------------------------------
+// v1.15.0 Batch 2: source-audit facts from the already-parsed TypeScript AST
+// ---------------------------------------------------------------------------
+
+interface TsAuditCollector {
+  requires: Array<{ node: ts.Node; specifier: string; names: string[] }>
+  commonJsExports: Array<{ node: ts.Node; fact: CommonJsExportFact }>
+  unsupportedExportMutation: boolean
+  unsupportedRequire: boolean
+  unsafeRequireBinding: boolean
+}
+
+/**
+ * Builds raw audit facts from the AST that `extractFromSource` already created;
+ * no second parse happens. Capabilities are `complete` only within the declared
+ * syntactic profile: top-level named declarations, static ES imports/exports,
+ * top-level literal `require` and top-level CommonJS export assignments.
+ */
+function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector): SourceAuditExtractionPayload {
+  const facts: SourceAuditFact[] = []
+  const capabilities = auditCapabilityMap('unsupported')
+  capabilities.declarations = 'complete'
+  capabilities.imports = 'complete'
+  capabilities.exports = 'complete'
+  capabilities['source-ranges'] = parseErrors ? 'partial' : 'complete'
+  const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
+  const note = (code: string, message: string, node?: ts.Node): void => {
+    const position = node ? sf.getLineAndCharacterOfPosition(node.getStart(sf)) : undefined
+    diagnostics.push({ code, message, span: position ? { path: filePath, startLine: position.line + 1, startColumn: position.character, endLine: null, endColumn: null } : null })
+  }
+  const partial = (capability: 'declarations' | 'imports' | 'exports', code: string, message: string, node?: ts.Node): void => {
+    capabilities[capability] = 'partial'
+    note(code, message, node)
+  }
+  if (parseErrors) {
+    const first = (sf as unknown as { parseDiagnostics?: ReadonlyArray<{ start?: number }> }).parseDiagnostics?.[0]
+    for (const capability of ['declarations', 'imports', 'exports'] as const) capabilities[capability] = 'partial'
+    diagnostics.push({
+      code: 'syntax-errors',
+      message: 'The parser reported syntax diagnostics; end positions are omitted and enumeration is partial.',
+      span: first?.start !== undefined ? auditSpanAt(sf, filePath, first.start, first.start, false) : null,
+    })
+  }
+  const exact = !parseErrors
+  const span = (node: ts.Node) => auditSpanAt(sf, filePath, node.getStart(sf), node.getEnd(), exact)
+  const base = { id: '', extractionMethod: 'typescript-ast' as const }
+
+  // Local export clauses make a same-named declaration explicitly exported.
+  const locallyExported = new Set<string>()
+  for (const statement of sf.statements) {
+    if (ts.isExportDeclaration(statement) && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      for (const element of statement.exportClause.elements) locallyExported.add((element.propertyName ?? element.name).text)
+    }
+  }
+  const declare = (node: ts.Node, name: string, kind: string, explicit: boolean, isDefault: boolean): void => {
+    const exported = explicit || locallyExported.has(name)
+    facts.push({
+      ...base, kind: 'declaration', span: span(node), name, symbolId: '', declarationKind: kind,
+      visibility: exported ? 'public' : 'module', exported, exportOrigin: exported ? 'declared-export' : 'none',
+    })
+    if (explicit) {
+      facts.push({ ...base, kind: 'export', span: span(node), name: isDefault ? 'default' : name, exportOrigin: 'declared-export', visibility: 'public', exported: true, symbolId: '' })
+    }
+  }
+
+  for (const statement of sf.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      if (!ts.isStringLiteral(statement.moduleSpecifier)) { partial('imports', 'unsupported-import-specifier', 'Import specifier is not a string literal.', statement); continue }
+      const clause = statement.importClause
+      const names: string[] = []
+      if (clause?.name) names.push('default')
+      const named = clause?.namedBindings
+      if (named && ts.isNamespaceImport(named)) names.push('*')
+      if (named && ts.isNamedImports(named)) for (const element of named.elements) names.push((element.propertyName ?? element.name).text)
+      facts.push({ ...base, kind: 'import', span: span(statement), sourceSpecifier: statement.moduleSpecifier.text, importedNames: names, importResolution: 'observed' })
+    } else if (ts.isImportEqualsDeclaration(statement)) {
+      if (ts.isExternalModuleReference(statement.moduleReference) && ts.isStringLiteral(statement.moduleReference.expression)) {
+        facts.push({ ...base, kind: 'import', span: span(statement), sourceSpecifier: statement.moduleReference.expression.text, importedNames: ['*'], importResolution: 'observed' })
+      }
+    } else if (ts.isExportDeclaration(statement)) {
+      const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : undefined
+      if (statement.moduleSpecifier && specifier === undefined) { partial('exports', 'unsupported-export-specifier', 'Re-export specifier is not a string literal.', statement); continue }
+      const clause = statement.exportClause
+      if (!clause) {
+        if (specifier !== undefined) facts.push({ ...base, kind: 'export', span: span(statement), name: '*', exportOrigin: 're-export', sourceSpecifier: specifier, exported: true })
+      } else if (ts.isNamespaceExport(clause)) {
+        facts.push({ ...base, kind: 'export', span: span(statement), name: clause.name.text, exportOrigin: 're-export', ...(specifier !== undefined ? { sourceSpecifier: specifier } : {}), exported: true })
+      } else {
+        for (const element of clause.elements) {
+          facts.push({
+            ...base, kind: 'export', span: span(element), name: element.name.text, exported: true,
+            exportOrigin: specifier !== undefined ? 're-export' : 'declared-export',
+            ...(specifier !== undefined ? { sourceSpecifier: specifier } : {}),
+          })
+        }
+      }
+    } else if (ts.isExportAssignment(statement)) {
+      facts.push({ ...base, kind: 'export', span: span(statement), name: statement.isExportEquals ? 'export=' : 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isFunctionDeclaration(statement)) {
+      const explicit = hasExportKeyword(statement)
+      if (statement.name) declare(statement, statement.name.text, 'function', explicit, hasDefaultKeyword(statement))
+      else if (explicit) facts.push({ ...base, kind: 'export', span: span(statement), name: 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isClassDeclaration(statement)) {
+      const explicit = hasExportKeyword(statement)
+      if (statement.name) declare(statement, statement.name.text, 'class', explicit, hasDefaultKeyword(statement))
+      else if (explicit) facts.push({ ...base, kind: 'export', span: span(statement), name: 'default', exportOrigin: 'declared-export', exported: true })
+    } else if (ts.isInterfaceDeclaration(statement)) {
+      declare(statement, statement.name.text, 'interface', hasExportKeyword(statement), hasDefaultKeyword(statement))
+    } else if (ts.isTypeAliasDeclaration(statement)) {
+      declare(statement, statement.name.text, 'type', hasExportKeyword(statement), false)
+    } else if (ts.isEnumDeclaration(statement)) {
+      declare(statement, statement.name.text, 'enum', hasExportKeyword(statement), false)
+    } else if (ts.isVariableStatement(statement)) {
+      const explicit = hasExportKeyword(statement)
+      const kind = statement.declarationList.flags & ts.NodeFlags.Const ? 'const' : 'variable'
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) declare(declaration, declaration.name.text, kind, explicit, false)
+        else {
+          partial('declarations', 'destructured-declaration-unsupported', 'A destructured top-level declaration is not enumerated.', declaration)
+          if (explicit) partial('exports', 'destructured-export-unsupported', 'A destructured exported declaration is not enumerated.', declaration)
+        }
+      }
+    } else if (ts.isModuleDeclaration(statement)) {
+      partial('declarations', 'module-declaration-unsupported', 'Namespace and module declarations are outside the extraction profile.', statement)
+      if (hasExportKeyword(statement)) partial('exports', 'module-export-unsupported', 'An exported namespace or module declaration is not enumerated.', statement)
+    }
+  }
+
+  // CommonJS imports and exports observed by the existing module-evidence pass.
+  for (const entry of collector.requires) {
+    facts.push({ ...base, kind: 'import', span: span(entry.node), sourceSpecifier: entry.specifier, importedNames: entry.names, importResolution: 'observed' })
+  }
+  let uncertainCommonJs = collector.unsupportedExportMutation
+  for (const entry of collector.commonJsExports) {
+    if (entry.fact.resolutionStatus === 'unresolved' || entry.fact.resolutionStatus === 'ambiguous') uncertainCommonJs = true
+    facts.push({ ...base, kind: 'export', span: span(entry.node), name: entry.fact.exportedName ?? 'module.exports', exportOrigin: 'commonjs', exported: true })
+  }
+  if (uncertainCommonJs) partial('exports', 'commonjs-export-uncertain', 'CommonJS exports include conditional, mutated, aliased or competing assignments.')
+
+  // Reuse the parsed tree for literal calls outside the top-level binding
+  // profile. Keep those existing facts/spans unchanged and never duplicate them.
+  const recordedRequires = new Set(collector.requires.map(({ node }) => {
+    const call = ts.isVariableDeclaration(node) ? node.initializer : ts.isExpressionStatement(node) ? node.expression : node
+    return call?.getStart(sf)
+  }))
+  const scan = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
+      const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require'
+      if (dynamicImport || requireCall && !recordedRequires.has(node.getStart(sf))) {
+        if (requireCall && collector.unsafeRequireBinding) {
+          partial('imports', 'unsupported-require', 'A shadowed or assigned require binding cannot establish a module import.', node)
+        } else if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) {
+          partial('imports', dynamicImport ? 'unsupported-dynamic-import' : 'unsupported-require', 'The import target is outside the single string-literal call profile.', node)
+        } else {
+          facts.push({ ...base, kind: 'import', span: span(node), sourceSpecifier: node.arguments[0].text,
+            importedNames: ts.isExpressionStatement(node.parent) ? [] : ['*'], importResolution: 'observed' })
+        }
+      }
+    }
+    ts.forEachChild(node, scan)
+  }
+  scan(sf)
+  if (collector.unsupportedRequire) partial('imports', 'unsupported-require', 'A require call or binding form is outside the static profile.')
+  collectTsObservations(sf, filePath, exact, facts, capabilities, diagnostics)
+  return { facts, capabilities, diagnostics }
+}
+
+function hasDefaultKeyword(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined
+  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false
+}
+
+function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean) {
+  const from = sf.getLineAndCharacterOfPosition(start)
+  const to = sf.getLineAndCharacterOfPosition(end)
+  return {
+    path: filePath,
+    startLine: from.line + 1,
+    startColumn: from.character,
+    endLine: exact ? to.line + 1 : null,
+    endColumn: exact ? to.character : null,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// v1.15.0 Batch 3: bounded literal observations from the same TypeScript AST
+// ---------------------------------------------------------------------------
+
+const TEST_FUNCTIONS = new Set(['describe', 'it', 'test'])
+const LEGACY_TEST_ALIASES = new Set(['xit', 'xdescribe', 'xtest', 'fit', 'fdescribe', 'ftest'])
+const PROCESS_FUNCTIONS = new Set(['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'])
+const CHILD_PROCESS_MODULES = new Set(['child_process', 'node:child_process'])
+const FIXTURE_SEGMENT = /(^|[\\/])(?:__fixtures__|fixtures?)(?:[\\/]|$)/i
+const FIXTURE_PATH_CALLS = new Set(['join', 'resolve', 'readFileSync', 'readFile', 'existsSync', 'statSync', 'readdirSync', 'copyFileSync', 'cpSync', 'createReadStream', 'accessSync'])
+const PATH_COMPOSERS = new Set(['join', 'resolve'])
+const IDENTIFIER_KEY = /^(?:id|ID)$|[a-z0-9]Id$|_ID$|_id$/
+const REGISTRY_NAME = /(?:registry|detectors?|rules)$/i
+const NPM_RUN = /\bnpm run ([A-Za-z0-9][A-Za-z0-9:_.-]*)/g
+const TEST_PATH = /(^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/
+
+type StaticString = { kind: 'literal' | 'binding'; text: string; bound?: string } | { kind: 'ignored' } | { kind: 'dynamic' }
+
+/**
+ * Collects identifier, test, fixture and process observations while walking the already-built AST.
+ * Syntax profile (anything outside it makes the affected family partial, never an invented fact):
+ * - identifier-literals: string values of `id`-like object keys and top-level `*_ID` constants, exact one-hop
+ *   bindings to a uniquely declared top-level string const, (identifier-property and literal-constant observations; no registry membership is inferred).
+ * - test-observations: direct describe/it/test calls (+ .skip/.only) not shadowed by a local declaration, literal titles,
+ *   and literal `npm run <script>` text in test files or inside test calls.
+ * - fixture-references: relative import/require specifiers and join/resolve/fs-call string arguments with a fixtures segment.
+ * - process-observations: child_process exec/spawn-family calls bound through a top-level import/require, literal
+ *   `shell: true`, and `.split("\n")` / `.split("\\")` literals.
+ */
+function collectTsObservations(
+  sf: ts.SourceFile,
+  filePath: string,
+  exact: boolean,
+  facts: SourceAuditFact[],
+  capabilities: SourceAuditExtractionPayload['capabilities'],
+  diagnostics: SourceAuditExtractionPayload['diagnostics'],
+): void {
+  const families = ['identifier-literals', 'test-observations', 'fixture-references', 'process-observations'] as const
+  for (const family of families) capabilities[family] = exact ? 'complete' : 'partial'
+  const base = { id: '', extractionMethod: 'typescript-ast' as const }
+  const span = (node: ts.Node) => auditSpanAt(sf, filePath, node.getStart(sf), node.getEnd(), exact)
+  const uncertain = (family: (typeof families)[number], code: string, message: string, node: ts.Node): void => {
+    capabilities[family] = 'partial'
+    if (diagnostics.length < 200) {
+      const at = sf.getLineAndCharacterOfPosition(node.getStart(sf))
+      diagnostics.push({ code, message, span: { path: filePath, startLine: at.line + 1, startColumn: at.character, endLine: null, endColumn: null } })
+    }
+  }
+  const isTestFile = TEST_PATH.test(filePath)
+
+  // Declaration census: a name declared more than once (or non-uniquely) is shadowed/ambiguous for ownership checks.
+  const declared = new Map<string, number>()
+  const addName = (name: string): void => { declared.set(name, (declared.get(name) ?? 0) + 1) }
+  const addBinding = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) addName(name.text)
+    else for (const element of name.elements) if (!ts.isOmittedExpression(element)) addBinding(element.name)
+  }
+  const censusVisit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) addBinding(node.name)
+    else if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) && node.name) addName(node.name.text)
+    else if (ts.isImportClause(node) && node.name) addName(node.name.text)
+    else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node) || ts.isImportEqualsDeclaration(node)) addName(node.name.text)
+    ts.forEachChild(node, censusVisit)
+  }
+  censusVisit(sf)
+  const uniquelyDeclared = (name: string): boolean => declared.get(name) === 1
+
+  // Unaliased imports of the test names count as the runner; every other local declaration shadows it.
+  const importedTestNames = new Set<string>()
+  // child_process bindings from top-level imports / requires.
+  const processNamed = new Map<string, string>()
+  const processNamespaces = new Set<string>()
+  const topLevelStrings = new Map<string, string>()
+  let cpRecognized = 0
+  const isCp = (e: ts.Expression | undefined): e is ts.StringLiteral => !!e && ts.isStringLiteral(e) && CHILD_PROCESS_MODULES.has(e.text)
+  const requireOf = (e: ts.Expression | undefined): ts.StringLiteral | undefined =>
+    e && ts.isCallExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'require' && !declared.has('require') && e.arguments.length === 1 && ts.isStringLiteral(e.arguments[0]!) ? (e.arguments[0] as ts.StringLiteral) : undefined
+  for (const statement of sf.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause
+      const named = clause?.namedBindings
+      if (named && ts.isNamedImports(named)) {
+        for (const element of named.elements) if (!element.propertyName && TEST_FUNCTIONS.has(element.name.text)) importedTestNames.add(element.name.text)
+      }
+      if (ts.isStringLiteral(statement.moduleSpecifier) && CHILD_PROCESS_MODULES.has(statement.moduleSpecifier.text)) {
+        cpRecognized++
+        if (clause?.name) processNamespaces.add(clause.name.text)
+        if (named && ts.isNamespaceImport(named)) processNamespaces.add(named.name.text)
+        if (named && ts.isNamedImports(named)) {
+          for (const element of named.elements) {
+            const imported = (element.propertyName ?? element.name).text
+            if (PROCESS_FUNCTIONS.has(imported)) processNamed.set(element.name.text, imported)
+          }
+        }
+      }
+    } else if (ts.isImportEqualsDeclaration(statement) && ts.isExternalModuleReference(statement.moduleReference) && isCp(statement.moduleReference.expression)) {
+      cpRecognized++
+      processNamespaces.add(statement.name.text)
+    } else if (ts.isVariableStatement(statement)) {
+      const isConst = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0
+      for (const declaration of statement.declarationList.declarations) {
+        const literal = declaration.initializer ? staticLiteralText(declaration.initializer) : undefined
+        if (isConst && ts.isIdentifier(declaration.name) && literal !== undefined) topLevelStrings.set(declaration.name.text, literal)
+        if (isCp(requireOf(declaration.initializer))) {
+          cpRecognized++
+          if (ts.isIdentifier(declaration.name)) processNamespaces.add(declaration.name.text)
+          else if (ts.isObjectBindingPattern(declaration.name)) {
+            for (const element of declaration.name.elements) {
+              const imported = (element.propertyName && ts.isIdentifier(element.propertyName) ? element.propertyName : ts.isIdentifier(element.name) ? element.name : undefined)?.text
+              if (imported && PROCESS_FUNCTIONS.has(imported) && ts.isIdentifier(element.name)) processNamed.set(element.name.text, imported)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const resolveString = (expression: ts.Expression): StaticString => {
+    const unwrapped = unwrapExpression(expression)
+    const literal = staticLiteralText(unwrapped)
+    if (literal !== undefined) return { kind: 'literal', text: literal }
+    if (ts.isIdentifier(unwrapped)) {
+      const bound = topLevelStrings.get(unwrapped.text)
+      if (bound !== undefined && uniquelyDeclared(unwrapped.text)) return { kind: 'binding', text: bound, bound: unwrapped.text }
+      return { kind: 'dynamic' }
+    }
+    if (ts.isNumericLiteral(unwrapped) || ts.isBigIntLiteral(unwrapped) || unwrapped.kind === ts.SyntaxKind.TrueKeyword || unwrapped.kind === ts.SyntaxKind.FalseKeyword || unwrapped.kind === ts.SyntaxKind.NullKeyword) return { kind: 'ignored' }
+    return { kind: 'dynamic' }
+  }
+  const pushLiteral = (kind: SourceAuditFact['kind'], observationKind: NonNullable<SourceAuditFact['observationKind']>, node: ts.Node, name: string, value?: string): void => {
+    facts.push({ ...base, kind, span: span(node), observationKind, name, ...(value !== undefined ? { value } : {}) })
+  }
+
+  let testDepth = 0
+  const attributedShell = new Set<ts.Node>()
+  let cpLiterals = 0
+  const registryValue = (key: string, init: ts.Expression, keyNode: ts.Node): void => {
+    const resolved = resolveString(init)
+    if (resolved.kind === 'literal') pushLiteral('identifier-literal', 'registry-id', init, key, resolved.text)
+    else if (resolved.kind === 'binding') pushLiteral('identifier-literal', 'registry-id', init, `${key}<-${resolved.bound}`, resolved.text)
+    else if (resolved.kind === 'dynamic') uncertain('identifier-literals', 'dynamic-identifier-value', `The value of identifier key "${key}" is not a static string.`, keyNode)
+  }
+
+  function isModuleSpecifier(node: ts.Node): boolean {
+    const parent = node.parent
+    return (!!parent && (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) ||
+      (!!parent && ts.isExternalModuleReference(parent))
+  }
+  function isConcatenationOperand(node: ts.Node): boolean {
+    const parent = node.parent
+    return !!parent && ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.PlusToken
+  }
+  function fixtureSpecifier(literal: ts.StringLiteral): void {
+    if (!literal.text.startsWith('.') || !FIXTURE_SEGMENT.test(literal.text)) return
+    pushLiteral('fixture-reference', 'fixture-basename', literal, literal.text, literal.text.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? literal.text)
+  }
+  function visitFixturePathCall(call: ts.CallExpression, callee: ts.Expression): void {
+    const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined
+    if (!name || !FIXTURE_PATH_CALLS.has(name)) return
+    const args = call.arguments
+    const composing = PATH_COMPOSERS.has(name)
+    const limit = composing ? args.length : Math.min(1, args.length)
+    for (let i = 0; i < limit; i++) {
+      const arg = args[i]!
+      if (ts.isTemplateExpression(arg)) {
+        if (FIXTURE_SEGMENT.test([arg.head.text, ...arg.templateSpans.map((s) => s.literal.text)].join('/'))) uncertain('fixture-references', 'dynamic-fixture-path', 'A fixture path template contains substitutions.', arg)
+        continue
+      }
+      const text = staticLiteralText(arg)
+      if (text === undefined || !FIXTURE_SEGMENT.test(text)) continue
+      const parts = [text]
+      let last: ts.Expression = arg
+      let allStatic = true
+      if (composing) {
+        for (let j = i + 1; j < args.length; j++) {
+          const next = staticLiteralText(args[j]!)
+          if (next === undefined) { allStatic = false; break }
+          parts.push(next)
+          last = args[j]!
+        }
+      }
+      if (!allStatic) { uncertain('fixture-references', 'dynamic-fixture-path', 'A fixture path continues with a non-literal segment.', arg); break }
+      const joined = parts.join('/').replace(/\\/g, '/')
+      facts.push({
+        ...base, kind: 'fixture-reference', observationKind: 'fixture-basename', name: joined,
+        span: auditSpanAt(sf, filePath, arg.getStart(sf), last.getEnd(), exact), value: joined.replace(/\/+$/, '').split('/').pop() ?? joined,
+      })
+      break
+    }
+  }
+  function visitTestCall(call: ts.CallExpression, callee: ts.Expression): boolean {
+    let testName: string | undefined
+    let modifier: 'skip' | 'only' | undefined
+    if (ts.isIdentifier(callee)) {
+      if (LEGACY_TEST_ALIASES.has(callee.text) && declared.get(callee.text) === undefined) {
+        uncertain('test-observations', 'unsupported-test-alias', `The call ${callee.text}(...) is a test alias outside the supported profile.`, call)
+        return false
+      }
+      if (TEST_FUNCTIONS.has(callee.text)) testName = callee.text
+    } else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && TEST_FUNCTIONS.has(callee.expression.text)) {
+      testName = callee.expression.text
+      if (callee.name.text === 'skip' || callee.name.text === 'only') modifier = callee.name.text
+      else {
+        // describe.each, it.concurrent, test.describe, ... are outside the supported profile.
+        if (declared.get(testName) === undefined || importedTestNames.has(testName)) {
+          uncertain('test-observations', 'unsupported-test-modifier', `${testName}.${callee.name.text}(...) is outside the supported test profile.`, call)
+        }
+        return false
+      }
+    }
+    if (!testName) return false
+    const owner = declared.get(testName)
+    if (owner !== undefined && !(owner === 1 && importedTestNames.has(testName))) {
+      uncertain('test-observations', 'test-call-shadowed', `${testName} is declared locally, so the call is not attributed to a test runner.`, call)
+      return false
+    }
+    const title = call.arguments[0]
+    if (modifier) pushLiteral('test-observation', modifier === 'skip' ? 'test-modifier-skip' : 'test-modifier-only', callee, testName)
+    if (!title) return true
+    const literal = staticLiteralText(title)
+    if (literal !== undefined) pushLiteral('test-observation', 'test-title', title, testName, literal)
+    else uncertain('test-observations', 'dynamic-test-title', `The title of ${testName}(...) is not a static string.`, title)
+    return true
+  }
+  function visitProcessCall(call: ts.CallExpression, callee: ts.Expression): void {
+    let fn: string | undefined
+    if (ts.isIdentifier(callee) && uniquelyDeclared(callee.text)) fn = processNamed.get(callee.text)
+    else if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && processNamespaces.has(callee.expression.text) && uniquelyDeclared(callee.expression.text)) {
+      if (PROCESS_FUNCTIONS.has(callee.name.text)) fn = callee.name.text
+    } else if (ts.isElementAccessExpression(callee) && ts.isIdentifier(callee.expression) && processNamespaces.has(callee.expression.text)) {
+      uncertain('process-observations', 'dynamic-process-target', 'A child_process member is invoked through a computed key.', call)
+      return
+    }
+    if (!fn) return
+    const target = call.arguments[0]
+    const resolved = target ? resolveString(target) : ({ kind: 'dynamic' } as StaticString)
+    if (resolved.kind === 'literal' || resolved.kind === 'binding') pushLiteral('process-observation', 'process-invocation', call, fn, resolved.text)
+    else {
+      pushLiteral('process-observation', 'process-invocation', call, fn)
+      uncertain('process-observations', 'dynamic-process-target', `The command argument of ${fn}(...) is not a static string.`, target ?? call)
+    }
+    call.arguments.forEach((arg, index) => {
+      const value = unwrapExpression(arg)
+      if (ts.isObjectLiteralExpression(value)) {
+        for (const property of value.properties) {
+          if (ts.isSpreadAssignment(property)) uncertain('process-observations', 'unsupported-process-options', 'Spread options cannot be enumerated.', property)
+          else if ((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && property.name.text === 'shell') {
+            const initializer = ts.isPropertyAssignment(property) ? unwrapExpression(property.initializer) : undefined
+            if (initializer?.kind === ts.SyntaxKind.TrueKeyword) { attributedShell.add(property); pushLiteral('process-observation', 'process-option', property, 'shell', 'true') }
+            else if (initializer?.kind !== ts.SyntaxKind.FalseKeyword) uncertain('process-observations', 'dynamic-process-option', 'The shell option is not a literal boolean.', property)
+          }
+        }
+      } else if (index >= 1 && !ts.isArrayLiteralExpression(value) && !ts.isArrowFunction(value) && !ts.isFunctionExpression(value) && staticLiteralText(value) === undefined) {
+        uncertain('process-observations', 'unresolved-process-options', 'A non-literal argument may carry process options.', arg)
+      }
+    })
+  }
+
+  const visit = (node: ts.Node): void => {
+    // Identifier constants and registry objects (top-level declarations only).
+    if (ts.isVariableStatement(node) && node.parent === sf) {
+      const isConst = (node.declarationList.flags & ts.NodeFlags.Const) !== 0
+      for (const declaration of node.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
+        const name = declaration.name.text
+        if (isConst && IDENTIFIER_KEY.test(name)) registryValue(name, declaration.initializer, declaration.name)
+        const init = unwrapExpression(declaration.initializer)
+        // Registry membership cannot be established from a name alone: report the gap instead of inventing registry-id facts.
+        if (isConst && REGISTRY_NAME.test(name) && ts.isObjectLiteralExpression(init) && init.properties.length > 0) {
+          uncertain('identifier-literals', 'registry-membership-unsupported', `Keys of "${name}" are not observed as identifiers: registry membership is not established from a name.`, declaration.name)
+        }
+      }
+    }
+    // A literal shell: true outside a recognised child_process call is not attributed to a process call.
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && node.name.text === 'shell' && unwrapExpression(node.initializer).kind === ts.SyntaxKind.TrueKeyword && !attributedShell.has(node)) {
+      uncertain('process-observations', 'unattributed-shell-option', 'A shell: true option appears outside a recognised child_process call.', node)
+    }
+    // Identifier-like object keys anywhere.
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) && IDENTIFIER_KEY.test(node.name.text)) {
+      registryValue(node.name.text, node.initializer, node)
+    } else if (ts.isShorthandPropertyAssignment(node) && IDENTIFIER_KEY.test(node.name.text)) {
+      registryValue(node.name.text, node.name, node)
+    }
+
+    // Module specifiers: fixture references and child_process literal accounting.
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      fixtureSpecifier(node.moduleSpecifier)
+      if (CHILD_PROCESS_MODULES.has(node.moduleSpecifier.text)) cpLiterals++
+      return
+    }
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && ts.isStringLiteral(node.moduleReference.expression)) {
+      fixtureSpecifier(node.moduleReference.expression)
+      if (isCp(node.moduleReference.expression)) cpLiterals++
+      return
+    }
+
+    let enteredTest = false
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const required = requireOf(node)
+      if (required) {
+        fixtureSpecifier(required)
+        if (CHILD_PROCESS_MODULES.has(required.text)) cpLiterals++
+      }
+      enteredTest = visitTestCall(node, callee)
+      visitProcessCall(node, callee)
+      visitFixturePathCall(node, callee)
+      if (ts.isPropertyAccessExpression(callee) && callee.name.text === 'split' && node.arguments.length >= 1) {
+        const literal = staticLiteralText(node.arguments[0]!)
+        if (literal === '\n') pushLiteral('process-observation', 'newline-split', node, 'split', literal)
+        else if (literal === '\\') pushLiteral('process-observation', 'path-separator-split', node, 'split', literal)
+      }
+    }
+    // Embedded npm run commands inside string-like nodes.
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      if ((testDepth > 0 || isTestFile) && !isModuleSpecifier(node)) {
+        const matches = [...node.text.matchAll(NPM_RUN)]
+        if (matches.length > 0) {
+          if (isConcatenationOperand(node)) uncertain('test-observations', 'dynamic-test-command', 'A literal containing "npm run" is part of a concatenated command.', node)
+          else for (const match of matches) pushLiteral('test-observation', 'embedded-test-command', node, `npm run ${match[1]}`, node.text)
+        }
+      }
+      if (ts.isStringLiteral(node) && CHILD_PROCESS_MODULES.has(node.text) && !isModuleSpecifier(node) && !(ts.isCallExpression(node.parent) && requireOf(node.parent))) cpLiterals++
+    } else if (ts.isTemplateExpression(node) && (testDepth > 0 || isTestFile)) {
+      const staticText = [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join('')
+      if (/\bnpm run\b/.test(staticText)) uncertain('test-observations', 'dynamic-test-command', 'A template with substitutions contains "npm run"; the command is not exact.', node)
+    }
+
+    if (enteredTest) testDepth++
+    ts.forEachChild(node, visit)
+    if (enteredTest) testDepth--
+  }
+
+  visit(sf)
+  if (isTestFile && capabilities['fixture-references'] === 'complete') {
+    // Parser-backed path literals cannot prove the absence of an arbitrary basename occurrence in raw test content.
+    capabilities['fixture-references'] = 'partial'
+    diagnostics.push({ code: 'fixture-text-occurrence-unavailable', message: 'Fixture references are parser-backed path literals only; raw basename text occurrences are not enumerated.', span: null })
+  }
+  if (cpLiterals > cpRecognized) uncertain('process-observations', 'unsupported-process-import', 'child_process is referenced in a form outside the top-level import/require profile.', sf)
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isNonNullExpression(current)) current = current.expression
+  return current
+}
+
+/** Exact text of a string literal or substitution-free template, otherwise undefined. */
+function staticLiteralText(expression: ts.Expression): string | undefined {
+  const value = unwrapExpression(expression)
+  return ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value) ? value.text : undefined
 }

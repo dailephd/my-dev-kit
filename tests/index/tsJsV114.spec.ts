@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { createHash } from 'node:crypto'
-import { TypeScriptAdapter } from '../../src/languages/typescript/adapter.js'
+import { TypeScriptAdapter, enumerateJsTsCandidatePaths, resolveJsTsCandidates } from '../../src/languages/typescript/adapter.js'
 import { PythonAdapter } from '../../src/languages/python/adapter.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
@@ -16,6 +16,26 @@ import * as cacheMetadata from '../../src/indexing/cacheMetadata.js'
 import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
 
 const adapter = new TypeScriptAdapter()
+describe('canonical TypeScript/JavaScript source candidates', () => {
+  it.each(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs'])('discovers and resolves %s and its directory index', ext => {
+    const paths = ['src/peer' + ext, 'src/peer/index' + ext]
+    expect(adapter.extensions).toContain(ext)
+    expect(resolveJsTsCandidates('./peer', 'src/main.ts', [...paths].reverse())).toEqual(paths)
+    const root = fixture({ 'src/main.ts': 'import "./peer";', [paths[0]]: 'export const peer = 1;' })
+    const index = buildIndex({ repoRoot: root, sourceRoots: ['src'] }).index
+    expect(index.files.map(f => f.path)).toContain(paths[0])
+    expect(index.graph!.fileDeps).toContainEqual({ from: 'src/main.ts', to: paths[0], kind: 'import' })
+  })
+  it('canonicalizes, deduplicates and sorts the same enumerated and selected candidates', () => {
+    const candidates = enumerateJsTsCandidatePaths('.\\sub\\..\\peer', 'src\\main.ts')!
+    expect(candidates).toHaveLength(16)
+    expect(candidates).toEqual([...new Set(candidates)].sort())
+    expect(candidates.every(p => p.startsWith('src/peer') && !p.includes('\\') && !p.includes('..'))).toBe(true)
+    expect(resolveJsTsCandidates('./peer.mjs', 'src/main.ts', ['src/peer.mts', 'src/peer.mjs', 'src/peer.mts']))
+      .toEqual(['src/peer.mjs', 'src/peer.mts'])
+    expect(adapter.resolveImportToFile('./peer.mjs', 'src/main.ts', ['src/peer.mts', 'src/peer.mjs'])).toBeNull()
+  })
+})
 const taskRoot = allocateV114OutputDir('ts-js-v114')
 function fixture(files: Record<string, string>) {
   mkdirSync(taskRoot, { recursive: true })
@@ -159,12 +179,13 @@ describe('B05 selected mixed source resolution and calls', () => {
   it.each([
     ['./left', ['left.ts'], 'left.ts'], ['./left.js', ['left.ts'], 'left.ts'],
     ['./left.jsx', ['left.tsx'], 'left.tsx'], ['./pkg', ['pkg/index.js'], 'pkg/index.js'],
-    ['./left.js', ['left.js', 'left.ts'], 'left.js'], ['./left.ts', ['left.ts', 'left.js'], 'left.ts'],
+    // Source candidates are conservative possibilities, not runtime probe-order binding.
+    ['./left.js', ['left.js', 'left.ts'], null], ['./left.ts', ['left.ts', 'left.js'], 'left.ts'],
     ['./left', ['left.js', 'left.ts'], null], ['./left.js', ['left.ts', 'left.tsx'], null],
     ['./left.cjs', ['left.cjs'], 'left.cjs'], ['./left.mjs', ['left.ts'], null],
     ['package', ['package/index.js'], null],
     ['./left.py', ['left.py'], null], ['./left.kt', ['left.kt'], null], ['./left.java', ['left.java'], null],
-    ['./left.mjs', ['left.mjs'], null], ['./left.mts', ['left.mts'], null], ['./left.cts', ['left.cts'], null],
+    ['./left.mjs', ['left.mjs'], 'left.mjs'], ['./left.mts', ['left.mts'], 'left.mts'], ['./left.cts', ['left.cts'], 'left.cts'],
   ] as const)('resolves %s in %j conservatively', (spec, files, expected) => {
     expect(adapter.resolveImportToFile(spec, 'consumer.js', files)).toBe(expected)
   })
@@ -256,7 +277,7 @@ describe('B05 persistence and integration', () => {
     expect(buildCodeGraph({ symbolIndex: full.index, callGraph: full.callGraph }).edges.filter(e => e.kind === 'calls')).toHaveLength(2)
     expect(full.index.schemaVersion).toBe('3')
     expect(buildCodeGraph({ symbolIndex: full.index }).schemaVersion).toBe('1.1.0')
-    expect(CACHE_SCHEMA_VERSION).toBe('1.3.0')
+    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
     expect(JSON.parse(JSON.stringify(partial.index)).files).toEqual(full.index.files)
   })
   it('makes JSDoc descriptions searchable through the shared index', async () => {

@@ -1899,9 +1899,9 @@ Use existing `tests/fixtures/`, tests under their owning `tests/index/`, `tests/
 
 ## Version 1.15.0
 
-**Status: planned.**
+**Status: implemented in v1.15.0.**
 
-Version 1.15.0 is reserved as **KIT-API-01**.
+Version 1.15.0 retains **KIT-API-01** and adds **KIT-FACTS-01** as its first workstream under the explicit 2026-10-27 ecosystem migration decision. Both are implemented within their qualified static-evidence boundaries. The released v1.14.0 baseline and the v1.16.0, v1.17.0 and v2.0.0 reservations keep their existing scope.
 
 The goal is to add conservative static evidence for supported UI/client/API/schema/data relationships and contract-oriented change evidence after the broader framework evidence introduced in v1.14.0.
 

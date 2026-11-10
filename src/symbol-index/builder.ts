@@ -13,9 +13,12 @@
 import * as fs from 'fs'
 import { assignDeclarationIdentities } from './declarationIdentity.js'
 import { TypeScriptAdapter } from '../languages/typescript/adapter.js'
+import { PythonAdapter } from '../languages/python/adapter.js'
+import { extractAuditObservations } from './auditObservations.js'
 import type { ExtractionResult } from './symbolExtractor.js'
 import { createCallGraph } from './graphBuilder.js'
 import { createDefaultRegistry } from '../languages/registry.js'
+import { sha256Hex } from '../indexing/cacheMetadata.js'
 import type { LanguageAdapter, SourceFileInput } from '../languages/types.js'
 import {
   discoverSourceFiles,
@@ -80,6 +83,12 @@ export interface BuildResult {
    * reconstruct a full `ExtractionResult` for an unchanged file without re-parsing it.
    */
   fileExtractionMeta: Map<string, FileExtractionMeta>
+  /**
+   * Lowercase SHA-256 of the exact source bytes each indexed file was analyzed
+   * from, keyed by relative path (v1.15.0 audit provenance). Files that could
+   * not be read are absent; absence is never replaced by a hash from another read.
+   */
+  fileContentHashes: Map<string, string>
 }
 
 export type BuildIndexProgressEvent =
@@ -123,6 +132,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
   const summaries: FileSummary[] = []
   const rawExtractions: Array<{ relPath: string; extraction: ExtractionResult }> = []
   const fileExtractionMeta = new Map<string, FileExtractionMeta>()
+  const fileContentHashes = new Map<string, string>()
 
   emitBuildProgress(config, 'index-start', 'Indexing started', startTime, 0, sourceFiles.length)
   let filesIndexed = 0
@@ -130,15 +140,21 @@ export function buildIndex(config: BuildConfig): BuildResult {
   for (const { relPath, absPath } of sourceFiles) {
     let sourceText: string
     try {
-      sourceText = fs.readFileSync(absPath, 'utf-8')
+      // One read yields both the analyzed text and its content identity; the
+      // decoding is identical to readFileSync(absPath, 'utf-8').
+      const sourceBytes = fs.readFileSync(absPath)
+      sourceText = sourceBytes.toString('utf-8')
+      fileContentHashes.set(relPath, sha256Hex(sourceBytes))
     } catch {
-      continue // Skip unreadable files silently
+      continue // Unreadable files stay out of the index; the audit ledger still records them
     }
 
     const adapter = registry.adapterForFile(relPath)!
 
     const result = adapter.extractFromSource(relPath, sourceText)
     result.symbols = assignDeclarationIdentities(relPath, result.symbols)
+    // Audit facts reuse this extraction and this exact source text; nothing is read or parsed again.
+    result.sourceAudit = extractAuditObservations(relPath, sourceText, result)
     rawExtractions.push({ relPath, extraction: result })
     fileExtractionMeta.set(relPath, {
       reExportSpecifiers: result.reExportSpecifiers,
@@ -149,11 +165,13 @@ export function buildIndex(config: BuildConfig): BuildResult {
       language: result.language,
       lineCount: result.lineCount,
       imports: result.imports,
+      ...(result.sourceAudit ? { sourceAudit: result.sourceAudit } : {}),
       ...(result.importBindings ? { importBindings: result.importBindings } : {}),
       ...(result.commonJsExports ? { commonJsExports: result.commonJsExports } : {}),
       ...(result.rustSyntaxFacts ? { rustSyntaxFacts: result.rustSyntaxFacts } : {}),
       ...(result.pythonOrmFacts ? { pythonOrmFacts: result.pythonOrmFacts } : {}),
       ...(result.frameworkRouteFacts ? { frameworkRouteFacts: result.frameworkRouteFacts } : {}),
+      ...(result.apiRelationships ? { apiRelationships: result.apiRelationships } : {}),
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       exports: result.exports,
       symbols: result.symbols,
@@ -229,7 +247,7 @@ export function buildIndex(config: BuildConfig): BuildResult {
     // callGraphArtifact set by writer after writing the artifact
   }
 
-  return { index, callGraph, discovery, fileExtractionMeta }
+  return { index, callGraph, discovery, fileExtractionMeta, fileContentHashes }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +282,7 @@ export function buildGraphSection(
     }
     const adapter = registry.adapterForFile(relPath)!
     extraction.warnings = extraction.warnings?.filter(w => !w.startsWith('Configured import unresolved:'))
+    resolveAuditImports(extraction, relPath, adapter, knownFiles)
 
     for (const fact of extraction.frameworkRouteFacts ?? []) {
       if (fact.framework !== 'express' && fact.framework !== 'nestjs') continue
@@ -344,6 +363,36 @@ export function buildGraphSection(
   )
 
   return { fileDeps: uniqueDeps, symbols }
+}
+
+/**
+ * Derives the local-resolution state of audit import facts from the same
+ * selected inventory and adapter resolvers used for file dependencies. Always
+ * recomputed from the specifier, so full and partial builds agree. An
+ * unresolved import is never reported as a proven missing file.
+ */
+function resolveAuditImports(extraction: ExtractionResult, relPath: string, adapter: LanguageAdapter, knownFiles: readonly string[]): void {
+  for (const fact of extraction.sourceAudit?.facts ?? []) {
+    if (fact.kind !== 'import' || !fact.sourceSpecifier) continue
+    const specifier = fact.sourceSpecifier
+    const relative = specifier.startsWith('.')
+    let candidates: string[]
+    if (adapter instanceof TypeScriptAdapter) candidates = adapter.resolveCandidates(specifier, relPath, knownFiles)
+    else if (adapter instanceof PythonAdapter) candidates = adapter.resolveAuditCandidates(specifier, fact.importedNames ?? [], relPath, knownFiles)
+    else {
+      const target = adapter.resolveImportToFile(specifier, relPath, knownFiles)
+      candidates = target ? [target] : []
+    }
+    candidates = [...new Set(candidates)].sort()
+    delete fact.targetPaths
+    if (candidates.length > 0) fact.targetPaths = candidates
+    fact.importResolution =
+      candidates.length === 1 ? 'resolved-local'
+      : candidates.length > 1 ? 'ambiguous'
+      : relative ? 'unresolved'
+      : adapter instanceof TypeScriptAdapter ? 'external'
+      : 'observed'
+  }
 }
 
 function emitBuildProgress(

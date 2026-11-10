@@ -1,10 +1,12 @@
 # Commands
 
-This is the installed CLI reference for `@dailephd/my-dev-kit`. The v1.14.0 public surface has nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
+This is the installed CLI reference for `@dailephd/my-dev-kit`. The v1.15.0 public surface has nine command families, including core indexing and retrieval of selected test files, the v1.12.5 incremental refresh-scope selector, v1.12.6 retrieval improvements, and Android retrieval selectors and evidence described below. Package versions and artifact schema versions are separate.
 
 `index --incremental --refresh-scope <changed-files|affected-neighborhood>` is part of the installed v1.12.5 command surface. Plain `--incremental` remains equivalent to `changed-files`. See "Incremental refresh scope (v1.12.5)" below and [ROADMAP.md](ROADMAP.md#version-1125).
 
 **v1.12.6 release additions.** `search --query "<text>" --intent ownership` and known-symbol-boundary behavior for `source` are available in the published package. No new command, public schema major, or artifact was added.
+
+**v1.15.0 additions.** The installed `lookup` source-audit selectors (`--audit-files`, `--audit-file`, `--audit-import-target`, `--page`) and exact-file `source --file <path> --contains <literal> --json` form extend the existing command families. Built-checkout examples below can also use the installed `my-dev-kit` command. See [lookup source-audit selectors](#source-audit-selectors-v1150-unreleased) and [exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
 
 Use [WORKFLOWS.md](WORKFLOWS.md) for ordered my-dev-kit usage and [ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md](ECOSYSTEM_DEVELOPMENT_WORKFLOWS.md) for workflows combining Orchestrator, Lab, Observer, project tests, and coding-agent execution. This file does not redefine companion CLIs.
 
@@ -281,11 +283,52 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1
 - Alternative Android selector: `--android-component <name>`.
 - `--depth <n>`: graph traversal depth, default 1.
 - `--resolve-classification`: resolve the full available classification entry for node lookup.
+- `--audit-files`, `--audit-file <relative-path>`, `--audit-import-target <fact-id>` and `--page <n>` (v1.15.0): source-audit selectors, described in [Source-audit selectors](#source-audit-selectors-v1150-unreleased).
 - `--json`: structured result.
 
 Do not combine a fact selector with `--node`. Do not assume every `search` selector is also a `lookup` flag. For example, find a composable/resource/test fact with `search`, then pass its exact returned node ID to `lookup`.
 
 Node lookup reports the node, incoming/outgoing edges, neighbors, and available semantic/classification/Android metadata. Component lookup reports explicit found/not-found/ambiguous outcomes and related manifest/source evidence. Preserve ambiguous candidates. Neither a classification role nor a unique textual label proves runtime ownership.
+
+<a id="source-audit-selectors-v1150-unreleased"></a>
+
+### Source-audit selectors (v1.15.0)
+
+Available in v1.15.0. These selectors read the managed `source-audit-evidence.json` artifact that `index` registers in `manifest.json`; see [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased) for the artifact and [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased) for the contract.
+
+```powershell
+node dist/cli.js lookup --index .my-dev-kit --audit-files --page 0 --json
+node dist/cli.js lookup --index .my-dev-kit --audit-file src/service.ts --page 0 --json
+node dist/cli.js lookup --index .my-dev-kit --audit-import-target "<import-fact-id>" --json
+```
+
+Arguments and exclusivity:
+
+- `--audit-files`: page through the recorded selected-file inventory. `--audit-file <relative-path>`: page through the recorded facts of one exact selected file. `--audit-import-target <fact-id>`: existence proof for one recorded `import` fact. Use exactly one; combining them, or combining any with `--node`, `--route`, `--storage-key`, `--ui`, `--android-component` or `--resolve-classification`, is rejected.
+- All three require `--json`. Without it the command fails; there is no plain-text audit format.
+- `--page <n>` is valid only with `--audit-files` or `--audit-file`, is zero-based, defaults to `0`, and must be a nonnegative integer. It is rejected with `--audit-import-target` and when no audit selector is present.
+- `--audit-file` takes a canonical, forward-slash, project-root-relative selected path. Absolute paths, `..` traversal, backslashes and non-canonical forms are rejected with `INVALID_AUDIT_PATH`.
+
+Pagination:
+
+- The inventory page size is 64 files and the fact page size is 128 facts. The page envelope reports `pageIndex`, `pageSize`, `totalItems`, `totalPages`, `nextPageIndex` and `snapshotId`. `nextPageIndex` is `null` on the terminal page.
+- An inventory or file with no items has `totalPages` of 1; page 0 is then a valid empty terminal page. A page beyond the terminal page is an error (`INVALID_AUDIT_PAGE`), not an empty page.
+- `--audit-file` for a path that is not in the selected inventory returns a successful result with `status: "not-selected"`, `file: null` and no facts. An unselected path is not evidence that the file does not exist or is clean.
+- Inventory pages include the `coverage` object. A complete selected inventory does not mean every file was fully parsed or semantically resolved; read each file's `status` and capability statuses.
+
+Prerequisites and freshness:
+
+- The index must have been written by a build that registers `sourceAuditEvidence` in `manifest.json`. A missing, unregistered, hash-mismatched or invalid artifact fails closed (`AUDIT_EVIDENCE_UNAVAILABLE` or `AUDIT_EVIDENCE_INVALID`); an index from an earlier version is not silently upgraded. Re-run `index`.
+- Source containment is authoritative: paths are checked against the indexed project root, and a selected file that changed, was deleted or replaced, or escapes the root through a symlink is rejected as stale (`STALE_SOURCE_EVIDENCE`) rather than reported from old evidence.
+
+`--audit-import-target <fact-id>` returns one JSON object with `status`, `reasonCode`, `candidatePaths`, `selectionComplete`, `originFile`, `sourceSpecifier`, `importFactId` and `snapshotId`. Take the fact ID from `--audit-file` output; do not construct it. `status` is one of:
+
+- `present`: at least one existing eligible candidate is in the selected inventory. This proves candidate existence, not a unique semantic import binding: several candidates can exist, and for Java and Kotlin the resolver may report only one of several source-set candidates, so `candidatePaths` can be incomplete. The recorded fact's own `importResolution` keeps its meaning.
+- `proven-missing`: every supported candidate was enumerated, all lie inside the selected roots in a complete, explicit selection, and none exists on disk (checked with a read-only `lstat`). It is never claimed from a partial or unverifiable scope.
+- `outside-selected-roots`: a candidate lies outside the selected source roots. This is not proof that the file is missing.
+- `indeterminate`: existence could not be established (external or configured specifiers, unsupported shapes, non-enumerable Java/Kotlin/Rust/Python candidates, incomplete selection, unreadable candidates, or a candidate that exists but was not selected). This is not proof that the file is missing.
+
+Exit codes and errors: argument errors and evidence failures exit with code 2. Successful results are JSON on stdout. Failures print a code-prefixed plain-text message such as `INVALID_AUDIT_PAGE: ...`, `AUDIT_FACT_NOT_FOUND`, `AUDIT_FACT_NOT_IMPORT` or `STALE_SOURCE_EVIDENCE`; no JSON error object is guaranteed, so consumers must not parse failures as JSON. Nothing is written to the index or to the target source.
 
 ## source
 
@@ -307,7 +350,7 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region "<indexed-reg
 - `--node <node-id>`: source-capable graph node.
 - `--file <path>` with `--symbol <name>`: exact symbol in a file.
 - `--file <path>` with `--start <n>` and `--end <n>`: bounded numbered range.
-- `--contains <string>`: exact text matches across indexed source files, including test files indexed beneath a selected `--src` root. Files outside the indexed roots are not searched.
+- `--contains <string>`: exact text matches across indexed source files, including test files indexed beneath a selected `--src` root. Files outside the indexed roots are not searched. With `--file <path>` and `--json` (v1.15.0) it instead searches exactly one selected file; see [Exact-file occurrences](#exact-file-occurrences-v1150-unreleased).
 - `--context <n>`: bounded context around exact matches. Use installed help for its documented default and maximum.
 - `--path <prefix>`: indexed source-path prefix filter for `--contains` (for example `--path tests` or a specific test file path).
 - `--react-region <region>`: indexed React component/hook/JSX/prop-type region name, not a new arbitrary region taxonomy.
@@ -332,6 +375,24 @@ npx @dailephd/my-dev-kit source --index .my-dev-kit --react-region "<indexed-reg
 - `--json`: alias for JSON format.
 
 Select one coherent source mode. Do not combine unrelated web/Android selectors or invent source flags from another command. `--android-component` and `--permission` are not direct `source` selectors in this surface. Retrieve a supported exact node instead. Paths remain contained by the indexed project root.
+
+<a id="exact-file-occurrences-v1150-unreleased"></a>
+
+### Exact-file occurrences (v1.15.0)
+
+Available in v1.15.0. It reuses the existing `source` family and `--contains`; it is distinct from the cross-file `source --contains <literal>` above, which is unchanged.
+
+```powershell
+node dist/cli.js source --index .my-dev-kit --file tests/one.test.ts --contains "seed.json" --context 2 --json
+```
+
+- `--file <relative-path> --contains <literal> --json` is the exact-file form. `--json` is required. `--out` and `--path` are rejected. The value must be non-empty and must not contain a line break. `--context` is the context-line count (default 3, maximum 40; a negative value is rejected).
+- The path must be an exactly selected file of the index's source-audit inventory: canonical, forward-slash and root-relative. An unselected, unknown, deleted, traversing or symlink-escaping path is rejected rather than answered; so is a file whose live content no longer matches the recorded hash (`STALE_SOURCE_EVIDENCE`). It never falls back to cross-file search.
+- Matching is a literal substring search over the file's UTF-8 text, not a regular expression. Comments and ordinary string literals count as raw occurrences; an occurrence is not automatically a syntactic reference or a semantic use. The query applies no Lab audit policy and produces no findings or severities.
+- Limits: at most 200000 bytes of the file are scanned, at most 200 matches are returned, and at most 40 context lines per match.
+- The result (`mode: "exact-file-occurrence"`) reports `snapshotId`, `filePath`, `value`, `scannedBytes`, `complete`, `reasonCode`, `matchCount`, `returnedMatches`, `truncated` and `matches` (`line`, `column`, `windowStart`, `windowEnd`, `content`).
+- `complete: true` means the recorded content hash matched the live bytes, the whole file was valid UTF-8 within the scan limit, and the match list was not capped. Only then is a zero-match result valid evidence of absence. `complete: false` carries a `reasonCode` (`CONTENT_HASH_UNAVAILABLE`, `FILE_NOT_VALID_UTF8`, `FILE_EXCEEDS_SCAN_LIMIT` or `MATCHES_TRUNCATED`) and does not establish absence: unhashed, oversized, invalid or truncated content never produces complete-absence evidence, though matches already found are still reported.
+- Errors exit with code 2 and a code-prefixed plain-text message; no JSON error object is guaranteed. Nothing is written to the index or to the target source.
 
 ### Source continuation and local dependency expansion (v1.4.0)
 
@@ -642,6 +703,16 @@ npx @dailephd/my-dev-kit graph-diff --before .my-dev-kit-before --after .my-dev-
 Flags are exactly `--before <index-dir>`, `--after <index-dir>`, and `--json`. Both indexes are required. There is no `--out`, `--fail-on-change`, or source-edit mode in this command. Use appropriate shell redirection to save JSON.
 
 The result reports added/removed/changed graph nodes and edges, supported symbol-index changes, manifest/analyzer metadata changes, classification changes where available, and warnings. Comparison uses existing stable identities, not fuzzy rename inference. A rename or incompatible identity may appear as removal/addition. It does not enumerate and recursively diff every arbitrary file in the directory.
+
+In v1.15.0, a manifest-registered API relationship
+artifact on either side also produces the optional `apiRelationshipImpact` section.
+It validates persisted snapshot integrity and source-universe identity, reports
+bounded observed contract/relationship changes and directly associated potential
+impacts, and preserves unresolved/unsupported evidence. Each collection is capped
+at 64 with explicit counts and incomplete/truncated qualifications. Neither artifact
+registered leaves the original output shape intact. One-sided or untrustworthy
+evidence does not establish additions/removals. This section certifies no runtime
+compatibility or breakage; see [CONTRACTS.md](CONTRACTS.md#kit-api-01-contract-oriented-graph-diff-evidence-v1150-unreleased).
 
 Exit 0 means a valid comparison, including one with differences. Graph equality is not runtime equivalence. Dependency upgrades, configuration, dynamic behavior, or omitted source roots can change behavior without a useful graph delta. Use Git differences, project tests, and runtime evidence as required.
 

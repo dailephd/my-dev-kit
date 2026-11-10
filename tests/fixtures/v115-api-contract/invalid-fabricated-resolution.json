@@ -1,0 +1,13 @@
+{
+  "id": "api-client-call:src/web/items.ts:30:4",
+  "filePath": "src/web/items.ts",
+  "startLine": 30,
+  "startColumn": 4,
+  "owningSymbolId": "symbol:src/web/items.ts#loadItems",
+  "method": "POST",
+  "observedUrl": "`/api/items/${id}`",
+  "staticPath": null,
+  "clientKind": "axios",
+  "resolutionStatus": "resolved-static",
+  "sourceFactId": "src/web/items.ts#api-client-call:30:4"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "api-client-call:src/web/items.ts:12:8",
+  "filePath": "src/web/items.ts",
+  "startLine": 12,
+  "startColumn": 8,
+  "owningSymbolId": "symbol:src/web/items.ts#loadItems",
+  "method": "GET",
+  "observedUrl": "/api/items",
+  "staticPath": "/api/items",
+  "clientKind": "fetch",
+  "resolutionStatus": "resolved-static",
+  "sourceFactId": "src/web/items.ts#api-client-call:12:8"
+}

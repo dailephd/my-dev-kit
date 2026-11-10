@@ -57,11 +57,24 @@ export function buildCodeGraph(options: BuildCodeGraphOptions): CodeGraph {
     }
   }
 
-  for (const dep of options.symbolIndex.graph?.fileDeps ?? []) {
+  // One file may depend on the same target through several statement kinds (import, re-export,
+  // export-all). The first kind in this fixed order keeps the historical `--imports-->` identity;
+  // every other kind is disambiguated so edge identities stay unique and deterministic.
+  const depKindOrder = ['import', 're-export', 'export-all']
+  const fileDeps = options.symbolIndex.graph?.fileDeps ?? []
+  const primaryKindRank = new Map<string, number>()
+  for (const dep of fileDeps) {
+    const pair = `${dep.from}\0${dep.to}`
+    const rank = depKindOrder.indexOf(dep.kind)
+    const best = primaryKindRank.get(pair)
+    if (best === undefined || rank < best) primaryKindRank.set(pair, rank)
+  }
+  for (const dep of fileDeps) {
     const source = fileNodeId(dep.from)
     const target = fileNodeId(dep.to)
+    const historicalId = edgeId(source, 'imports', target)
     edges.push({
-      id: edgeId(source, 'imports', target),
+      id: depKindOrder.indexOf(dep.kind) === primaryKindRank.get(`${dep.from}\0${dep.to}`) ? historicalId : `${historicalId}#${dep.kind}`,
       source,
       target,
       kind: dep.kind === 'import' ? 'imports' : 'depends-on',

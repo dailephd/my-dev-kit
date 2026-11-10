@@ -1,0 +1,42 @@
+{
+  "available": "both",
+  "complete": false,
+  "totalChanges": 3,
+  "returnedChanges": 2,
+  "omittedChanges": 0,
+  "changes": [
+    {
+      "kind": "route",
+      "change": "added",
+      "subjectId": "route:GET:/api/items",
+      "affectedNodeIds": [
+        "file:src/server/items.ts"
+      ],
+      "sourceRefs": [
+        {
+          "filePath": "src/server/items.ts",
+          "line": 5,
+          "endLine": 9,
+          "column": 0
+        }
+      ],
+      "certainty": "explicit-static"
+    },
+    {
+      "kind": "client-call",
+      "change": "unresolved",
+      "subjectId": "api-client-call:src/web/items.ts:30:4",
+      "affectedNodeIds": [],
+      "sourceRefs": [
+        {
+          "filePath": "src/web/items.ts",
+          "line": 30,
+          "endLine": 30,
+          "column": 4
+        }
+      ],
+      "certainty": "partial"
+    }
+  ],
+  "warnings": []
+}
