@@ -4,7 +4,7 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.15.0` is the version represented by this repository. Version 1.14.0 is the preceding release.
+`@dailephd/my-dev-kit@1.15.0` is the current published release represented by this repository. Version 1.14.0 is the preceding release.
 
 ## Version 1.15.0
 
@@ -12,7 +12,7 @@ Version 1.15.0 includes the KIT-FACTS-01 source-evidence producer and KIT-API-01
 
 - **Implemented:** the managed `source-audit-evidence.json` artifact with manifest linkage and the `lookup --audit-files`, `--audit-file` and `--audit-import-target` selectors; the read-only import-target existence proof; raw exact-file occurrence retrieval (`source --file --contains --json`); and a repair of duplicate file-dependency edge IDs in the code graph. See [COMMANDS.md](COMMANDS.md), [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md#source-audit-evidencejson-v1150-unreleased), [CONTRACTS.md](CONTRACTS.md#v1150-source-evidence-contracts-unreleased) and [ARCHITECTURE.md](ARCHITECTURE.md#source-audit-evidence-architecture-v1150-unreleased).
 - **Known limitations:** Java and Kotlin extraction is lexical, and import existence for them cannot enumerate source-set candidates, so `present` is not unique resolution. Python absolute and module-less relative imports cannot be proven missing, non-relative TypeScript specifiers are `indeterminate` when nothing is found, and Rust import resolution is not implemented. Set-level live freshness and non-TypeScript observation families remain open.
-- **Remaining ecosystem obligations (not done):** a hash-pinned Kit package candidate; the Lab managed-provider bridge and consumption (LAB-KIT-01, Lab v0.10.0); five-language differential comparison; retirement of Lab's duplicate analyzers, scanners and resolvers; and proof of Rust reuse. Kit producer completion alone does not complete the one-provider restructuring.
+- **Remaining ecosystem obligations (not done):** Lab's version-pinned consumption of published Kit v1.15.0 through its managed-provider bridge (LAB-KIT-01, Lab v0.10.0); five-language differential comparison; retirement of Lab's duplicate analyzers, scanners and resolvers; and proof of Rust reuse. Kit producer completion alone does not complete the one-provider restructuring.
 - **KIT-API-01 implemented:** managed, authenticated API relationship evidence for qualified JavaScript/TypeScript/TSX profiles, including Express mounted routers, static Next.js App Router handlers, exact local request matching, React handler/request associations, explicit schema and conservative model references. Existing `graph-diff` optionally returns bounded `apiRelationshipImpact` evidence for compatible immutable snapshots. See [CONTRACTS.md](CONTRACTS.md#kit-api-01-bounded-cross-layer-projection-v1150-unreleased).
 - **Implementation status:** the four accepted KIT-API-01 batches are complete through `e03c8967dae751a651e45b554932f30e5b3e9d3c`. Qualification uses independently annotated synthetic fixtures; its precision/recall does not establish universal accuracy. The 64-record impact cap can omit supported candidates while reporting truncation and incompleteness; these disclosed omissions are not a demonstrated correctness defect. Dynamic or ambiguous patterns and unsupported ORM/SQL inference remain explicit limitations. v1.15.0 retains these bounded static-evidence contracts. This does not complete the ecosystem obligations above.
 
