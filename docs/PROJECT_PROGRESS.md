@@ -4,7 +4,15 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.15.0` is the version represented by this repository. Version 1.14.0 is the preceding release.
+`@dailephd/my-dev-kit@1.15.1` is the version represented by this repository. Version 1.15.0 is the preceding release.
+
+## Version 1.15.1
+
+Version 1.15.1 corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). Package, lockfile and CLI versions agree at 1.15.1.
+
+- **Implemented:** Python pytest-named tests (`test_*.py`, `*_test.py`) are related to selected production files in `context` by authenticated indexed Python-AST import facts, plus literal Streamlit `AppTest.from_file` references, so test-implementation responsibility mappings that previously stayed partial can reach the core related-test evidence. Only `src/context/testInfrastructureDiscovery.ts` and four context specs changed, plus reconciled documentation.
+- **Known limitations:** pytest configuration (`pytest.ini`, `tox.ini`) is detected but not parsed, no targeted pytest command is derived, dynamic imports and fixture/`conftest.py` relationships are not followed, and a related test is not proof of oracle evidence, coverage or execution. See [CONTRACTS.md](CONTRACTS.md#python-test-discovery-kit-pytest-01-unreleased).
+- **Implementation status:** the exact implementation candidate `a87d939d5c15b591f4067cf5783c8ac3b7cb34ba` passed pre-release readiness: 266 files / 4,422 tests, 139 security tests, typecheck, build, docs:check and installed-package qualification. Exact-SHA Windows, Ubuntu and macOS Node 24 CI passed (run `43629052001`).
 
 ## Version 1.15.0
 
@@ -15,13 +23,6 @@ Version 1.15.0 includes the KIT-FACTS-01 source-evidence producer and KIT-API-01
 - **Remaining ecosystem obligations (not done):** a hash-pinned Kit package candidate; the Lab managed-provider bridge and consumption (LAB-KIT-01, Lab v0.10.0); five-language differential comparison; retirement of Lab's duplicate analyzers, scanners and resolvers; and proof of Rust reuse. Kit producer completion alone does not complete the one-provider restructuring.
 - **KIT-API-01 implemented:** managed, authenticated API relationship evidence for qualified JavaScript/TypeScript/TSX profiles, including Express mounted routers, static Next.js App Router handlers, exact local request matching, React handler/request associations, explicit schema and conservative model references. Existing `graph-diff` optionally returns bounded `apiRelationshipImpact` evidence for compatible immutable snapshots. See [CONTRACTS.md](CONTRACTS.md#kit-api-01-bounded-cross-layer-projection-v1150-unreleased).
 - **Implementation status:** the four accepted KIT-API-01 batches are complete through `e03c8967dae751a651e45b554932f30e5b3e9d3c`. Qualification uses independently annotated synthetic fixtures; its precision/recall does not establish universal accuracy. The 64-record impact cap can omit supported candidates while reporting truncation and incompleteness; these disclosed omissions are not a demonstrated correctness defect. Dynamic or ambiguous patterns and unsupported ORM/SQL inference remain explicit limitations. v1.15.0 retains these bounded static-evidence contracts. This does not complete the ecosystem obligations above.
-
-## Unreleased implementation candidate: KIT-PYTEST-01
-
-Python pytest-named tests (`test_*.py`, `*_test.py`) are related to selected production files in `context` by authenticated indexed Python-AST import facts, plus literal Streamlit `AppTest.from_file` references, so test-implementation responsibility mappings that previously stayed partial can reach the core related-test evidence. This is an implementation candidate on top of v1.15.0 (only `src/context/testInfrastructureDiscovery.ts` and four context specs changed, plus reconciled documentation); it is **unpublished and unreleased, it is not a released v1.15.1, and the package version is still 1.15.0**. The v1.12.3 limitation below is therefore historical for this change but remains true for every published version.
-
-- **Evidence recorded:** the full suite passed 4,422 of 4,422 tests when the change was implemented; JavaScript/TypeScript output was unchanged and the CLI help is identical to published 1.15.0. Release readiness is a separate, not-yet-run stage.
-- **Remaining limitations:** pytest configuration (`pytest.ini`, `tox.ini`) is detected but not parsed, no targeted pytest command is derived, dynamic imports and fixture/`conftest.py` relationships are not followed, and a related test is not proof of oracle evidence, coverage or execution. See [CONTRACTS.md](CONTRACTS.md#python-test-discovery-kit-pytest-01-unreleased).
 
 ## Shipped: v1.14.0
 
