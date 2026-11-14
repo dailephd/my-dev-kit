@@ -213,3 +213,33 @@ describe('Makefile "test" target discovery (Python/non-npm repositories)', () =>
     ).toBe(true)
   })
 })
+
+
+// KIT-PYTEST-01 (PY-16): a pytest command is execution metadata only; discovered related Python tests never cause an
+// invented targeted command, and the verbatim project command is preserved with provenance.
+describe('Python test-command evidence (KIT-PYTEST-01)', () => {
+  it('PY-16: with related Python tests and a pytest package script only the verbatim script is a command; no targeted pytest command is invented', () => {
+    const root = createTempRoot('my-dev-kit-py16-cmd-')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    mkdirSync(join(root, 'tests'), { recursive: true })
+    writeFileSync(join(root, 'src', 'widget_registry.py'), 'def register_widget(name):\n    return name\n')
+    writeFileSync(join(root, 'tests', 'test_widget_registry.py'), 'from src.widget_registry import register_widget\n\n\ndef test_x():\n    assert register_widget("a") == "a"\n')
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fx', version: '0.0.0', scripts: { test: 'python -m pytest tests/ -q' } }))
+    const indexOut = join(root, '.my-dev-kit')
+    expect(runCli(['index', '--root', root, '--src', 'src', '--src', 'tests', '--out', indexOut]).status).toBe(0)
+    const requestPath = writeRequest(root, 'req.json', {
+      schemaVersion: '1.0.0', query: 'widget', role: 'test-implementation', changedFiles: ['src/widget_registry.py'],
+      changedSymbols: ['symbol:src/widget_registry.py#register_widget'], requestedEvidenceKinds: ['test-infrastructure', 'test-commands'],
+    })
+    const outPath = join(root, 'capsule.json')
+    expect(runCli(['context', '--index', indexOut, '--request', requestPath, '--out', outPath]).status).toBe(0)
+    const capsule = JSON.parse(readFileSync(outPath, 'utf8'))
+    const infra = capsule.testInfrastructure
+    expect(infra.relatedTests.map((t: { path: string }) => t.path)).toEqual(['tests/test_widget_registry.py'])
+    expect(infra.testCommands).toHaveLength(1)
+    expect(infra.testCommands[0]).toMatchObject({ commandText: 'python -m pytest tests/ -q', commandSource: 'package.json script "test"', framework: 'pytest', scope: 'full-project', testFiles: [] })
+    expect(JSON.stringify(infra.testCommands)).not.toContain('tests/test_widget_registry.py')
+    const note = infra.unresolved.find((u: { evidenceKind: string }) => u.evidenceKind === 'test-commands')
+    expect(note?.reason).toContain('a targeted test command was not invented')
+  })
+})
