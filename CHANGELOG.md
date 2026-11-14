@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.15.1 - 2026-11-14
+
+- Python test-discovery correction: `context` and related-test classification now recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). Previously, the shared related-test classifier did not generally discover Python test files by name. Pytest configuration parsing remains incomplete, dynamic imports remain unsupported, and fixture/conftest linkage is not universally inferred. Related tests are static evidence, not execution proof. No new public command, flag, or artifact schema major.
+
 ## 1.15.0 - 2026-11-10
 
 - API relationship evidence (v1.15.0): authenticated managed static relationships for qualified Express mounts, Next.js App Router handlers, exact local requests, React handler/request associations, explicit schemas and conservative model references. Dynamic, ambiguous and unsupported patterns retain uncertainty; no new public command or runtime execution claim.

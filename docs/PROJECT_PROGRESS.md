@@ -4,7 +4,15 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.15.0` is the version represented by this repository. Version 1.14.0 is the preceding release.
+`@dailephd/my-dev-kit@1.15.1` is the version represented by this repository. Version 1.15.0 is the preceding release.
+
+## Version 1.15.1
+
+Version 1.15.1 corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). Package, lockfile and CLI versions agree at 1.15.1.
+
+- **Implemented:** Python pytest-named tests (`test_*.py`, `*_test.py`) are related to selected production files in `context` by authenticated indexed Python-AST import facts, plus literal Streamlit `AppTest.from_file` references, so test-implementation responsibility mappings that previously stayed partial can reach the core related-test evidence. Only `src/context/testInfrastructureDiscovery.ts` and four context specs changed, plus reconciled documentation.
+- **Known limitations:** pytest configuration (`pytest.ini`, `tox.ini`) is detected but not parsed, no targeted pytest command is derived, dynamic imports and fixture/`conftest.py` relationships are not followed, and a related test is not proof of oracle evidence, coverage or execution. See [CONTRACTS.md](CONTRACTS.md#python-test-discovery-kit-pytest-01-unreleased).
+- **Implementation status:** the exact implementation candidate `a87d939d5c15b591f4067cf5783c8ac3b7cb34ba` passed pre-release readiness: 266 files / 4,422 tests, 139 security tests, typecheck, build, docs:check and installed-package qualification. Exact-SHA Windows, Ubuntu and macOS Node 24 CI passed (run `43629052001`).
 
 ## Version 1.15.0
 

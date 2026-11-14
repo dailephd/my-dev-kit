@@ -1,6 +1,6 @@
 {
   "name": "@dailephd/my-dev-kit",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Local-first codebase graph indexing and graph-guided bounded retrieval, with conservative static language, framework, frontend, Android and data-model evidence for TypeScript, JavaScript, Python, Kotlin, Java and Rust projects.",
   "type": "module",
   "bin": {

@@ -23,7 +23,7 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 ## Current release scope
 
-Version 1.15.0 is the version represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence and adds Rust structural retrieval, retaining the existing Android and bounded graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#shipped-v1140) and [COMMANDS.md](COMMANDS.md).
+Version 1.15.1 is the version represented by this package. It corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). It retains all existing Python, JavaScript/TypeScript, framework, Rust, Android and graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#version-1151) and [COMMANDS.md](COMMANDS.md).
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.
 

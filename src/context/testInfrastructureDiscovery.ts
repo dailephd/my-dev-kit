@@ -13,6 +13,13 @@
  * resolve which already-indexed production/fixture/mock/factory files each
  * test file references. This is not a second index: nothing is persisted,
  * no symbols are extracted, and only test-shaped files are ever read.
+ *
+ * KIT-PYTEST-01: Python tests (pytest `test_*.py` / `*_test.py`) are related through the
+ * AUTHENTICATED indexed Python import facts (`sourceAudit` import facts extracted by the Python
+ * adapter's AST pass, cross-checked against the indexed `fileDeps` import edges) - no second Python
+ * parser. The only Python text scan is a literal-only, comment/string-aware lexer for a
+ * `AppTest.from_file("<literal>")` application-file reference, performed only for tests whose indexed
+ * import bindings show Streamlit's `AppTest`. Nothing is executed or imported.
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -129,7 +136,7 @@ function listTestShapedFiles(repoRoot: string, sourceRoots: string[]): string[] 
         walk(path.join(dir, entry.name))
       } else if (entry.isFile()) {
         const relPath = toForwardSlash(path.relative(repoRoot, path.join(dir, entry.name)))
-        if (isTestLike(relPath)) results.add(relPath)
+        if (isTestLike(relPath) || isPythonTestFile(relPath)) results.add(relPath)
       }
     }
   }
@@ -184,7 +191,219 @@ function extractImportClauses(text: string): ImportClause[] {
 
 interface TestFileAnalysis {
   testPath: string
-  resolvedImports: Array<{ path: string; names: string[] }>
+  resolvedImports: Array<{ path: string; names: string[]; line?: number; viaPackageSubmodule?: boolean }>
+  /** KIT-PYTEST-01: present only for Python tests. */
+  python?: {
+    /** Literal Streamlit AppTest.from_file application-file references resolved to exactly one indexed file. */
+    literalReferences: Array<{ path: string; line: number; base: 'repository-root' | 'caller-directory'; call: string }>
+    /** Bounded human-readable notes for imports/literals that could not be resolved uniquely. */
+    unresolved: string[]
+  }
+}
+
+/** pytest default discovery naming: `test_*.py` and `*_test.py`. */
+const PYTHON_TEST_FILE_PATTERN = /(^|\/)(test_[^/]+|[^/]+_test)\.py$/
+
+export function isPythonTestFile(filePath: string): boolean {
+  return PYTHON_TEST_FILE_PATTERN.test(filePath)
+}
+
+type IndexedFile = SymbolIndex['files'][number]
+
+interface IndexedPythonImportFact {
+  kind?: string
+  extractionMethod?: string
+  sourceSpecifier?: string
+  importedNames?: string[]
+  importResolution?: string
+  targetPaths?: string[]
+  span?: { startLine?: number }
+}
+
+interface IndexedImportBinding {
+  localName?: string
+  importedName?: string
+  sourceSpecifier?: string
+}
+
+/** Python lexical token (comments and whitespace are dropped; strings carry their static value). */
+interface PythonToken {
+  kind: 'ident' | 'string' | 'punct'
+  text: string
+  line: number
+  /** For strings: false when the literal is not a plain static string (f-string, bytes, unterminated). */
+  plainString?: boolean
+}
+
+/** Minimal comment/string-aware Python tokenizer. Bounded by the caller's file-size limit; never evaluates anything. */
+function tokenizePython(text: string): PythonToken[] {
+  const tokens: PythonToken[] = []
+  let i = 0
+  let line = 1
+  const n = text.length
+  while (i < n) {
+    const ch = text[i]
+    if (ch === '\n') { line++; i++; continue }
+    if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\f') { i++; continue }
+    if (ch === '#') { while (i < n && text[i] !== '\n') i++; continue }
+    const prefix = /^([rRuUbBfF]{1,2})(?=["'])/.exec(text.slice(i, i + 3))
+    if (ch === '"' || ch === "'" || prefix) {
+      const flags = prefix ? prefix[1].toLowerCase() : ''
+      i += flags.length
+      const quote = text[i]
+      const triple = text.startsWith(quote.repeat(3), i)
+      const delimiter = triple ? quote.repeat(3) : quote
+      const startLine = line
+      i += delimiter.length
+      let value = ''
+      let terminated = false
+      while (i < n) {
+        if (text.startsWith(delimiter, i)) { i += delimiter.length; terminated = true; break }
+        const c = text[i]
+        if (c === '\\' && i + 1 < n) {
+          value += c + text[i + 1]
+          if (text[i + 1] === '\n') line++
+          i += 2
+          continue
+        }
+        if (c === '\n') {
+          if (!triple) break
+          line++
+        }
+        value += c
+        i++
+      }
+      const plain = terminated && !/[bf]/.test(flags) && !value.includes('\\')
+      tokens.push({ kind: 'string', text: value, line: startLine, plainString: plain })
+      continue
+    }
+    const ident = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i, i + 128))
+    if (ident) { tokens.push({ kind: 'ident', text: ident[0], line }); i += ident[0].length; continue }
+    tokens.push({ kind: 'punct', text: ch, line })
+    i++
+  }
+  return tokens
+}
+
+/**
+ * Finds `<receiver>.from_file(<plain string literal>[, ...])` / `from_file(script_path=<literal>)` calls.
+ * A literal is returned only when it is the complete argument (no implicit concatenation, f-string, bytes or
+ * expression). Everything else is counted as dynamic and never produces a path.
+ */
+export function findAppTestFileLiterals(text: string, receivers: ReadonlySet<string>): { literals: Array<{ value: string; line: number; call: string }>; dynamicCalls: number } {
+  const tokens = tokenizePython(text)
+  const literals: Array<{ value: string; line: number; call: string }> = []
+  let dynamicCalls = 0
+  for (let k = 0; k + 4 < tokens.length; k++) {
+    const t = tokens[k]
+    if (t.kind !== 'ident' || !receivers.has(t.text)) continue
+    if (tokens[k - 1]?.text === '.') continue
+    if (tokens[k + 1].text !== '.' || tokens[k + 2].text !== 'from_file' || tokens[k + 3].text !== '(') continue
+    let a = k + 4
+    if (tokens[a]?.kind === 'ident' && tokens[a].text === 'script_path' && tokens[a + 1]?.text === '=') a += 2
+    const arg = tokens[a]
+    const after = tokens[a + 1]
+    if (arg?.kind === 'string' && arg.plainString && (after?.text === ',' || after?.text === ')')) {
+      literals.push({ value: arg.text, line: t.line, call: `${t.text}.from_file` })
+    } else {
+      dynamicCalls++
+    }
+  }
+  return { literals, dynamicCalls }
+}
+
+/** Resolves a static application-file literal to indexed paths: repository-root and caller-directory bases. */
+export function resolveAppFileLiteral(literal: string, testPath: string, knownPaths: ReadonlySet<string>): Array<{ path: string; base: 'repository-root' | 'caller-directory' }> {
+  if (!literal || literal.includes('\\') || literal.includes('\0') || literal.startsWith('/') || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(literal)) return []
+  if (literal.split('/').includes('..')) return []
+  const found = new Map<string, 'repository-root' | 'caller-directory'>()
+  const rootRelative = path.posix.normalize(literal)
+  if (knownPaths.has(rootRelative)) found.set(rootRelative, 'repository-root')
+  const callerRelative = path.posix.normalize(path.posix.join(path.posix.dirname(testPath), literal))
+  if (knownPaths.has(callerRelative) && !found.has(callerRelative)) found.set(callerRelative, 'caller-directory')
+  return [...found.entries()].map(([p, base]) => ({ path: p, base })).sort((a, b) => a.path.localeCompare(b.path))
+}
+
+const MAX_PYTHON_UNRESOLVED_NOTES_PER_TEST = 3
+
+/**
+ * Relates one Python test to indexed production files using ONLY authenticated indexed evidence:
+ * resolved-local Python import facts that are also present as indexed file-dependency edges. Ambiguous or
+ * unresolved imports are never guessed; they are reported as unresolved notes.
+ */
+function analyzePythonTest(options: {
+  testPath: string
+  repoRoot: string
+  entry: IndexedFile | undefined
+  filesByPath: ReadonlyMap<string, IndexedFile>
+  knownPaths: ReadonlySet<string>
+  dependencies: ReadonlySet<string>
+}): NonNullable<TestFileAnalysis['python']> & { resolvedImports: TestFileAnalysis['resolvedImports'] } {
+  const { testPath, repoRoot, entry, filesByPath, knownPaths, dependencies } = options
+  const resolvedImports: TestFileAnalysis['resolvedImports'] = []
+  const unresolved: string[] = []
+  const literalReferences: NonNullable<TestFileAnalysis['python']>['literalReferences'] = []
+  const note = (message: string): void => {
+    if (unresolved.length < MAX_PYTHON_UNRESOLVED_NOTES_PER_TEST) unresolved.push(message)
+  }
+  if (!entry) return { resolvedImports, literalReferences, unresolved }
+
+  const facts = ((entry as unknown as { sourceAudit?: { facts?: unknown[] } }).sourceAudit?.facts ?? []) as IndexedPythonImportFact[]
+  for (const fact of facts) {
+    if (fact.kind !== 'import' || fact.extractionMethod !== 'python-ast') continue
+    const specifier = fact.sourceSpecifier ?? ''
+    const line = fact.span?.startLine
+    if (fact.importResolution === 'ambiguous') {
+      note(`import "${specifier}"${line ? ` (line ${line})` : ''} is ambiguous among indexed files; no relationship was inferred.`)
+      continue
+    }
+    if (fact.importResolution !== 'resolved-local') continue
+    const targets = fact.targetPaths ?? []
+    if (targets.length !== 1) {
+      note(`import "${specifier}"${line ? ` (line ${line})` : ''} resolved to ${targets.length} indexed files; no relationship was inferred.`)
+      continue
+    }
+    const target = targets[0]
+    // Authentication: the resolved target must be an indexed file with an indexed import edge from this test.
+    if (target === testPath || !knownPaths.has(target) || !dependencies.has(`${testPath}\0${target}`)) continue
+    const names = (fact.importedNames ?? []).filter((name) => name !== '*')
+    resolvedImports.push({ path: target, names, ...(line !== undefined ? { line } : {}) })
+    // `from package import submodule`: the index resolves only the package __init__; an indexed submodule of
+    // the same name is the imported module unless the package itself declares that name (attribute wins).
+    if (path.posix.basename(target) === '__init__.py') {
+      const dir = path.posix.dirname(target)
+      const join = (name: string): string => (dir === '.' ? name : `${dir}/${name}`)
+      const init = filesByPath.get(target)
+      for (const name of names) {
+        if (init?.symbols.some((symbol) => !symbol.ownerKey && symbol.name === name)) continue
+        const candidates = [join(`${name}.py`), join(`${name}/__init__.py`)].filter((candidate) => knownPaths.has(candidate) && candidate !== testPath)
+        if (candidates.length === 1) resolvedImports.push({ path: candidates[0], names: [], ...(line !== undefined ? { line } : {}), viaPackageSubmodule: true })
+        else if (candidates.length > 1) note(`from-import of "${name}" from "${specifier}" matches both a module file and a package; no relationship was inferred.`)
+      }
+    }
+  }
+
+  // Literal Streamlit AppTest.from_file(...) references: only when indexed bindings show Streamlit's AppTest.
+  const bindings = ((entry as unknown as { importBindings?: IndexedImportBinding[] }).importBindings ?? [])
+  const receivers = new Set(
+    bindings
+      .filter((b) => b.importedName === 'AppTest' && (b.sourceSpecifier ?? '').startsWith('streamlit') && b.localName)
+      .map((b) => b.localName as string)
+  )
+  if (receivers.size > 0) {
+    const text = readBoundedText(path.join(repoRoot, testPath))
+    if (text !== null) {
+      const { literals, dynamicCalls } = findAppTestFileLiterals(text, receivers)
+      if (dynamicCalls > 0) note(`${dynamicCalls} AppTest.from_file call(s) do not use a static string literal; no relationship was inferred.`)
+      for (const literal of literals) {
+        const resolved = resolveAppFileLiteral(literal.value, testPath, knownPaths)
+        if (resolved.length === 1) literalReferences.push({ path: resolved[0].path, line: literal.line, base: resolved[0].base, call: literal.call })
+        else if (resolved.length > 1) note(`AppTest.from_file literal "${literal.value}" (line ${literal.line}) matches ${resolved.length} indexed files; no relationship was inferred.`)
+        else note(`AppTest.from_file literal "${literal.value}" (line ${literal.line}) does not resolve to an indexed file.`)
+      }
+    }
+  }
+  return { resolvedImports, literalReferences, unresolved }
 }
 
 /** One bounded read+scan pass per test-shaped file, reused by related-test, fixture,
@@ -196,7 +415,13 @@ function analyzeTestShapedFiles(options: { repoRoot: string; sourceRoots: string
   const configured = new TypeScriptAdapter(repoRoot)
   const selected = [...knownPaths]
   const dependencies = new Set((options.symbolIndex.graph?.fileDeps ?? []).filter(e => e.kind === 'import').map(e => `${e.from}\0${e.to}`))
+  const filesByPath = new Map(options.symbolIndex.files.map((file) => [file.path, file] as const))
   for (const testPath of testPaths) {
+    if (isPythonTestFile(testPath) && !isTestLike(testPath)) {
+      const python = analyzePythonTest({ testPath, repoRoot, entry: filesByPath.get(testPath), filesByPath, knownPaths, dependencies })
+      analyses.push({ testPath, resolvedImports: python.resolvedImports, python: { literalReferences: python.literalReferences, unresolved: python.unresolved } })
+      continue
+    }
     const text = readBoundedText(path.join(repoRoot, testPath))
     if (text === null) continue
     const resolvedImports: Array<{ path: string; names: string[] }> = []
@@ -227,8 +452,16 @@ function analyzeTestShapedFiles(options: { repoRoot: string; sourceRoots: string
 
 interface RelatedTestMatch {
   testPath: string
-  relationship: 'references-selected-production-symbol' | 'imports-selected-production-file'
+  relationship: 'references-selected-production-symbol' | 'imports-selected-production-file' | 'references-selected-production-file-literal'
   basis: string[]
+  /** KIT-PYTEST-01: 'python' for tests related through indexed Python evidence; absent for the JS/TS import scan. */
+  language?: 'python'
+  /** Lowest 1-based source line of the evidencing import/literal in the test file, when known. */
+  line?: number
+  /** Imports derived through a package submodule (from package import module), when any. */
+  packageSubmoduleBasis?: string[]
+  /** Literal application-file references (`path:line`), when any. */
+  literalReferences?: string[]
 }
 
 /**
@@ -242,6 +475,12 @@ interface RelatedTestMatch {
  * evidence before redundant references, then prefer direct symbol references and
  * stable paths. This order matters only when the real aggregate bound overflows.
  */
+const RELATIONSHIP_RANK: Record<RelatedTestMatch['relationship'], number> = {
+  'references-selected-production-symbol': 0,
+  'imports-selected-production-file': 1,
+  'references-selected-production-file-literal': 2,
+}
+
 function rankRelatedTestMatches(matches: RelatedTestMatch[]): RelatedTestMatch[] {
   const remaining = [...matches]
   const selected: RelatedTestMatch[] = []
@@ -253,11 +492,7 @@ function rankRelatedTestMatches(matches: RelatedTestMatch[]): RelatedTestMatch[]
       const bNew = b.basis.filter((basis) => !coveredBasis.has(basis)).length
       return (
         bNew - aNew ||
-        (a.relationship === b.relationship
-          ? 0
-          : a.relationship === 'references-selected-production-symbol'
-            ? -1
-            : 1) ||
+        (RELATIONSHIP_RANK[a.relationship] - RELATIONSHIP_RANK[b.relationship]) ||
         a.testPath.localeCompare(b.testPath)
       )
     })
@@ -306,27 +541,58 @@ function findRelatedTests(options: {
   for (const analysis of analyses) {
     const symbolBasis = new Set<string>()
     const fileBasis = new Set<string>()
+    const submoduleBasis = new Set<string>()
+    const lines: number[] = []
     for (const imp of analysis.resolvedImports) {
       const wantedNames = symbolsByPath.get(imp.path)
+      let matched = false
       if (wantedNames) {
         for (const name of imp.names) {
           const id = wantedNames.get(name)
-          if (id) symbolBasis.add(id)
+          if (id) { symbolBasis.add(id); matched = true }
         }
       }
       // A file-level match is also evidence in its own right (a symbol-of-interest
       // implies its containing file is of interest too, even when the caller only
       // supplied `focusSymbols`/`changedSymbols` and no `focusFiles`/`changedFiles`).
-      if (filesOfInterestSet.has(imp.path) || wantedNames) fileBasis.add(imp.path)
+      if (filesOfInterestSet.has(imp.path) || wantedNames) {
+        fileBasis.add(imp.path)
+        matched = true
+        if (imp.viaPackageSubmodule) submoduleBasis.add(imp.path)
+      }
+      if (matched && imp.line !== undefined) lines.push(imp.line)
+    }
+    const literalBasis = new Map<string, string>()
+    for (const ref of analysis.python?.literalReferences ?? []) {
+      if (filesOfInterestSet.has(ref.path) || symbolsByPath.has(ref.path)) {
+        literalBasis.set(ref.path, `${ref.path}:${ref.line}`)
+        lines.push(ref.line)
+      }
+    }
+    const extra = {
+      ...(analysis.python ? { language: 'python' as const } : {}),
+      ...(lines.length > 0 ? { line: Math.min(...lines) } : {}),
+      ...(submoduleBasis.size > 0 ? { packageSubmoduleBasis: [...submoduleBasis].sort() } : {}),
+      ...(literalBasis.size > 0 ? { literalReferences: [...literalBasis.values()].sort() } : {}),
     }
     if (symbolBasis.size > 0) {
-      matches.push({ testPath: analysis.testPath, relationship: 'references-selected-production-symbol', basis: [...symbolBasis].sort() })
+      matches.push({ testPath: analysis.testPath, relationship: 'references-selected-production-symbol', basis: [...symbolBasis].sort(), ...extra })
     } else if (fileBasis.size > 0) {
-      matches.push({ testPath: analysis.testPath, relationship: 'imports-selected-production-file', basis: [...fileBasis].sort() })
+      matches.push({ testPath: analysis.testPath, relationship: 'imports-selected-production-file', basis: [...fileBasis].sort(), ...extra })
+    } else if (literalBasis.size > 0) {
+      matches.push({ testPath: analysis.testPath, relationship: 'references-selected-production-file-literal', basis: [...literalBasis.keys()].sort(), ...extra })
     }
   }
 
   return rankRelatedTestMatches(matches)
+}
+
+const MAX_PYTHON_UNRESOLVED_WARNINGS = 5
+
+function relatedTestProvenance(match: RelatedTestMatch): string {
+  if (match.relationship === 'references-selected-production-file-literal') return 'python-literal-app-file:AppTest.from_file'
+  const prefix = match.language === 'python' ? 'python-indexed-import' : 'import-specifier-scan'
+  return match.relationship === 'references-selected-production-symbol' ? `${prefix}:named-import` : `${prefix}:import`
 }
 
 function toEvidenceItem(options: {
@@ -335,13 +601,14 @@ function toEvidenceItem(options: {
   relationship: string
   basis: string
   provenance: string
+  line?: number
   metadata?: Record<string, string | number | boolean | null>
 }): EvidenceItemRef {
   return {
     id: options.path,
     itemKind: options.itemKind,
     path: options.path,
-    sourceLocation: { filePath: options.path },
+    sourceLocation: options.line !== undefined ? { filePath: options.path, line: options.line } : { filePath: options.path },
     relationship: options.relationship,
     basis: options.basis,
     provenance: options.provenance,
@@ -636,9 +903,23 @@ export function discoverTestInfrastructure(options: DiscoverTestInfrastructureOp
       itemKind: 'test-file',
       relationship: m.relationship,
       basis: m.basis.join(', '),
-      provenance: m.relationship === 'references-selected-production-symbol' ? 'import-specifier-scan:named-import' : 'import-specifier-scan:import',
+      provenance: relatedTestProvenance(m),
+      ...(m.line !== undefined ? { line: m.line } : {}),
+      ...(m.language === 'python'
+        ? {
+            metadata: {
+              language: 'python',
+              evidenceType: m.relationship === 'references-selected-production-file-literal' ? 'literal-application-file-reference' : 'python-import',
+              ...(m.packageSubmoduleBasis ? { packageSubmoduleBasis: m.packageSubmoduleBasis.join(', ') } : {}),
+              ...(m.literalReferences ? { literalReferences: m.literalReferences.join(', ') } : {}),
+            },
+          }
+        : {}),
     })
   )
+  const pythonNotes = analyses.flatMap((a) => (a.python?.unresolved ?? []).map((note) => `Python test "${a.testPath}": ${note}`))
+  warnings.push(...pythonNotes.slice(0, MAX_PYTHON_UNRESOLVED_WARNINGS))
+  if (pythonNotes.length > MAX_PYTHON_UNRESOLVED_WARNINGS) warnings.push(`${pythonNotes.length - MAX_PYTHON_UNRESOLVED_WARNINGS} further Python unresolved-reference note(s) omitted.`)
   relatedTestItems.push(...rustRelatedTests(options, warnings))
   const relatedTests = bound(relatedTestItems, limits.relatedTests)
   const relatedTestPaths = relatedMatches.map((m) => m.testPath)

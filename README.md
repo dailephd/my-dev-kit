@@ -132,13 +132,22 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Version 1.15.0
+## Version 1.15.1
 
-`@dailephd/my-dev-kit@1.15.0` is the version represented by this package. It broadens Python, JavaScript/TypeScript and framework evidence, and adds Rust structural indexing and bounded retrieval. It retains the existing Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
+`@dailephd/my-dev-kit@1.15.1` is the version represented by this package. It corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). It retains all existing Python, JavaScript/TypeScript, framework, Rust, Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).
 
 The v1.13.0 release includes the Android retrieval benchmark suite, public Android example, and workflow documentation. The Android example provides static Kotlin, Compose, Room, and Retrofit retrieval evidence; it is not compiled or run as an Android application.
 
-<a id="v1150-development-status-unreleased"></a>
+### v1.15.1 Python test-discovery correction
+
+Version 1.15.1 corrects Python test-discovery so that `context` and related-test
+classification recognize standard Python test file naming conventions (`test_*.py`
+and `*_test.py`). Previously, Python test files were not universally discovered
+by the shared related-test classifier. Pytest configuration parsing remains
+incomplete, dynamic imports remain unsupported, and fixture/conftest linkage
+is not universally inferred. Related tests are static evidence, not execution
+proof. See the [command reference](docs/COMMANDS.md) and
+[architecture](docs/ARCHITECTURE.md) for the implemented contracts.
 
 ### v1.15.0 static evidence
 
@@ -638,7 +647,7 @@ Rust call inference and Prisma are not implemented. Try it with the [Rust worksp
 
 ## Roadmap
 
-Version 1.15.0 retains this coverage. The planned scopes and ordering for v1.16.0, v1.17.0 and v2.0.0 remain unchanged. Optional Rust direct-call inference (R7) and Prisma remain deferred. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack) and [changelog](CHANGELOG.md) for scope and release history.
+Version 1.15.1 retains this coverage. The planned scopes and ordering for v1.16.0, v1.17.0 and v2.0.0 remain unchanged. Optional Rust direct-call inference (R7) and Prisma remain deferred. See the canonical [roadmap](docs/ROADMAP.md#rust-language-intelligence--v1140-subtrack) and [changelog](CHANGELOG.md) for scope and release history.
 
 ## Support the project
 

@@ -190,10 +190,75 @@ This distinction prevents supplemental execution metadata from silently
 gating core responsibility readiness while preserving fail-closed behavior for
 genuinely missing core evidence or an explicit `test-commands` request.
 
-Known limitation: the shared test-file classifier does not generally recognize
-Python `test_*.py` / `*_test.py` naming as related-test evidence. This is not
-implemented as of v1.12.3; broader Python language/framework classifier
-improvements remain v1.14.0 scope.
+Historical limitation (v1.12.3 through the published v1.15.0): the shared
+test-file classifier did not recognize Python `test_*.py` / `*_test.py` naming
+as related-test evidence, so Python tests were absent from `selectedTests` and
+responsibility mappings stayed partial. That limitation is corrected in an
+unreleased implementation candidate after v1.15.0 (KIT-PYTEST-01, below); it is not part of any
+published release and `package.json` is still `1.15.0`.
+
+<a id="python-test-discovery-kit-pytest-01-unreleased"></a>
+
+### Python related-test discovery (KIT-PYTEST-01, unreleased implementation candidate)
+
+**Status: implemented after v1.15.0 as an unreleased candidate; unpublished and not
+part of `@dailephd/my-dev-kit@1.15.0`.** The change lives only in
+`src/context/testInfrastructureDiscovery.ts`; `responsibilityMapping.ts`, the
+capsule/audit schemas (`"1.0.0"`), the command syntax and every public option
+are unchanged, and no artifact schema changed. These are separate claims and
+must not be conflated:
+
+- **Python test-file recognition.** `isPythonTestFile` accepts the pytest default
+  names `test_*.py` and `*_test.py` at any depth (`tests/test_a.py`,
+  `pkg/a_test.py`). `conftest.py`, helpers, `test.py` and other names are not
+  test files. Recognition alone relates nothing to production code.
+- **Static import relationship discovery.** A Python test is related to a
+  selected production file only through authenticated indexed evidence: a
+  `python-ast` import fact in the file's indexed `sourceAudit` with
+  `importResolution: "resolved-local"` and exactly one `targetPaths` entry that
+  is also an indexed file-dependency `import` edge from that test. `ambiguous`,
+  `unresolved`, `external`, `outside-selected-roots` and multi-target imports
+  never create a relationship; ambiguous and multi-target imports and
+  unresolved `AppTest.from_file` literals are reported as bounded notes (at
+  most three per test, five warnings overall). A `from package import submodule` import, which the index
+  resolves only to the package `__init__.py`, also relates an indexed submodule
+  of that name unless the package itself declares the name or the name matches
+  both a module file and a package (reported, not guessed). A named import of a
+  selected symbol is reported as `references-selected-production-symbol`;
+  otherwise `imports-selected-production-file`.
+- **Exact selected-source relationship evidence.** Evidence items carry the
+  test path, the relationship, the basis, a provenance string
+  (`python-indexed-import:import`, `python-indexed-import:named-import` or
+  `python-literal-app-file:AppTest.from_file`) and the import or literal line as
+  `sourceLocation.line`. Non-Python tests keep the existing
+  `import-specifier-scan` provenance and output unchanged.
+- **Streamlit `AppTest.from_file` literals.** Only when the test's indexed
+  import bindings show `AppTest` imported from `streamlit`, a literal-only,
+  comment- and string-aware token scan (bounded to 400,000 bytes per file and 400
+  test-shaped files) reads `AppTest.from_file("path")` or `script_path=` calls.
+  A complete plain string literal that resolves to exactly one existing indexed
+  file under the repository root or the test's own directory
+  (`references-selected-production-file-literal`) is evidence; variables,
+  f-strings, bytes, escapes, concatenation, traversal, absolute or scheme paths,
+  unknown files and literals matching both bases are counted as unresolved and
+  never produce a path.
+- **Test-command discovery** is unchanged. Commands still come only from
+  `package.json` scripts and a repository `Makefile` `test` target, reported
+  verbatim with their provenance. `pytest.ini`, `tox.ini` and similar
+  configuration files are detected but not parsed (`supported: false`), and no
+  targeted pytest command is derived from related Python tests.
+- **Responsibility mapping, oracle evidence and execution.** A discovered
+  related Python test supplies the core *related-test* evidence for a
+  responsibility. It does not establish oracle/assertion evidence, that every
+  responsibility is covered, or that any test ran or passed; a command never
+  substitutes for oracle evidence. Mapping semantics are exactly those described
+  above.
+
+Still not supported: pytest configuration discovery or parsing, deriving
+targeted pytest commands, dynamic imports and `importlib` use, fixtures,
+`conftest.py` or plugin relationships, and any claim from static evidence about
+test execution, coverage or passing. Broader Python language and framework
+improvements shipped separately in v1.14.0.
 
 ## Retrieval-precision contracts (v1.12.6)
 
