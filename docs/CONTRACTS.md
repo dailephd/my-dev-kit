@@ -309,6 +309,14 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 - **Kit facts versus Lab policy.** Kit supplies source facts, existence and occurrence evidence. Lab keeps audit rules, severity, policy, findings and reports. An exact occurrence is not automatically a syntactic reference, and a candidate's existence is not proof of unique semantic binding.
 - **Graph identity.** File-dependency edge IDs in `code-graph.json` stay unique when a file depends on one target through several statement kinds: the first kind (import, re-export, export-all) keeps the historical ID and the others receive a `#<kind>` suffix. Node and edge validation was not weakened.
 
+### Planned v1.15.2 capability-isolation patch (KIT-FACTS-01 maintenance)
+
+**Status: planned immediate correction, not shipped by the current 1.15.1 package.** Kotlin script explicit-import enumeration must be qualified independently from declaration, export and JVM identity completeness. The existing per-file, per-capability source-audit contract remains authoritative: a partial or unsupported capability cannot prove a negative, and complete selected inventory cannot prove complete semantic analysis.
+
+For the supported lexical profile, a complete `imports` capability covers every **explicit** import directive, including recognized alias/wildcard forms; it does not cover implicit Kotlin/Gradle DSL imports or resolved runtime dependencies. Any malformed directive or unresolved lexical boundary that may affect enumeration leaves `imports` partial or failed with diagnostic evidence. Executable top-level script statements alone are not import ambiguity. `declarations` stays partial where script declaration completeness is unproven, and no ordinary script JVM declaration identity is invented. All fact payloads remain source-anchored and producer-authenticated.
+
+The implementation must change the producer extractor revision so old per-file cache records cannot claim newly strengthened completeness. Retain source-audit schema `1.1.0`, stable file/fact/lookup contracts, and existing containment and snapshot checks unless a concrete incompatibility is first established. Downstream Lab v0.10.1 must qualify each predicate independently; Kit cannot assign a Lab PASS, severity or audit applicability state.
+
 ## Static-evidence boundary
 
 <a id="kit-api-01-bounded-cross-layer-projection-v1150-unreleased"></a>
