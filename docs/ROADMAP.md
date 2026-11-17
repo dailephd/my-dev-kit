@@ -1915,6 +1915,10 @@ Planned boundaries:
 
 This milestone supports later full-stack contract assurance but is not required for Android v1.13.0 work.
 
+## Version 1.15.1 — Python related-test discovery correction
+
+**Status: implemented in v1.15.1; package metadata 1.15.1.** KIT-PYTEST-01 corrects recognition of standard `test_*.py` and `*_test.py` related-test files, retaining conservative authenticated source/import relationships. It does not infer fixtures, dynamic imports, pytest configuration semantics, or executed test coverage. This already implemented patch remains separate from the urgent v1.15.2 Kotlin source-audit correction. See [CONTRACTS.md](CONTRACTS.md#python-test-discovery-kit-pytest-01-unreleased) and [CHANGELOG.md](../CHANGELOG.md) for the versioned behavior and release history.
+
 ## Version 1.15.2 — Kotlin script source-audit capability correction
 
 **Status: active, immediate corrective patch; planned and not yet implemented.** This patch follows the current v1.15.1 package and precedes the reserved v1.16.0 feature milestone. The v1.15.0 KIT-FACTS-01 and KIT-API-01 implementation and the v1.15.1 Python-test correction remain intact. SW-123 in my-dev-kit-lab identified a concrete downstream readiness failure on a Gradle Kotlin DSL fixture; this is an urgent producer correction, not a new language-analysis milestone.
