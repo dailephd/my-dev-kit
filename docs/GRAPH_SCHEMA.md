@@ -1262,6 +1262,10 @@ Not claimed: the artifact does not prove complete semantic resolution, runtime b
 
 <a id="api-relationship-evidencejson-v1150-unreleased"></a>
 
+### Planned v1.15.2 capability interpretation correction
+
+**Not implemented in the current v1.15.1 package.** The proposed Kotlin script repair changes how existing `files[].capabilities.imports` and `files[].capabilities.declarations` statuses are established; it does not add a new source-audit artifact, fact kind, field, or command selector. One file may legitimately report complete explicit imports and partial declarations. Complete imports mean enumeration of supported explicit import directives only, not implicit Gradle/Kotlin imports or semantic dependency resolution. Unsupported lexing that could conceal an import still prevents a complete claim. Existing `facts[]`, diagnostics, selected inventory, pagination, source hashes, and snapshot validation remain authoritative. An extractor contract revision and private cache invalidation will distinguish new evidence from old results; old persisted evidence must not be silently promoted.
+
 ## api-relationship-evidence.json (v1.15.0)
 
 Kind `kit-api-relationship-evidence-v1`, schema `1.0.0`, producer revision
