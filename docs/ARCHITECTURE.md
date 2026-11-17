@@ -768,6 +768,17 @@ Boundaries: the evidence is static and bounded. It supports enumeration of the s
 
 <a id="api-relationship-evidence-architecture-v1150-unreleased"></a>
 
+### Planned v1.15.2 Kotlin-script capability isolation
+
+**Status: immediate correction planned; not implemented in v1.15.1.** The existing Kotlin lexical adapter remains the sole source of Kotlin source-audit facts. Its shared `uncertain` state currently makes both `declarations` and `imports` partial when an executable top-level Gradle script statement is encountered. The correction will separate uncertainty by capability without inserting a second scanner, adding compiler execution, or moving applicability policy out of Lab.
+
+The required ownership flow is: tokenize and validate supported lexical regions; identify explicit import directives independently; identify declaration/nesting/JVM/visibility uncertainty independently; emit only observed facts with honest per-capability statuses and diagnostics; build the managed source-audit projection using the existing index, hash and manifest machinery. `imports: complete` will mean exhaustive **explicit** import enumeration in the qualified lexical domain, never implicit Kotlin or Gradle DSL imports or dependency-resolution completeness. Unsupported import grammar or ambiguous comment/string/structural boundaries prevents that claim. Executable script statements may leave declarations partial and JVM declarations unsupported while imports are complete.
+
+The affected owners are `src/languages/kotlin/adapter.ts`, `src/indexing/buildSourceAuditEvidence.ts`, the existing private cache metadata/extractor compatibility path, and tests in the established indexing suites. Change the extractor contract revision as required to invalidate old reusable records; do not fabricate equivalence by reusing prior-revision cache entries. Keep source-audit artifact schema `1.1.0`, opaque fact IDs, manifest identity, hashes, selected-root containment, read-time freshness and fact pagination unless separately authorized by a demonstrated contract need.
+
+Lab remains responsible for detector-predicate applicability and adequacy. A valid Kit record with complete imports and partial declarations does **not** authorize negative declaration inference or imply successful Lab readiness. The SW-123 matched packaged producer/consumer test is a required coordinated gate, not a new Kit audit command.
+
+
 ## API relationship evidence architecture (v1.15.0)
 
 KIT-API-01 is implemented in v1.15.0. It extends the existing
