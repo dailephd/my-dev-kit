@@ -1915,6 +1915,32 @@ Planned boundaries:
 
 This milestone supports later full-stack contract assurance but is not required for Android v1.13.0 work.
 
+## Version 1.15.2 — Kotlin script source-audit capability correction
+
+**Status: active, immediate corrective patch; planned and not yet implemented.** This patch follows the current v1.15.1 package and precedes the reserved v1.16.0 feature milestone. The v1.15.0 KIT-FACTS-01 and KIT-API-01 implementation and the v1.15.1 Python-test correction remain intact. SW-123 in my-dev-kit-lab identified a concrete downstream readiness failure on a Gradle Kotlin DSL fixture; this is an urgent producer correction, not a new language-analysis milestone.
+
+**Goal:** report truthful, independently established source-audit capabilities for Kotlin scripts so that an executable or unsupported declaration statement does not automatically downgrade explicit-import enumeration. Preserve conservative interpretation of unsupported syntax, selected-source authority, and the existing language and command boundaries.
+
+**Scope and ownership:**
+
+- Extend the existing `src/languages/kotlin/adapter.ts` scanner and tests under `tests/index/`; distinguish uncertainty about imports, declarations/nesting, JVM declaration identity, visibility/exports, and cross-cutting lexical integrity. An unsupported top-level Gradle DSL statement alone must not invalidate a separately established explicit-import inventory.
+- Define `imports: complete` only for exhaustive enumeration of explicit import directives inside a validated lexical profile. Do not equate this with implicit Kotlin/Gradle imports, dependency resolution, or proof that a script has no dependencies. Preserve supported direct, alias, and wildcard import facts and report unsupported/malformed directives conservatively.
+- Preserve `declarations: partial` when executable script statements or unrecognized declarations prevent complete enumeration; `jvmDeclarations: unsupported` for scripts unless a separately qualified contract changes it; and existing conservative `exports` and `source-ranges` semantics. No fabricated Kotlin DSL declarations, implicit receivers, exported symbols, or JVM type identities.
+- Test strings (including raw multiline strings), annotations, comments, nested comments, malformed import text, structural errors, directives, Unicode and line endings before granting completeness. Retain truthful diagnostics and already observed, individually qualified facts without presenting uncertain observations as valid negatives.
+- Advance `SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION` and corresponding private cache compatibility checks when extraction semantics change. The existing schema-`1.1.0` source-audit artifact, manifest-`1.0.0`, symbol-index-`3`, code-graph-`1.1.0`, audit lookup selectors, snapshot/hash validation, selected roots and bounded paging remain the public contract unless a specific, separately justified compatibility change is required.
+- Maintain the established Kit producer / Lab consumer boundary: Kit supplies source facts and capability evidence, not Lab detector applicability, findings, severity or readiness policy.
+
+**Ordered implementation and acceptance:**
+
+1. **K0 — Frozen reproduction and contract.** Retain the SW-123 file and qualified Kit 1.15.0 evidence as historical regression input; assert the old limitation and the intended differentiated capability outcomes. Inspect the existing language/source-audit tests and cache invalidation precedents.
+2. **K1 — Bounded scanner correction.** Decouple capability decisions, prove explicit-import lexical coverage on supported inputs, and keep unrecognized or ambiguous syntax partial. Validate both positive and adversarial cases.
+3. **K2 — Index lifecycle and compatibility.** Update extractor revision and cache invalidation; establish exact-byte artifact provenance, deterministic fact ordering, snapshot identity, fresh/unchanged file behavior and equivalent normalized full/incremental outputs.
+4. **K3 — Exact-package producer qualification.** Run focused and canonical tests, docs checks, packed isolated-consumer lookup, cross-platform checks at readiness, and a real Kit-to-Lab compatibility fixture. Do not relabel an existing 1.15.0 or 1.15.1 package as the corrected producer. Release preparation and publication remain separate authorized stages.
+
+**Acceptance:** The exact SW-123 `tests/fixtures/android/advanced-security-fixtures/release-configuration/kotlin-release-debuggable-false.gradle.kts` fixture yields complete *explicit-import* enumeration (zero explicit imports) only when lexical tests prove that result, while script declaration and JVM limitations remain visible. Complete and partial capabilities may coexist in one authenticated file. Malformed imports, syntactic ambiguity, stale/old-revision caches, altered bytes, missing evidence, and out-of-root paths never produce a false complete negative. Existing TypeScript, JavaScript, Python, Java, Rust, Android and complete-Kotlin fixtures remain compatible; no new command family or Gradle execution is introduced.
+
+The downstream Lab v0.10.1 fix is separately required: producer improvements alone do not qualify a Lab detector or discharge mandatory audit coverage. Coordinated acceptance uses independently pinned exact Kit and Lab candidates before any downstream release.
+
 ## Version 1.16.0
 
 **Status: planned.**
