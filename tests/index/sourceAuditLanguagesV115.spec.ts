@@ -471,11 +471,106 @@ describe('v1.15.0 Batch 2 Kotlin facts', () => {
     expect(discoverSourceFiles({ repoRoot: root, sourceRoots: ['src'] }).files.map((file) => file.relPath).sort()).toEqual(['src/app.kt', 'src/script.kts'])
     expect(registry.adapterForFile('build.gradle.kts')).toBeInstanceOf(KotlinAdapter)
     const { payload } = audit('src/script.kts', fixture('language-kotlin-script.kts'))
-    expect(payload.capabilities).toMatchObject({ declarations: 'partial', imports: 'partial' })
+    expect(payload.capabilities).toMatchObject({ declarations: 'partial', imports: 'complete' })
     expect(payload.diagnostics.map((d) => d.code)).toContain('kotlin-script-statement')
     expect(named(payload, 'declaration', 'greeting')).toMatchObject({ visibility: 'unknown', exported: null, exportOrigin: 'unknown' })
     const { artifact } = artifactFor(root)
     expect(artifact.files.find((file) => file.path === 'src/script.kts')).toMatchObject({ language: 'kotlin', status: 'parsed', analyzerId: 'kotlin-lexical' })
+    expect(artifact.files.find((file) => file.path === 'src/script.kts')!.capabilities).toMatchObject({ declarations: 'partial', imports: 'complete', jvmDeclarations: 'unsupported' })
+    expect(artifact.files.find((file) => file.path === 'src/app.kt')!.capabilities).toMatchObject({ declarations: 'complete', imports: 'complete', jvmDeclarations: 'complete' })
+    expect(artifactFor(root).artifact).toEqual(artifact)
+  })
+
+  const gradleScript = 'android {\n    buildTypes {\n        getByName("release") {\n            isDebuggable = false\n        }\n    }\n}\n'
+
+  it('independently qualifies the SW-123 Gradle explicit-import inventory', () => {
+    const { payload } = audit('src/build.gradle.kts', gradleScript)
+    expect(payload.capabilities).toMatchObject({ declarations: 'partial', imports: 'complete', jvmDeclarations: 'unsupported', exports: 'partial', 'source-ranges': 'partial' })
+    expect(payload.facts).toEqual([])
+    expect(payload.diagnostics.map(d => d.code)).toContain('kotlin-script-statement')
+    expect(audit('src/build.gradle.kts', gradleScript).payload).toEqual(payload)
+  })
+
+  it('preserves direct, alias and wildcard facts alongside partial script declarations', () => {
+    const source = 'import java.io.File\nimport java.util.Date as CalendarDate\nimport java.util.*; // supported terminator\nval marker = 1\n' + gradleScript
+    const { payload, extraction } = audit('src/build.gradle.kts', source)
+    expect(payload.capabilities).toMatchObject({ declarations: 'partial', imports: 'complete', jvmDeclarations: 'unsupported' })
+    expect(extraction.imports).toEqual(['java.io.File', 'java.util.Date', 'java.util.*'])
+    expect(ofKind(payload, 'import').map(f => [f.sourceSpecifier, f.importedNames, f.span.startLine])).toEqual([
+      ['java.io.File', ['File'], 1], ['java.util.Date', ['Date'], 2], ['java.util.*', ['*'], 3],
+    ])
+    expect(importOf(payload, 'java.io.File')).toMatchObject({ extractionMethod: 'kotlin-lexical', importResolution: 'observed', jvmImportTarget: { kind: 'kotlin-direct', qualifiedName: 'java.io.File' }, span: { path: 'src/build.gradle.kts', startColumn: null, endLine: null } })
+    for (const specifier of ['java.util.Date', 'java.util.*']) expect(importOf(payload, specifier).jvmImportTarget).toEqual({ kind: 'unsupported', qualifiedName: null })
+    expect(named(payload, 'declaration', 'marker')).toMatchObject({ visibility: 'unknown', exported: null, exportOrigin: 'unknown' })
+    expect(payload.facts.every(f => !f.jvmDeclaration)).toBe(true)
+    expect(audit('src/build.gradle.kts', source).payload).toEqual(payload)
+  })
+
+  it.each([
+    '// import fake.Line\n/* import fake.Block\n /* nested */ import fake.StillComment\n*/\n',
+    'val url = "https://example.test/* not a comment */"\nval quoted = "\\\" import fake.Quoted"\nval brace = \'{\'\n',
+    'val text = """\nimport fake.Raw\n/* not a comment */ { }\n"""\n',
+    'val simpleTemplate = "import fake.Name $name"\n',
+  ])('masks supported comments and literals without hiding real imports: %s', prefix => {
+    const source = prefix + 'import java.io.File // real\n' + gradleScript
+    const { payload } = audit('src/build.gradle.kts', source)
+    expect(payload.capabilities.imports).toBe('complete')
+    expect(ofKind(payload, 'import').map(f => f.sourceSpecifier)).toEqual(['java.io.File'])
+    expect(audit('src/build.gradle.kts', source).payload).toEqual(payload)
+  })
+
+  it.each([
+    'import\njava.io.File\n', 'import java.io.File trailing\n', 'import java.io.File as\n',
+    'import java..File\n', 'import java.io.* as Files\n', 'import java.io.File()\n',
+    'import java.io.File; import java.util.Date\n', 'val a = 1; import java.io.File\n',
+    'import java.io.File "suffix"\n', 'import java.io.文件\n', 'import java.io.\nFile\n',
+    'import java.io.Fi/* split token */le\n', 'call(\nimport java.io.File\n)\n',
+    'android {\nimport java.io.File\n}\n', 'import foo.class\n', 'import foo.Bar as class\n',
+    'import foo._\n', 'import foo.Bar class Invented\n', 'import\u00a0java.io.File\n',
+    'import java.io.`File`\n',
+  ])('rejects partial import prefixes and misplaced directives: %s', body => {
+    const { payload, extraction } = audit('src/bad.kts', body)
+    expect(payload.capabilities.imports).toBe('partial')
+    expect(ofKind(payload, 'import')).toEqual([])
+    expect(extraction.imports).toEqual([])
+    expect(payload.facts.find(f => f.name === 'Invented')).toBeUndefined()
+    expect(payload.diagnostics.map(d => d.code)).toContain('kotlin-import-syntax')
+  })
+
+  it.each([
+    ['/* import fake.Hidden', 'unterminated-block-comment'],
+    ['/* outer /* inner */\nimport fake.Hidden\n', 'unterminated-block-comment'],
+    ['val text = "unterminated\nimport fake.Hidden\n', 'unterminated-kotlin-literal'],
+    ['val text = """\nimport fake.Hidden\n', 'unterminated-kotlin-raw-string'],
+    ['val text = "${call("nested")}"\nimport fake.Hidden\n', 'kotlin-string-template'],
+    ['val text = """${call("nested")}\nimport fake.Hidden\n"""', 'kotlin-string-template'],
+    ['val `unfinished\nimport fake.Hidden\n', 'kotlin-escaped-identifier'],
+    ['android {\n', 'kotlin-unbalanced-delimiters'],
+    ['}\n{\n', 'kotlin-unbalanced-delimiters'],
+    ['call([)]\n', 'kotlin-unbalanced-delimiters'],
+    ['*/\n', 'kotlin-unmatched-comment'],
+    ['val char = \'ab\'\n', 'kotlin-character-literal'],
+    ['val text = "\\q"\n', 'kotlin-literal-escape'],
+    ['#!/usr/bin/env kotlin\n', 'kotlin-import-directive'],
+    ['@file:DependsOn("library")\n', 'kotlin-import-directive'],
+    ['// comment\rimport fake.Hidden\r', 'kotlin-line-boundary'],
+    ['// comment\u2028import fake.Hidden\n', 'kotlin-line-boundary'],
+  ])('retains partial imports for unverified lexical boundaries: %s', (body, code) => {
+    const source = 'import java.io.File\n' + body
+    const { payload } = audit('src/uncertain.kts', source)
+    expect(payload.capabilities.imports).toBe('partial')
+    expect(ofKind(payload, 'import').map(f => f.sourceSpecifier)).toEqual(['java.io.File'])
+    expect(payload.diagnostics.map(d => d.code)).toContain(code)
+    expect(payload.capabilities.jvmDeclarations).toBe('unsupported')
+    expect(audit('src/uncertain.kts', source).payload).toEqual(payload)
+  })
+
+  it.each(['\n', '\r\n'])('keeps complete ordinary Kotlin evidence with comments and %j line endings', newline => {
+    const source = ['package demo', 'import java.io.File /* outer /* nested */ end */', 'class App', ''].join(newline)
+    const { payload } = audit('src/App.kt', source)
+    expect(payload.capabilities).toMatchObject({ declarations: 'complete', imports: 'complete', jvmDeclarations: 'complete', exports: 'partial', 'source-ranges': 'partial' })
+    expect(named(payload, 'declaration', 'App').jvmDeclaration?.qualifiedName).toBe('demo.App')
+    expect(importOf(payload, 'java.io.File').span.startLine).toBe(2)
   })
 
   it('qualifies lexical script declarations without assuming compilation-unit visibility', () => {
