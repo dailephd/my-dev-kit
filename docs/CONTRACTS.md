@@ -193,16 +193,13 @@ genuinely missing core evidence or an explicit `test-commands` request.
 Historical limitation (v1.12.3 through the published v1.15.0): the shared
 test-file classifier did not recognize Python `test_*.py` / `*_test.py` naming
 as related-test evidence, so Python tests were absent from `selectedTests` and
-responsibility mappings stayed partial. That limitation is corrected in an
-unreleased implementation candidate after v1.15.0 (KIT-PYTEST-01, below); it is not part of any
-published release and `package.json` is still `1.15.0`.
+responsibility mappings stayed partial. That limitation was corrected in the v1.15.1 package (KIT-PYTEST-01, below), not in v1.15.0. Current `package.json` metadata is `1.15.1`; release-channel verification remains separate from metadata.
 
 <a id="python-test-discovery-kit-pytest-01-unreleased"></a>
 
-### Python related-test discovery (KIT-PYTEST-01, unreleased implementation candidate)
+### Python related-test discovery (KIT-PYTEST-01, v1.15.1)
 
-**Status: implemented after v1.15.0 as an unreleased candidate; unpublished and not
-part of `@dailephd/my-dev-kit@1.15.0`.** The change lives only in
+**Status: implemented in v1.15.1; not part of `@dailephd/my-dev-kit@1.15.0`.** The change lives only in
 `src/context/testInfrastructureDiscovery.ts`; `responsibilityMapping.ts`, the
 capsule/audit schemas (`"1.0.0"`), the command syntax and every public option
 are unchanged, and no artifact schema changed. These are separate claims and
