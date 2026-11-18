@@ -86,14 +86,14 @@ describe('v1.15.0 Batch 4 source-audit artifact generation', () => {
     expect(artifact.coverage.recordedFileCount).toBe(0)
   })
 
-  it('records an unsupported file without claiming a content hash it never analyzed', async () => {
+  it('authenticates selected unsupported text without claiming semantic extraction', async () => {
     const root = makeProject({ ...BASE, 'src/notes.xyz': 'unsupported\n' })
     await index(root)
     const artifact = readSourceAuditEvidence(join(root, 'out'))
     const records = artifact.files.map((file) => file.path)
     expect(records).toEqual(expect.arrayContaining(['src/a.ts', 'src/b.ts', 'src/notes.xyz']))
     const unsupported = artifact.files.find((file) => file.path === 'src/notes.xyz')!
-    expect(unsupported).toMatchObject({ status: 'unsupported', contentSha256: null })
+    expect(unsupported).toMatchObject({ status: 'unsupported', contentSha256: createHash('sha256').update('unsupported\n').digest('hex'), facts: [] })
     expect(unsupported.capabilities.declarations).toBe('unsupported')
     expect(artifact.coverage.inventoryComplete).toBe(true)
     for (const file of artifact.files) {

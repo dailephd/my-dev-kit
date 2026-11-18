@@ -9,7 +9,7 @@ import { assertSourceAuditFileFresh, readSourceAuditEvidence, SourceAuditEvidenc
 import { ensureInsideProjectRoot, UnsafeSourceError } from './getSourceSlice.js'
 
 /**
- * Filesystem/source-selection evidence for one recorded import fact. It is NOT a claim that the import
+ * Filesystem/source-selection evidence for one recorded import or JS/TS re-export fact. It is NOT a claim that the import
  * binds semantically; the fact's own importResolution and targetPaths keep their meanings.
  */
 export interface AuditImportTargetProof {
@@ -43,7 +43,10 @@ function findImportFact(artifact: SourceAuditEvidenceArtifact, factId: string): 
   for (const file of artifact.files) {
     const fact = file.facts.find((candidate) => candidate.id === factId)
     if (!fact) continue
-    if (fact.kind !== 'import') {
+    const reExport = fact.kind === 'export' && fact.exportOrigin === 're-export' &&
+      typeof fact.sourceSpecifier === 'string' && fact.sourceSpecifier.length > 0 &&
+      (file.language === 'typescript' || file.language === 'javascript')
+    if (fact.kind !== 'import' && !reExport) {
       throw new SourceAuditEvidenceError('AUDIT_FACT_NOT_IMPORT', `Fact "${factId}" is a ${fact.kind} fact, not an import fact.`)
     }
     if (fact.span.path !== file.path) {
@@ -98,10 +101,11 @@ function classifyAbsentCandidates(
 }
 
 /**
- * Read-only existence proof for one indexed import fact. Uses the identity-verified source-audit artifact,
+ * Read-only existence proof for one indexed import or JS/TS re-export fact. Uses the identity-verified source-audit artifact,
  * the existing language resolvers and the recorded selected inventory; it never reparses source, rebuilds
  * the index or writes anything. Unresolved is never translated into missing without a complete enumerated
- * candidate set in a complete selection.
+ * candidate set in a complete selection. Re-export chains are not traversed: a present immediate target
+ * says nothing about its exported bindings, cycles, external dependencies or global reference coverage.
  */
 export function resolveAuditImportTarget(indexDir: string, importFactId: string): AuditImportTargetProof {
   const artifact = readSourceAuditEvidence(indexDir)

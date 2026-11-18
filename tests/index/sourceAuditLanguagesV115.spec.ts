@@ -249,7 +249,7 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     expect(registry.adapterForFile('src/unsupported.txt')).toBeNull()
     expect(built.index.files.map(file => file.path)).not.toContain('src/unsupported.txt')
     const unsupported = artifact.files.find(file => file.path === 'src/unsupported.txt')!
-    expect(unsupported).toMatchObject({ language: 'unsupported', status: 'unsupported', analyzerId: null, contentSha256: null, facts: [] })
+    expect(unsupported).toMatchObject({ language: 'unsupported', status: 'unsupported', analyzerId: null, contentSha256: createHash('sha256').update('not source\n').digest('hex'), facts: [] })
     expect(unsupported.capabilities).toEqual(Object.fromEntries(SOURCE_AUDIT_CAPABILITIES.map(capability => [capability, 'unsupported'])))
     expect(() => validateSourceAuditEvidence(artifact)).not.toThrow()
   })

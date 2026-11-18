@@ -8,6 +8,7 @@ import { readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidenc
 import { findExactFileOccurrences } from '../../src/source/findExactMatches.js'
 import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
 import { runCli } from '../lookup/testCli.js'
+import * as sourceReader from '../../src/lookup/getSourceSlice.js'
 
 const owned: string[] = []
 afterAll(() => { for (const dir of owned) rmSync(dir, { recursive: true, force: true }) })
@@ -53,7 +54,7 @@ describe('selected JSON test-content source evidence', () => {
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     expect(manifest.sourceAuditEvidence.snapshotId).toBe(artifact.source.snapshotId)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.2')
   })
 
   it('uses the same exact-file CLI authority without exposing JSON through other source modes', async () => {
@@ -75,16 +76,51 @@ describe('selected JSON test-content source evidence', () => {
       expect(query(out, file)).toMatchObject({ complete: true, matchCount: 1 })
     })
 
-  it('does not grant raw content to metadata, unrelated JSON, generated or vendor files', async () => {
+  it('authenticates explicitly selected text independently of metadata or fixture role', async () => {
     const ineligible = ['package.json', 'src/settings.json', 'src/contests/payload.json', 'tests/package-lock.json',
       'tests/package.json', 'tests/tsconfig.json', 'tests/generated/payload.json', 'tests/vendor/payload.json']
     const root = project(Object.fromEntries(ineligible.map(file => [file, '{}\n'])))
     const out = join(root, 'out')
     await runIndexCommand({ root, src: ['.'], out })
     for (const file of ineligible) {
-      expect(fileRecord(out, file)?.contentSha256).toBeNull()
-      expect(query(out, file)).toMatchObject({ complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE' })
+      expect(fileRecord(out, file)).toMatchObject({ status: 'unsupported', contentSha256: digest('{}\n'), facts: [] })
+      expect(query(out, file)).toMatchObject({ complete: true, matchCount: 0 })
     }
+  })
+
+  it.each(['readme.md', 'layout.xml', 'build.gradle', 'local.properties', 'settings.toml', 'case.input', 'case.txt', 'LICENSE', 'result.tap'])(
+    'authenticates selected unsupported text %s without semantic capabilities', async basename => {
+      const file = `tests/fixtures/${basename}`
+      const out = await build(project({ [file]: 'raw witness\r\n' }))
+      const record = fileRecord(out, file)!
+      expect(record).toMatchObject({ status: 'unsupported', contentSha256: digest('raw witness\r\n'), facts: [] })
+      expect(Object.values(record.capabilities).every(status => status === 'unsupported')).toBe(true)
+      expect(query(out, file, 'witness')).toMatchObject({ complete: true, matchCount: 1 })
+      expect(query(out, file, 'absent')).toMatchObject({ complete: true, matchCount: 0 })
+      writeFileSync(join(readSourceAuditEvidence(out).source.projectRoot, file), 'changed bytes')
+      expect(() => query(out, file, 'absent')).toThrow()
+    })
+
+  it('certifies empty selected text and preserves unreadable and binary limitations', async () => {
+    const empty = 'tests/fixtures/empty.txt'
+    const binary = 'tests/fixtures/keystore.jks'
+    const root = project({ [empty]: '', [binary]: Buffer.from([0, 255, 1]) })
+    const out = await build(root)
+    expect(fileRecord(out, empty)?.contentSha256).toBe(digest(''))
+    expect(query(out, empty)).toMatchObject({ complete: true, scannedBytes: 0, matchCount: 0 })
+    expect(fileRecord(out, binary)?.contentSha256).toBeNull()
+    expect(query(out, binary)).toMatchObject({ complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE' })
+    writeFileSync(join(root, empty), 'read must fail')
+    const original = sourceReader.readSourceBytes
+    const spy = vi.spyOn(sourceReader, 'readSourceBytes').mockImplementation((...args: Parameters<typeof original>) => {
+      if (args[1] === empty) throw new Error('synthetic unreadable source')
+      return original(...args)
+    })
+    try {
+      await build(root)
+      expect(fileRecord(out, empty)?.contentSha256).toBeNull()
+      expect(query(out, empty).complete).toBe(false)
+    } finally { spy.mockRestore() }
   })
 
   it.each(['build', 'dist', 'node_modules', 'target', '.cache'])('keeps default-ignored %s content unselected', async dir => {

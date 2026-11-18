@@ -96,7 +96,7 @@ function partialProjection(
 
 describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
   it('versions the extractor snapshot independently of the public schema', () => {
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.1')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.2')
     const artifact = fullProjection(makeProject({ 'src/App.kt': 'class App\n' })).artifact
     expect(artifact.schemaVersion).toBe('1.1.0')
     const identity = (revision: string) => sha(JSON.stringify({
@@ -108,7 +108,8 @@ describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
         language: file.language, role: file.role, status: file.status,
       })),
     }))
-    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.5.1'))
+    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.5.2'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.1'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.0'))
   })
 

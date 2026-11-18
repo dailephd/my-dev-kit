@@ -98,17 +98,6 @@ export interface AuditSelectedFile {
   contentSha256?: string
 }
 
-/** Narrow raw test-input eligibility, separate from the programming-language registry. */
-export function isAuditJsonContentPath(relPath: string): boolean {
-  const segments = toForwardSlash(relPath).split('/').map(segment => segment.toLowerCase())
-  const basename = segments.pop() ?? ''
-  if (!basename.endsWith('.json') || ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'tsconfig.json', 'jsconfig.json'].includes(basename) || basename.endsWith('.lock.json')) return false
-  if (segments.some(segment => segment === 'generated' || segment === 'vendor' ||
-    (DEFAULT_IGNORED_DIRECTORY_NAMES as readonly string[]).includes(segment) ||
-    DEFAULT_IGNORED_DIRECTORY_PREFIXES.some(prefix => segment.startsWith(prefix)))) return false
-  return segments.some(segment => ['test', 'tests', '__tests__', 'fixtures'].includes(segment))
-}
-
 /**
  * Additive audit ledger populated during the single discovery traversal.
  * `excludedPathCount` counts unique excluded path entries actually observed
@@ -275,7 +264,9 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     if (!state.registry.supportsFile(entry.name)) {
       recordSkipped(state, relPath, 'unsupported')
       let contentSha256: string | undefined
-      if (isAuditJsonContentPath(relPath) && stat.size <= AUDIT_CONTENT_MAX_BYTES) {
+      // Selection grants raw byte authority independently of semantic language support.
+      // Keep the existing bounded, containment-safe text profile; never manufacture facts.
+      if (stat.size <= AUDIT_CONTENT_MAX_BYTES) {
         try {
           const bytes = readSourceBytes(state.repoRoot, relPath, AUDIT_CONTENT_MAX_BYTES)
           // Fatal decoding rejects invalid UTF-8 instead of authenticating replacement-character text.

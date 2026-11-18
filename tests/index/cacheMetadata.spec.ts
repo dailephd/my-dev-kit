@@ -31,7 +31,7 @@ describe('computeConfigFingerprint', () => {
     vi.resetModules()
     vi.doMock('../../src/indexing/buildSourceAuditEvidence.js', async (original) => ({
       ...await original<typeof import('../../src/indexing/buildSourceAuditEvidence.js')>(),
-      SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION: 'source-audit-v1.5.0',
+      SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION: 'source-audit-v1.5.1',
     }))
     try {
       const historicalContract = await import('../../src/indexing/cacheMetadata.js')
