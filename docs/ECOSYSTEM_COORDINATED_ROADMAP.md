@@ -513,11 +513,11 @@ Kit v1.12.6 is not a new prerequisite for Lab v0.6.3 or ORC-EVIDENCE-01. Lab v0.
 
 **Status update: Kit v1.12.6 is published.** Ownership-oriented search and bounded retrieval with trustworthy generic symbol boundaries are available in the current package. This does not change the existing Lab v0.6.3 dependency on Kit v1.12.5 or any later milestone assignment.
 
-#### 7.1.3 Post-ECO-00 Kit v1.17.0 frontend retrieval completion reservation — 2026-10-10
+#### 7.1.3 Historical Kit v1.17.0 frontend reservation — 2026-10-10; amended 2026-11-19
 
 A later Kit-local planning decision reserves v1.17.0 after unchanged v1.13.0–v1.16.0 milestones and before the independent v2.0.0 program. It completes bounded test-title, React render/prop/event, scoped literal, storage operation and grounded route/guard retrieval within existing Kit architectures. The Kit ROADMAP owns the detailed scope and a nineteen-item disposition of the prior frontend improvement notes.
 
-This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or create a new prerequisite for ECO-01, Lab v0.6.3 or Orchestrator v1.7.0. Project/Orchestrator test execution and Observer browser-visible validation retain their existing ownership.
+The paragraph above records the historical 2026-10-10 reservation, not today's effective version mapping. **2026-11-19 user-approved amendment:** Kit **v1.16.0** now delivers the coordinated SW-123 / iworkhere source-evidence public proof feature, Kit **v1.17.0** retains the entire KIT-OPS-01 operational-evidence scope formerly assigned v1.16.0, and Kit **v1.18.0** retains the entire frontend-retrieval scope formerly assigned v1.17.0. These moves do not expand KIT-API-01 or change ECO-01, Lab v0.6.3 or Orchestrator dependencies. Project/Orchestrator execution and Observer browser-visible validation keep their existing ownership.
 
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
@@ -532,9 +532,9 @@ This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or creat
 - 0.13.0 / OBS-PERF-01: versioned local performance capture, browser/environment provenance, comparable baseline/candidate samples, unavailable metrics explicit.
 - 0.14.0 / OBS-BROWSER-01: bounded browser/viewport matrix; preserve each browser's identity and capabilities. Unsupported browser metrics remain unavailable. Do not compare baselines across incompatible engines as though identical.
 
-### 7.4 Lab — adopted additive reservations with no rebaseline of existing scope
+### 7.4 Lab — historical ECO-00 reservations and 2026-11-19 approved amendment
 
-ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0.6.0 is already published as index freshness and changed-file detection. It also avoids moving the already-agreed 0.6.1-0.9.2 roadmap. Existing assignments remain intact:
+ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0.6.0 is already published as index freshness and changed-file detection. It also avoids moving the already-agreed 0.6.1-0.9.2 roadmap. The following is the **historical 2026-09-25 ECO-00 mapping**, retained as provenance; its v0.11.0–v0.17.0 version numbers were explicitly revised on 2026-11-19:
 
 - 0.6.0: published index freshness and changed-file detection.
 - 0.6.1-0.6.3: affected-neighborhood, incremental-change/staleness, and partial-refresh planning, unchanged.
@@ -551,7 +551,7 @@ ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0
 - 0.17.0 / LAB-OPS-01: bounded observability/configuration/IaC evidence adapters only when demanded by real target projects.
 - 1.0.0 and existing 1.1.0-1.4.0 post-stable milestones retain their current purposes.
 
-This is an additive reservation, not a relocation. No existing Lab version heading, feature scope, or acceptance criterion is reassigned by ECO-00. Chronological order inside the package is a release constraint, not a claim of technical dependency among unrelated evidence domains.
+This was an additive reservation at ECO-00, not a relocation **at that date**. **Current approved 2026-11-19 mapping:** Lab **v0.11.0** is now the coordinated SW-123 / iworkhere source-evidence consumer release. The prior LAB-A11Y-01 v0.11.0 moves intact to **v0.12.0**; LAB-WEBSEC-01 **v0.13.0**; LAB-PERF-01 **v0.14.0**; LAB-API-01 **v0.15.0**; LAB-SUPPLY-01 **v0.16.0**; LAB-TEST-01 **v0.17.0**; LAB-OPS-01 **v0.18.0**. LAB-EVIDENCE-01 remains v0.10.0; all published releases and stable/post-stable scopes remain unchanged. These are deliberate version shifts without loss of feature, owner or acceptance criteria. Chronological order is a release constraint, not proof of technical dependency.
 
 
 ### 7.5 Adopted dependency matrix by milestone
@@ -567,6 +567,7 @@ This table describes *capability prerequisites*, not permanent package pins.
 | ECO-04 | Observer performance/browser evidence | Lab metric/policy evaluation + generic Orchestrator intake | Observer, Lab | Kit |
 | ECO-05 | Kit supported API/data relationship evidence; project-native execution evidence | Lab API/migration evaluation + generic Orchestrator intake | Kit, Lab | Observer unless UI runtime verification selected |
 | ECO-06 | domain-specific native/adapted evidence | generic evidence intake | mostly Lab; bounded Kit additions where justified | Observer for non-browser profiles |
+| SW-123/iworkhere dual-target correction (approved 2026-11-19) | Kit v1.16.0 source-audit 1.2.0, authenticated byte and finite-domain proof, retained 1.1.0 defaults | Lab v0.11.0 predicate-level qualification, exit 2 and independent full-scope audits | Kit then Lab | Observer and Orchestrator not required |
 
 ### 7.6 Version-number collision rules
 
@@ -583,12 +584,12 @@ ECO-00 resolved the Lab collision by preserving all existing 0.6.0-0.9.2 assignm
 
 ### 7.7 Adopted release train view
 
-The release train preserves the ECO-00 baseline and adopted milestone ordering. Its diagram does not designate the current release of any repository; consult each repository's latest published state and current-state documentation.
+The release train preserves the historical ECO-00 baseline through its amended 2026-11-19 allocations and adopted milestone ordering. Its diagram does not designate the current release of any repository; consult each repository's latest published state and current-state documentation.
 
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 optional KIT-OPS-01] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 source-evidence proof] --> K17[1.17 KIT-OPS-01] --> K18[1.18 frontend retrieval completion]
   end
 
   subgraph ORC[orchestrator]
@@ -602,16 +603,17 @@ flowchart LR
   subgraph LAB[lab]
     L060[0.6.0 freshness] --> L061[0.6.1 neighborhoods] --> L062[0.6.2 staleness] --> L063[0.6.3 partial-refresh planning]
     L063 --> L07[0.7 scaling] --> L08[0.8 retrieval] --> L09[0.9 agent/provider work] --> L010[0.10 LAB-EVIDENCE-01]
-    L010 --> L011[0.11 accessibility] --> L012[0.12 web security] --> L013[0.13 performance] --> L014[0.14 API assurance]
+    L010 --> L011[0.11 source-evidence consumer] --> L012[0.12 accessibility] --> L013[0.13 web security] --> L014[0.14 performance] --> L015[0.15 API assurance] --> L016[0.16 supply chain] --> L017[0.17 test quality] --> L018[0.18 operations]
   end
 
   L010 -. ECO-01 .-> O17
   B11 -. ECO-02 .-> O17
-  B12 -. controlled state .-> L011
   B12 -. controlled state .-> L012
-  B13 -. ECO-04 .-> L013
+  B12 -. controlled state .-> L013
+  B13 -. ECO-04 .-> L014
   K125 -. partial-refresh capability .-> L063
-  K15 -. ECO-05 .-> L014
+  K15 -. ECO-05 .-> L015
+  K16 -. source-evidence proof .-> L011
 ```
 
 The dashed edges are capability relationships, not npm dependencies. If a future explicit decision moves an unimplemented reservation, retain the stable milestone ID and preserve the prior mapping in the change ledger rather than rewriting history.
