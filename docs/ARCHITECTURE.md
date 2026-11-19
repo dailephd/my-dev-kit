@@ -779,7 +779,7 @@ The affected owners are `src/languages/kotlin/adapter.ts`, `src/indexing/buildSo
 Lab remains responsible for detector-predicate applicability and adequacy. A valid Kit record with complete imports and partial declarations does **not** authorize negative declaration inference or imply successful Lab readiness. The SW-123 matched packaged producer/consumer test is a required coordinated gate, not a new Kit audit command.
 
 
-### Coordinated dual-target evidence architecture — Kit v1.16.0 and Lab v0.11.0
+### Coordinated dual-target evidence architecture (Kit v1.16.0 and Lab v0.11.0)
 
 **Status: A1 architecture decided by the Global Planner; planned, not implemented or published.** A0 R2 authenticated Kit `660e5b7`, Lab `7183dc5`, and read-only website `94a60ad`; indexed source retrieval established the existing owners. The current source-audit producer, selected facts, and Lab predicate bridge are preserved. The approved coordinated release targets are **Kit v1.16.0 and Lab v0.11.0**. The existing v1.15.2/v0.10.1 corrective candidates are preserved as implementation baselines, not separately planned publications.
 
