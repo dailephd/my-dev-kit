@@ -779,6 +779,17 @@ The affected owners are `src/languages/kotlin/adapter.ts`, `src/indexing/buildSo
 Lab remains responsible for detector-predicate applicability and adequacy. A valid Kit record with complete imports and partial declarations does **not** authorize negative declaration inference or imply successful Lab readiness. The SW-123 matched packaged producer/consumer test is a required coordinated gate, not a new Kit audit command.
 
 
+### Proposed dual-target audit evidence extension (v1.15.2; SW-123 and iworkhere.space v0.4.4)
+
+This is **planned architecture, not released behavior**. One managed Kit source-audit producer must serve both Lab's existing SW-123 full-source audit and the immutable iworkhere.space `94a60ad` acceptance target. The former still has thirteen mandatory proof requirements awaiting A1 feasibility assessment; the latter reports three omitted ambient declaration files and a computed `import(pathToFileURL(...).href)` in `script/pdfFixture.ts`. Local implementation candidate `660e5b7` with extractor `source-audit-v1.5.3` is not on this GitHub documentation branch and does not establish release readiness.
+
+- **Source selection / producer:** extend the existing discovery ledger and source-audit projection to admit selected `.d.ts` files as **audit evidence**, preserving their byte identity, qualified ambient-module declarations, explicit incomplete/unsupported capabilities and independent cache revision. Ordinary graph omission and new runtime module edges must not be silently changed. `declare module "server-only";` is an ambient declaration, not proof of actual module exports or runtime reachability.
+- **Import and reference evidence:** the current language adapter and observation normalizer distinguish the *presence/syntax* of an import expression from static target facts. Literal imports may have qualified immediate target proof; computed nonliteral targets remain unresolved unless a sound finite domain or separately authenticated build/runtime provenance is available. Runtime observation is positive evidence under its recorded conditions, not exhaustive absence proof.
+- **Binary and dynamic limits:** a proposed bounded byte-occurrence contract must prove exact bytes, content hash, selection, containment, freshness, scan completeness and offset provenance without laundering binary input into text or semantic facts. Arbitrary dynamic reference domains cannot be marked complete merely because a project inventory is complete. Potential public schema/query changes require A1 contract and version adjudication before coding.
+- **Consumer boundary:** Lab alone resolves which detector/predicate needs the selected declaration, raw bytes, import observation or negative target-domain proof. Keep default direct-provider integrity strict, preserve independently qualified findings, and require exit `2` for unavailable mandatory coverage. A single Kit package candidate is independently qualified against **both** audit targets; acceptance remains two separate result identities.
+
+The ordered implementation and compatibility gates are recorded in [Version 1.15.2](ROADMAP.md#version-1152--kotlin-script-source-audit-capability-correction). No new graph engine, Lab source parser or automatic target execution is planned.
+
 ## API relationship evidence architecture (v1.15.0)
 
 KIT-API-01 is implemented in v1.15.0. It extends the existing
