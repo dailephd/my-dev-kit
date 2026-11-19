@@ -781,14 +781,37 @@ Lab remains responsible for detector-predicate applicability and adequacy. A val
 
 ### Proposed dual-target audit evidence extension (v1.15.2; SW-123 and iworkhere.space v0.4.4)
 
-This is **planned architecture, not released behavior**. One managed Kit source-audit producer must serve both Lab's existing SW-123 full-source audit and the immutable iworkhere.space `94a60ad` acceptance target. The former still has thirteen mandatory proof requirements awaiting A1 feasibility assessment; the latter reports three omitted ambient declaration files and a computed `import(pathToFileURL(...).href)` in `script/pdfFixture.ts`. Local implementation candidate `660e5b7` with extractor `source-audit-v1.5.3` is not on this GitHub documentation branch and does not establish release readiness.
+**Status: A1 architecture decided by the Global Planner; planned, not implemented or published.** A0 R2 authenticated Kit `660e5b7`, Lab `7183dc5`, and read-only website `94a60ad`; indexed source retrieval established the existing owners. The current source-audit producer, selected facts, and Lab predicate bridge are preserved. New public proof protocols require a **separate feature release allocation (TBD)**; the compatible corrective work remains planned for v1.15.2.
 
-- **Source selection / producer:** extend the existing discovery ledger and source-audit projection to admit selected `.d.ts` files as **audit evidence**, preserving their byte identity, qualified ambient-module declarations, explicit incomplete/unsupported capabilities and independent cache revision. Ordinary graph omission and new runtime module edges must not be silently changed. `declare module "server-only";` is an ambient declaration, not proof of actual module exports or runtime reachability.
-- **Import and reference evidence:** the current language adapter and observation normalizer distinguish the *presence/syntax* of an import expression from static target facts. Literal imports may have qualified immediate target proof; computed nonliteral targets remain unresolved unless a sound finite domain or separately authenticated build/runtime provenance is available. Runtime observation is positive evidence under its recorded conditions, not exhaustive absence proof.
-- **Binary and dynamic limits:** a proposed bounded byte-occurrence contract must prove exact bytes, content hash, selection, containment, freshness, scan completeness and offset provenance without laundering binary input into text or semantic facts. Arbitrary dynamic reference domains cannot be marked complete merely because a project inventory is complete. Potential public schema/query changes require A1 contract and version adjudication before coding.
-- **Consumer boundary:** Lab alone resolves which detector/predicate needs the selected declaration, raw bytes, import observation or negative target-domain proof. Keep default direct-provider integrity strict, preserve independently qualified findings, and require exit `2` for unavailable mandatory coverage. A single Kit package candidate is independently qualified against **both** audit targets; acceptance remains two separate result identities.
+**Single-producer flow:**
 
-The ordered implementation and compatibility gates are recorded in [Version 1.15.2](ROADMAP.md#version-1152--kotlin-script-source-audit-capability-correction). No new graph engine, Lab source parser or automatic target execution is planned.
+```text
+One discoverSourceFiles traversal
+  -> graph eligibility (existing exclusions and ordinary graph unchanged)
+  -> audit eligibility (selected .d.ts included, explicit excludes retained)
+  -> existing language observations + capability-specific status
+  -> buildSourceAuditEvidence + validated managed artifact
+  -> manifest/artifact/hash/snapshot/cache identity
+  -> bounded source/lookup proof queries
+  -> Lab managed provider -> per-predicate policy -> findings and coverage
+```
+
+**Ownership and extension boundaries:**
+
+- `src/indexing/discoverSourceFiles.ts` owns ordinary/audit selection, suffix recognition, excluded-path ledger and source-root authority. Audit-only `.d.ts` records must not create ordinary graph nodes, imports, exports or edges.
+- `src/symbol-index/symbolExtractor.ts` and existing TS/JS/language adapters own source observations; `src/symbol-index/auditObservations.ts` owns normalization and independent capability status. The existing single-use immutable string-binding precedent remains supported.
+- `src/indexing/buildSourceAuditEvidence.ts`, `src/indexing/cacheMetadata.ts`, `src/symbol-index/auditEvidenceTypes.ts` and `src/symbol-index/validateAuditEvidence.ts` own managed projection, cache/extractor identity, typed fact schemas and validation. Audit-only declaration add/change/delete invalidates audit evidence without changing the graph. Unhashed inventory entries carry no source-freshness proof.
+- `src/lookup/readSourceAuditEvidence.ts` authenticates manifest and current bytes; `src/lookup/resolveAuditImportTarget.ts` owns existing fact-bound target proof and the planned finite-domain extension. `src/source/findExactMatches.ts` and `src/commands/sourceCommand.ts` own exact-file text occurrence and planned raw-byte occurrence. Do not move the matching owner to `getSourceSlice.ts`, duplicate source readers, or invent a second parser/index.
+- Proposed feature-only private helpers, requiring later exact path authorization: `src/source/findExactByteMatches.ts`, `src/source/readAuthenticatedAuditBytes.ts`, `src/lookup/resolveAuditImportDomain.ts`. Shared bytes must be read through the existing freshness/containment authority; text occurrence semantics must remain unchanged.
+
+**Evidence semantics:** `declare module "server-only";` is a supported ambient declaration fact, not a runtime export or executable module. The presence of an ambient fact, suffix, or complete declaration enumeration does not prove the entire file is ambient-only. The feature-only whole-file ambient classification must verify every statement in a successful TypeScript parse; executable statements give `not-ambient-only`, unsupported syntax gives `undetermined`. The legacy v1.15.2 correction cannot infer this result from a schema-1.1.0 record.
+
+An observed computed `import(pathToFileURL(...).href)` is not a resolved target. Preserve present/literal/single-use binding witnesses and existing `present`, `proven-missing`, `outside-selected-roots`, `indeterminate` meanings. The feature-only domain evaluator is bounded to 64 alternatives, 16 immutable binding hops and 32 expression levels, with explicit Win32/POSIX identity and unknown-CWD/alias uncertainty. A sound disjointness proof requires an exhaustive upper bound with empty intersection against the authenticated selected domain; empty candidates or an arbitrary computed expression do not suffice. Possible target membership does not supply positive reference proof.
+
+**Version boundary:** source-audit `1.1.0`, symbol index `3`, graph `1.1.0`, manifest `1.0.0` remain the patch baseline. Proposed opt-in `1.2.0` expression evidence, the `exact-file-byte-occurrence` and `audit-import-domain` response families, and whole-file ambient classification belong to a separately versioned public feature. The exact release numbers remain TBD; reserved v1.16.0 is untouched. Corrective extractor `source-audit-v1.5.4` and feature extractor `source-audit-v1.6.0` are proposed internal revisions only, not shipped facts.
+
+**Qualification and acceptance:** exact packed Kit archive/installed CLI hashes, schema, extractor, selected roots, fact pages and read-time freshness must be independently validated by Lab. Separate SW-123 full-source and website `94a60ad` audits retain original detectors, scopes, findings, mandatory coverage/exit `2`, immutable target identity, and historical provenance. Ten runtime-dependent and three binary SW-123 obligations remain mandatory unavailable until each obtains its own qualified proof. A successful downstream local replay does not establish published-tool website readiness. See the [Kit contracts](CONTRACTS.md#planner-decided-a1-dual-target-source-evidence-contract), [proposed schemas](GRAPH_SCHEMA.md#planned-a1-versioned-proof-protocols-not-currently-implemented) and [version plan](ROADMAP.md#version-1152--kotlin-script-source-audit-capability-correction).
+
 
 ## API relationship evidence architecture (v1.15.0)
 
