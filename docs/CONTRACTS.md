@@ -314,6 +314,17 @@ For the supported lexical profile, a complete `imports` capability covers every 
 
 The implementation must change the producer extractor revision so old per-file cache records cannot claim newly strengthened completeness. Retain source-audit schema `1.1.0`, stable file/fact/lookup contracts, and existing containment and snapshot checks unless a concrete incompatibility is first established. Downstream Lab v0.10.1 must qualify each predicate independently; Kit cannot assign a Lab PASS, severity or audit applicability state.
 
+### Proposed dual-target v1.15.2 evidence contract (SW-123 and iworkhere.space v0.4.4)
+
+**Status: A0/A1 contract design pending; not a shipped extension.** The original Kotlin explicit-import correction is preserved. The new iworkhere.space acceptance target is immutable commit `94a60ad`, with three `server-only.d.ts` ambient declaration files and a computed `await import(pathToFileURL(...).href)` witness; A0 must authenticate the complete private readiness report and code-rot JSON. The existing thirteen SW-123 proof gaps remain independently mandatory until adjudicated.
+
+- **Audit-only `.d.ts` selection:** a declaration file omitted from ordinary graph indexing is not automatically absent from the selected audit domain. Any added audit record needs a canonical selected path, actual source-content identity, declared evidence coverage, bounded retrieval and revision-compatible cache/snapshot. Qualified ambient `declare module` observations must not invent application declarations, exports, imports or runtime graph edges. Missing/unreadable/malformed selected declaration evidence remains unavailable.
+- **Observed import versus resolved target:** static import, literal dynamic import, computed dynamic import and evidence-loss/parser failure are distinct. An exhaustively recorded import *expression* does not imply exhaustive runtime-target enumeration. `import(pathToFileURL(...).href)` retains an unresolved target when no finite proof exists. Negative missing-target or non-reference claims require complete, relevant target-domain evidence; positive observations and unrelated findings remain usable.
+- **Binary/static completeness:** an exact-byte query may establish a bounded positive/negative byte-literal result only with authenticated complete source bytes and scan scope; it does not prove decoded text meaning, semantic imports, execution or command behavior. Arbitrary runtime-dependent JS/TS targets remain unavailable for universal negative proof absent explicit closed-world and qualified provenance.
+- **Existing public compatibility:** preserve source-audit schema `1.1.0`, selectors, package/CLI hash qualification, fact pagination, snapshot, file-selection and containment contracts wherever representable. A1 must specify new request/response semantics and a separate version decision if those contracts cannot express the needed proof safely. Never upgrade unsupported or partial statuses by diagnostic exception, path allowlist, or an empty facts array.
+
+Kit produces evidence and proof completeness; Lab defines applicability, audit findings, mandatory coverage and exit semantics. Keep separate accepted Kit/Lab release targets and independently bound audit results for SW-123 and iworkhere.space. See [roadmap](ROADMAP.md#version-1152--kotlin-script-source-audit-capability-correction).
+
 ## Static-evidence boundary
 
 <a id="kit-api-01-bounded-cross-layer-projection-v1150-unreleased"></a>
