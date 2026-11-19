@@ -739,7 +739,7 @@ Security-relevant design rules:
 
 ## Source-audit evidence architecture (v1.15.0)
 
-**Status: implemented in v1.15.0 (KIT-FACTS-01 producer).** This is the Kit half of ECO-SOURCE-01: Kit is the planned sole source-analysis provider for Lab's source audits after the Lab migration (LAB-KIT-01, Lab v0.10.0). That migration is not complete: Lab has not yet consumed this evidence, passed five-language comparisons, retired its own analyzers, or proven Rust reuse, so Lab still owns its current analyzers. See [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md) and [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
+**Status: implemented in Kit v1.15.0 (KIT-FACTS-01 producer).** At the Kit v1.15.0 milestone, the Lab ECO-SOURCE-01 / LAB-KIT-01 migration was still pending. Lab v0.10.0 subsequently qualified the published Kit v1.15.0 producer and moved its source-dependent audit acquisition to Kit; that later Lab state does not change the historical Kit release scope. Further Kit v1.15.2 / Lab v0.10.1 evidence corrections and the dual-target SW-123/iworkhere.space acceptance remain unreleased and incomplete. See [ECOSYSTEM_COORDINATED_ROADMAP.md](ECOSYSTEM_COORDINATED_ROADMAP.md), [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) and the coordinated patch roadmap.
 
 Flow, all inside the existing managed index lifecycle:
 
