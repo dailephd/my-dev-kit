@@ -833,6 +833,39 @@ interface TsAuditCollector {
  * syntactic profile: top-level named declarations, static ES imports/exports,
  * top-level literal `require` and top-level CommonJS export assignments.
  */
+function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts.StringLiteral> {
+  const literals = new Map<string, ts.StringLiteral>()
+  if (sf.isDeclarationFile || !ts.isExternalModule(sf)) return literals
+  for (const statement of sf.statements) {
+    if (!ts.isVariableStatement(statement) ||
+        (statement.declarationList.flags & ts.NodeFlags.BlockScoped) !== ts.NodeFlags.Const ||
+        ts.getModifiers(statement)?.some(modifier => modifier.kind === ts.SyntaxKind.DeclareKeyword)) continue
+    for (const { name, initializer } of statement.declarationList.declarations) {
+      if (ts.isIdentifier(name) && initializer && ts.isStringLiteral(initializer)) literals.set(name.text, initializer)
+    }
+  }
+  if (!literals.size) return literals
+
+  // Require exactly the declaration and the operand. Any other same-spelled
+  // identifier could be a shadowing declaration or a write. A file-wide
+  // census deliberately declines those cases without doing name resolution.
+  const uses = new Map<string, number>()
+  let hasWith = false
+  const visit = (node: ts.Node): void => {
+    if (ts.isWithStatement(node)) hasWith = true
+    if (ts.isIdentifier(node) && literals.has(node.text)) {
+      uses.set(node.text, (uses.get(node.text) ?? 0) + 1)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  if (hasWith) literals.clear()
+  for (const name of literals.keys()) {
+    if (uses.get(name) !== 2) literals.delete(name)
+  }
+  return literals
+}
+
 function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector): SourceAuditExtractionPayload {
   const facts: SourceAuditFact[] = []
   const capabilities = auditCapabilityMap('unsupported')
@@ -960,6 +993,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
     const call = ts.isVariableDeclaration(node) ? node.initializer : ts.isExpressionStatement(node) ? node.expression : node
     return call?.getStart(sf)
   }))
+  let moduleStrings: Map<string, ts.StringLiteral> | undefined
   const scan = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
@@ -967,11 +1001,20 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
       if (dynamicImport || requireCall && !recordedRequires.has(node.getStart(sf))) {
         if (requireCall && collector.unsafeRequireBinding) {
           partial('imports', 'unsupported-require', 'A shadowed or assigned require binding cannot establish a module import.', node)
-        } else if (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])) {
-          partial('imports', dynamicImport ? 'unsupported-dynamic-import' : 'unsupported-require', 'The import target is outside the single string-literal call profile.', node)
         } else {
-          facts.push({ ...base, kind: 'import', span: span(node), sourceSpecifier: node.arguments[0].text,
-            importedNames: ts.isExpressionStatement(node.parent) ? [] : ['*'], importResolution: 'observed' })
+          const operand = node.arguments.length === 1 ? node.arguments[0] : undefined
+          let specifier = operand && ts.isStringLiteral(operand) ? operand.text : undefined
+          if (dynamicImport && exact && operand && ts.isIdentifier(operand)) {
+            const initializer = (moduleStrings ??= singleUseModuleStringBindings(sf)).get(operand.text)
+            if (initializer && initializer.end <= operand.getStart(sf)) specifier = initializer.text
+          }
+          if (specifier === undefined) {
+            partial('imports', dynamicImport ? 'unsupported-dynamic-import' : 'unsupported-require',
+              'The import target is outside the bounded single-string call profile.', node)
+          } else {
+            facts.push({ ...base, kind: 'import', span: span(node), sourceSpecifier: specifier,
+              importedNames: ts.isExpressionStatement(node.parent) ? [] : ['*'], importResolution: 'observed' })
+          }
         }
       }
     }

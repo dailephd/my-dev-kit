@@ -273,8 +273,27 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     }
   })
 
+  it.each(['ts', 'js'])('records a single-use module string constant at its dynamic import site in %s', extension => {
+    const file = `src/calls.${extension}`
+    const { payload } = audit(file, 'const target = "./peer.js"\nexport function load() { return import(target) }\n')
+    expect(payload.capabilities.imports).toBe('complete')
+    expect(ofKind(payload, 'import')).toEqual([expect.objectContaining({
+      sourceSpecifier: './peer.js', extractionMethod: 'typescript-ast',
+      span: { path: file, startLine: 2, startColumn: 32, endLine: 2, endColumn: 46 },
+    })])
+  })
+
   it.each([
     'const name = "./peer.js"; import(name)',
+    'export {}; const name = "./peer.js"; function load(name) { return import(name) }',
+    'export {}; const name = "./peer.js"; const load = function name() { return import(name) }',
+    'export {}; const name = "./peer.js"; name = other; import(name)',
+    'export {}; let name = "./peer.js"; import(name)',
+    'export {}; import(name); const name = "./peer.js"',
+    'export {}; const name = pathToFileURL(file).href; import(name)',
+    'export {}; const name = choose ? "./left.js" : "./right.js"; import(name)',
+    'export {}; const name = `./${other}.js`; import(name)',
+    'export {}; const name = "./peer.js"; require(name)',
     'function load(require) { return require("./peer.js") }',
     'require = custom; function load() { return require("./peer.js") }',
     'import(`./peer.js`)',

@@ -75,6 +75,24 @@ const TS_FILES: Record<string, string> = {
   'lib/o.ts': 'export const o = 1\n',
 }
 
+it('proves the selected immediate target of one constant import while retaining unknown alternatives', async () => {
+  const origin = 'src/loader.ts'
+  const source = 'const peer = "./peer.js"\nexport const load = () => import(peer)\nexport const other = (target: string) => import(target)\n'
+  const root = makeProject({ [origin]: source, 'src/peer.ts': 'export const value = 1\n' })
+  const out = await build(root)
+  const artifact = readSourceAuditEvidence(out)
+  const record = artifact.files.find(file => file.path === origin)!
+  expect(record.capabilities.imports).toBe('partial')
+  const imports = record.facts.filter(fact => fact.kind === 'import')
+  expect(imports.map(fact => fact.sourceSpecifier)).toEqual(['./peer.js'])
+  expect(resolveAuditImportTarget(out, imports[0]!.id)).toMatchObject({
+    schemaVersion: '1.1.0', snapshotId: artifact.source.snapshotId,
+    originFile: origin, status: 'present', candidatePaths: ['src/peer.ts'],
+  })
+  writeFileSync(join(root, origin), source.replace('./peer.js', './gone.js'))
+  expect(failure(() => resolveAuditImportTarget(out, imports[0]!.id)).code).toBe('STALE_SOURCE_EVIDENCE')
+})
+
 describe('qualified immediate re-export target proofs', () => {
   it.each([
     "export { value } from './peer.js'",
