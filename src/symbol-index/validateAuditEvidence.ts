@@ -174,7 +174,7 @@ const LITERAL_FIELDS = ['name', 'observationKind', 'value', 'valueSha256', 'valu
 const FACT_FIELDS: Record<SourceAuditFactKind, { allowed: string[]; required: string[] }> = {
   declaration: {
     allowed: ['name', 'symbolId', 'declarationKind', 'ownerKey', 'visibility', 'exported', 'exportOrigin', 'owningSymbolId', 'jvmDeclaration'],
-    required: ['name', 'symbolId', 'declarationKind'],
+    required: ['name', 'declarationKind'],
   },
   import: {
     allowed: ['name', 'sourceSpecifier', 'importedNames', 'importResolution', 'targetPaths', 'owningSymbolId', 'jvmImportTarget'],
@@ -204,6 +204,13 @@ function validateFact(
   const kind = requireOneOf(fact.kind, SOURCE_AUDIT_FACT_KINDS, `${path}.kind`)
   const fields = FACT_FIELDS[kind]
   requireClosed(fact, path, [...FACT_COMMON, ...fields.allowed], [...FACT_COMMON, ...fields.required])
+  if (kind === 'declaration') {
+    if (fact.declarationKind !== 'ambient-module') {
+      requireText(fact.symbolId, `${path}.symbolId`)
+    } else if (fact.symbolId !== undefined || fact.extractionMethod !== 'typescript-ast') {
+      fail(path, 'ambient modules require TypeScript AST evidence without a graph symbol')
+    }
+  }
   requireText(fact.id, `${path}.id`)
   validateSpan(fact.span, `${path}.span`, filePath)
   requireOneOf(fact.extractionMethod, SOURCE_AUDIT_EXTRACTION_METHODS, `${path}.extractionMethod`)

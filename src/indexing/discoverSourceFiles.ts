@@ -5,6 +5,9 @@ import { TextDecoder } from 'node:util'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { createDefaultRegistry, type LanguageRegistry } from '../languages/registry.js'
 import { readSourceBytes } from '../lookup/getSourceSlice.js'
+import { extractAuditObservations } from '../symbol-index/auditObservations.js'
+import { extractDeclarationFileAudit } from '../symbol-index/symbolExtractor.js'
+import type { FileSummary } from '../symbol-index/types.js'
 import { AUDIT_CONTENT_MAX_BYTES } from '../symbol-index/auditEvidenceTypes.js'
 
 export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
@@ -96,6 +99,7 @@ export interface AuditSelectedFile {
   selectionStatus: AuditSelectionStatus
   /** Raw content identity only; never makes an unsupported file a semantic indexing input. */
   contentSha256?: string
+  auditOnlySummary?: Pick<FileSummary, 'language' | 'lineCount' | 'sourceAudit'>
 }
 
 /**
@@ -251,13 +255,13 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     } catch {
       // Existing behavior is unchanged for counters; the audit ledger keeps the
       // known path as unreadable so it can never silently disappear.
-      if (shouldExcludeByFilePattern(relPath)) state.excludedPaths.add(relPath)
-      else recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
+      recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
       continue
     }
 
-    if (shouldExcludeByFilePattern(relPath)) {
+    if (shouldExcludeByFilePattern(entry.name)) {
       recordSkipped(state, relPath, 'file-pattern')
+      recordAuditOnlyDeclaration(state, relPath, absPath, stat.size)
       continue
     }
 
@@ -290,6 +294,37 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
   }
 }
 
+function recordAuditOnlyDeclaration(state: DiscoveryState, relPath: string, absPath: string, sizeBytes: number): void {
+  let bytes: Buffer
+  try {
+    bytes = readSourceBytes(state.repoRoot, relPath)
+    if (bytes.length !== sizeBytes) throw new Error('Declaration file changed during discovery')
+  } catch {
+    recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
+    return
+  }
+
+  let sourceText: string
+  try {
+    if (bytes.includes(0)) throw new Error('Declaration file contains binary content')
+    sourceText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+  } catch {
+    recordSelected(state, { relPath, absPath, sizeBytes, selectionStatus: 'unsupported' })
+    return
+  }
+
+  const extraction = extractDeclarationFileAudit(relPath, sourceText)
+  recordSelected(state, {
+    relPath, absPath, sizeBytes, selectionStatus: 'supported',
+    contentSha256: createHash('sha256').update(bytes).digest('hex'),
+    auditOnlySummary: {
+      language: extraction.language,
+      lineCount: extraction.lineCount,
+      sourceAudit: extractAuditObservations(relPath, sourceText, extraction),
+    },
+  })
+}
+
 function isDefaultIgnoredDirectory(name: string, exactNames: Set<string>): boolean {
   const lowerName = name.toLowerCase()
   if (exactNames.has(lowerName)) return true
@@ -302,7 +337,7 @@ function recordSkipped(
   reason: SkippedPathSample['reason']
 ): void {
   state.result.totalFilesSkipped += 1
-  if (reason !== 'unsupported') state.excludedPaths.add(relPath)
+  if (reason === 'default-ignore' || reason === 'user-exclude') state.excludedPaths.add(relPath)
   if (reason === 'default-ignore') state.result.skippedByDefaultIgnore += 1
   if (reason === 'user-exclude') state.result.skippedByUserExclude += 1
   if (reason === 'file-pattern') state.result.skippedByFilePattern += 1
@@ -332,7 +367,7 @@ function finalizeAuditSelection(state: DiscoveryState): void {
 }
 
 function shouldExcludeByFilePattern(relPath: string): boolean {
-  return DEFAULT_FILE_EXCLUDE_PATTERNS.some((pattern) => relPath.includes(pattern))
+  return DEFAULT_FILE_EXCLUDE_PATTERNS.some((pattern) => relPath.toLowerCase().endsWith(pattern))
 }
 
 function normalizeExcludeRules(values: string[]): ExcludeRule[] {

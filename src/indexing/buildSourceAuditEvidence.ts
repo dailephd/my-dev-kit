@@ -1,18 +1,10 @@
 /**
- * v1.15.0 Batch 1: pure in-memory projection of discovery and index evidence
- * into the Batch 0 source-audit evidence contract.
- *
- * This function reads no files, walks no directories, runs no parsers, hashes
- * nothing and writes nothing. Every file-derived value comes from the supplied
- * discovery ledger, symbol index and content-hash map. Batch 1 extracts no new
- * language facts, so no capability is ever reported `complete` and every
- * record carries an empty `facts` array; absence of facts is never presented
- * as completeness. The artifact is not persisted or registered here.
+ * Projects the selection ledger, ordinary index summaries and audit-only
+ * summaries into the managed source-audit artifact without reading live files.
  */
 
 import { createHash } from 'node:crypto'
 import {
-  DEFAULT_FILE_EXCLUDE_PATTERNS,
   DEFAULT_IGNORED_DIRECTORY_NAMES,
   DEFAULT_IGNORED_DIRECTORY_PREFIXES,
   languageNameForPath,
@@ -36,7 +28,7 @@ import { validateSourceAuditEvidence } from '../symbol-index/validateAuditEviden
 import type { SourceAuditEvidenceReference } from './manifestTypes.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.5.3'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.5.4'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string
@@ -162,6 +154,7 @@ interface SelectedEntry {
   sizeBytes: number | null
   selectionStatus: AuditSelectedFile['selectionStatus']
   contentSha256?: string
+  auditOnlySummary?: AuditSelectedFile['auditOnlySummary']
 }
 
 /** Deduplicates by canonical path; conflicting identities keep the most conservative status and flag the ledger. */
@@ -171,7 +164,7 @@ function dedupeSelected(selected: readonly AuditSelectedFile[], reasons: Set<str
     const relPath = toForwardSlash(file.relPath)
     const existing = byPath.get(relPath)
     if (!existing) {
-      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus, contentSha256: file.contentSha256 })
+      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus, contentSha256: file.contentSha256, auditOnlySummary: file.auditOnlySummary })
       continue
     }
     if (existing.selectionStatus === file.selectionStatus && existing.sizeBytes === file.sizeBytes && existing.contentSha256 === file.contentSha256) continue
@@ -193,7 +186,7 @@ interface FileProjection {
 
 function projectFile(
   entry: SelectedEntry,
-  summary: FileSummary | undefined,
+  summary: Pick<FileSummary, 'language' | 'lineCount' | 'sourceAudit' | 'warnings'> | undefined,
   hash: string | undefined,
   roots: readonly string[],
 ): FileProjection {
@@ -240,7 +233,7 @@ function projectFile(
     return { record, unreadable: true, identityGap: true }
   }
 
-  // Supported file selected for indexing.
+  // Supported graph or audit-only file.
   if (!summary) {
     const unreadable = validHash === null
     const record: SourceAuditFile = {
@@ -341,7 +334,6 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
   const excludes = sortedUnique([
     ...DEFAULT_IGNORED_DIRECTORY_NAMES.map((name) => `default-directory:${normalizeRule(name)}`),
     ...DEFAULT_IGNORED_DIRECTORY_PREFIXES.map((prefix) => `default-directory-prefix:${normalizeRule(prefix)}`),
-    ...DEFAULT_FILE_EXCLUDE_PATTERNS.map((pattern) => `default-file-pattern:${pattern}`),
     ...userRules.map((rule) => `user:${rule}`),
   ])
 
@@ -361,7 +353,7 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
       reasons.add('noncanonical-selected-path')
       continue
     }
-    const projection = projectFile(entry, summariesByPath.get(entry.relPath), input.fileHashes.get(entry.relPath) ?? entry.contentSha256, sourceRoots)
+    const projection = projectFile(entry, entry.auditOnlySummary ?? summariesByPath.get(entry.relPath), entry.contentSha256 ?? input.fileHashes.get(entry.relPath), sourceRoots)
     files.push(projection.record)
     if (projection.unreadable) unreadableFileCount += 1
     if (projection.record.status === 'unsupported') unsupportedFileCount += 1
@@ -380,7 +372,7 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
   const discoveryExcludes = sortedUnique(input.discovery.userExcludes.map(normalizeRule).filter((rule) => rule.length > 0))
   const excludesMatch = discoveryExcludes.length === userRules.length && discoveryExcludes.every((rule, i) => rule === userRules[i])
   const observedExclusions =
-    input.discovery.skippedByDefaultIgnore + input.discovery.skippedByUserExclude + input.discovery.skippedByFilePattern
+    input.discovery.skippedByDefaultIgnore + input.discovery.skippedByUserExclude
   const accountingConsistent = observedExclusions === 0 || ledger.excludedPathCount > 0
   const rulesRecorded = excludes.length > 0
   if (!excludesMatch) reasons.add('configured-excludes-inconsistent')

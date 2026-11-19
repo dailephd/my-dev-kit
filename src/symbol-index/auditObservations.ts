@@ -253,7 +253,9 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
 
     if (kind === 'declaration') {
       if (!fact.name || !fact.declarationKind) return drop('incomplete-declaration', kind)
-      if (!fact.symbolId) {
+      if (fact.declarationKind === 'ambient-module' && fact.extractionMethod === 'typescript-ast') {
+        delete fact.symbolId
+      } else if (!fact.symbolId) {
         const match = matchSymbol(fact, extraction)
         if (match === 'none' || match === 'ambiguous') return drop(match === 'none' ? 'declaration-without-symbol' : 'ambiguous-declaration-symbol', kind)
         fact.symbolId = match.nodeId

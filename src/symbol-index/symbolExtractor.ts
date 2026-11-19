@@ -83,13 +83,7 @@ export function extractFromSource(
         ? ts.ScriptKind.JSX
         : ts.ScriptKind.JS
 
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    /* setParentNodes */ true,
-    scriptKind
-  )
+  const sourceFile = parseTypeScriptSource(filePath, sourceText, scriptKind)
 
   const lineCount = sourceText.split('\n').length
   // Parser recovery cannot prove an exact declaration end, so a file with
@@ -138,6 +132,24 @@ export function extractFromSource(
     symbols,
     reExportSpecifiers: dedup(reExportSpecifiers),
     exportAllSpecifiers: dedup(exportAllSpecifiers),
+  }
+}
+
+function parseTypeScriptSource(filePath: string, sourceText: string, scriptKind: ts.ScriptKind): ts.SourceFile {
+  return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind)
+}
+
+/** Extracts audit evidence without constructing ordinary symbols or graph inputs. */
+export function extractDeclarationFileAudit(filePath: string, sourceText: string): ExtractionResult {
+  const sourceFile = parseTypeScriptSource(filePath, sourceText, ts.ScriptKind.TS)
+  const collector: TsAuditCollector = {
+    requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false, unsafeRequireBinding: false,
+  }
+  return {
+    language: 'typescript',
+    lineCount: sourceText.split('\n').length,
+    sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector, true),
+    imports: [], exports: [], symbols: [], reExportSpecifiers: [], exportAllSpecifiers: [],
   }
 }
 
@@ -866,7 +878,7 @@ function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts.String
   return literals
 }
 
-function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector): SourceAuditExtractionPayload {
+function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector, auditOnly = false): SourceAuditExtractionPayload {
   const facts: SourceAuditFact[] = []
   const capabilities = auditCapabilityMap('unsupported')
   capabilities.declarations = 'complete'
@@ -914,6 +926,22 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   }
 
   for (const statement of sf.statements) {
+    if (auditOnly) {
+      if (ts.isEmptyStatement(statement)) continue
+      if (exact && !ts.isExternalModule(sf) && ts.isModuleDeclaration(statement) &&
+          ts.isStringLiteral(statement.name) && statement.name.text.length > 0 && !statement.body &&
+          statement.modifiers?.length === 1 && statement.modifiers[0].kind === ts.SyntaxKind.DeclareKeyword) {
+        facts.push({ ...base, kind: 'declaration', span: span(statement), name: statement.name.text, declarationKind: 'ambient-module' })
+        continue
+      }
+      if (!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) {
+        partial('declarations', 'declaration-file-syntax-unsupported', 'Declaration-file statement is outside the bounded ambient stub profile.', statement)
+        // The unsupported subtree may contain explicit module references or exports.
+        capabilities.imports = 'partial'
+        capabilities.exports = 'partial'
+        continue
+      }
+    }
     if (ts.isImportDeclaration(statement)) {
       if (!ts.isStringLiteral(statement.moduleSpecifier)) { partial('imports', 'unsupported-import-specifier', 'Import specifier is not a string literal.', statement); continue }
       const clause = statement.importClause
@@ -975,6 +1003,10 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
       if (hasExportKeyword(statement)) partial('exports', 'module-export-unsupported', 'An exported namespace or module declaration is not enumerated.', statement)
     }
   }
+
+  // Audit-only files use the bounded statement profile above. Unsupported
+  // subtrees are not scanned as executable code.
+  if (auditOnly) return { facts, capabilities, diagnostics }
 
   // CommonJS imports and exports observed by the existing module-evidence pass.
   for (const entry of collector.requires) {
