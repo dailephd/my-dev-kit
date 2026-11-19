@@ -1,3 +1,4 @@
+import { findExactByteMatches } from '../source/findExactByteMatches.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { Command } from 'commander'
@@ -75,6 +76,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--symbol <name>', 'symbol name, qualified declaration name, or exact declaration ID')
     .option('--include-local-component-tree', 'include a bounded local React component-tree source bundle for --symbol')
     .option('--prop <name>', 'highlight a prop name inside --include-local-component-tree output')
+    .option('--contains-bytes-hex <hex>', 'find overlapping bytes in one authenticated selected file (requires --json)')
     .option('--contains <string>', 'exact string to search for across indexed source files; with --file and --json, search exactly that one selected file')
     .option('--react-region <region>', 'React region name (component, hook, JSX region, or prop type) to retrieve')
     .option(
@@ -99,6 +101,14 @@ export function registerSourceCommand(program: Command): void {
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
     .action(function (this: Command, options: SourceCommandOptions) {
+      if (options.containsBytesHex !== undefined) {
+        const allowed = new Set(['index', 'file', 'containsBytesHex', 'json'])
+        if (!options.file || !options.json || Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
+          throw new Error('INVALID_BYTE_SELECTOR: --contains-bytes-hex requires --file and --json and excludes other source modes.')
+        }
+        console.log(JSON.stringify(findExactByteMatches(readSourceAuditEvidence(options.index), options.file, options.containsBytesHex), null, 2))
+        return
+      }
       return withSourceAuthority(createSourceAuthority(options), () => {
       try {
       const reachabilityMode = resolveReachabilityMode(options)
@@ -1345,6 +1355,7 @@ function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): Frontend
 }
 
 interface SourceCommandOptions {
+  containsBytesHex?: string
   index: string
   node?: string
   route?: string

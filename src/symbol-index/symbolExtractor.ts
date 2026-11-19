@@ -14,8 +14,8 @@
 
 import * as ts from 'typescript'
 import * as path from 'path'
-import { auditCapabilityMap, type SourceAuditExtractionPayload } from './auditObservations.js'
-import type { SourceAuditFact } from './auditEvidenceTypes.js'
+import { auditCapabilityMap, auditFactId, type SourceAuditExtractionPayload } from './auditObservations.js'
+import type { AmbientClassification, SourceAuditFact } from './auditEvidenceTypes.js'
 import { API_RELATIONSHIP_PRODUCER, API_RELATIONSHIP_METHODS, type ApiSourceObservations, type ApiSourceObservation } from './apiRelationshipEvidenceTypes.js'
 import {
   type SymbolDefinition,
@@ -135,7 +135,7 @@ export function extractFromSource(
   }
 }
 
-function parseTypeScriptSource(filePath: string, sourceText: string, scriptKind: ts.ScriptKind): ts.SourceFile {
+export function parseTypeScriptSource(filePath: string, sourceText: string, scriptKind = auditScriptKind(filePath)): ts.SourceFile {
   return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
@@ -151,6 +151,83 @@ export function extractDeclarationFileAudit(filePath: string, sourceText: string
     sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector, true),
     imports: [], exports: [], symbols: [], reExportSpecifiers: [], exportAllSpecifiers: [],
   }
+}
+
+function isBodylessAmbientModule(statement: ts.Statement): statement is ts.ModuleDeclaration & { name: ts.StringLiteral } {
+  return ts.isModuleDeclaration(statement) && ts.isStringLiteral(statement.name) &&
+    statement.name.text.length > 0 && !statement.body && statement.modifiers?.length === 1 &&
+    statement.modifiers[0].kind === ts.SyntaxKind.DeclareKeyword
+}
+
+function auditScriptKind(filePath: string): ts.ScriptKind {
+  if (/\.tsx$/i.test(filePath)) return ts.ScriptKind.TSX
+  if (/\.jsx$/i.test(filePath)) return ts.ScriptKind.JSX
+  return /\.[cm]?js$/i.test(filePath) ? ts.ScriptKind.JS : ts.ScriptKind.TS
+}
+
+/** Projects the opt-in audit profile from authenticated JS/TS text. */
+export function extractVersionedAudit(filePath: string, text: string, legacy: readonly SourceAuditFact[], hash: string) {
+  const sf = parseTypeScriptSource(filePath, text)
+  const exact = !hasParseErrors(sf)
+  const bindings = exact ? singleUseModuleStringBindings(sf) : new Map<string, ts.StringLiteral>()
+  const facts: SourceAuditFact[] = []
+  const legacyImports = new Map(legacy.filter(fact => fact.kind === 'import').map(fact => [
+    `${fact.span.startLine}:${fact.span.startColumn}`, fact,
+  ]))
+  let complete = exact
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const operand = node.arguments[0]
+      if (!operand || operand.getWidth(sf) === 0) {
+        complete = false
+      } else {
+        const span = auditSpanAt(sf, filePath, node.getStart(sf), node.getEnd(), exact)
+        const binding = ts.isIdentifier(operand) ? bindings.get(operand.text) : undefined
+        const operandForm = ts.isStringLiteral(operand) ? 'string-literal' :
+          binding && binding.end <= operand.getStart(sf) ? 'qualified-string-binding' : 'computed'
+        const linked = operandForm !== 'computed' ? legacyImports.get(`${span.startLine}:${span.startColumn}`) : undefined
+        facts.push({
+          id: auditFactId(filePath, 'dynamic-import-expression', span.startLine, span.startColumn, 0),
+          kind: 'dynamic-import-expression', extractionMethod: 'typescript-ast', span,
+          operandForm, operandSpan: auditSpanAt(sf, filePath, operand.getStart(sf), operand.getEnd(), exact),
+          ...(linked ? { literalImportFactId: linked.id } : {}),
+        })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  const statements = sf.statements.filter(statement => !ts.isEmptyStatement(statement))
+  const witnesses = legacy.filter(fact => fact.kind === 'declaration' && fact.declarationKind === 'ambient-module')
+  const ambientCandidate = /\.d\.ts$/i.test(filePath) ||
+    statements.some(statement => ts.isModuleDeclaration(statement) && ts.isStringLiteral(statement.name))
+  let ambientClassification: AmbientClassification | undefined
+  if (ambientCandidate && auditScriptKind(filePath) === ts.ScriptKind.TS) {
+    const proven = exact && !ts.isExternalModule(sf) && statements.length > 0 && statements.every(isBodylessAmbientModule)
+    if (proven) {
+      for (const statement of statements) {
+        if (!isBodylessAmbientModule(statement)) continue
+        const span = auditSpanAt(sf, filePath, statement.getStart(sf), statement.end, true)
+        if (witnesses.some(fact => fact.span.startLine === span.startLine && fact.span.startColumn === span.startColumn)) continue
+        const fact: SourceAuditFact = {
+          id: auditFactId(filePath, 'declaration', span.startLine, span.startColumn, 0),
+          kind: 'declaration', declarationKind: 'ambient-module',
+          extractionMethod: 'typescript-ast', name: statement.name.text, span,
+        }
+        witnesses.push(fact)
+        facts.push(fact)
+      }
+    }
+    const executable = statements.some(statement => ts.isExpressionStatement(statement) ||
+      ts.isVariableStatement(statement) && statement.declarationList.declarations.some(declaration => declaration.initializer !== undefined))
+    ambientClassification = {
+      profile: 'typescript-ambient-stub-v1', scope: 'entire-file', contentSha256: hash,
+      outcome: proven ? 'proven-ambient-only' : exact && executable ? 'not-ambient-only' : 'undetermined',
+      reasonCode: proven ? null : !exact ? 'PARSE_UNCERTAINTY' : executable ? 'EXECUTABLE_SYNTAX_PRESENT' : 'UNSUPPORTED_AMBIENT_PROFILE',
+      witnessFactIds: proven ? witnesses.map(witness => witness.id) : [],
+    }
+  }
+  return { facts, complete, ambientClassification }
 }
 
 /** Reuses this analyzer's parsed AST. No source IO, runtime execution or type checker. */
@@ -845,7 +922,7 @@ interface TsAuditCollector {
  * syntactic profile: top-level named declarations, static ES imports/exports,
  * top-level literal `require` and top-level CommonJS export assignments.
  */
-function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts.StringLiteral> {
+export function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts.StringLiteral> {
   const literals = new Map<string, ts.StringLiteral>()
   if (sf.isDeclarationFile || !ts.isExternalModule(sf)) return literals
   for (const statement of sf.statements) {
@@ -928,9 +1005,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   for (const statement of sf.statements) {
     if (auditOnly) {
       if (ts.isEmptyStatement(statement)) continue
-      if (exact && !ts.isExternalModule(sf) && ts.isModuleDeclaration(statement) &&
-          ts.isStringLiteral(statement.name) && statement.name.text.length > 0 && !statement.body &&
-          statement.modifiers?.length === 1 && statement.modifiers[0].kind === ts.SyntaxKind.DeclareKeyword) {
+      if (exact && !ts.isExternalModule(sf) && isBodylessAmbientModule(statement)) {
         facts.push({ ...base, kind: 'declaration', span: span(statement), name: statement.name.text, declarationKind: 'ambient-module' })
         continue
       }
@@ -1063,7 +1138,7 @@ function hasDefaultKeyword(node: ts.Node): boolean {
   return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false
 }
 
-function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean) {
+export function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean) {
   const from = sf.getLineAndCharacterOfPosition(start)
   const to = sf.getLineAndCharacterOfPosition(end)
   return {

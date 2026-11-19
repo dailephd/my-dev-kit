@@ -114,7 +114,7 @@ export function failedAuditPayload(code: string, message: string): SourceAuditEx
 }
 
 /** Deterministic artifact-wide fact identity: no timestamps, output paths, random values or absolute paths. */
-export function auditFactId(path: string, kind: SourceAuditFactKind, line: number, column: number | null, ordinal: number): string {
+export function auditFactId(path: string, kind: SourceAuditFact['kind'], line: number, column: number | null, ordinal: number): string {
   return `audit-fact:${encodeURIComponent(path)}#${encodeURIComponent(kind)}#${line}#${column === null ? 'u' : column}#${ordinal}`
 }
 

@@ -9,6 +9,7 @@
  */
 
 import {
+  DYNAMIC_OPERAND_FORMS,
   AUDIT_FACT_PAGE_SIZE,
   AUDIT_INVENTORY_PAGE_SIZE,
   AUDIT_LITERAL_MAX_CHARS,
@@ -201,6 +202,29 @@ function validateFact(
   capabilities: Record<string, unknown>,
 ): Obj {
   const fact = requireObj(value, path)
+  if (fact.kind === 'dynamic-import-expression' && 'dynamic-import-expressions' in capabilities) {
+    const keys = [...FACT_COMMON, 'operandForm', 'operandSpan']
+    requireClosed(fact, path, [...keys, 'literalImportFactId'], keys)
+    requireText(fact.id, `${path}.id`)
+    validateSpan(fact.span, `${path}.span`, filePath)
+    validateSpan(fact.operandSpan, `${path}.operandSpan`, filePath)
+    requireOneOf(fact.operandForm, DYNAMIC_OPERAND_FORMS, `${path}.operandForm`)
+    if (fact.extractionMethod !== 'typescript-ast') fail(path, 'requires TypeScript AST evidence')
+    if (!['complete', 'partial'].includes(String(capabilities['dynamic-import-expressions']))) fail(path, 'requires dynamic-import-expressions coverage')
+    if (fact.literalImportFactId !== undefined) {
+      requireText(fact.literalImportFactId, `${path}.literalImportFactId`)
+      if (fact.operandForm === 'computed') fail(path, 'computed operands cannot link an ordinary import')
+    }
+    const call = fact.span as Obj
+    const operand = fact.operandSpan as Obj
+    const compare = (line: unknown, col: unknown, otherLine: unknown, otherCol: unknown) =>
+      Number(line) - Number(otherLine) || Number(col) - Number(otherCol)
+    if (compare(operand.startLine, operand.startColumn, call.startLine, call.startColumn) <= 0 ||
+        (call.endLine !== null && (operand.endLine === null || compare(operand.endLine, operand.endColumn, call.endLine, call.endColumn) > 0))) {
+      fail(path, 'operand must be nested in its call')
+    }
+    return fact
+  }
   const kind = requireOneOf(fact.kind, SOURCE_AUDIT_FACT_KINDS, `${path}.kind`)
   const fields = FACT_FIELDS[kind]
   requireClosed(fact, path, [...FACT_COMMON, ...fields.allowed], [...FACT_COMMON, ...fields.required])
@@ -351,10 +375,10 @@ function validateJvmName(value: unknown, path: string, allowDefault = false): vo
   if (typeof value !== 'string' || !(allowDefault && value === '') && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value)) fail(path, 'must be a qualified JVM identifier')
 }
 
-function validateFileRecord(value: unknown, path: string, mode: FileMode): Obj {
+function validateFileRecord(value: unknown, path: string, mode: FileMode, feature = false): Obj {
   const file = requireObj(value, path)
   const extra = mode === 'full' ? ['facts', 'diagnostics'] : mode === 'file-page' ? ['diagnostics'] : []
-  requireClosed(file, path, [...FILE_BASE_KEYS, ...extra, 'jvmPackageName'], [...FILE_BASE_KEYS, ...extra])
+  requireClosed(file, path, [...FILE_BASE_KEYS, ...extra, 'jvmPackageName', ...(feature ? ['ambientClassification'] : [])], [...FILE_BASE_KEYS, ...extra])
   if (file.jvmPackageName !== undefined) validateJvmName(file.jvmPackageName, `${path}.jvmPackageName`, true)
   const filePath = requirePath(file.path, `${path}.path`)
   requireText(file.language, `${path}.language`)
@@ -366,8 +390,9 @@ function validateFileRecord(value: unknown, path: string, mode: FileMode): Obj {
   requireNullable(file.analyzerId, `${path}.analyzerId`, requireText)
 
   const capabilities = requireObj(file.capabilities, `${path}.capabilities`)
-  requireClosed(capabilities, `${path}.capabilities`, SOURCE_AUDIT_CAPABILITIES, SOURCE_AUDIT_CAPABILITIES)
-  for (const capability of SOURCE_AUDIT_CAPABILITIES) {
+  const capabilityKeys = feature ? [...SOURCE_AUDIT_CAPABILITIES, 'dynamic-import-expressions'] : SOURCE_AUDIT_CAPABILITIES
+  requireClosed(capabilities, `${path}.capabilities`, capabilityKeys, capabilityKeys)
+  for (const capability of capabilityKeys) {
     const capabilityStatus = requireOneOf(
       capabilities[capability],
       SOURCE_AUDIT_CAPABILITY_STATUSES,
@@ -378,6 +403,24 @@ function validateFileRecord(value: unknown, path: string, mode: FileMode): Obj {
     }
   }
 
+  if (file.ambientClassification !== undefined) {
+    const a = requireObj(file.ambientClassification, `${path}.ambientClassification`)
+    const keys = ['profile', 'contentSha256', 'scope', 'outcome', 'witnessFactIds', 'reasonCode']
+    requireClosed(a, path, keys, keys)
+    if (a.profile !== 'typescript-ambient-stub-v1' || a.scope !== 'entire-file' || file.language !== 'typescript') fail(path, 'invalid ambient classification profile')
+    requireSha(a.contentSha256, `${path}.ambientClassification.contentSha256`)
+    if (a.contentSha256 !== file.contentSha256) fail(path, 'ambient classification hash mismatch')
+    const outcome = requireOneOf(a.outcome, ['proven-ambient-only', 'not-ambient-only', 'undetermined'] as const, path)
+    const ids = requireArray(a.witnessFactIds, path).map(id => requireText(id, path))
+    if (new Set(ids).size !== ids.length) fail(path, 'duplicate ambient witness')
+    if (outcome === 'proven-ambient-only') {
+      if (a.reasonCode !== null || ids.length === 0 || status !== 'parsed' || capabilities.declarations !== 'complete') fail(path, 'invalid ambient proof')
+    } else {
+      if (ids.length > 0) fail(path, 'unproven classification cannot claim witnesses')
+      requireOneOf(a.reasonCode, outcome === 'not-ambient-only'
+        ? ['EXECUTABLE_SYNTAX_PRESENT'] as const : ['UNSUPPORTED_AMBIENT_PROFILE', 'PARSE_UNCERTAINTY'] as const, path)
+    }
+  }
   requireStringArray(file.warnings, `${path}.warnings`, false)
   if (capabilities.jvmDeclarations === 'complete') {
     if (!/\.(java|kt)$/i.test(filePath) || file.jvmPackageName === undefined || capabilities.declarations !== 'complete') fail(path, 'complete JVM declarations require an ordinary JVM file, known package and complete declarations')
@@ -444,7 +487,7 @@ export function validateSourceAuditEvidence(value: unknown): asserts value is So
     'files',
   ])
   if (root.artifactKind !== SOURCE_AUDIT_ARTIFACT_KIND) fail('$.artifactKind', 'must equal the source-audit artifact kind')
-  if (root.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) fail('$.schemaVersion', 'must equal the source-audit schema version')
+  if (root.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION && root.schemaVersion !== '1.2.0') fail('$.schemaVersion', 'must equal the source-audit schema version')
 
   const producer = requireObj(root.producer, '$.producer')
   requireClosed(producer, '$.producer', ['packageName', 'packageVersion'], ['packageName', 'packageVersion'])
@@ -481,7 +524,7 @@ export function validateSourceAuditEvidence(value: unknown): asserts value is So
   let previousPath: string | null = null
   files.forEach((entry, i) => {
     const path = `$.files[${i}]`
-    const file = validateFileRecord(entry, path, 'full')
+    const file = validateFileRecord(entry, path, 'full', root.schemaVersion === '1.2.0')
     const filePath = file.path as string
     if (previousPath !== null && filePath <= previousPath) {
       fail(`${path}.path`, filePath === previousPath ? 'is duplicated' : 'is out of order (expected ascending path)')
@@ -490,6 +533,17 @@ export function validateSourceAuditEvidence(value: unknown): asserts value is So
     if (file.status === 'unsupported') unsupported++
     if (file.status === 'failed') failed++
     const facts = validateFacts(file.facts, `${path}.facts`, filePath, file.capabilities as Obj)
+    const byId = new Map(facts.map(fact => [fact.id, fact]))
+    for (const fact of facts) {
+      if (fact.literalImportFactId === undefined) continue
+      const linked = byId.get(fact.literalImportFactId)
+      if (linked?.kind !== 'import' || JSON.stringify(linked.span) !== JSON.stringify(fact.span)) fail(path, 'invalid expression/import linkage')
+    }
+    const ambient = file.ambientClassification as Obj | undefined
+    if (ambient && (ambient.witnessFactIds as string[]).some(id => {
+      const witness = byId.get(id)
+      return witness?.kind !== 'declaration' || witness.declarationKind !== 'ambient-module'
+    })) fail(path, 'ambient witness is not an ambient declaration')
     for (const fact of facts) {
       if (fact.jvmDeclaration !== undefined) {
         const identity = fact.jvmDeclaration as Obj
@@ -531,7 +585,7 @@ const ENVELOPE_KEYS = ['schemaVersion', 'snapshotId', 'pageIndex', 'pageSize', '
 
 /** Validates the shared envelope and returns the expected item count for this page. */
 function validateEnvelope(page: Obj, path: string, expectedPageSize: number): number {
-  if (page.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) fail(`${path}.schemaVersion`, 'must equal the source-audit schema version')
+  if (page.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION && page.schemaVersion !== '1.2.0') fail(`${path}.schemaVersion`, 'must equal the source-audit schema version')
   requireSha(page.snapshotId, `${path}.snapshotId`)
   const pageIndex = requireNonNegInt(page.pageIndex, `${path}.pageIndex`)
   const pageSize = requireNonNegInt(page.pageSize, `${path}.pageSize`)
@@ -558,7 +612,7 @@ export function validateSourceAuditInventoryPage(value: unknown): asserts value 
   if (files.length !== expectedItems) fail('$.files', `must contain exactly ${expectedItems} items for this page`)
   let previousPath: string | null = null
   files.forEach((entry, i) => {
-    const file = validateFileRecord(entry, `$.files[${i}]`, 'inventory')
+    const file = validateFileRecord(entry, `$.files[${i}]`, 'inventory', page.schemaVersion === '1.2.0')
     const filePath = file.path as string
     if (previousPath !== null && filePath <= previousPath) {
       fail(`$.files[${i}].path`, filePath === previousPath ? 'is duplicated' : 'is out of order (expected ascending path)')
@@ -584,7 +638,7 @@ export function validateSourceAuditFilePage(value: unknown): asserts value is So
   }
 
   if (page.file === null) fail('$.file', 'is required for a found result')
-  const file = validateFileRecord(page.file, '$.file', 'file-page')
+  const file = validateFileRecord(page.file, '$.file', 'file-page', page.schemaVersion === '1.2.0')
   if (facts.length !== expectedItems) fail('$.facts', `must contain exactly ${expectedItems} items for this page`)
   const pageFacts = validateFacts(facts, '$.facts', file.path as string, file.capabilities as Obj)
   if (file.status === 'failed' || file.status === 'skipped' || file.status === 'unsupported') {

@@ -54,7 +54,7 @@ describe('selected JSON test-content source evidence', () => {
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     expect(manifest.sourceAuditEvidence.snapshotId).toBe(artifact.source.snapshotId)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.4')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
   })
 
   it('uses the same exact-file CLI authority without exposing JSON through other source modes', async () => {
@@ -237,7 +237,7 @@ describe('selected JSON test-content source evidence', () => {
     expect(contents(out, 'code-graph.json')).toEqual(graph)
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     const cache = JSON.parse(contents(out, 'cache-metadata.json').toString('utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.4.0')
+    expect(cache.cacheSchemaVersion).toBe('1.5.0')
     expect(cache.baselineArtifacts.manifestSha256).toBe(digest(contents(out, 'manifest.json')))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     await runIndexCommand({ root, src: ['src', 'tests'], out: join(root, 'full') })

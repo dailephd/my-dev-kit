@@ -104,10 +104,10 @@ describe('v1.15.0 Batch 4 source-audit artifact generation', () => {
 
 describe('v1.15.0 Batch 4 cache schema and full/incremental behaviour', () => {
   it('uses private cache schema 1.4.0 and records the extractor revision in the fingerprint', async () => {
-    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
+    expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
     const root = makeProject(BASE)
     await index(root, { incremental: true })
-    expect(readJson(join(root, 'out', 'cache-metadata.json')).cacheSchemaVersion).toBe('1.4.0')
+    expect(readJson(join(root, 'out', 'cache-metadata.json')).cacheSchemaVersion).toBe('1.5.0')
   })
 
   it('produces equivalent facts and snapshot ids for full, incremental and partial builds', async () => {

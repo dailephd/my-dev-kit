@@ -67,7 +67,7 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
   if (typeof reference !== 'object' || reference.path !== SOURCE_AUDIT_EVIDENCE_FILENAME) {
     invalid(`Manifest sourceAuditEvidence.path must be ${SOURCE_AUDIT_EVIDENCE_FILENAME}.`)
   }
-  if (reference.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) invalid('Manifest sourceAuditEvidence.schemaVersion is unsupported.')
+  if (reference.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION && reference.schemaVersion !== '1.2.0') invalid('Manifest sourceAuditEvidence.schemaVersion is unsupported.')
   if (typeof reference.sha256 !== 'string' || !SHA256_PATTERN.test(reference.sha256)) invalid('Manifest sourceAuditEvidence.sha256 is not a lowercase SHA-256.')
   if (typeof reference.snapshotId !== 'string' || !SHA256_PATTERN.test(reference.snapshotId)) invalid('Manifest sourceAuditEvidence.snapshotId is malformed.')
 
@@ -103,7 +103,7 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
   }
   const artifact = parsed as SourceAuditEvidenceArtifact
   if (artifact.artifactKind !== SOURCE_AUDIT_ARTIFACT_KIND) invalid('Unexpected audit artifact kind.')
-  if (artifact.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) invalid('Unexpected audit artifact schema version.')
+  if (artifact.schemaVersion !== reference.schemaVersion) invalid('Unexpected audit artifact schema version.')
   if (artifact.source.snapshotId !== reference.snapshotId) invalid('The artifact snapshotId does not match the manifest.')
   if (artifact.source.projectRoot !== resolved.manifest.projectRoot) invalid('The artifact project root does not match the manifest.')
   const manifestRoots = [...resolved.manifest.sourceRoots].map((root) => root.replace(/\\/g, '/')).sort()
@@ -134,7 +134,7 @@ export function getSourceAuditInventoryPage(artifact: SourceAuditEvidenceArtifac
   assertPageIndex(pageIndex, totalPages)
   const start = pageIndex * AUDIT_INVENTORY_PAGE_SIZE
   const page: SourceAuditInventoryPage = {
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion: artifact.schemaVersion,
     snapshotId: artifact.source.snapshotId,
     pageIndex,
     pageSize: AUDIT_INVENTORY_PAGE_SIZE,
@@ -170,7 +170,7 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
   if (!file) {
     assertPageIndex(pageIndex, 1)
     const notSelected: SourceAuditFilePage = {
-      schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+      schemaVersion: artifact.schemaVersion,
       snapshotId: artifact.source.snapshotId,
       pageIndex: 0,
       pageSize: AUDIT_FACT_PAGE_SIZE,
@@ -191,7 +191,7 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
   const start = pageIndex * AUDIT_FACT_PAGE_SIZE
   const { facts: _facts, ...record } = file
   const page: SourceAuditFilePage = {
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion: artifact.schemaVersion,
     snapshotId: artifact.source.snapshotId,
     pageIndex,
     pageSize: AUDIT_FACT_PAGE_SIZE,

@@ -41,7 +41,7 @@ import { SOURCE_AUDIT_SCHEMA_VERSION } from '../symbol-index/auditEvidenceTypes.
 import { AUDIT_PRODUCER_CAPABILITIES } from '../symbol-index/auditObservations.js'
 
 export const CACHE_METADATA_FILENAME = 'cache-metadata.json'
-export const CACHE_SCHEMA_VERSION = '1.4.0'
+export const CACHE_SCHEMA_VERSION = '1.5.0'
 export const INDEX_ARTIFACT_SCHEMA_VERSION = '1.0.0'
 
 const SAMPLE_LIMIT = 20
@@ -189,7 +189,7 @@ export interface ConfigFingerprintInput {
  * and excludes are sorted before hashing so re-ordering repeated `--src`/
  * `--exclude` flags does not spuriously invalidate the cache.
  */
-export function computeConfigFingerprint(input: ConfigFingerprintInput): string {
+export function computeConfigFingerprint(input: ConfigFingerprintInput & { sourceAuditSchema?: '1.1.0' | '1.2.0' }): string {
   const normalized = {
     // Extractor semantics changed without changing the cache storage format.
     // Invalidate pre-B04 summaries before a no-change shortcut can reuse them.
@@ -206,7 +206,7 @@ export function computeConfigFingerprint(input: ConfigFingerprintInput): string 
     configuredImportsRevision: 'v1.14.0-configured-imports',
     // v1.15.0: private extraction/capability contract that produced FileSummary.sourceAudit.
     sourceAuditExtractorRevision: SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION,
-    sourceAuditSchemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    sourceAuditSchemaVersion: input.sourceAuditSchema ?? SOURCE_AUDIT_SCHEMA_VERSION,
     sourceAuditCapabilities: [...AUDIT_PRODUCER_CAPABILITIES],
     configuredImportsFingerprint: input.configuredImportsFingerprint ?? null,
     sourceRoots: [...input.sourceRoots].map(toForwardSlash).sort(),

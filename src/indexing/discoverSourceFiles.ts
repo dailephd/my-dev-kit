@@ -99,6 +99,7 @@ export interface AuditSelectedFile {
   selectionStatus: AuditSelectionStatus
   /** Raw content identity only; never makes an unsupported file a semantic indexing input. */
   contentSha256?: string
+  rawContentSha256?: string
   auditOnlySummary?: Pick<FileSummary, 'language' | 'lineCount' | 'sourceAudit'>
 }
 
@@ -268,19 +269,21 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     if (!state.registry.supportsFile(entry.name)) {
       recordSkipped(state, relPath, 'unsupported')
       let contentSha256: string | undefined
+      let rawContentSha256: string | undefined
       // Selection grants raw byte authority independently of semantic language support.
       // Keep the existing bounded, containment-safe text profile; never manufacture facts.
       if (stat.size <= AUDIT_CONTENT_MAX_BYTES) {
         try {
           const bytes = readSourceBytes(state.repoRoot, relPath, AUDIT_CONTENT_MAX_BYTES)
+          if (bytes.length === stat.size) rawContentSha256 = createHash('sha256').update(bytes).digest('hex')
           // Fatal decoding rejects invalid UTF-8 instead of authenticating replacement-character text.
           new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-          if (!bytes.includes(0) && bytes.length === stat.size) contentSha256 = createHash('sha256').update(bytes).digest('hex')
+          if (!bytes.includes(0) && bytes.length === stat.size) contentSha256 = rawContentSha256
         } catch {
           // Keep the selected unsupported record without a hash; absence can never be complete.
         }
       }
-      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported', contentSha256 })
+      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported', contentSha256, rawContentSha256 })
       continue
     }
 
@@ -352,7 +355,7 @@ function recordSelected(state: DiscoveryState, file: AuditSelectedFile): void {
     state.selectedByPath.set(file.relPath, file)
     return
   }
-  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes || existing.contentSha256 !== file.contentSha256) {
+  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes || existing.contentSha256 !== file.contentSha256 || existing.rawContentSha256 !== file.rawContentSha256) {
     state.incompleteReasons.add('conflicting-selection-identity')
   }
 }

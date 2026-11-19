@@ -113,11 +113,7 @@ export function resolveAuditImportTarget(indexDir: string, importFactId: string)
   // The origin file must still be the indexed one before any conclusion is drawn from its import.
   assertSourceAuditFileFresh(artifact, file)
 
-  const projectRoot = artifact.source.projectRoot
-  const roots = artifact.source.sourceRoots
   const selectionComplete = artifact.coverage.inventoryComplete && artifact.coverage.exclusionsAreExplicit
-  const inventory = artifact.files.map((entry) => entry.path).sort(compareText)
-  const inventorySet = new Set(inventory)
   const specifier = fact.sourceSpecifier
 
   const proof = (status: AuditImportTargetProof['status'], candidatePaths: readonly string[], reasonCode: string): AuditImportTargetProof => ({
@@ -177,6 +173,18 @@ export function resolveAuditImportTarget(indexDir: string, importFactId: string)
     }
   }
 
+  return resolveAuditTargetCandidates(artifact, file, specifier, fact.importedNames ?? [], proof)
+}
+
+/** Shared resolver for authenticated legacy imports and already qualified domain alternatives. */
+export function resolveAuditTargetCandidates<T>(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, specifier: string, importedNames: string[],
+  proof: (status: AuditImportTargetProof['status'], candidates: readonly string[], reasonCode: string) => T,
+): T {
+  const { projectRoot, sourceRoots: roots } = artifact.source
+  const selectionComplete = artifact.coverage.inventoryComplete && artifact.coverage.exclusionsAreExplicit
+  const inventory = artifact.files.map(entry => entry.path).sort(compareText)
+  const inventorySet = new Set(inventory)
   const registry = createDefaultRegistry(projectRoot)
   const adapter = registry.adapterForFile(file.path)
   if (!adapter) return proof('indeterminate', [], 'UNSUPPORTED_LANGUAGE_RESOLUTION')
@@ -199,7 +207,7 @@ export function resolveAuditImportTarget(indexDir: string, importFactId: string)
       enumerated = enumerateJsTsCandidatePaths(specifier, file.path)
       notEnumerableReason = specifier.startsWith('.') ? 'UNSUPPORTED_SPECIFIER_SHAPE' : 'EXTERNAL_OR_CONFIGURED_SPECIFIER'
     } else if (adapter instanceof PythonAdapter) {
-      existing = adapter.resolveAuditCandidates(specifier, fact.importedNames ?? [], file.path, inventory)
+      existing = adapter.resolveAuditCandidates(specifier, importedNames, file.path, inventory)
       enumerated = adapter.enumerateAuditCandidatePaths(specifier, file.path)
       notEnumerableReason = 'PYTHON_CANDIDATES_NOT_ENUMERABLE'
     } else {

@@ -1,3 +1,4 @@
+import { resolveAuditImportDomain } from '../lookup/resolveAuditImportDomain.js'
 import type { Command } from 'commander'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
@@ -23,6 +24,7 @@ import {
 } from '../android/index.js'
 
 interface LookupCommandOptions {
+  auditImportDomain?: string
   index: string
   node?: string
   route?: string
@@ -55,10 +57,19 @@ export function registerLookupCommand(program: Command): void {
     )
     .option('--audit-files', 'page through the recorded source-audit file inventory (requires --json)')
     .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
+    .option('--audit-import-domain <fact-id>', 'prove a bounded selected import expression domain (requires --json)')
     .option('--audit-import-target <fact-id>', 'prove whether one recorded source-audit import fact has an existing target in the selected inventory (requires --json)')
     .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
-    .action((options: LookupCommandOptions) => {
+    .action(function (this: Command, options: LookupCommandOptions) {
+      if (options.auditImportDomain !== undefined) {
+        const allowed = new Set(['index', 'auditImportDomain', 'json'])
+        if (!options.json || Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
+          throw new Error('INVALID_IMPORT_DOMAIN_SELECTOR: --audit-import-domain requires --json and excludes other lookup selectors and paging.')
+        }
+        console.log(JSON.stringify(resolveAuditImportDomain(options.index, options.auditImportDomain)))
+        return
+      }
       const importTargetRequested = options.auditImportTarget !== undefined
       const auditRequested = options.auditFiles === true || options.auditFile !== undefined || importTargetRequested
       if (options.page !== undefined && !auditRequested) {

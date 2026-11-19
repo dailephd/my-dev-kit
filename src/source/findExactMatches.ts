@@ -198,7 +198,11 @@ export function findExactFileOccurrences(options: {
   const jsonContent = file.path.toLowerCase().endsWith('.json')
   const bytes = readSourceAuditFileBytes(artifact, file, jsonContent ? MAX_EXACT_FILE_SCAN_BYTES : Infinity)
   const text = bytes.toString('utf8')
-  const validUtf8 = createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex') === file.contentSha256 && (!jsonContent || !bytes.includes(0))
+  const validUtf8 = createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex') === file.contentSha256 && (!(jsonContent || artifact.schemaVersion === '1.2.0' && file.status === 'unsupported') || !bytes.includes(0))
+  if (!validUtf8 && artifact.schemaVersion === '1.2.0' && file.status === 'unsupported') {
+    // Opt-in byte authentication does not promote raw-only resources to legacy text evidence.
+    return result({ scannedBytes: 0, complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE', matchCount: 0, matches: [] })
+  }
   const withinLimit = bytes.length <= MAX_EXACT_FILE_SCAN_BYTES
   const scanned = withinLimit ? text : bytes.subarray(0, MAX_EXACT_FILE_SCAN_BYTES).toString('utf8')
 

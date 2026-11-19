@@ -50,7 +50,7 @@ function integrity(dir: string) {
   if (fs.existsSync(path.join(dir, 'cache-metadata.json'))) {
     const cache = json(dir, 'cache-metadata.json')
     expect(manifest.sourceRoots).toEqual(cache.sourceRoots)
-    expect(cache.cacheSchemaVersion).toBe('1.4.0')
+    expect(cache.cacheSchemaVersion).toBe('1.5.0')
     expect(cache.baselineArtifacts).toEqual(computeBaselineArtifactIdentity(dir))
   }
 }

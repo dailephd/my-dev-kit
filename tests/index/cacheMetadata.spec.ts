@@ -35,8 +35,8 @@ describe('computeConfigFingerprint', () => {
     }))
     try {
       const historicalContract = await import('../../src/indexing/cacheMetadata.js')
-      expect(historicalContract.CACHE_SCHEMA_VERSION).toBe('1.4.0')
-      expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
+      expect(historicalContract.CACHE_SCHEMA_VERSION).toBe('1.5.0')
+      expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
       expect(historicalContract.computeConfigFingerprint(input)).not.toBe(current)
     } finally {
       vi.doUnmock('../../src/indexing/buildSourceAuditEvidence.js')
@@ -237,8 +237,8 @@ describe('cache schema 1.4.0 baseline artifact identity', () => {
     return dir
   }
 
-  it('advances the internal cache schema to 1.4.0 (source-audit contract)', () => {
-    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
+  it('advances the internal cache schema to 1.5.0 (source-audit contract)', () => {
+    expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
   })
 
   it('hashes the exact manifest and the manifest-registered symbol index and code graph, deterministically', () => {
@@ -266,7 +266,7 @@ describe('cache schema 1.4.0 baseline artifact identity', () => {
       const read = readCacheMetadata(dir)
       expect(read.status).toBe('ok')
       if (read.status === 'ok') {
-        expect(read.metadata.cacheSchemaVersion).toBe('1.4.0')
+        expect(read.metadata.cacheSchemaVersion).toBe('1.5.0')
         expect(read.metadata.baselineArtifacts).toEqual(baselineArtifacts)
         expect(checkCacheCompatibility(read.metadata).compatible).toBe(true)
       }
