@@ -1266,6 +1266,12 @@ Not claimed: the artifact does not prove complete semantic resolution, runtime b
 
 **Not implemented in the current v1.15.1 package.** The proposed Kotlin script repair changes how existing `files[].capabilities.imports` and `files[].capabilities.declarations` statuses are established; it does not add a new source-audit artifact, fact kind, field, or command selector. One file may legitimately report complete explicit imports and partial declarations. Complete imports mean enumeration of supported explicit import directives only, not implicit Gradle/Kotlin imports or semantic dependency resolution. Unsupported lexing that could conceal an import still prevents a complete claim. Existing `facts[]`, diagnostics, selected inventory, pagination, source hashes, and snapshot validation remain authoritative. An extractor contract revision and private cache invalidation will distinguish new evidence from old results; old persisted evidence must not be silently promoted.
 
+### Proposed v1.15.2 dual-target evidence considerations (not yet a schema change)
+
+For the coordinated SW-123/iworkhere.space v0.4.4 repair, the current `source-audit-evidence.json` schema `1.1.0` is the compatibility baseline. The reported iworkhere `.d.ts` source omission is an **audit selected-file and truthful ambient-declaration** requirement, not authorization to add ordinary graph edges or report invented module exports. A file with an authenticated hash but incomplete semantic facts remains partial/unsupported for the relevant capability.
+
+An observed computed `import(pathToFileURL(...).href)` must remain distinct from a statically proven target; partial runtime target knowledge cannot establish missing-file or project-wide non-reference negatives. The thirteen remaining SW-123 obligations require a separate feasibility design for three authenticated binary-byte occurrences and ten nonliteral runtime target domains. A0/A1 must determine whether existing per-file records and bounded lookup/source responses can express those proofs; **do not add fields, enum statuses, commands, or bump this public schema on the strength of a roadmap proposal**. Any incompatible evidence representation needs explicit version/consumer migration and independent exact-package qualification.
+
 ## api-relationship-evidence.json (v1.15.0)
 
 Kind `kit-api-relationship-evidence-v1`, schema `1.0.0`, producer revision
