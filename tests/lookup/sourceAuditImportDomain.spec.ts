@@ -53,14 +53,11 @@ describe('authenticated dynamic import domains and ambient classification', () =
     expect(() => fixture.query(0)).toThrow(/STALE_SOURCE_EVIDENCE/)
   }, 60_000)
 
-  it('retains each conditional alternative and grounds approved Node operations in imported bindings', async () => {
-    const fixture = await indexed(root => [
-      'import path from "node:path";',
-      'import { pathToFileURL as asURL } from "node:url";',
+  it('retains independent primitive alternatives, template literals and exclusions', async () => {
+    const fixture = await indexed(() => [
       'declare const choose: boolean;',
       'const prefix = "./";',
       'import(`'+'${prefix}'+'${choose ? "peer" : "missing"}`);',
-      'import(asURL(path.join(' + JSON.stringify(join(root, 'src')) + ', "peer.ts")).href);',
       'import(`./peer`);',
       'import("./" + "definitely-absent");',
     ].join('\n'), { 'peer.ts': 'export const x = 1;' })
@@ -71,9 +68,8 @@ describe('authenticated dynamic import domains and ambient classification', () =
         { alternativeIndex: 1, specifier: './missing', resolution: { status: 'proven-missing', candidateEnumerationComplete: true } },
       ],
     })
-    expect(fixture.query(1)).toMatchObject({ outcome: 'finite', operandAlternatives: [{ resolution: { status: 'present' } }] })
-    expect(fixture.query(2)).toMatchObject({ outcome: 'finite', operandAlternatives: [{ specifier: './peer' }] })
-    expect(fixture.query(3)).toMatchObject({ outcome: 'disjoint-selected-domain', disjointProof: { rule: 'fixed-normalized-path-v1' } })
+    expect(fixture.query(1)).toMatchObject({ outcome: 'finite', operandAlternatives: [{ specifier: './peer' }] })
+    expect(fixture.query(2)).toMatchObject({ outcome: 'disjoint-selected-domain', disjointProof: { rule: 'fixed-normalized-path-v1' } })
   })
 
   it('refuses shadowing, reassignment, mutated builtins, unknown CWD and the website-style runtime operand', async () => {
@@ -99,6 +95,90 @@ describe('authenticated dynamic import domains and ambient classification', () =
       'import path from "node:path";', 'path.join = runCustom;', 'import(path.join(".", "peer"));',
     ].join('\n'))
     expect(mutated.query(0)).toMatchObject({ outcome: 'indeterminate' })
+  })
+
+  const incompleteCall = {
+    outcome: 'indeterminate', domainComplete: false, reasonCode: 'INCOMPLETE_REFERENCE_PROFILE',
+    operandAlternatives: [], qualifiedPositiveWitnesses: [], disjointProof: null,
+  }
+
+  it.each([
+    ['shared default exports', [
+      "import path from 'node:path';",
+      "import alias from 'node:path';",
+      "alias.join = () => 'peer.mjs';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+    ['node:path without visible mutation', [
+      "import path from 'node:path';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+    ['bare path with computed property mutation', [
+      "import path from 'path';",
+      "import alias from 'node:path';",
+      "alias['jo' + 'in'] = () => 'peer.mjs';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+    ['synchronized named export', [
+      "import path, { join as buildPath } from 'node:path';",
+      "import { syncBuiltinESMExports } from 'node:module';",
+      "path.join = () => 'peer.mjs';",
+      "syncBuiltinESMExports();",
+      "void import('./' + buildPath('missing.mjs'));",
+    ]],
+    ['require alias', [
+      "import path from 'node:path';",
+      "const alias = require('path');",
+      "alias.join = () => 'peer.mjs';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+    ['createRequire alias', [
+      "import path from 'node:path';",
+      "import { createRequire } from 'node:module';",
+      "const load = createRequire(import.meta.url);",
+      "const alias = load('node:path');",
+      "alias.join = () => 'peer.mjs';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+    ['cross-module mutation', [
+      "import path from 'node:path';",
+      "import './mutate.mjs';",
+      "void import('./' + path.join('missing.mjs'));",
+    ]],
+  ])('fails closed for %s', async (_description, lines) => {
+    const fixture = await indexed(() => lines.join('\n'), {
+      'peer.mjs': 'throw new Error("target must not execute");',
+      'mutate.mjs': "import alias from 'node:path'; alias.join = () => 'peer.mjs';",
+    })
+    expect(fixture.expressions).toHaveLength(1)
+    const result = fixture.query(0)
+    expect(result).toMatchObject(incompleteCall)
+    expect(fixture.query(0)).toEqual(result)
+  })
+
+  it('propagates unqualified calls through bindings, templates, conditionals and file URLs', async () => {
+    const fixture = await indexed(root => [
+      "import path from 'node:path';",
+      "import { fileURLToPath, pathToFileURL as asURL } from 'node:url';",
+      "import url from 'url';",
+      "const target = path.join('peer.mjs');",
+      "void import('./' + target);",
+      'void import(`./${path.join("peer.mjs")}`);',
+      "void import(flag ? './peer.mjs' : './' + path.join('missing.mjs'));",
+      "void import(path.resolve('peer.mjs'));",
+      "void import(path.normalize('./peer.mjs'));",
+      "void import(asURL(" + JSON.stringify(join(root, 'src', 'peer.mjs')) + ").href);",
+      "void import(asURL(path.join('missing.mjs')).href);",
+      "void import(fileURLToPath('file:///peer.mjs'));",
+      "void import(url.pathToFileURL('peer.mjs').href);",
+      "void import(true ? './peer.mjs' : path.join('missing.mjs'));",
+    ].join('\n'), { 'peer.mjs': 'throw new Error("target must not execute");' })
+    expect(fixture.expressions).toHaveLength(10)
+    for (let index = 0; index < 9; index++) expect(fixture.query(index)).toMatchObject(incompleteCall)
+    expect(fixture.query(9)).toMatchObject({
+      outcome: 'finite', domainComplete: true,
+      operandAlternatives: [{ specifier: './peer.mjs', resolution: { status: 'present' } }],
+    })
   })
 
   it('makes overflow indeterminate without truncating a successful domain', async () => {

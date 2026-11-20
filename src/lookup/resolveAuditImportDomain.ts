@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import * as path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import * as ts from 'typescript'
 import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
 import type { SourceAuditSpan } from '../symbol-index/auditEvidenceTypes.js'
@@ -26,7 +26,6 @@ const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 /** Evaluate only syntactic forms grounded in the authenticated origin. */
 function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.Node, role: Role) => void): string[] {
   const bindings = new Map<string, ts.VariableDeclaration>()
-  const operations = new Map<string, { declaration: ts.Identifier; operation: string }>()
   const identifiers = new Map<string, ts.Identifier[]>()
   let references = 0
   let hasDynamicScope = false
@@ -48,21 +47,6 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
         if (ts.isIdentifier(declaration.name) && declaration.initializer) bindings.set(declaration.name.text, declaration)
       }
     }
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue
-    const module = statement.moduleSpecifier.text
-    if (!['node:path', 'path', 'node:url', 'url'].includes(module)) continue
-    const named = statement.importClause?.namedBindings
-    const isPath = module.endsWith('path')
-    const addOperation = (declaration: ts.Identifier, operation: string) => operations.set(declaration.text, { declaration, operation })
-    if (isPath && statement.importClause?.name) addOperation(statement.importClause.name, 'path')
-    if (named && ts.isNamespaceImport(named)) addOperation(named.name, isPath ? 'path' : 'url')
-    if (named && ts.isNamedImports(named)) {
-      for (const element of named.elements) {
-        if (element.isTypeOnly) continue
-        const name = (element.propertyName ?? element.name).text
-        if (isPath && name === 'join' || !isPath && name === 'pathToFileURL') addOperation(element.name, name)
-      }
-    }
   }
   const bounded = (values: Iterable<string>): string[] => {
     const unique = new Set<string>()
@@ -82,24 +66,6 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
       if (result.size > 64) throw new DomainGap('DOMAIN_LIMIT_EXCEEDED')
     }
     return [...result]
-  }
-  function qualifiedOperation(node: ts.Expression, operation: 'join' | 'pathToFileURL'): boolean {
-    const name = ts.isIdentifier(node) ? node : ts.isPropertyAccessExpression(node) && node.name.text === operation &&
-      ts.isIdentifier(node.expression) ? node.expression : undefined
-    if (!name) return false
-    const binding = operations.get(name.text)
-    if (!binding || (ts.isIdentifier(node) ? binding.operation !== operation :
-      binding.operation !== (operation === 'join' ? 'path' : 'url'))) return false
-    const uses = identifiers.get(name.text) ?? []
-    if (uses.some(use => {
-      if (use === binding.declaration) return false
-      if (binding.operation === operation) return !ts.isCallExpression(use.parent) || use.parent.expression !== use
-      const access = use.parent
-      return !ts.isPropertyAccessExpression(access) || access.expression !== use || access.name.text !== operation ||
-        !ts.isCallExpression(access.parent) || access.parent.expression !== access
-    })) return false
-    add(binding.declaration, 'binding')
-    return true
   }
   function visit(node: ts.Expression, depth: number): string[] {
     if (depth > 32) throw new DomainGap('DOMAIN_LIMIT_EXCEEDED')
@@ -138,21 +104,12 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
       if (node.condition.kind === ts.SyntaxKind.FalseKeyword) return visit(node.whenFalse, depth + 1)
       return bounded([...visit(node.whenTrue, depth + 1), ...visit(node.whenFalse, depth + 1)])
     }
-    if (ts.isCallExpression(node) && qualifiedOperation(node.expression, 'join') && node.arguments.length > 0) {
-      add(node, 'operation')
-      let values = ['']
-      for (const arg of node.arguments) values = combine(values, visit(arg, depth + 1), (a, b) => path.join(a, b))
-      return values
-    }
-    if (ts.isPropertyAccessExpression(node) && node.name.text === 'href' && ts.isCallExpression(node.expression) &&
-        node.expression.arguments.length === 1) {
-      const call = node.expression
-      if (!qualifiedOperation(call.expression, 'pathToFileURL')) throw new DomainGap('UNSUPPORTED_PATH_OPERATION')
-      add(node, 'operation')
-      return bounded(visit(call.arguments[0]!, depth + 1).map(value => {
-        if (!path.isAbsolute(value) || process.platform === 'win32' && !/^[A-Za-z]:[\\/]/.test(value)) throw new DomainGap('UNKNOWN_RUNTIME_VALUE')
-        return pathToFileURL(value).href
-      }))
+    // Imported Node built-in functions can change through shared exports or
+    // named-export synchronization. Source authentication cannot qualify a
+    // runtime call or a property read on its result under this static profile.
+    if (ts.isCallExpression(node) ||
+        ts.isPropertyAccessExpression(node) && node.name.text === 'href' && ts.isCallExpression(node.expression)) {
+      throw new DomainGap('INCOMPLETE_REFERENCE_PROFILE')
     }
     throw new DomainGap('UNSUPPORTED_EXPRESSION')
   }
