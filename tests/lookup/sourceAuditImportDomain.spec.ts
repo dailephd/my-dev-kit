@@ -14,11 +14,11 @@ import { runCli } from './testCli.js'
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 
-async function indexed(source: (root: string) => string, other: Record<string, string> = {}) {
+async function indexed(source: (root: string) => string, other: Record<string, string> = {}, origin = 'origin.ts') {
   const root = mkdtempSync(join(tmpdir(), 'kit-b2-domain-'))
   roots.push(root)
   mkdirSync(join(root, 'src'))
-  const path = 'src/origin.ts'
+  const path = 'src/' + origin
   writeFileSync(join(root, path), source(root))
   for (const [name, content] of Object.entries(other)) writeFileSync(join(root, 'src', name), content)
   const out = join(root, 'out')
@@ -33,7 +33,7 @@ async function indexed(source: (root: string) => string, other: Record<string, s
 describe('authenticated dynamic import domains and ambient classification', () => {
   it('preserves ordinary facts and records one typed expression per call with exact operands', async () => {
     const fixture = await indexed(() => [
-      'export {}; const peer = "./peer";', 'import(peer);', 'import("./peer");',
+      'export {}; const peer = "./peer.ts";', 'import(peer);', 'import("./peer");',
       'import("./" + "peer");', 'import(globalThis.target);',
     ].join('\n'), { 'peer.ts': 'throw new Error("target must not execute");' })
     expect(fixture.page).toMatchObject({ schemaVersion: '1.2.0', file: { capabilities: { imports: 'partial', 'dynamic-import-expressions': 'complete' } } })
@@ -100,6 +100,50 @@ describe('authenticated dynamic import domains and ambient classification', () =
     expect(resolveAuditImportTarget(legacy, encoded.id)).toMatchObject({
       status: 'indeterminate', reasonCode: 'UNSUPPORTED_SPECIFIER_SHAPE', candidatePaths: [],
     })
+  })
+
+  it('keeps source-extension candidates separate from exact ESM reference witnesses', async () => {
+    // Freeze the expected ESM spelling and selected inventory independently of Kit.
+    const cases = [
+      { operand: './peer', candidate: 'peer.mjs', witness: null },
+      { operand: './only-source.mjs', candidate: 'only-source.mts', witness: null },
+      { operand: './peer.mjs', candidate: 'peer.mjs', witness: 'peer.mjs' },
+      { operand: './pe%65r.mjs', candidate: 'peer.mjs', witness: 'peer.mjs' },
+      { operand: './intermediate/%2e%2e/peer.mjs', candidate: 'peer.mjs', witness: 'peer.mjs' },
+      { operand: './unambiguously-absent.mjs', candidate: null, witness: null },
+    ]
+    const fixture = await indexed(() => cases.map(({ operand }) =>
+      'void import(' + JSON.stringify(operand) + ');').join('\n'), {
+      'peer.mjs': 'throw new Error("target fixture must not execute");',
+      'only-source.mts': 'export const source: number = 1;',
+    }, 'origin.mjs')
+    const parent = pathToFileURL(join(fixture.root, fixture.path)).href
+    const oracle = spawnSync(process.execPath, [
+      '--experimental-import-meta-resolve', '--input-type=module', '-e',
+      'const [base, ...values] = process.argv.slice(1); console.log(JSON.stringify(values.map(value => import.meta.resolve(value, base))));',
+      '--', parent, ...cases.map(({ operand }) => operand),
+    ], { encoding: 'utf8', windowsHide: true })
+    expect(oracle.status, oracle.stderr).toBe(0)
+    const urls: string[] = JSON.parse(oracle.stdout)
+    for (const [i, row] of cases.entries()) {
+      const physical = fileURLToPath(urls[i]!)
+      if (row.witness) {
+        expect(statSync(physical).isFile()).toBe(true)
+        expect(realpathSync(physical)).toBe(realpathSync(join(fixture.root, 'src', row.witness)))
+      } else {
+        expect(existsSync(physical)).toBe(false)
+      }
+      const fact = fixture.expressions[i]!
+      const ordinary = resolveAuditImportTarget(fixture.out, fact.literalImportFactId!)
+      expect(ordinary).toMatchObject({ sourceSpecifier: row.operand, status: row.candidate ? 'present' : 'proven-missing' })
+      if (row.candidate) expect(ordinary.candidatePaths).toEqual(['src/' + row.candidate])
+      const result = fixture.query(i)
+      expect(result).toMatchObject({
+        outcome: row.candidate ? 'finite' : 'disjoint-selected-domain',
+        operandAlternatives: [{ specifier: row.operand }],
+      })
+      expect(result.qualifiedPositiveWitnesses.map(w => w.targetPath)).toEqual(row.witness ? ['src/' + row.witness] : [])
+    }
   })
 
   it('keeps finite operands when a particular resolution cannot qualify the target domain', async () => {

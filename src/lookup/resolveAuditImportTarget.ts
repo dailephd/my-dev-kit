@@ -366,3 +366,22 @@ export function resolveAuditTargetCandidates(
   const decision = classifyAbsentCandidates(projectRoot, roots, enumerated, selectionComplete)
   return result(decision.status, enumerated, decision.reasonCode, decision.status === 'proven-missing' ? enumerated : null)
 }
+/**
+ * A source-extension candidate is not a positive ESM reference witness.
+ * The default ESM file URL must itself designate this exact selected path.
+ * This is source-reference evidence, not a promise the module can be loaded.
+ * Reuse the shared candidate owner's URL, containment and profile checks.
+ */
+export function isQualifiedDefaultEsmSelectedReference(
+  artifact: SourceAuditEvidenceArtifact,
+  origin: SourceAuditFile,
+  specifier: string,
+  selectedPath: string,
+): boolean {
+  if (origin.language !== 'typescript' && origin.language !== 'javascript') return false
+  if (!runtimeProfileIsDefault() || !hasCanonicalPath(artifact.source.projectRoot, origin.path)) return false
+  const normalized = jsTsPath(artifact.source.projectRoot, origin.path, specifier, true)
+  if (!normalized || !('localPath' in normalized) || normalized.localPath !== selectedPath) return false
+  if (!insideSelectedRoots(artifact.source.sourceRoots, selectedPath)) return false
+  return hasCanonicalPath(artifact.source.projectRoot, selectedPath)
+}

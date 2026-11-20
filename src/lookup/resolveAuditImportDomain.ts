@@ -1,3 +1,4 @@
+import { isQualifiedDefaultEsmSelectedReference } from './resolveAuditImportTarget.js'
 import { createHash } from 'node:crypto'
 import * as ts from 'typescript'
 import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
@@ -174,7 +175,11 @@ export function resolveAuditImportDomain(indexDir: string, id: string) {
       const targetProof = resolveAuditImportTarget(indexDir, fact.literalImportFactId)
       if (targetProof.snapshotId !== base.snapshotId) throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Target proof snapshot changed.')
       if (operandAlternatives[0].resolution.candidateEnumerationComplete &&
-          targetProof.status === 'present' && targetProof.candidatePaths.length === 1) {
+        targetProof.status === 'present' &&
+        targetProof.candidatePaths.length === 1 &&
+        isQualifiedDefaultEsmSelectedReference(
+          artifact, file, values[0]!, targetProof.candidatePaths[0]!,
+        )) {
         const target = artifact.files.find(entry => entry.path === targetProof.candidatePaths[0])
         if (target?.contentSha256) qualifiedPositiveWitnesses.push({
           importFactId: fact.literalImportFactId, targetPath: target.path, targetContentSha256: target.contentSha256, targetProof,
