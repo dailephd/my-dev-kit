@@ -757,3 +757,23 @@ There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-s
 **Unexpected zero-match or empty graph:** check the semantic result and required scope. A valid empty result is not proof of sufficient context or successful application behavior.
 
 **Workflow needs a missing command:** verify the command's actual owner and installation. Record unsupported/manual/library-only boundaries in the ecosystem feedback report rather than invent a flag or secretly require a source checkout.
+
+## Coordinated source-evidence commands in the local R3 candidate
+
+The following selectors describe the qualified local R3 package.
+`index --source-audit-schema 1.2.0` selects the extended artifact; the
+default is `1.1.0`. The artifact, inventory and file fact pages use the
+selected artifact schema. Validate the other response families independently:
+
+| Command | Response schema |
+| --- | --- |
+| `lookup --audit-import-target <fact-id> --json` | 1.1.0 |
+| `lookup --audit-import-domain <fact-id> --json` | 1.0.0 |
+| `source --file <path> --contains <text> --json` | 1.1.0 |
+| `source --file <path> --contains-bytes-hex <hex> --json` | 1.0.0 |
+
+Use the same managed index for inventory, file facts and proofs. Pass the
+authenticated import-expression fact ID to the domain selector and the literal
+import fact ID to the ordinary target selector. The domain selector excludes
+other lookup modes and paging. The byte selector requires one exact selected
+file and excludes other source modes. See [the proof contract](CONTRACTS.md#coordinated-r3-import-evidence).

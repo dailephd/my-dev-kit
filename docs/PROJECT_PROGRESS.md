@@ -232,3 +232,15 @@ Version 1.10.2 corrects the v1.10.1 release-state documentation and does not cha
 - Command-level behavior and flags: [COMMANDS.md](COMMANDS.md)
 - Schema and artifact fields: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md)
 - Release history: [CHANGELOG.md](../CHANGELOG.md)
+
+## Coordinated source-evidence candidate
+
+The published Kit baseline is 1.15.1. The local producer for the coordinated
+v1.16.0 Kit and v0.11.0 Lab work still has package metadata 1.15.1.
+The qualified R3 source commit is `bde00d9c165a6a546170ab72e7a9534d6929697e`.
+The qualified local archive SHA-256 is
+`943b3506c7a3e9708f96d2e40a9fcfc720853c46a4273f31408568942a5599a6`.
+Registry Kit 1.15.1 has a separate package identity. Lab B4 requalification
+covered the installed Windows consumer. Lab Linux integration and release
+readiness require separate qualification. Existing roadmap reservations remain
+in force.

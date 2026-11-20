@@ -457,3 +457,19 @@ Contract changes require synchronized implementation, tests, detailed schema or
 command documentation, compatibility notes, and preservation checks. Current
 behavior may correct stale status, but it must not erase future roadmap scope.
 Release history and versioned schema details remain append-preserving.
+
+## Coordinated R3 import evidence
+
+An ordinary `present` result records an observed selected candidate. Extension
+heuristics can yield a candidate even when default Node ESM lacks an exact
+source reference. The expression-domain response carries
+`qualifiedPositiveWitnesses` separately. A witness binds the linked literal
+fact, exact selected path, target content digest and ordinary proof under
+the qualified default ESM reference rules.
+
+A finite operand set describes evaluated alternatives. A consumer must still
+check each alternative's resolution, candidate enumeration and selection
+coverage. A disjoint proof concerns the authenticated selected domain and
+its declared premises. Reverse-reference absence additionally requires
+coverage of the relevant origins. Indeterminate operands, unresolved
+profiles and incomplete evidence leave the affected predicate unknown.
