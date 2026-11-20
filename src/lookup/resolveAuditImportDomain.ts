@@ -1,13 +1,10 @@
 import { createHash } from 'node:crypto'
-import * as path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import * as ts from 'typescript'
 import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
 import type { SourceAuditSpan } from '../symbol-index/auditEvidenceTypes.js'
 import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
-import { resolveAuditImportTarget, resolveAuditTargetCandidates, type AuditImportTargetProof } from './resolveAuditImportTarget.js'
-import { enumerateJsTsCandidatePaths } from '../languages/typescript/adapter.js'
+import { resolveAuditImportTarget, resolveAuditTargetCandidates } from './resolveAuditImportTarget.js'
 
 type Gap = 'UNSUPPORTED_EXPRESSION' | 'UNKNOWN_RUNTIME_VALUE' | 'UNQUALIFIED_BINDING' |
   'UNSUPPORTED_PATH_OPERATION' | 'PATH_IDENTITY_UNCERTAIN' | 'INCOMPLETE_REFERENCE_PROFILE' |
@@ -17,10 +14,6 @@ class DomainGap extends Error {
 }
 type Role = 'operand' | 'binding' | 'operation' | 'guard'
 type Premise = { type: 'source-span'; filePath: string; contentSha256: string; span: SourceAuditSpan; role: Role }
-type Resolution = Pick<AuditImportTargetProof, 'status' | 'candidatePaths' | 'selectionComplete' | 'reasonCode'> & {
-  candidateEnumerationComplete: boolean
-}
-
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 
 /** Evaluate only syntactic forms grounded in the authenticated origin. */
@@ -80,7 +73,8 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
         const parent = use.parent
         return ts.isVariableDeclaration(parent) && parent.name === use ||
           ts.isParameter(parent) || ts.isBindingElement(parent) || ts.isImportClause(parent) ||
-          ts.isImportSpecifier(parent) || ts.isNamespaceImport(parent) ||
+          ts.isImportSpecifier(parent) || ts.isNamespaceImport(parent) || ts.isImportEqualsDeclaration(parent) ||
+          (ts.isEnumDeclaration(parent) || ts.isModuleDeclaration(parent)) && parent.name === use ||
           (ts.isFunctionLike(parent) || ts.isClassLike(parent)) && parent.name === use ||
           ts.isBinaryExpression(parent) && parent.left === use && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
             parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment ||
@@ -114,25 +108,6 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
     throw new DomainGap('UNSUPPORTED_EXPRESSION')
   }
   return visit(root, 0)
-}
-
-function comparableSpecifier(value: string, root: string, origin: string): string | null {
-  if (/[?#%\0]/.test(value) && !value.startsWith('file:')) return null
-  if (!value.startsWith('file:') && !path.isAbsolute(value)) {
-    return value.includes('\\') ? null : value
-  }
-  let absolute: string
-  try {
-    const url = value.startsWith('file:') ? new URL(value) : null
-    if (url && (url.host || url.search || url.hash)) return null
-    absolute = url ? fileURLToPath(url) : value
-  } catch {
-    return null
-  }
-  const relative = path.relative(path.dirname(path.join(root, origin)), absolute)
-  if (path.isAbsolute(relative) || /[?#%]/.test(relative)) return null
-  const originRelative = relative.split(path.sep).join('/')
-  return originRelative.startsWith('../') ? originRelative : './' + originRelative
 }
 
 export function resolveAuditImportDomain(indexDir: string, id: string) {
@@ -181,29 +156,15 @@ export function resolveAuditImportDomain(indexDir: string, id: string) {
     const premiseIndexes = premiseRefs.map((_, i) => i)
     const selectionComplete = artifact.coverage.inventoryComplete && artifact.coverage.exclusionsAreExplicit
     const operandAlternatives = values.map((specifier, alternativeIndex) => {
-      const comparable = comparableSpecifier(specifier, artifact.source.projectRoot, file.path)
-      let resolution: Resolution
-      if (!comparable) {
-        resolution = { status: 'indeterminate', candidatePaths: [], selectionComplete,
-          reasonCode: 'PATH_IDENTITY_UNCERTAIN', candidateEnumerationComplete: false }
-      } else {
-        const upper = enumerateJsTsCandidatePaths(comparable, file.path)
-        resolution = resolveAuditTargetCandidates(artifact, file, comparable, [], (status, candidates, reasonCode) => {
-          const candidateEnumerationComplete = upper !== null && !['RESOLVER_FAILED', 'CANDIDATE_ESCAPES_PROJECT_ROOT'].includes(reasonCode)
-          return { status, candidatePaths: [...new Set(candidateEnumerationComplete ? upper! : candidates)].sort(),
-            selectionComplete, reasonCode, candidateEnumerationComplete }
-        })
-      }
+      const { candidateDomain, ...resolved } = resolveAuditTargetCandidates(artifact, file, specifier, [], true)
+      const resolution = { ...resolved, candidatePaths: candidateDomain ?? resolved.candidatePaths, selectionComplete }
       return { alternativeIndex, specifier, premiseIndexes, resolution }
     })
     const paths = operandAlternatives.flatMap(item => item.resolution.candidatePaths)
     if (paths.length > 256) return incomplete('QUERY_BUDGET_EXCEEDED')
-    const normalize = (value: string) => process.platform === 'win32' ? value.toLowerCase() : value
-    const selected = new Set(artifact.files.map(entry => normalize(entry.path)))
+    // Only the shared resolver may certify an exhaustive absent candidate set.
     const disjoint = paths.length > 0 && operandAlternatives.every(({ resolution }) =>
-      resolution.status === 'proven-missing' && resolution.candidateEnumerationComplete) &&
-      paths.every(candidate => !selected.has(normalize(candidate)) &&
-        candidate.split('/').every(segment => !/[ .]$/.test(segment) && !segment.includes(':')))
+      resolution.status === 'proven-missing' && resolution.candidateEnumerationComplete)
     const qualifiedPositiveWitnesses = []
     if (fact.literalImportFactId) {
       const linked = file.facts.find(entry => entry.id === fact.literalImportFactId)
@@ -212,7 +173,8 @@ export function resolveAuditImportDomain(indexDir: string, id: string) {
       }
       const targetProof = resolveAuditImportTarget(indexDir, fact.literalImportFactId)
       if (targetProof.snapshotId !== base.snapshotId) throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Target proof snapshot changed.')
-      if (targetProof.status === 'present' && targetProof.candidatePaths.length === 1) {
+      if (operandAlternatives[0].resolution.candidateEnumerationComplete &&
+          targetProof.status === 'present' && targetProof.candidatePaths.length === 1) {
         const target = artifact.files.find(entry => entry.path === targetProof.candidatePaths[0])
         if (target?.contentSha256) qualifiedPositiveWitnesses.push({
           importFactId: fact.literalImportFactId, targetPath: target.path, targetContentSha256: target.contentSha256, targetProof,

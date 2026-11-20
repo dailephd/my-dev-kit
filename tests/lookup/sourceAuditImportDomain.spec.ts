@@ -1,9 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { existsSync, realpathSync, statSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { getSourceAuditFilePage, readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidence.js'
+import { resolveAuditImportTarget } from '../../src/lookup/resolveAuditImportTarget.js'
 import { resolveAuditImportDomain } from '../../src/lookup/resolveAuditImportDomain.js'
 import { validateSourceAuditEvidence } from '../../src/symbol-index/validateAuditEvidence.js'
 import { runCli } from './testCli.js'
@@ -52,6 +55,99 @@ describe('authenticated dynamic import domains and ambient classification', () =
     writeFileSync(join(fixture.root, fixture.path), 'import("./changed")')
     expect(() => fixture.query(0)).toThrow(/STALE_SOURCE_EVIDENCE/)
   }, 60_000)
+
+
+  it('binds decoded URL operands to the same selected source across both selectors', async () => {
+    const operands = ['./pe\ter.mjs', './pe\ner.mjs', './pe\rer.mjs', './p%65er.mjs',
+      './unused/%2e%2e/peer.mjs', './peer.mjs?one', './peer.mjs#two', './other.mjs']
+    const fixture = await indexed(root => {
+      operands.push(pathToFileURL(join(root, 'src', 'peer.mjs')).href + '?absolute')
+      return [...operands, './missing.mjs'].map(value => 'void import(' + JSON.stringify(value) + ');').join('\n')
+    }, {
+      'peer.mjs': 'throw new Error("target must not execute");',
+      'other.mjs': 'throw new Error("other must not execute");',
+    })
+    const parent = pathToFileURL(join(fixture.root, fixture.path)).href
+    const oracle = spawnSync(process.execPath, [
+      '--experimental-import-meta-resolve', '--input-type=module', '-e',
+      'const [base, ...values] = process.argv.slice(1); console.log(JSON.stringify(values.map(value => import.meta.resolve(value, base))));',
+      '--', parent, ...operands, './missing.mjs',
+    ], { encoding: 'utf8', windowsHide: true })
+    expect(oracle.status, oracle.stderr).toBe(0)
+    const urls: string[] = JSON.parse(oracle.stdout)
+    expect(new Set(urls.slice(4, 7)).size).toBe(3)
+    for (const [i, operand] of operands.entries()) {
+      const target = operand === './other.mjs' ? 'src/other.mjs' : 'src/peer.mjs'
+      const oracleFile = fileURLToPath(urls[i]!)
+      expect(realpathSync(oracleFile)).toBe(realpathSync(join(fixture.root, target)))
+      expect(statSync(oracleFile).isFile()).toBe(true)
+      const fact = fixture.expressions[i]!
+      const query = fixture.query(i)
+      expect(query).toMatchObject({ outcome: 'finite', disjointProof: null, operandAlternatives: [{ specifier: operand }] })
+      expect(query.qualifiedPositiveWitnesses.map(w => w.targetPath)).toEqual([target])
+      expect(resolveAuditImportTarget(fixture.out, fact.literalImportFactId!))
+        .toMatchObject({ status: 'present', candidatePaths: [target], sourceSpecifier: operand })
+      expect(fixture.query(i)).toEqual(query)
+    }
+    expect(existsSync(fileURLToPath(urls.at(-1)!))).toBe(false)
+    expect(fixture.query(operands.length)).toMatchObject({ outcome: 'disjoint-selected-domain' })
+
+    const legacy = join(fixture.root, 'legacy')
+    await runIndexCommand({ root: fixture.root, src: ['src'], out: legacy })
+    const page = getSourceAuditFilePage(readSourceAuditEvidence(legacy), fixture.path, 0)
+    expect(page.schemaVersion).toBe('1.1.0')
+    const encoded = page.facts.find(f => f.kind === 'import' && f.sourceSpecifier === './p%65er.mjs')!
+    expect(resolveAuditImportTarget(legacy, encoded.id)).toMatchObject({
+      status: 'indeterminate', reasonCode: 'UNSUPPORTED_SPECIFIER_SHAPE', candidatePaths: [],
+    })
+  })
+
+  it('keeps finite operands when a particular resolution cannot qualify the target domain', async () => {
+    const fixture = await indexed(() => [
+      'declare const choose: boolean;',
+      'void import(choose ? "./present.mjs" : "./missing.mjs");',
+      'void import(choose ? "./missing.mjs" : "file://%");',
+      'void import("./nested%2fpeer.mjs");',
+      'void import("./missing.mjs");',
+      'void import("./nested");',
+    ].join('\n'), { 'present.mjs': 'export {};'})
+    mkdirSync(join(fixture.root, 'src/nested'))
+    writeFileSync(join(fixture.root, 'src/nested/package.json'), '{"main":"../present.mjs"}')
+    expect(fixture.query(0)).toMatchObject({
+      outcome: 'finite', domainComplete: true, disjointProof: null, qualifiedPositiveWitnesses: [],
+      operandAlternatives: [
+        { resolution: { status: 'present', candidateEnumerationComplete: true } },
+        { resolution: { status: 'proven-missing', candidateEnumerationComplete: true } },
+      ],
+    })
+    expect(fixture.query(1)).toMatchObject({
+      outcome: 'finite', domainComplete: true, disjointProof: null,
+      operandAlternatives: [
+        { resolution: { status: 'proven-missing' } },
+        { resolution: { status: 'indeterminate', candidateEnumerationComplete: false, reasonCode: 'UNSUPPORTED_SPECIFIER_SHAPE' } },
+      ],
+    })
+    expect(fixture.query(2)).toMatchObject({ outcome: 'finite', disjointProof: null, qualifiedPositiveWitnesses: [] })
+    expect(fixture.query(4)).toMatchObject({ outcome: 'finite', disjointProof: null, qualifiedPositiveWitnesses: [] })
+    const absent = fixture.expressions[3]!.literalImportFactId!
+    expect(fixture.query(3)).toMatchObject({ outcome: 'disjoint-selected-domain' })
+    const checkIncomplete = () => {
+      expect(fixture.query(3)).toMatchObject({
+        outcome: 'finite', domainComplete: true, disjointProof: null,
+        operandAlternatives: [{ resolution: {
+          status: 'indeterminate', candidateEnumerationComplete: false, reasonCode: 'INCOMPLETE_REFERENCE_PROFILE',
+        } }],
+      })
+      expect(resolveAuditImportTarget(fixture.out, absent)).toMatchObject({
+        status: 'indeterminate', reasonCode: 'INCOMPLETE_REFERENCE_PROFILE',
+      })
+    }
+    vi.stubEnv('NODE_OPTIONS', '--conditions=audit')
+    try { checkIncomplete() } finally { vi.unstubAllEnvs() }
+    writeFileSync(join(fixture.root, 'tsconfig.json'), '{"compilerOptions":{"moduleSuffixes":[".custom",""]}}')
+    checkIncomplete()
+  })
+
 
   it('retains independent primitive alternatives, template literals and exclusions', async () => {
     const fixture = await indexed(() => [
