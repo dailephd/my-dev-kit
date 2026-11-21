@@ -143,10 +143,10 @@ describe('static API relationship producer (RSP-002 through RSP-005)', () => {
     expect(readApiRelationshipEvidence(out)).toEqual(partial)
     expect(hash(client)).toBe(after)
   })
-  it('preserves the exact inherited source-audit and cache contracts (RSP-007)', async () => {
+  it('leaves the current source-audit and cache contracts intact (RSP-007)', async () => {
     expect(SOURCE_AUDIT_SCHEMA_VERSION).toBe('1.1.0')
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.0')
-    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
+    expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
     const { input } = await project('client-server-static')
     const before = JSON.stringify(input.sourceAudit)
     buildApiRelationshipEvidence(input)

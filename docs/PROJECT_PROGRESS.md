@@ -241,6 +241,8 @@ The qualified R3 source commit is `bde00d9c165a6a546170ab72e7a9534d6929697e`.
 The qualified local archive SHA-256 is
 `943b3506c7a3e9708f96d2e40a9fcfc720853c46a4273f31408568942a5599a6`.
 Registry Kit 1.15.1 has a separate package identity. Lab B4 requalification
-covered the installed Windows consumer. Lab Linux integration and release
-readiness require separate qualification. Existing roadmap reservations remain
-in force.
+covered the installed Windows consumer. A later Step 5 run exercised the
+installed Lab candidate on native Linux with the authenticated R3 producer.
+The production dependency contract and release readiness still require
+correction. The roadmap records the coordinated release scope and retains
+the earlier KIT-OPS-01 reservation as planning history.

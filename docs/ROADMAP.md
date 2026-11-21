@@ -1947,9 +1947,21 @@ The downstream Lab v0.10.1 fix is separately required: producer improvements alo
 
 ## Version 1.16.0
 
-**Status: planned.**
+**Coordinated source-evidence producer status: implemented locally, unreleased.**
 
-Version 1.16.0 is reserved as **KIT-OPS-01**.
+The coordinated v1.16.0 candidate supplies bounded source identity and import
+evidence to the Lab v0.11.0 consumer. The source-audit artifact defaults to
+schema `1.1.0` and offers an explicit `1.2.0` mode. The candidate distinguishes
+selected import candidates from exact ESM witnesses, supports bounded
+selected-domain and exact-byte proofs, and preserves incomplete results when
+selection or resolution cannot establish a conclusion. See
+[Commands](COMMANDS.md#coordinated-source-evidence-commands-in-the-local-r3-candidate)
+and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
+
+### Earlier reservation for KIT-OPS-01
+
+**Status: planned.** The operational-evidence scope below records the earlier
+v1.16.0 reservation. Its release assignment remains a planner decision.
 
 The goal is bounded static evidence for configuration, instrumentation, and deployment-source relationships when real downstream assurance workflows demonstrate a need for them.
 
@@ -2014,7 +2026,7 @@ The goal is to make indexed TypeScript/JavaScript/TSX and frontend-test evidence
 
 ### Dependencies and exclusions
 
-- v1.17.0 follows, but does not change, the reserved v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 operational evidence work.
+- v1.17.0 follows the v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 coordinated source-evidence work. The frontend milestone leaves the earlier operational-evidence scope intact.
 - No automatic browser, server, database, test execution, deployment or real-user visibility proof in Kit. Those belong to project workflows, Orchestrator and Observer.
 - No broad cross-file dependency closure, universal authorization inference, general runtime control flow, second graph/index engine or v2.0.0 plugin/command redesign.
 
