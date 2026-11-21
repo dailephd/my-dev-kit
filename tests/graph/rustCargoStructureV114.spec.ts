@@ -13,6 +13,7 @@ import { adaptCodeGraph } from '../../src/graph/adaptGraphArtifact.js'
 import type { CodeGraph } from '../../src/graph/codeGraphTypes.js'
 import type { SymbolIndex } from '../../src/symbol-index/types.js'
 import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
+import { cliArgs } from '../lookup/testCli.js'
 
 const task = allocateV114OutputDir('rust-cargo-structure-v114')
 const fixtures = path.resolve('tests/fixtures/v114-language/rust')
@@ -35,7 +36,7 @@ function module(graph: CodeGraph, modulePath: string) {
 }
 const resolutions = (graph:CodeGraph) => graph.edges.filter(e => e.kind === 'rust-module-resolves-to-file')
 const read = <T,>(root: string,file: string): T => JSON.parse(fs.readFileSync(path.join(root,file),'utf8'))
-const cli = (...args:string[]) => childProcess.execFileSync(process.execPath,['node_modules/tsx/dist/cli.mjs','src/cli.ts',...args],{cwd:process.cwd(),encoding:'utf8',windowsHide:true})
+const cli = (...args:string[]) => childProcess.execFileSync(process.execPath,cliArgs(args),{cwd:process.cwd(),encoding:'utf8',windowsHide:true})
 
 describe('B09 conservative structure in the existing graph', () => {
   beforeAll(async () => { await prepareRustParser() })
