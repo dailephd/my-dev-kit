@@ -239,6 +239,46 @@ describe('documentation preservation checker', () => {
     })
   })
 
+  describe('approved 2026-11-19 roadmap relocation', () => {
+    const reassignedScopes: Array<{ version: string; required: string }> = [
+      { version: '1.16.0', required: 'computed-import-domain' },
+      { version: '1.17.0', required: 'KIT-OPS-01' },
+      { version: '1.18.0', required: 'Exact test-block retrieval' },
+      { version: '1.19.0', required: 'KIT-PYREL-01' },
+    ]
+
+    it.each(reassignedScopes)('preserves $required inside v$version, not only in historical notes', ({ version, required }) => {
+      expect(manifest.roadmap.futureVersionScopeKeywords[version]).toContain(required)
+      const content = realDocuments[manifest.roadmap.path]
+      const heading = `## Version ${version}`
+      const start = content.indexOf(heading)
+      expect(start).toBeGreaterThanOrEqual(0)
+      const next = content.indexOf('\n## Version ', start + heading.length)
+      const section = content.slice(start, next < 0 ? content.length : next)
+      expect(section).toContain(required)
+
+      const stripped = section.replaceAll(required, 'REMOVED_APPROVED_SCOPE')
+      const altered = content.slice(0, start) + stripped + content.slice(next < 0 ? content.length : next)
+      const violations = checkDocumentationPreservation(manifest, {
+        ...realDocuments,
+        [manifest.roadmap.path]: altered,
+      })
+      expect(violations.some((v) => v.rule === 'roadmap-future-scope' && v.expected.includes(version) && v.expected.includes(required))).toBe(true)
+    })
+
+    it('keeps the explicit 2026-11-19 version relocation as a coordinated planning boundary', () => {
+      const coordinatedPath = 'docs/ECOSYSTEM_COORDINATED_ROADMAP.md'
+      const required = '2026-11-19 user-approved amendment'
+      expect(manifest.statusBoundaries.documentKeywords[coordinatedPath]).toContain(required)
+      const mutated: DocumentContents = {
+        ...realDocuments,
+        [coordinatedPath]: realDocuments[coordinatedPath].replaceAll(required, 'AMENDMENT_REMOVED'),
+      }
+      const violations = checkDocumentationPreservation(manifest, mutated)
+      expect(violations.some((v) => v.rule === 'current-future-status-boundary' && v.document === coordinatedPath)).toBe(true)
+    })
+  })
+
   describe('roadmap preservation', () => {
     it('fails when a version heading is removed', () => {
       const mutated: DocumentContents = {
