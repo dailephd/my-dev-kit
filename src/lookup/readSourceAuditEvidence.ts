@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { isInsideRoot } from '../io/pathUtils.js'
-import { readIndexManifest } from '../indexing/readIndexManifest.js'
+import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { SOURCE_AUDIT_EVIDENCE_FILENAME } from '../indexing/managedArtifacts.js'
 import {
   AUDIT_FACT_PAGE_SIZE,
@@ -57,6 +57,23 @@ function invalid(message: string): never {
  */
 export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceArtifact {
   const resolved = readIndexManifest(indexDir)
+  const { reference, artifactPath } = resolveAuditRegistration(resolved)
+  let bytes: Buffer
+  try {
+    const physicalDir = fs.realpathSync(resolved.indexDir)
+    const physicalArtifact = fs.realpathSync(artifactPath)
+    if (!isInsideRoot(physicalDir, physicalArtifact)) invalid('The audit artifact resolves outside the index directory.')
+    if (!fs.statSync(physicalArtifact).isFile()) invalid('The audit artifact is not a regular file.')
+    bytes = fs.readFileSync(physicalArtifact)
+  } catch (error) {
+    if (error instanceof SourceAuditEvidenceError) throw error
+    return invalid('The audit artifact could not be read.')
+  }
+  if (sha256Hex(bytes) !== reference.sha256) invalid('The serialized audit artifact does not match the SHA-256 recorded in the manifest.')
+  return parseRegisteredArtifact(bytes, resolved, reference)
+}
+
+function resolveAuditRegistration(resolved: ResolvedIndexManifest) {
   const reference = resolved.manifest.sourceAuditEvidence
   if (reference === undefined || reference === null) {
     throw new SourceAuditEvidenceError(
@@ -76,20 +93,10 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
   if (!fs.existsSync(artifactPath)) {
     invalid('The audit artifact referenced by the manifest is missing.')
   }
-  let bytes: Buffer
-  try {
-    // A symlink or junction may not lead outside the chosen index directory.
-    const physicalDir = fs.realpathSync(resolved.indexDir)
-    const physicalArtifact = fs.realpathSync(artifactPath)
-    if (!isInsideRoot(physicalDir, physicalArtifact)) invalid('The audit artifact resolves outside the index directory.')
-    if (!fs.statSync(physicalArtifact).isFile()) invalid('The audit artifact is not a regular file.')
-    bytes = fs.readFileSync(physicalArtifact)
-  } catch (error) {
-    if (error instanceof SourceAuditEvidenceError) throw error
-    return invalid('The audit artifact could not be read.')
-  }
-  if (sha256Hex(bytes) !== reference.sha256) invalid('The serialized audit artifact does not match the SHA-256 recorded in the manifest.')
+  return { reference, artifactPath }
+}
 
+function parseRegisteredArtifact(bytes: Buffer, resolved: ResolvedIndexManifest, reference: ReturnType<typeof resolveAuditRegistration>['reference']): SourceAuditEvidenceArtifact {
   let parsed: unknown
   try {
     parsed = JSON.parse(bytes.toString('utf8'))
@@ -112,6 +119,52 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
     invalid('The artifact source roots do not match the manifest.')
   }
   return artifact
+}
+
+/** A session pins static index identity and reauthenticates its bytes before every frame. */
+export function createSourceAuditFrameReader(indexDir: string, extraPaths?: (resolved: ResolvedIndexManifest) => Array<string | null>) {
+  let pinned: { artifact: SourceAuditEvidenceArtifact; manifestSha256: string; stamps: string } | undefined
+  return () => {
+    try {
+      const manifestBytes = readSourceBytes(indexDir, 'manifest.json')
+      const manifestSha256 = sha256Hex(manifestBytes)
+      const resolved = readIndexManifest(indexDir)
+      if (JSON.stringify(JSON.parse(manifestBytes.toString('utf8'))) !== JSON.stringify(resolved.manifest)) {
+        invalid('The index manifest changed while it was being read.')
+      }
+      const { reference, artifactPath } = resolveAuditRegistration(resolved)
+      const paths = [resolved.indexDir, resolved.manifestPath, artifactPath, ...(extraPaths?.(resolved) ?? [])]
+      const stamp = () => JSON.stringify(paths.map(file => {
+        if (file === null) return null
+        try {
+          const real = fs.realpathSync(file)
+          const stat = fs.statSync(real, { bigint: true })
+          return [real, stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+          throw error
+        }
+      }))
+      const stamps = stamp()
+      if (pinned && (pinned.manifestSha256 !== manifestSha256 || pinned.stamps !== stamps)) {
+        invalid('The index changed during the audit stream.')
+      }
+      const bytes = readSourceBytes(indexDir, SOURCE_AUDIT_EVIDENCE_FILENAME)
+      if (sha256Hex(bytes) !== reference.sha256) invalid('The serialized audit artifact does not match its registration.')
+      const artifact = pinned?.artifact ?? parseRegisteredArtifact(bytes, resolved, reference)
+      const assertCurrent = () => {
+        if (stamps !== stamp() || manifestSha256 !== sha256Hex(readSourceBytes(indexDir, 'manifest.json'))) {
+          invalid('The index changed during the audit stream frame.')
+        }
+      }
+      assertCurrent()
+      pinned = { artifact, manifestSha256, stamps }
+      return { artifact, assertCurrent }
+    } catch (error) {
+      if (error instanceof SourceAuditEvidenceError) throw error
+      return invalid('The audit stream index or manifest could not be authenticated.')
+    }
+  }
 }
 
 function totalPagesFor(totalItems: number, pageSize: number): number {

@@ -23,9 +23,10 @@ export type SourceBatchItem = AuditBatchItem & (
   | { selector: 'line-range'; path: string; start: number; end: number; maxLines?: number }
 )
 
-type BatchItem = LookupBatchItem | SourceBatchItem
-const MAX_INPUT_BYTES = 64 * 1024
-const MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+export type AuditBatchItemByFamily = { lookup: LookupBatchItem; source: SourceBatchItem }
+type BatchItem = AuditBatchItemByFamily[AuditBatchFamily]
+export const AUDIT_BATCH_MAX_INPUT = 64 * 1024
+export const AUDIT_BATCH_MAX_OUTPUT = 8 * 1024 * 1024
 const MAX_REQUESTS = 32
 const sha256 = /^[a-f0-9]{64}$/
 
@@ -42,7 +43,7 @@ function readInput(file: string): Buffer {
   const canonical = () => path.relative(normalized, realpathSync.native(normalized)) === ''
   try {
     if (canonical()) {
-      const bytes = readSourceBytes(path.dirname(normalized), path.basename(normalized), MAX_INPUT_BYTES)
+      const bytes = readSourceBytes(path.dirname(normalized), path.basename(normalized), AUDIT_BATCH_MAX_INPUT)
       if (canonical()) return bytes
     }
   } catch {
@@ -51,7 +52,7 @@ function readInput(file: string): Buffer {
   return invalid('Expected a regular, nonsymlink input file of at most 64 KiB in its real parent directory.')
 }
 
-function record(value: unknown): Record<string, unknown> {
+function auditRequestRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid('Expected a JSON object.')
   return value as Record<string, unknown>
 }
@@ -65,7 +66,7 @@ function string(value: unknown): value is string {
 }
 
 function validateItem(raw: unknown, family: AuditBatchFamily): BatchItem {
-  const item = record(raw)
+  const item = auditRequestRecord(raw)
   if (typeof item.id !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(item.id)) invalid('Expected a printable ASCII request ID of 1–64 characters.')
   const fields = (requiredStrings: string[], requiredNumbers: string[], optionalNumbers: string[]) => {
     keys(item, ['id', 'selector', ...requiredStrings, ...requiredNumbers, ...optionalNumbers])
@@ -94,7 +95,7 @@ function validateItem(raw: unknown, family: AuditBatchFamily): BatchItem {
   return item as unknown as BatchItem
 }
 
-function errorCode(error: unknown): string {
+export function auditErrorCode(error: unknown): string {
   if (error instanceof UnsafeSourceError) return 'UNSAFE_SOURCE'
   if (error instanceof Error) {
     return /^([A-Z][A-Z0-9_]{1,63}):/.exec(error.message)?.[1] ?? 'COMMAND_ERROR'
@@ -103,52 +104,49 @@ function errorCode(error: unknown): string {
 }
 
 /** An invocation shares only persisted evidence. The item reader retains all live checks. */
-export function readAuditBatch(
-  indexDir: string,
-  file: string,
-  family: 'lookup',
-  readItem: (artifact: SourceAuditEvidenceArtifact, item: LookupBatchItem) => unknown,
-): { json: string; complete: boolean }
-export function readAuditBatch(
-  indexDir: string,
-  file: string,
-  family: 'source',
-  readItem: (artifact: SourceAuditEvidenceArtifact, item: SourceBatchItem) => unknown,
-): { json: string; complete: boolean }
-export function readAuditBatch(
-  indexDir: string,
-  file: string,
-  family: AuditBatchFamily,
-  readItem: ((artifact: SourceAuditEvidenceArtifact, item: LookupBatchItem) => unknown) |
-    ((artifact: SourceAuditEvidenceArtifact, item: SourceBatchItem) => unknown),
+export function readAuditBatch<F extends AuditBatchFamily>(
+  indexDir: string, file: string, family: F,
+  readItem: (artifact: SourceAuditEvidenceArtifact, item: AuditBatchItemByFamily[F]) => unknown,
 ): { json: string; complete: boolean } {
   const bytes = readInput(file)
-  const inputSha256 = createHash('sha256').update(bytes).digest('hex')
-  let raw: unknown
-  try {
-    raw = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes))
-  } catch {
-    return invalid('Expected a valid UTF-8 JSON input file.')
-  }
-
-  const input = record(raw)
+  const input = auditRequestRecord(decodeAuditRequest(bytes))
   keys(input, ['schemaVersion', 'mode', 'family', 'expectedSnapshotId', 'selectionFingerprint', 'requests'])
   if (input.schemaVersion !== '1.0.0' || input.mode !== 'audit-batch-request' || input.family !== family ||
       typeof input.expectedSnapshotId !== 'string' || !sha256.test(input.expectedSnapshotId) ||
       typeof input.selectionFingerprint !== 'string' || !sha256.test(input.selectionFingerprint)) {
     invalid('Invalid schema, mode, family or snapshot/selection identity.')
   }
-  if (!Array.isArray(input.requests) || input.requests.length < 1 || input.requests.length > MAX_REQUESTS) {
-    invalid('Expected 1–32 requests.')
-  }
-  const items = input.requests.map(item => validateItem(item, family))
-  if (new Set(items.map(item => item.id)).size !== items.length) invalid('Duplicate request ID.')
-
+  const items = validateAuditRequests(input.requests, family)
   const artifact = readSourceAuditEvidence(indexDir)
-  const { snapshotId, selectionFingerprint } = artifact.source
-  if (snapshotId !== input.expectedSnapshotId || selectionFingerprint !== input.selectionFingerprint) {
+  if (artifact.source.snapshotId !== input.expectedSnapshotId || artifact.source.selectionFingerprint !== input.selectionFingerprint) {
     throw new Error('AUDIT_BATCH_IDENTITY_MISMATCH: Expected snapshot or selection does not match the authenticated artifact.')
   }
+  return executeAuditBatch(artifact, bytes, family, items, readItem)
+}
+
+export function decodeAuditRequest(bytes: Uint8Array): unknown {
+  try {
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes))
+  } catch {
+    return invalid('Expected a valid UTF-8 JSON input file.')
+  }
+}
+
+export function validateAuditRequests<F extends AuditBatchFamily>(raw: unknown, family: F): AuditBatchItemByFamily[F][] {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_REQUESTS) {
+    invalid('Expected 1–32 requests.')
+  }
+  const items = raw.map(item => validateItem(item, family))
+  if (new Set(items.map(item => item.id)).size !== items.length) invalid('Duplicate request ID.')
+  return items as AuditBatchItemByFamily[F][]
+}
+
+export function executeAuditBatch<F extends AuditBatchFamily>(
+  artifact: SourceAuditEvidenceArtifact, bytes: Uint8Array, family: F, items: readonly AuditBatchItemByFamily[F][],
+  readItem: (artifact: SourceAuditEvidenceArtifact, item: AuditBatchItemByFamily[F]) => unknown,
+): { json: string; complete: boolean } {
+  const { snapshotId, selectionFingerprint } = artifact.source
+  const inputSha256 = createHash('sha256').update(bytes).digest('hex')
 
   const header = {
     schemaVersion: '1.0.0', mode: 'audit-batch', family, snapshotId, selectionFingerprint, inputSha256,
@@ -163,16 +161,16 @@ export function readAuditBatch(
     const identity = { id: item.id, selector: item.selector }
     let result: unknown
     try {
-      const response = (readItem as (artifact: SourceAuditEvidenceArtifact, item: BatchItem) => unknown)(artifact, item)
+      const response = readItem(artifact, item)
       if (response === undefined) throw new Error('AUDIT_BATCH_MISSING_RESULT: Selector returned no evidence.')
       result = { ...identity, status: 'ok', response }
     } catch (error) {
       complete = false
-      result = { ...identity, status: 'error', error: { code: errorCode(error), exitCode: 2 } }
+      result = { ...identity, status: 'error', error: { code: auditErrorCode(error), exitCode: 2 } }
     }
     const serialized = JSON.stringify(result)
     size += Buffer.byteLength(serialized) + (results.length === 0 ? 0 : 1)
-    if (size > MAX_OUTPUT_BYTES) {
+    if (size > AUDIT_BATCH_MAX_OUTPUT) {
       throw new Error('AUDIT_BATCH_OUTPUT_LIMIT: Serialized responses exceed 8 MiB.')
     }
     results.push(serialized)

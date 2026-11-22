@@ -359,6 +359,29 @@ The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, sna
 
 Any item error makes complete false and sets exit 2. Invalid input, artifact or identity errors, and output over 8 MiB fail globally with exit 2 and no response envelope. Accept a usable batch only after verifying the exit, the complete JSON envelope, the identities and counts, and the ordered IDs and selectors. Envelope completeness describes delivery of the requested responses. Per-item paging, proof and coverage fields retain their original meaning, including partial, truncated or indeterminate evidence.
 
+### Finite audit streams (v1.16.0 candidate)
+
+Use an absolute index directory. The stream accepts the existing batch selectors for its command family.
+
+```text
+my-dev-kit lookup --index <absolute-index-dir> --audit-stream --json
+my-dev-kit source --index <absolute-index-dir> --audit-stream --json
+```
+
+Send one UTF-8 JSON record terminated by LF, then read its response before sending the next record. The first request authenticates the session index and returns its snapshot and selection identity. Compare both identities on every response before using its proof.
+
+```json
+{"schemaVersion":"1.0.0","requestId":"frame-1","requests":[{"id":"page-0","selector":"audit-files","page":0}]}
+```
+
+Frame IDs use 1–64 printable ASCII characters excluding spaces, and are unique within one process. Each input record contains 1–32 existing batch items. Item IDs are unique within their frame. The input limit is 64 KiB excluding LF, and the output limit is 8 MiB including LF and the stream envelope.
+
+Every response carries schemaVersion "1.0.0", requestId and status. A complete response embeds the existing batch envelope in batch. Its inputSha256 authenticates the exact bytes of the input record excluding LF, including any trailing CR. An incomplete response embeds an incomplete batch envelope or an error with code and fatal. Do not use any item from an incomplete frame as evidence. If an input has no valid ID, requestId is null.
+
+Submit at most 8,192 frames. Close stdin to finish. An incomplete frame makes the final exit code 2. A typed item failure or response overflow can be followed by an independent frame. Framing, duplicate ID, index identity and read failures are fatal. Partial lines at EOF are rejected. The session stops after 60 seconds awaiting a frame, 30 seconds blocked on output, or at the 100-minute session deadline. A frame in a synchronous proof reader is checked before its response is emitted. Use a caller-owned process timeout and require the terminating LF before consuming a frame.
+
+The session reauthenticates the manifest and registered source-audit artifact for each frame and rejects index changes. Parsed static metadata can be reused only after that check. Source ranges use their current symbol and classification data. Each live query retains its original freshness, containment, source-byte and proof checks.
+
 ## source
 
 Retrieve bounded current source corresponding to indexed identity or a supported source selector.

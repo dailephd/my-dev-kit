@@ -9,13 +9,24 @@ export function assertAuditBatchOptions(command: Command, options: { json?: bool
 
 export async function emitAuditBatch({ json, complete }: { json: string; complete: boolean }): Promise<void> {
   if (!complete) process.exitCode = 2
+  await writeAuditJson(json)
+}
+
+export async function writeAuditJson(json: string, timeoutMs?: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    process.stdout.once('error', reject)
+    const timer = timeoutMs === undefined ? undefined : setTimeout(() =>
+      process.stdout.destroy(new Error('AUDIT_STREAM_OUTPUT_TIMEOUT')), timeoutMs)
+    const onError = (error: Error) => {
+      clearTimeout(timer)
+      reject(error)
+    }
+    process.stdout.once('error', onError)
     process.stdout.write(json, error => {
+      clearTimeout(timer)
       if (error) {
         reject(error)
       } else {
-        process.stdout.removeListener('error', reject)
+        process.stdout.removeListener('error', onError)
         resolve()
       }
     })

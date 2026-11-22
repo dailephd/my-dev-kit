@@ -1,5 +1,7 @@
 import { assertAuditBatchOptions, emitAuditBatch } from './emitAuditBatch.js'
-import { readAuditBatch } from '../lookup/readAuditBatch.js'
+import { assertAuditStreamOptions, runAuditStream } from './runAuditStream.js'
+import type { SourceAuditEvidenceArtifact } from '../symbol-index/auditEvidenceTypes.js'
+import { readAuditBatch, type SourceBatchItem } from '../lookup/readAuditBatch.js'
 import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { findExactByteMatches } from '../source/findExactByteMatches.js'
 import * as fs from 'node:fs'
@@ -22,7 +24,7 @@ import {
   DEFAULT_CONTEXT_LINES,
   MAX_CONTEXT_LINES,
 } from '../source/findExactMatches.js'
-import { readSourceAuditEvidence, isCanonicalAuditRelativePath, SourceAuditEvidenceError } from '../lookup/readSourceAuditEvidence.js'
+import { createSourceAuditFrameReader, readSourceAuditEvidence, isCanonicalAuditRelativePath, SourceAuditEvidenceError } from '../lookup/readSourceAuditEvidence.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRegion.js'
@@ -55,6 +57,7 @@ import {
   buildClassificationCommandSummary,
   findClassificationEntryByTargetId,
   loadClassificationArtifact,
+  resolveClassificationArtifactPath,
   type ClassificationCommandSummary,
 } from '../classification/resolveClassificationForCommands.js'
 
@@ -101,13 +104,21 @@ export function registerSourceCommand(program: Command): void {
     .option('--max-bundle-lines <n>', 'max total lines across all blocks in bundle (default: 300)', parseInteger)
     .option('--max-blocks <n>', 'max number of blocks in bundle (default: 20)', parseInteger)
     .option('--format <json|plain|numbered>', 'output format')
+    .option('--audit-stream', 'read finite authenticated source frames from stdin (requires --json)')
     .option('--audit-batch-file <path>', 'read 1–32 authenticated audit source requests (requires --json)')
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
     .action(function (this: Command, options: SourceCommandOptions) {
+      if (options.auditStream) {
+        assertAuditStreamOptions(this, options)
+        const read = createSourceAuditFrameReader(options.index, resolved => [
+          resolved.artifactPaths.symbolIndex, resolveClassificationArtifactPath(resolved.manifest, resolved.indexDir),
+        ])
+        return runAuditStream('source', read, () => createSourceAuditItemReader(options))
+      }
       if (options.auditBatchFile !== undefined) {
         assertAuditBatchOptions(this, options)
-        return handleSourceAuditBatch(options, options.auditBatchFile)
+        return emitAuditBatch(readAuditBatch(options.index, options.auditBatchFile, 'source', createSourceAuditItemReader(options)))
       }
       if (options.containsBytesHex !== undefined) {
         const allowed = new Set(['index', 'file', 'containsBytesHex', 'json'])
@@ -257,10 +268,10 @@ function readLineRange(manifest: IndexManifest, indexDir: string, filePath: stri
   })
 }
 
-function handleSourceAuditBatch(options: SourceCommandOptions, input: string): Promise<void> {
+function createSourceAuditItemReader(options: SourceCommandOptions) {
   const authorizeRange = createSourceAuthority(options)
   let manifest: IndexManifest | undefined
-  return emitAuditBatch(readAuditBatch(options.index, input, 'source', (artifact, item) => {
+  return (artifact: SourceAuditEvidenceArtifact, item: SourceBatchItem): unknown => {
     switch (item.selector) {
       case 'exact-file-occurrence':
         return readExactFileOccurrence(artifact, item.path, item.literal, item.context ?? DEFAULT_CONTEXT_LINES)
@@ -280,7 +291,7 @@ function handleSourceAuditBatch(options: SourceCommandOptions, input: string): P
             () => readAuthenticatedAuditBytes(artifact, file).toString('utf8')))
       }
     }
-  }))
+  }
 }
 
 function createSourceAuthority(options: SourceCommandOptions): (root: string, file: string) => void {
@@ -1398,6 +1409,7 @@ function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): Frontend
 
 interface SourceCommandOptions {
   auditBatchFile?: string
+  auditStream?: boolean
   containsBytesHex?: string
   index: string
   node?: string
