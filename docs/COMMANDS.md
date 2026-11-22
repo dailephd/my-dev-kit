@@ -330,6 +330,35 @@ Prerequisites and freshness:
 
 Exit codes and errors: argument errors and evidence failures exit with code 2. Successful results are JSON on stdout. Failures print a code-prefixed plain-text message such as `INVALID_AUDIT_PAGE: ...`, `AUDIT_FACT_NOT_FOUND`, `AUDIT_FACT_NOT_IMPORT` or `STALE_SOURCE_EVIDENCE`; no JSON error object is guaranteed, so consumers must not parse failures as JSON. Nothing is written to the index or to the target source.
 
+### Bounded audit batches (v1.16.0 candidate)
+
+Use one command family per request file.
+
+```text
+my-dev-kit lookup --index <index-dir> --audit-batch-file <absolute-json-path> --json
+my-dev-kit source --index <index-dir> --audit-batch-file <absolute-json-path> --json
+```
+
+The request object has schemaVersion "1.0.0", mode "audit-batch-request", family "lookup" or "source", expectedSnapshotId, selectionFingerprint, and requests. Both identity values come from the selected source-audit artifact. The request file must be valid UTF-8, at most 64 KiB, and a regular file at a canonical absolute path with no symlink or junction hops. Its real parent directory is the caller-owned input directory. The batch selector requires --json and excludes all single selectors, format options, and --out.
+
+Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters, excluding spaces, a selector, and the fields for that selector. IDs are unique within the batch. Unknown fields are rejected.
+
+| Family | selector | Fields and defaults |
+| --- | --- | --- |
+| lookup | audit-files | page (0) |
+| lookup | audit-file | path, page (0) |
+| lookup | audit-import-target | factId |
+| lookup | audit-import-domain | factId (requires artifact schema 1.2.0) |
+| source | exact-file-occurrence | path, literal, context (3) |
+| source | exact-file-byte-occurrence | path, needleHex (requires artifact schema 1.2.0) |
+| source | line-range | path, start, end, maxLines (160) |
+
+Use canonical forward-slash project-relative paths. Pages are zero-based and line ranges are one-based and inclusive. Batches reuse the authenticated artifact within the invocation. Each live read retains its own containment, source identity, and freshness checks. A batched line range additionally verifies that the exact bytes used to render the range match the snapshot.
+
+The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, snapshotId, selectionFingerprint, inputSha256 (the exact request file digest), requestedCount, returnedCount, complete, and ordered results. Each result echoes id and selector. An item with status "ok" carries its original selector JSON in response. An item with status "error" has error.code and error.exitCode and carries no evidence. Expect known standalone error codes where available, with UNSAFE_SOURCE and COMMAND_ERROR for errors without a standalone code.
+
+Any item error makes complete false and sets exit 2. Invalid input, artifact or identity errors, and output over 8 MiB fail globally with exit 2 and no response envelope. Accept a usable batch only after verifying the exit, the complete JSON envelope, the identities and counts, and the ordered IDs and selectors. Envelope completeness describes delivery of the requested responses. Per-item paging, proof and coverage fields retain their original meaning, including partial, truncated or indeterminate evidence.
+
 ## source
 
 Retrieve bounded current source corresponding to indexed identity or a supported source selector.

@@ -1,15 +1,16 @@
-import { resolveAuditImportDomain } from '../lookup/resolveAuditImportDomain.js'
+import { assertAuditBatchOptions, emitAuditBatch } from './emitAuditBatch.js'
+import { readAuditBatch } from '../lookup/readAuditBatch.js'
+import { resolveAuditImportDomain, resolveAuditImportDomainFromArtifact } from '../lookup/resolveAuditImportDomain.js'
 import type { Command } from 'commander'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { loadLookupArtifacts } from '../indexing/loadIndexArtifacts.js'
 import { lookupNode } from '../lookup/lookupNode.js'
 import {
-  assertSourceAuditFileFresh,
-  getSourceAuditFilePage,
+  readFreshSourceAuditFilePage,
   getSourceAuditInventoryPage,
   readSourceAuditEvidence,
 } from '../lookup/readSourceAuditEvidence.js'
-import { resolveAuditImportTarget } from '../lookup/resolveAuditImportTarget.js'
+import { resolveAuditImportTarget, resolveAuditImportTargetFromArtifact } from '../lookup/resolveAuditImportTarget.js'
 import { parseInteger } from './parseUtils.js'
 import {
   loadFrontendReachabilityArtifact,
@@ -24,6 +25,7 @@ import {
 } from '../android/index.js'
 
 interface LookupCommandOptions {
+  auditBatchFile?: string
   auditImportDomain?: string
   index: string
   node?: string
@@ -59,9 +61,21 @@ export function registerLookupCommand(program: Command): void {
     .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
     .option('--audit-import-domain <fact-id>', 'prove a bounded selected import expression domain (requires --json)')
     .option('--audit-import-target <fact-id>', 'prove whether one recorded source-audit import fact has an existing target in the selected inventory (requires --json)')
+    .option('--audit-batch-file <path>', 'read 1–32 authenticated audit lookup requests (requires --json)')
     .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
     .action(function (this: Command, options: LookupCommandOptions) {
+      if (options.auditBatchFile !== undefined) {
+        assertAuditBatchOptions(this, options)
+        return emitAuditBatch(readAuditBatch(options.index, options.auditBatchFile, 'lookup', (artifact, item) => {
+          switch (item.selector) {
+            case 'audit-files': return getSourceAuditInventoryPage(artifact, item.page ?? 0)
+            case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0)
+            case 'audit-import-target': return resolveAuditImportTargetFromArtifact(artifact, item.factId)
+            case 'audit-import-domain': return resolveAuditImportDomainFromArtifact(artifact, item.factId)
+          }
+        }))
+      }
       if (options.auditImportDomain !== undefined) {
         const allowed = new Set(['index', 'auditImportDomain', 'json'])
         if (!options.json || Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
@@ -108,9 +122,7 @@ export function registerLookupCommand(program: Command): void {
           console.log(JSON.stringify(getSourceAuditInventoryPage(artifact, pageIndex), null, 2))
           return
         }
-        const filePage = getSourceAuditFilePage(artifact, options.auditFile as string, pageIndex)
-        if (filePage.status === 'found' && filePage.file) assertSourceAuditFileFresh(artifact, filePage.file)
-        console.log(JSON.stringify(filePage, null, 2))
+        console.log(JSON.stringify(readFreshSourceAuditFilePage(artifact, options.auditFile as string, pageIndex), null, 2))
         return
       }
       const reachabilityMode = resolveReachabilityMode(options)

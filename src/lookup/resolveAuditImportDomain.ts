@@ -2,10 +2,10 @@ import { isQualifiedDefaultEsmSelectedReference } from './resolveAuditImportTarg
 import { createHash } from 'node:crypto'
 import * as ts from 'typescript'
 import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
-import type { SourceAuditSpan } from '../symbol-index/auditEvidenceTypes.js'
+import type { SourceAuditEvidenceArtifact, SourceAuditSpan } from '../symbol-index/auditEvidenceTypes.js'
 import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
-import { resolveAuditImportTarget, resolveAuditTargetCandidates } from './resolveAuditImportTarget.js'
+import { resolveAuditImportTarget, resolveAuditImportTargetFromArtifact, resolveAuditTargetCandidates } from './resolveAuditImportTarget.js'
 
 type Gap = 'UNSUPPORTED_EXPRESSION' | 'UNKNOWN_RUNTIME_VALUE' | 'UNQUALIFIED_BINDING' |
   'UNSUPPORTED_PATH_OPERATION' | 'PATH_IDENTITY_UNCERTAIN' | 'INCOMPLETE_REFERENCE_PROFILE' |
@@ -112,7 +112,13 @@ function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.
 }
 
 export function resolveAuditImportDomain(indexDir: string, id: string) {
-  const artifact = readSourceAuditEvidence(indexDir)
+  return resolveAuditImportDomainFromArtifact(readSourceAuditEvidence(indexDir), id,
+    factId => resolveAuditImportTarget(indexDir, factId))
+}
+
+export function resolveAuditImportDomainFromArtifact(artifact: SourceAuditEvidenceArtifact, id: string,
+  readTarget = (factId: string) => resolveAuditImportTargetFromArtifact(artifact, factId),
+) {
   if (artifact.schemaVersion !== '1.2.0') throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Import-domain proof requires audit schema 1.2.0.')
   const file = artifact.files.find(entry => entry.facts.some(fact => fact.id === id))
   const fact = file?.facts.find(entry => entry.id === id)
@@ -172,7 +178,7 @@ export function resolveAuditImportDomain(indexDir: string, id: string) {
       if (values.length !== 1 || linked?.sourceSpecifier !== values[0]) {
         throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Linked literal import contradicts its authenticated operand.')
       }
-      const targetProof = resolveAuditImportTarget(indexDir, fact.literalImportFactId)
+      const targetProof = readTarget(fact.literalImportFactId)
       if (targetProof.snapshotId !== base.snapshotId) throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Target proof snapshot changed.')
       if (operandAlternatives[0].resolution.candidateEnumerationComplete &&
         targetProof.status === 'present' &&

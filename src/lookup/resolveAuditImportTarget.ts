@@ -109,7 +109,10 @@ function classifyAbsentCandidates(
  * says nothing about its exported bindings, cycles, external dependencies or global reference coverage.
  */
 export function resolveAuditImportTarget(indexDir: string, importFactId: string): AuditImportTargetProof {
-  const artifact = readSourceAuditEvidence(indexDir)
+  return resolveAuditImportTargetFromArtifact(readSourceAuditEvidence(indexDir), importFactId)
+}
+
+export function resolveAuditImportTargetFromArtifact(artifact: SourceAuditEvidenceArtifact, importFactId: string): AuditImportTargetProof {
   const { file, fact } = findImportFact(artifact, importFactId)
   // The origin file must still be the indexed one before any conclusion is drawn from its import.
   assertSourceAuditFileFresh(artifact, file)

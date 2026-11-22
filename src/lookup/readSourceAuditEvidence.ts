@@ -207,6 +207,13 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
   return page
 }
 
+/** Reads a fact page and verifies live selected bytes before returning it. */
+export function readFreshSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, relativePath: string, pageIndex: number): SourceAuditFilePage {
+  const page = getSourceAuditFilePage(artifact, relativePath, pageIndex)
+  if (page.status === 'found' && page.file) assertSourceAuditFileFresh(artifact, page.file)
+  return page
+}
+
 /**
  * Read-only freshness check for one recorded file. Where contentSha256 was recorded, the current
  * bytes must hash to it; a missing, replaced or escaping file is reported, never returned as empty success.
