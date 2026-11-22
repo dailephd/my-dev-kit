@@ -2067,6 +2067,39 @@ The goal is to make indexed TypeScript/JavaScript/TSX and frontend-test evidence
 - No automatic browser, server, database, test execution, deployment or real-user visibility proof in Kit. Those belong to project workflows, Orchestrator and Observer.
 - No broad cross-file dependency closure, universal authorization inference, general runtime control flow, second graph/index engine or v2.0.0 plugin/command redesign.
 
+## Version 1.19.0 — Qualified relative-import and fixture-byte evidence (KIT-FACTS-02)
+
+**Status (2026-11-21): planned capability extension; no implementation, producer qualification, publication, or retroactive coverage discharge.** This slot follows the existing v1.17.0 operational-evidence and v1.18.0 frontend-retrieval reservations **without moving either milestone**. It is not an addition to the currently qualified v1.16.0 producer or a release-readiness waiver. Lab's separately planned corresponding consumer is v0.19.0; its production pin changes only after published-Kit qualification. If an urgent earlier patch is proposed, that requires a separately recorded version-allocation decision.
+
+**Evidence basis and traceability.** The 2026-11-21 R6-R6 offline Kit/Lab coverage-gap ledger records 709 mandatory gaps on a frozen Lab self-audit of 839 selected paths, 6,401 obligations and ten detectors: 586 `LEGITIMATE_INCOMPLETE`, 114 `REQUIRES_KIT_CONTRACT`, and nine `OUTSIDE_DECLARED_PROFILE`. Within the 114, this milestone owns **six Python relative-import** and **three unsupported fixture-byte** gaps. The other 105 JVM declaration/symbol gaps are a separate compiler/classpath-aware capability question, **not** silently assigned to this milestone. The raw per-run ledger and its response receipts remain external local qualification evidence; their presence in a report is not proof of a new Kit contract. See [CONTRACTS.md](CONTRACTS.md#planned-kit-facts-02-proof-boundaries-python-relative-imports-and-fixture-bytes).
+
+**KIT-BYTES-01 — authenticated unsupported fixture-byte predicate evidence (implement first):**
+
+- Existing fixture: `tests/fixtures/android-retrieval/combined-app/app/src/main/res/mipmap-xxhdpi/icon.png`. Its unsupported source type is not permission for Lab to read the target directly. Preserve one Kit source selection ledger, project-root containment, byte identity and freshness.
+- Qualify a bounded, source-identity-bound raw-byte reader **or** an exact predicate-equivalent byte-occurrence proof (or prove inapplicability for an individual predicate). Reuse the existing v1.16.0 byte protocol/reader where semantically applicable; extend its owner only if specific missing behavior is demonstrated.
+- Explicitly distinguish raw bytes from decoded text, string/regex matches, parser facts, and runtime meaning. An unauthenticated or truncated read does not prove absence; a positive fixture reference requires an authenticated, predicate-equivalent witness.
+- Exact retained gap IDs:
+  - `gap-899e6e4018fc6a5aec1bb7816e41ddf0e7bb806f7492f9d03dbc38bac9542a86`
+  - `gap-543970eeaf4de124fa01316239b8fa8d3ed34eab26951551db1f87156babd595`
+  - `gap-07c01f6ab018627268d80a289fd755170b4bed95737b7c47cd0b22d761f2bea3`
+- **Acceptance:** independently verify the PNG byte SHA-256, selection/scope, boundedness, negative and positive witness equivalence, stale/oversize/unsupported/error behavior and immutable target. Exercise both dead-code fixture predicates and test-rot bounded-content predicates; preserve existing valid findings and fail-closed coverage when proof remains incomplete.
+
+**KIT-PYREL-01 — qualified Python relative-import target enumeration (separate batch):**
+
+- Existing source: `tests/fixtures/v115-source-audit/language-python-all.py`. The six gaps cover dead-code unused declaration/source and test-rot missing-source-import predicates; they are not six observed incorrect Kit resolutions.
+- Extend the existing Python import/target-evidence owner to enumerate sound selected-file candidate domains for supported explicit `from .`, `from ..package`, `from .package import member` and package/module forms. Model `__init__.py`, selected roots, relative level, importable packages and member-vs-submodule ambiguity; do not require importing or executing inspected Python code.
+- Separate complete *source spelling extraction*, candidate-domain overapproximation, qualified unique target and complete negative exclusion. Namespace packages, dynamic `__path__`, import hooks, runtime import state, missing package context and unobserved environments remain expressly indeterminate unless independently qualified. No speculative positive reference or missing import.
+- Exact retained gap IDs:
+  - `gap-979e0759f7eddd8842505de1804c92771a75e5a11e54728250525f3f5957c939`
+  - `gap-7083b0018d175b45ffe8ee2464f676067aa5bdeb757b65bd8df9728bb67486e6`
+  - `gap-0c5440a175269e318fb79a08affa136c3ca7d2be79bdf693ac912276a51ff60a`
+  - `gap-b08af881f505ac0a45a74bb3176b3861fbc9ed6e09a099e3dce27077cb56e425`
+  - `gap-d449bbea845e82372471800c30ad5380434f907c97239d866a40b9bbf41bf8cf`
+  - `gap-361120059164ee7cdded73681146af74aa78082a577f0bba87b0da2cf6c55c9f`
+- **Acceptance:** independent Python standard import-system oracles on disposable, controlled fixtures (without executing target application code), exact package-relative positive/negative/ambiguous controls, selected and unselected siblings, stale/config/snapshot checks, bounded results, both relevant detector consumers, and full/incremental parity. Preserve existing JavaScript/TypeScript, Rust, JVM and default-schema behavior.
+
+**Implementation and release gates:** (1) freeze per-gap expected evidence and source-owner/closest-test mapping; (2) implement and test KIT-BYTES-01 independently; (3) implement and test KIT-PYREL-01 independently; (4) qualify packed and installed Kit on Windows and native Linux against separate holdouts and both default/opt-in source-audit contracts; (5) qualify Lab predicates and their exact responses separately; (6) complete separate readiness and publication steps. A gap is discharged only by an exact authenticated predicate-specific receipt. Preserve the 155 existing findings, all ten detector families, and independent mandatory exit-2 behavior until evidence justifies changes. This roadmap allocates scope; it authorizes no production edit, package pin change, publication, or SW-123 website replay.
+
 ## Version 2.0.0
 
 Version 2.0.0 focuses on a larger artifact and plugin model.
