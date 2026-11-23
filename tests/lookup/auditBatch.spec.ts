@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -18,7 +18,8 @@ afterEach(() => {
 })
 
 async function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'kit-audit-batch-'))
+  // CI can expose the temporary directory through a symlink or junction.
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'kit-audit-batch-')))
   roots.push(root)
   const project = join(root, 'p')
   mkdirSync(join(project, 'src'), { recursive: true })
