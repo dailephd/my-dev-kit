@@ -1235,6 +1235,11 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## source-audit-evidence.json (v1.15.0)
 
+The artifact and cache metadata below describe the v1.15.0 baseline.
+For the coordinated candidate's default and opt-in artifact schemas,
+cache revision and proof response families, see
+[Coordinated R3 import evidence](CONTRACTS.md#coordinated-r3-import-evidence).
+
 Status: implemented in v1.15.0 (KIT-FACTS-01 producer). Artifact kind `my-dev-kit-v1-source-audit-evidence`, schema version `1.1.0`. Types: `src/symbol-index/auditEvidenceTypes.ts`; validator: `src/symbol-index/validateAuditEvidence.ts`; producer: `src/indexing/buildSourceAuditEvidence.ts`. Commands: [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
 
 Schema versions around it: manifest `1.0.0`, symbol index `3`, code graph `1.1.0` (all unchanged), private cache metadata `1.4.0` (advanced from `1.3.0`), extractor contract revision `source-audit-v1.5.0`.

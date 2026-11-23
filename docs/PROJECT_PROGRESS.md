@@ -237,12 +237,24 @@ Version 1.10.2 corrects the v1.10.1 release-state documentation and does not cha
 
 The published Kit baseline is 1.15.1. The local producer for the coordinated
 v1.16.0 Kit and v0.11.0 Lab work still has package metadata 1.15.1.
-The qualified R3 source commit is `bde00d9c165a6a546170ab72e7a9534d6929697e`.
-The qualified local archive SHA-256 is
+The B5 implementation baseline is `c2eb844c0dae8ff061e1d5b65e257bf0551a7a66`.
+The Kit audit-batch fixture path correction passed on plain and junction-backed
+temporary paths. Its rebuild reproduced the qualified B5 archive and installed
+CLI byte for byte. The complete 4,532-test regression ran on predecessor
+`0d642684600f82ffb3f5eebc42ae73e14a7d7d25`. The installed B5 pair exercised
+bounded positives, negatives and incomplete source evidence in Lab. These
+receipts retain their execution identities.
+
+The earlier R3 qualification used source `bde00d9c165a6a546170ab72e7a9534d6929697e`
+and local archive SHA-256
 `943b3506c7a3e9708f96d2e40a9fcfc720853c46a4273f31408568942a5599a6`.
-Registry Kit 1.15.1 has a separate package identity. Lab B4 requalification
-covered the installed Windows consumer. A later Step 5 run exercised the
-installed Lab candidate on native Linux with the authenticated R3 producer.
-The production dependency contract and release readiness still require
-correction. The roadmap records the coordinated release scope and retains
-the earlier KIT-OPS-01 reservation as planning history.
+Registry Kit 1.15.1 has a separate package identity. Lab B4 covered the
+installed Windows consumer, and a later Step 5 run exercised the installed
+Lab candidate on native Linux with the authenticated R3 producer.
+
+Final product acceptance and separate release readiness remain pending under
+the [adopted policy](ROADMAP.md#version-1160). SW-123 and iworkhere.space
+retain their historical mandatory gaps and exit 2. Reconciled documentation
+changes candidate source identity, and changes to packaged documents also
+change archive identity. The existing CLI qualification and earlier
+archive receipts remain bound to the observed bytes.

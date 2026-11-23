@@ -829,3 +829,9 @@ authenticated import-expression fact ID to the domain selector and the literal
 import fact ID to the ordinary target selector. The domain selector excludes
 other lookup modes and paging. The byte selector requires one exact selected
 file and excludes other source modes. See [the proof contract](CONTRACTS.md#coordinated-r3-import-evidence).
+
+The byte needle is even-length hexadecimal for 1 to 4,096 bytes. The
+selector scans at most 200,000 bytes in that file and returns up to 200
+overlapping match offsets. Read the scan, count and match-completeness
+fields before interpreting an empty or capped response. This selector
+requires an index produced with `--source-audit-schema 1.2.0`.

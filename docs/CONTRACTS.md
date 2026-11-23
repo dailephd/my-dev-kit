@@ -478,3 +478,13 @@ coverage. A disjoint proof concerns the authenticated selected domain and
 its declared premises. Reverse-reference absence additionally requires
 coverage of the relevant origins. Indeterminate operands, unresolved
 profiles and incomplete evidence leave the affected predicate unknown.
+
+Exact-byte occurrence authenticates one selected file against its recorded
+content hash and returns overlapping, half-open byte offsets. It distinguishes
+whole-file scan and count completeness from returned-match completeness. A
+capped match list can retain a positive witness. An exact zero can support
+absence only after complete authentication and scanning for the same predicate.
+Absent hashes, out-of-budget scans, and stale content cannot support absence.
+Byte-literal proof leaves decoding, command and line context, executable
+syntax, and runtime behavior outside the claim. Lab owns applicability and
+reporting for predicates it can establish from these bytes.

@@ -1921,7 +1921,7 @@ This milestone supports later full-stack contract assurance but is not required 
 
 ## Version 1.15.2 — Kotlin script source-audit capability correction
 
-**Status: active, immediate corrective patch; planned and not yet implemented.** This patch follows the current v1.15.1 package and precedes the reserved v1.16.0 feature milestone. The v1.15.0 KIT-FACTS-01 and KIT-API-01 implementation and the v1.15.1 Python-test correction remain intact. SW-123 in my-dev-kit-lab identified a concrete downstream readiness failure on a Gradle Kotlin DSL fixture; this is an urgent producer correction, not a new language-analysis milestone.
+**Status: historical corrective scope.** SW-123 in my-dev-kit-lab identified the downstream Gradle Kotlin DSL fixture failure that prompted this plan after v1.15.1. The coordinated v1.16.0 candidate contains the bounded explicit-import capability correction. Separate v1.15.2 release status is outside this candidate record. The v1.15.0 KIT-FACTS-01 and KIT-API-01 implementation and the v1.15.1 Python-test correction remain intact.
 
 **Goal:** report truthful, independently established source-audit capabilities for Kotlin scripts so that an executable or unsupported declaration statement does not automatically downgrade explicit-import enumeration. Preserve conservative interpretation of unsupported syntax, selected-source authority, and the existing language and command boundaries.
 
@@ -1943,7 +1943,7 @@ This milestone supports later full-stack contract assurance but is not required 
 
 **Acceptance:** The exact SW-123 `tests/fixtures/android/advanced-security-fixtures/release-configuration/kotlin-release-debuggable-false.gradle.kts` fixture yields complete *explicit-import* enumeration (zero explicit imports) only when lexical tests prove that result, while script declaration and JVM limitations remain visible. Complete and partial capabilities may coexist in one authenticated file. Malformed imports, syntactic ambiguity, stale/old-revision caches, altered bytes, missing evidence, and out-of-root paths never produce a false complete negative. Existing TypeScript, JavaScript, Python, Java, Rust, Android and complete-Kotlin fixtures remain compatible; no new command family or Gradle execution is introduced.
 
-The downstream Lab v0.10.1 fix is separately required: producer improvements alone do not qualify a Lab detector or discharge mandatory audit coverage. Coordinated acceptance uses independently pinned exact Kit and Lab candidates before any downstream release.
+The historical plan assigns detector applicability to the Lab v0.10.1 correction. The coordinated candidate still qualifies producer and consumer evidence separately. A producer improvement alone cannot establish Lab predicate coverage.
 
 ## Version 1.16.0
 
@@ -1957,6 +1957,28 @@ selected-domain and exact-byte proofs, and preserves incomplete results when
 selection or resolution cannot establish a conclusion. See
 [Commands](COMMANDS.md#coordinated-source-evidence-commands-in-the-local-r3-candidate)
 and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
+
+**Acceptance policy adopted on 2026-11-23.** Kit v1.16.0 and Lab v0.11.0
+may qualify for release when their approved product capabilities, proof
+integrity, producer-consumer integration, report and exit behavior,
+regression, security, exact-package, native and hosted platform, current
+candidate binding, and documentation requirements pass. Demonstrated defects
+in supported behavior, evidence integrity, or proof soundness block product
+acceptance. The original coordinated requirement for complete mandatory
+coverage on both SW-123 and iworkhere.space is retained as historical
+governance and superseded as a release prerequisite for these versions.
+Certification of either target still requires authenticated selection,
+qualified evidence for every applicable mandatory predicate, and a terminal
+result satisfying the target's finding and severity contract. Both targets
+remain uncertified. See [candidate status](PROJECT_PROGRESS.md#coordinated-source-evidence-candidate).
+
+Whole-origin runtime reference closure, build-dependent source mappings, and
+computed imports with unresolved runtime alternatives remain future
+requirements without an assigned release. The existing v1.19.0 Kit and
+v0.19.0 Lab allocations for deferred binary/context and Python relative-import
+capabilities are preserved. The current exact-byte selector covers literal
+predicates and leaves contextual content qualification for the appropriate
+capability.
 
 ### Earlier reservation for KIT-OPS-01
 
