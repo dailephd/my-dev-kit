@@ -391,7 +391,13 @@ function validateFileRecord(value: unknown, path: string, mode: FileMode, featur
 
   const capabilities = requireObj(file.capabilities, `${path}.capabilities`)
   const capabilityKeys = feature ? [...SOURCE_AUDIT_CAPABILITIES, 'dynamic-import-expressions'] : SOURCE_AUDIT_CAPABILITIES
-  requireClosed(capabilities, `${path}.capabilities`, capabilityKeys, capabilityKeys)
+  requireClosed(capabilities, `${path}.capabilities`, feature ? [...capabilityKeys, 'direct-test-modifiers'] : capabilityKeys, capabilityKeys)
+  if (capabilities['direct-test-modifiers'] !== undefined) {
+    const modifier = requireOneOf(capabilities['direct-test-modifiers'], ['complete', 'partial'] as const, path)
+    if (!feature || !['typescript', 'javascript'].includes(String(file.language)) || file.analyzerId !== 'typescript-ast' ||
+        (modifier === 'complete' && (status !== 'parsed' || typeof file.contentSha256 !== 'string' ||
+          !['complete', 'partial'].includes(String(capabilities['test-observations']))))) fail(path, 'invalid direct-test-modifiers proof')
+  }
   for (const capability of capabilityKeys) {
     const capabilityStatus = requireOneOf(
       capabilities[capability],

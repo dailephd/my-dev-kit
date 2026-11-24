@@ -488,3 +488,17 @@ Absent hashes, out-of-budget scans, and stale content cannot support absence.
 Byte-literal proof leaves decoding, command and line context, executable
 syntax, and runtime behavior outside the claim. Lab owns applicability and
 reporting for predicates it can establish from these bytes.
+
+### Direct test modifier observations
+
+Opt-in source-audit schema 1.2.0 may include the optional per-file capability
+`direct-test-modifiers`. It reports completeness for the existing TypeScript AST
+profile of direct dot calls to `describe`, `it` and `test` with `.skip` or `.only`.
+A complete claim requires authenticated parsed JavaScript or TypeScript, supported
+runner bindings and retention of the relevant facts. Computed keys, optional calls,
+ambiguous bindings and relevant modifier chains leave the predicate partial.
+The claim does not enumerate aliases, titles, embedded commands or runtime
+registration. The wider `test-observations` capability keeps its own status.
+Consumers must qualify the producer and traverse its exact-file fact pages.
+Missing claims, including older caches, establish no additional completeness.
+Strict older 1.2.0 readers may reject the added capability. Schema 1.1.0 remains unchanged.

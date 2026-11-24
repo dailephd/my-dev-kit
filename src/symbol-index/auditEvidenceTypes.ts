@@ -202,7 +202,7 @@ export interface SourceAuditFile {
   sizeBytes: number | null
   lineCount: number | null
   analyzerId: string | null
-  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus> & { 'dynamic-import-expressions'?: SourceAuditCapabilityStatus }
+  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus> & { 'dynamic-import-expressions'?: SourceAuditCapabilityStatus; 'direct-test-modifiers'?: SourceAuditCapabilityStatus }
   ambientClassification?: AmbientClassification
   facts: SourceAuditFact[]
   warnings: string[]

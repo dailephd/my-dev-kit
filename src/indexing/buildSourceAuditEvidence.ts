@@ -387,8 +387,17 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
       reasons.add('noncanonical-selected-path')
       continue
     }
-    const projection = projectFile(entry, entry.auditOnlySummary ?? summariesByPath.get(entry.relPath), (schemaVersion === '1.2.0' ? entry.rawContentSha256 : undefined) ?? entry.contentSha256 ?? input.fileHashes.get(entry.relPath), sourceRoots)
-    if (schemaVersion === '1.2.0') projectVersionedFile(input.projectRoot, projection.record)
+    const summary = entry.auditOnlySummary ?? summariesByPath.get(entry.relPath)
+    const projection = projectFile(entry, summary, (schemaVersion === '1.2.0' ? entry.rawContentSha256 : undefined) ?? entry.contentSha256 ?? input.fileHashes.get(entry.relPath), sourceRoots)
+    if (schemaVersion === '1.2.0') {
+      projectVersionedFile(input.projectRoot, projection.record)
+      const record = projection.record
+      const modifiers = summary?.sourceAudit?.capabilities['direct-test-modifiers']
+      if (modifiers !== undefined && ['typescript', 'javascript'].includes(record.language) &&
+          ['complete', 'partial'].includes(record.capabilities['test-observations'])) {
+        record.capabilities['direct-test-modifiers'] = record.status === 'parsed' && record.contentSha256 ? modifiers : 'partial'
+      }
+    }
     files.push(projection.record)
     if (projection.unreadable) unreadableFileCount += 1
     if (projection.record.status === 'unsupported') unsupportedFileCount += 1

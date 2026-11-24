@@ -1199,6 +1199,7 @@ function collectTsObservations(
     }
   }
   const isTestFile = TEST_PATH.test(filePath)
+  capabilities['direct-test-modifiers'] = exact ? 'complete' : 'partial'
 
   // Declaration census: a name declared more than once (or non-uniquely) is shadowed/ambiguous for ownership checks.
   const declared = new Map<string, number>()
@@ -1219,6 +1220,7 @@ function collectTsObservations(
 
   // Unaliased imports of the test names count as the runner; every other local declaration shadows it.
   const importedTestNames = new Set<string>()
+  const qualifiedTestImports = new Set<string>()
   // child_process bindings from top-level imports / requires.
   const processNamed = new Map<string, string>()
   const processNamespaces = new Set<string>()
@@ -1232,7 +1234,12 @@ function collectTsObservations(
       const clause = statement.importClause
       const named = clause?.namedBindings
       if (named && ts.isNamedImports(named)) {
-        for (const element of named.elements) if (!element.propertyName && TEST_FUNCTIONS.has(element.name.text)) importedTestNames.add(element.name.text)
+        for (const element of named.elements) {
+          if (element.propertyName || !TEST_FUNCTIONS.has(element.name.text)) continue
+          importedTestNames.add(element.name.text)
+          if (!clause?.isTypeOnly && !element.isTypeOnly && ts.isStringLiteral(statement.moduleSpecifier) &&
+              ['vitest', '@jest/globals', 'node:test'].includes(statement.moduleSpecifier.text)) qualifiedTestImports.add(element.name.text)
+        }
       }
       if (ts.isStringLiteral(statement.moduleSpecifier) && CHILD_PROCESS_MODULES.has(statement.moduleSpecifier.text)) {
         cpRecognized++
@@ -1338,6 +1345,26 @@ function collectTsObservations(
         span: auditSpanAt(sf, filePath, arg.getStart(sf), last.getEnd(), exact), value: joined.replace(/\/+$/, '').split('/').pop() ?? joined,
       })
       break
+    }
+  }
+  // Classify only direct dot-call skip/only syntax. A computed key or a
+  // modifier chain rooted in a runner may hide a relevant call. Bare aliases,
+  // other dot calls, titles and embedded commands belong to the wider family.
+  function checkModifierDomain(call: ts.CallExpression): void {
+    const raw = call.expression
+    let current = unwrapExpression(raw)
+    let relevant = false
+    while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current) || ts.isCallExpression(current)) {
+      if (ts.isElementAccessExpression(current) || (ts.isPropertyAccessExpression(current) &&
+          (current.name.text === 'skip' || current.name.text === 'only'))) relevant = true
+      current = unwrapExpression(current.expression)
+    }
+    if (!relevant || !ts.isIdentifier(current) || !TEST_FUNCTIONS.has(current.text)) return
+    const owner = declared.get(current.text)
+    const direct = ts.isPropertyAccessExpression(raw) && raw.expression === current &&
+      !raw.questionDotToken && !call.questionDotToken && (raw.name.text === 'skip' || raw.name.text === 'only')
+    if (!direct || (owner !== undefined && !(owner === 1 && qualifiedTestImports.has(current.text)))) {
+      capabilities['direct-test-modifiers'] = 'partial'
     }
   }
   function visitTestCall(call: ts.CallExpression, callee: ts.Expression): boolean {
@@ -1454,6 +1481,7 @@ function collectTsObservations(
         fixtureSpecifier(required)
         if (CHILD_PROCESS_MODULES.has(required.text)) cpLiterals++
       }
+      checkModifierDomain(node)
       enteredTest = visitTestCall(node, callee)
       visitProcessCall(node, callee)
       visitFixturePathCall(node, callee)
