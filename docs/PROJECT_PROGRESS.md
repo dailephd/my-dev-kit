@@ -4,7 +4,7 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.15.1` is the version represented by this repository. Version 1.15.0 is the preceding release.
+`@dailephd/my-dev-kit@1.16.0` is the version represented by this repository. Version 1.15.1 is the preceding release.
 
 ## Version 1.15.1
 
@@ -232,3 +232,34 @@ Version 1.10.2 corrects the v1.10.1 release-state documentation and does not cha
 - Command-level behavior and flags: [COMMANDS.md](COMMANDS.md)
 - Schema and artifact fields: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md)
 - Release history: [CHANGELOG.md](../CHANGELOG.md)
+
+## Coordinated source-evidence history
+
+The coordinated Kit and Lab implementation used Kit metadata 1.15.1 before
+the release version bump. Version 1.16.0 includes the bounded source-evidence
+capabilities documented in [Commands](COMMANDS.md#coordinated-source-evidence-commands-in-v1160)
+and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
+The B5 implementation baseline is `c2eb844c0dae8ff061e1d5b65e257bf0551a7a66`.
+The Kit audit-batch fixture path correction passed on plain and junction-backed
+temporary paths. Its rebuild reproduced the qualified B5 archive and installed
+CLI byte for byte. The complete 4,532-test regression ran on predecessor
+`0d642684600f82ffb3f5eebc42ae73e14a7d7d25`. The installed B5 pair exercised
+bounded positives, negatives and incomplete source evidence in Lab. These
+receipts retain their execution identities.
+
+The earlier R3 qualification used source `bde00d9c165a6a546170ab72e7a9534d6929697e`
+and local archive SHA-256
+`943b3506c7a3e9708f96d2e40a9fcfc720853c46a4273f31408568942a5599a6`.
+Registry Kit 1.15.1 has a separate package identity. Lab B4 covered the
+installed Windows consumer, and a later Step 5 run exercised the installed
+Lab candidate on native Linux with the authenticated R3 producer.
+
+The Kit implementation at `5b4e6a783691f6b5e434ac1de6e83df8d9e43f85` passed
+pre-release readiness, including 4,540 native tests across 270 files and
+exact-candidate Windows, Linux and macOS CI. The versioned package and its
+hosted release checks carry their own artifact and source identities.
+
+Under the [adopted policy](ROADMAP.md#version-1160), SW-123 and iworkhere.space
+retain their historical mandatory gaps and exit 2. Lab v0.11.0 formal
+acceptance depends on independently authenticating the published Kit
+artifact and validating the migrated dependency.

@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { isInsideRoot } from '../io/pathUtils.js'
-import { readIndexManifest } from '../indexing/readIndexManifest.js'
+import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { SOURCE_AUDIT_EVIDENCE_FILENAME } from '../indexing/managedArtifacts.js'
 import {
   AUDIT_FACT_PAGE_SIZE,
@@ -57,28 +57,9 @@ function invalid(message: string): never {
  */
 export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceArtifact {
   const resolved = readIndexManifest(indexDir)
-  const reference = resolved.manifest.sourceAuditEvidence
-  if (reference === undefined || reference === null) {
-    throw new SourceAuditEvidenceError(
-      'AUDIT_EVIDENCE_UNAVAILABLE',
-      'This index manifest does not reference source-audit evidence. Re-index with a my-dev-kit version that writes it.',
-    )
-  }
-  if (typeof reference !== 'object' || reference.path !== SOURCE_AUDIT_EVIDENCE_FILENAME) {
-    invalid(`Manifest sourceAuditEvidence.path must be ${SOURCE_AUDIT_EVIDENCE_FILENAME}.`)
-  }
-  if (reference.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) invalid('Manifest sourceAuditEvidence.schemaVersion is unsupported.')
-  if (typeof reference.sha256 !== 'string' || !SHA256_PATTERN.test(reference.sha256)) invalid('Manifest sourceAuditEvidence.sha256 is not a lowercase SHA-256.')
-  if (typeof reference.snapshotId !== 'string' || !SHA256_PATTERN.test(reference.snapshotId)) invalid('Manifest sourceAuditEvidence.snapshotId is malformed.')
-
-  const artifactPath = path.resolve(resolved.indexDir, reference.path)
-  if (!isInsideRoot(resolved.indexDir, artifactPath)) invalid('The audit artifact path escapes the index directory.')
-  if (!fs.existsSync(artifactPath)) {
-    invalid('The audit artifact referenced by the manifest is missing.')
-  }
+  const { reference, artifactPath } = resolveAuditRegistration(resolved)
   let bytes: Buffer
   try {
-    // A symlink or junction may not lead outside the chosen index directory.
     const physicalDir = fs.realpathSync(resolved.indexDir)
     const physicalArtifact = fs.realpathSync(artifactPath)
     if (!isInsideRoot(physicalDir, physicalArtifact)) invalid('The audit artifact resolves outside the index directory.')
@@ -89,7 +70,33 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
     return invalid('The audit artifact could not be read.')
   }
   if (sha256Hex(bytes) !== reference.sha256) invalid('The serialized audit artifact does not match the SHA-256 recorded in the manifest.')
+  return parseRegisteredArtifact(bytes, resolved, reference)
+}
 
+function resolveAuditRegistration(resolved: ResolvedIndexManifest) {
+  const reference = resolved.manifest.sourceAuditEvidence
+  if (reference === undefined || reference === null) {
+    throw new SourceAuditEvidenceError(
+      'AUDIT_EVIDENCE_UNAVAILABLE',
+      'This index manifest does not reference source-audit evidence. Re-index with a my-dev-kit version that writes it.',
+    )
+  }
+  if (typeof reference !== 'object' || reference.path !== SOURCE_AUDIT_EVIDENCE_FILENAME) {
+    invalid(`Manifest sourceAuditEvidence.path must be ${SOURCE_AUDIT_EVIDENCE_FILENAME}.`)
+  }
+  if (reference.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION && reference.schemaVersion !== '1.2.0') invalid('Manifest sourceAuditEvidence.schemaVersion is unsupported.')
+  if (typeof reference.sha256 !== 'string' || !SHA256_PATTERN.test(reference.sha256)) invalid('Manifest sourceAuditEvidence.sha256 is not a lowercase SHA-256.')
+  if (typeof reference.snapshotId !== 'string' || !SHA256_PATTERN.test(reference.snapshotId)) invalid('Manifest sourceAuditEvidence.snapshotId is malformed.')
+
+  const artifactPath = path.resolve(resolved.indexDir, reference.path)
+  if (!isInsideRoot(resolved.indexDir, artifactPath)) invalid('The audit artifact path escapes the index directory.')
+  if (!fs.existsSync(artifactPath)) {
+    invalid('The audit artifact referenced by the manifest is missing.')
+  }
+  return { reference, artifactPath }
+}
+
+function parseRegisteredArtifact(bytes: Buffer, resolved: ResolvedIndexManifest, reference: ReturnType<typeof resolveAuditRegistration>['reference']): SourceAuditEvidenceArtifact {
   let parsed: unknown
   try {
     parsed = JSON.parse(bytes.toString('utf8'))
@@ -103,7 +110,7 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
   }
   const artifact = parsed as SourceAuditEvidenceArtifact
   if (artifact.artifactKind !== SOURCE_AUDIT_ARTIFACT_KIND) invalid('Unexpected audit artifact kind.')
-  if (artifact.schemaVersion !== SOURCE_AUDIT_SCHEMA_VERSION) invalid('Unexpected audit artifact schema version.')
+  if (artifact.schemaVersion !== reference.schemaVersion) invalid('Unexpected audit artifact schema version.')
   if (artifact.source.snapshotId !== reference.snapshotId) invalid('The artifact snapshotId does not match the manifest.')
   if (artifact.source.projectRoot !== resolved.manifest.projectRoot) invalid('The artifact project root does not match the manifest.')
   const manifestRoots = [...resolved.manifest.sourceRoots].map((root) => root.replace(/\\/g, '/')).sort()
@@ -112,6 +119,52 @@ export function readSourceAuditEvidence(indexDir: string): SourceAuditEvidenceAr
     invalid('The artifact source roots do not match the manifest.')
   }
   return artifact
+}
+
+/** A session pins static index identity and reauthenticates its bytes before every frame. */
+export function createSourceAuditFrameReader(indexDir: string, extraPaths?: (resolved: ResolvedIndexManifest) => Array<string | null>) {
+  let pinned: { artifact: SourceAuditEvidenceArtifact; manifestSha256: string; stamps: string } | undefined
+  return () => {
+    try {
+      const manifestBytes = readSourceBytes(indexDir, 'manifest.json')
+      const manifestSha256 = sha256Hex(manifestBytes)
+      const resolved = readIndexManifest(indexDir)
+      if (JSON.stringify(JSON.parse(manifestBytes.toString('utf8'))) !== JSON.stringify(resolved.manifest)) {
+        invalid('The index manifest changed while it was being read.')
+      }
+      const { reference, artifactPath } = resolveAuditRegistration(resolved)
+      const paths = [resolved.indexDir, resolved.manifestPath, artifactPath, ...(extraPaths?.(resolved) ?? [])]
+      const stamp = () => JSON.stringify(paths.map(file => {
+        if (file === null) return null
+        try {
+          const real = fs.realpathSync(file)
+          const stat = fs.statSync(real, { bigint: true })
+          return [real, stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+          throw error
+        }
+      }))
+      const stamps = stamp()
+      if (pinned && (pinned.manifestSha256 !== manifestSha256 || pinned.stamps !== stamps)) {
+        invalid('The index changed during the audit stream.')
+      }
+      const bytes = readSourceBytes(indexDir, SOURCE_AUDIT_EVIDENCE_FILENAME)
+      if (sha256Hex(bytes) !== reference.sha256) invalid('The serialized audit artifact does not match its registration.')
+      const artifact = pinned?.artifact ?? parseRegisteredArtifact(bytes, resolved, reference)
+      const assertCurrent = () => {
+        if (stamps !== stamp() || manifestSha256 !== sha256Hex(readSourceBytes(indexDir, 'manifest.json'))) {
+          invalid('The index changed during the audit stream frame.')
+        }
+      }
+      assertCurrent()
+      pinned = { artifact, manifestSha256, stamps }
+      return { artifact, assertCurrent }
+    } catch (error) {
+      if (error instanceof SourceAuditEvidenceError) throw error
+      return invalid('The audit stream index or manifest could not be authenticated.')
+    }
+  }
 }
 
 function totalPagesFor(totalItems: number, pageSize: number): number {
@@ -134,7 +187,7 @@ export function getSourceAuditInventoryPage(artifact: SourceAuditEvidenceArtifac
   assertPageIndex(pageIndex, totalPages)
   const start = pageIndex * AUDIT_INVENTORY_PAGE_SIZE
   const page: SourceAuditInventoryPage = {
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion: artifact.schemaVersion,
     snapshotId: artifact.source.snapshotId,
     pageIndex,
     pageSize: AUDIT_INVENTORY_PAGE_SIZE,
@@ -170,7 +223,7 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
   if (!file) {
     assertPageIndex(pageIndex, 1)
     const notSelected: SourceAuditFilePage = {
-      schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+      schemaVersion: artifact.schemaVersion,
       snapshotId: artifact.source.snapshotId,
       pageIndex: 0,
       pageSize: AUDIT_FACT_PAGE_SIZE,
@@ -191,7 +244,7 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
   const start = pageIndex * AUDIT_FACT_PAGE_SIZE
   const { facts: _facts, ...record } = file
   const page: SourceAuditFilePage = {
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion: artifact.schemaVersion,
     snapshotId: artifact.source.snapshotId,
     pageIndex,
     pageSize: AUDIT_FACT_PAGE_SIZE,
@@ -204,6 +257,13 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
     facts: file.facts.slice(start, start + AUDIT_FACT_PAGE_SIZE),
   }
   validateSourceAuditFilePage(page)
+  return page
+}
+
+/** Reads a fact page and verifies live selected bytes before returning it. */
+export function readFreshSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, relativePath: string, pageIndex: number): SourceAuditFilePage {
+  const page = getSourceAuditFilePage(artifact, relativePath, pageIndex)
+  if (page.status === 'found' && page.file) assertSourceAuditFileFresh(artifact, page.file)
   return page
 }
 

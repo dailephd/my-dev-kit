@@ -91,6 +91,7 @@ export function getSourceSlice(options: {
   startLine: number
   endLine: number
   maxLines: number
+  readText?: () => string
   mode: SourceSliceMode
   symbolName?: string | null
   symbolBoundaryKnown?: boolean
@@ -109,7 +110,7 @@ export function getSourceSlice(options: {
 }): SourceSlice {
   validateLineRange(options.startLine, options.endLine, options.maxLines)
   const absolutePath = ensureInsideProjectRoot(options.projectRoot, options.filePath)
-  const rawLines = readSourceText(options.projectRoot, options.filePath).split(/\r?\n/)
+  const rawLines = (options.readText ? options.readText() : readSourceText(options.projectRoot, options.filePath)).split(/\r?\n/)
   // Standard text files end with \n, which produces a trailing empty string — don't count it as a line.
   const lines = rawLines.length > 0 && rawLines[rawLines.length - 1] === '' ? rawLines.slice(0, -1) : rawLines
   if (options.symbolEndLine !== undefined) assertSymbolSpanPresent(options.filePath, options.symbolEndLine, lines.length)

@@ -142,10 +142,11 @@ describe('v1.15.0 Batch 1 discovery ledger', () => {
       ['src/a.ts', 'supported'],
       ['src/b.py', 'supported'],
       ['src/notes.md', 'unsupported'],
+      ['src/types.d.ts', 'supported'],
     ])
     expect(ledger.selectedFiles.every((f) => f.absPath.length > 0 && typeof f.sizeBytes === 'number')).toBe(true)
-    // node_modules (once, not its two descendants), the user-excluded directory and the .d.ts file.
-    expect(ledger.excludedPathCount).toBe(3)
+    // Only the ignored and explicitly excluded directories are excluded from audit selection.
+    expect(ledger.excludedPathCount).toBe(2)
     expect(ledger.inaccessibleDirectoryCount).toBe(0)
     expect(ledger.incompleteReasons).toEqual([])
   })
@@ -230,7 +231,7 @@ describe('v1.15.0 Batch 1 coverage projection', () => {
       excludedPathCount: 1,
       inventoryComplete: true,
     })
-    expect(artifact.files[1]).toMatchObject({ language: 'unsupported', contentSha256: null, lineCount: null, facts: [] })
+    expect(artifact.files[1]).toMatchObject({ language: 'unsupported', contentSha256: sha256('hello\n'), lineCount: null, facts: [] })
     expect(() => validateSourceAuditEvidence(artifact)).not.toThrow()
     // Excluded directory is one observed entry, never an exhaustive scan of its descendants.
     expect(artifact.coverage.excludedPathCount).toBe(1)
@@ -376,7 +377,7 @@ describe('v1.15.0 Batch 1 coverage projection', () => {
     const rules = defaultOnly.artifact.source.excludes
     expect(rules).toContain('default-directory:node_modules')
     expect(rules).toContain('default-directory-prefix:.my-dev-kit-')
-    expect(rules).toContain('default-file-pattern:.d.ts')
+    expect(rules).not.toContain('default-file-pattern:.d.ts')
     expect(rules.some((rule) => rule.startsWith('user:'))).toBe(false)
     expect(rules).toEqual([...new Set(rules)].sort())
     expect(rules.every((rule) => /^(default-directory|default-directory-prefix|default-file-pattern|user):./.test(rule))).toBe(true)
@@ -405,7 +406,7 @@ describe('v1.15.0 Batch 1 hash and snapshot identity', () => {
     expect(first.files[0]!.contentSha256).toBe(sha256(text))
     expect(first.source.snapshotId).toMatch(/^[0-9a-f]{64}$/)
     expect(second).toEqual(first)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
   })
 
   it('hashes raw bytes rather than decoded text (BOM and invalid UTF-8 stay distinguishable)', () => {

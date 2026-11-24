@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   CACHE_SCHEMA_VERSION,
   buildCacheMetadata,
@@ -20,6 +20,30 @@ function entry(path: string, contentHash: string, sizeBytes = 10): CacheFileEntr
 }
 
 describe('computeConfigFingerprint', () => {
+  it('invalidates the previous extractor contract without changing cache storage (synthetic revision isolation)', async () => {
+    const input = {
+      sourceRoots: ['src'], excludePatterns: [], callGraphEnabled: false, language: null,
+      defaultIgnoredDirectoryNames: [], defaultIgnoredDirectoryPrefixes: [], defaultFileExcludePatterns: [],
+      androidEvidenceFingerprint: '', androidGradleEvidenceFingerprint: '', androidManifestEvidenceFingerprint: '',
+      androidResourcesEvidenceFingerprint: '', androidNavigationXmlEvidenceFingerprint: '', androidTestEvidenceFingerprint: '',
+    }
+    const current = computeConfigFingerprint(input)
+    vi.resetModules()
+    vi.doMock('../../src/indexing/buildSourceAuditEvidence.js', async (original) => ({
+      ...await original<typeof import('../../src/indexing/buildSourceAuditEvidence.js')>(),
+      SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION: 'source-audit-v1.5.2',
+    }))
+    try {
+      const historicalContract = await import('../../src/indexing/cacheMetadata.js')
+      expect(historicalContract.CACHE_SCHEMA_VERSION).toBe('1.5.0')
+      expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
+      expect(historicalContract.computeConfigFingerprint(input)).not.toBe(current)
+    } finally {
+      vi.doUnmock('../../src/indexing/buildSourceAuditEvidence.js')
+      vi.resetModules()
+    }
+  })
+
   it('is stable across repeated calls with identical input', () => {
     const input = {
       sourceRoots: ['src', 'tests'],
@@ -213,8 +237,8 @@ describe('cache schema 1.4.0 baseline artifact identity', () => {
     return dir
   }
 
-  it('advances the internal cache schema to 1.4.0 (source-audit contract)', () => {
-    expect(CACHE_SCHEMA_VERSION).toBe('1.4.0')
+  it('advances the internal cache schema to 1.5.0 (source-audit contract)', () => {
+    expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
   })
 
   it('hashes the exact manifest and the manifest-registered symbol index and code graph, deterministically', () => {
@@ -242,7 +266,7 @@ describe('cache schema 1.4.0 baseline artifact identity', () => {
       const read = readCacheMetadata(dir)
       expect(read.status).toBe('ok')
       if (read.status === 'ok') {
-        expect(read.metadata.cacheSchemaVersion).toBe('1.4.0')
+        expect(read.metadata.cacheSchemaVersion).toBe('1.5.0')
         expect(read.metadata.baselineArtifacts).toEqual(baselineArtifacts)
         expect(checkCacheCompatibility(read.metadata).compatible).toBe(true)
       }

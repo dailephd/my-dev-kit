@@ -383,3 +383,31 @@ describe('v1.15.0 Batch 3 artifact projection and full/incremental equivalence',
     expect(factsOf(partial.index, 'src/a.ts').map((entry) => entry[1])).toEqual(['changed'])
   })
 })
+
+describe('opt-in direct test-modifier observation domain', () => {
+  it.each(['js', 'ts'])('proves direct %s syntax independently of titles, aliases and other modifiers', ext => {
+    const result = audit('tests/modifiers.test.' + ext, [
+      '// it.skip("comment")',
+      'const sample = "test.only(fake)"',
+      'it.only(title, () => {});',
+      'it.skip("real", () => {});',
+      'xit(title, () => {});',
+      'it.todo("todo");',
+      'it.each([])("each", () => {});',
+    ].join('\n'))
+    expect(result.capabilities['test-observations']).toBe('partial')
+    expect(result.capabilities['direct-test-modifiers']).toBe('complete')
+    expect(of(result, 'test-observation').filter(f => f.observationKind?.startsWith('test-modifier')).map(f => f.observationKind))
+      .toEqual(['test-modifier-only', 'test-modifier-skip'])
+  })
+  it.each([
+    'const it = helper; it.skip("shadow");',
+    'import { it } from "./ambiguous"; it.only("shadow");',
+    'test[key]("computed");',
+    'describe.each([]).only("chain");',
+    'it?.skip("optional");',
+    'it.only("broken"',
+  ])('does not qualify %s', text => {
+    expect(audit('tests/modifiers.test.ts', text).capabilities['direct-test-modifiers']).not.toBe('complete')
+  })
+})

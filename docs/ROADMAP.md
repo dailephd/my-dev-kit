@@ -1915,11 +1915,75 @@ Planned boundaries:
 
 This milestone supports later full-stack contract assurance but is not required for Android v1.13.0 work.
 
+## Version 1.15.1 — Python related-test discovery correction
+
+**Status: implemented in v1.15.1; package metadata 1.15.1.** KIT-PYTEST-01 corrects recognition of standard `test_*.py` and `*_test.py` related-test files, retaining conservative authenticated source/import relationships. It does not infer fixtures, dynamic imports, pytest configuration semantics, or executed test coverage. This already implemented patch remains separate from the urgent v1.15.2 Kotlin source-audit correction. See [CONTRACTS.md](CONTRACTS.md#python-test-discovery-kit-pytest-01-unreleased) and [CHANGELOG.md](../CHANGELOG.md) for the versioned behavior and release history.
+
+## Version 1.15.2 — Kotlin script source-audit capability correction
+
+**Status: historical corrective scope.** SW-123 in my-dev-kit-lab identified the downstream Gradle Kotlin DSL fixture failure that prompted this plan after v1.15.1. Version 1.16.0 contains the bounded explicit-import capability correction. The v1.15.2 section records the original corrective scope. The v1.15.0 KIT-FACTS-01 and KIT-API-01 implementation and the v1.15.1 Python-test correction remain intact.
+
+**Goal:** report truthful, independently established source-audit capabilities for Kotlin scripts so that an executable or unsupported declaration statement does not automatically downgrade explicit-import enumeration. Preserve conservative interpretation of unsupported syntax, selected-source authority, and the existing language and command boundaries.
+
+**Scope and ownership:**
+
+- Extend the existing `src/languages/kotlin/adapter.ts` scanner and tests under `tests/index/`; distinguish uncertainty about imports, declarations/nesting, JVM declaration identity, visibility/exports, and cross-cutting lexical integrity. An unsupported top-level Gradle DSL statement alone must not invalidate a separately established explicit-import inventory.
+- Define `imports: complete` only for exhaustive enumeration of explicit import directives inside a validated lexical profile. Do not equate this with implicit Kotlin/Gradle imports, dependency resolution, or proof that a script has no dependencies. Preserve supported direct, alias, and wildcard import facts and report unsupported/malformed directives conservatively.
+- Preserve `declarations: partial` when executable script statements or unrecognized declarations prevent complete enumeration; `jvmDeclarations: unsupported` for scripts unless a separately qualified contract changes it; and existing conservative `exports` and `source-ranges` semantics. No fabricated Kotlin DSL declarations, implicit receivers, exported symbols, or JVM type identities.
+- Test strings (including raw multiline strings), annotations, comments, nested comments, malformed import text, structural errors, directives, Unicode and line endings before granting completeness. Retain truthful diagnostics and already observed, individually qualified facts without presenting uncertain observations as valid negatives.
+- Advance `SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION` and corresponding private cache compatibility checks when extraction semantics change. The existing schema-`1.1.0` source-audit artifact, manifest-`1.0.0`, symbol-index-`3`, code-graph-`1.1.0`, audit lookup selectors, snapshot/hash validation, selected roots and bounded paging remain the public contract unless a specific, separately justified compatibility change is required.
+- Maintain the established Kit producer / Lab consumer boundary: Kit supplies source facts and capability evidence, not Lab detector applicability, findings, severity or readiness policy.
+
+**Ordered implementation and acceptance:**
+
+1. **K0 — Frozen reproduction and contract.** Retain the SW-123 file and qualified Kit 1.15.0 evidence as historical regression input; assert the old limitation and the intended differentiated capability outcomes. Inspect the existing language/source-audit tests and cache invalidation precedents.
+2. **K1 — Bounded scanner correction.** Decouple capability decisions, prove explicit-import lexical coverage on supported inputs, and keep unrecognized or ambiguous syntax partial. Validate both positive and adversarial cases.
+3. **K2 — Index lifecycle and compatibility.** Update extractor revision and cache invalidation; establish exact-byte artifact provenance, deterministic fact ordering, snapshot identity, fresh/unchanged file behavior and equivalent normalized full/incremental outputs.
+4. **K3 — Exact-package producer qualification.** Run focused and canonical tests, docs checks, packed isolated-consumer lookup, cross-platform checks at readiness, and a real Kit-to-Lab compatibility fixture. Do not relabel an existing 1.15.0 or 1.15.1 package as the corrected producer. Release preparation and publication remain separate authorized stages.
+
+**Acceptance:** The exact SW-123 `tests/fixtures/android/advanced-security-fixtures/release-configuration/kotlin-release-debuggable-false.gradle.kts` fixture yields complete *explicit-import* enumeration (zero explicit imports) only when lexical tests prove that result, while script declaration and JVM limitations remain visible. Complete and partial capabilities may coexist in one authenticated file. Malformed imports, syntactic ambiguity, stale/old-revision caches, altered bytes, missing evidence, and out-of-root paths never produce a false complete negative. Existing TypeScript, JavaScript, Python, Java, Rust, Android and complete-Kotlin fixtures remain compatible; no new command family or Gradle execution is introduced.
+
+The historical plan assigns detector applicability to the Lab v0.10.1 correction. The coordinated policy qualifies producer and consumer evidence separately. A producer improvement alone cannot establish Lab predicate coverage.
+
 ## Version 1.16.0
 
-**Status: planned.**
+**Coordinated source-evidence producer status: implemented in v1.16.0.**
 
-Version 1.16.0 is reserved as **KIT-OPS-01**.
+Version 1.16.0 supplies bounded source identity and import
+evidence to the Lab v0.11.0 consumer. The source-audit artifact defaults to
+schema `1.1.0` and offers an explicit `1.2.0` mode. The producer distinguishes
+selected import candidates from exact ESM witnesses, supports bounded
+selected-domain and exact-byte proofs, and preserves incomplete results when
+selection or resolution cannot establish a conclusion. See
+[Commands](COMMANDS.md#coordinated-source-evidence-commands-in-v1160)
+and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
+
+**Acceptance policy adopted on 2026-11-23.** Kit v1.16.0 and Lab v0.11.0
+may qualify for release when their approved product capabilities, proof
+integrity, producer-consumer integration, report and exit behavior,
+regression, security, exact-package, native and hosted platform, current
+candidate binding, and documentation requirements pass. Demonstrated defects
+in supported behavior, evidence integrity, or proof soundness block product
+acceptance. The original coordinated requirement for complete mandatory
+coverage on both SW-123 and iworkhere.space is retained as historical
+governance and superseded as a release prerequisite for these versions.
+Certification of either target still requires authenticated selection,
+qualified evidence for every applicable mandatory predicate, and a terminal
+result satisfying the target's finding and severity contract. Both targets
+remain uncertified. See [release evidence](PROJECT_PROGRESS.md#coordinated-source-evidence-history).
+
+Whole-origin runtime reference closure, build-dependent source mappings, and
+computed imports with unresolved runtime alternatives remain future
+requirements without an assigned release. The existing v1.19.0 Kit and
+v0.19.0 Lab allocations for deferred binary/context and Python relative-import
+capabilities are preserved. The current exact-byte selector covers literal
+predicates and leaves contextual content qualification for the appropriate
+capability.
+
+### Earlier reservation for KIT-OPS-01
+
+**Status: planned.** The operational-evidence scope below records the earlier
+v1.16.0 reservation. Its release assignment remains a planner decision.
 
 The goal is bounded static evidence for configuration, instrumentation, and deployment-source relationships when real downstream assurance workflows demonstrate a need for them.
 
@@ -1984,7 +2048,7 @@ The goal is to make indexed TypeScript/JavaScript/TSX and frontend-test evidence
 
 ### Dependencies and exclusions
 
-- v1.17.0 follows, but does not change, the reserved v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 operational evidence work.
+- v1.17.0 follows the v1.13.0 Android, v1.14.0 language/framework, v1.15.0 API/data and v1.16.0 coordinated source-evidence work. The frontend milestone leaves the earlier operational-evidence scope intact.
 - No automatic browser, server, database, test execution, deployment or real-user visibility proof in Kit. Those belong to project workflows, Orchestrator and Observer.
 - No broad cross-file dependency closure, universal authorization inference, general runtime control flow, second graph/index engine or v2.0.0 plugin/command redesign.
 

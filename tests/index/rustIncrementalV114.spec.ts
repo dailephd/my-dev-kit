@@ -17,9 +17,10 @@ const fixture = path.resolve('tests/fixtures/v114-language/rust/F11-incremental'
 const sha = (value: string | Buffer) => createHash('sha256').update(value).digest('hex')
 const json = (dir: string, file: string) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'))
 const write = (dir: string, file: string, value: unknown) => fs.writeFileSync(path.join(dir, file), typeof value === 'string' ? value : JSON.stringify(value))
-function setup(name: string) {
-  fs.mkdirSync(path.join(base, 'changed-config'), { recursive: true })
-  const root = fs.mkdtempSync(path.join(base, 'changed-config', name + '-'))
+function setup() {
+  // mkdtemp's Windows directory path budget includes the random suffix.
+  // The Vitest case already carries the scenario name.
+  const root = fs.mkdtempSync(path.join(base, 'c-'))
   fs.cpSync(fixture, root, { recursive: true })
   const key = path.basename(root)
   const output = (family: string, suffix = '') => path.join(base, family, key, suffix)
@@ -50,7 +51,7 @@ function integrity(dir: string) {
   if (fs.existsSync(path.join(dir, 'cache-metadata.json'))) {
     const cache = json(dir, 'cache-metadata.json')
     expect(manifest.sourceRoots).toEqual(cache.sourceRoots)
-    expect(cache.cacheSchemaVersion).toBe('1.4.0')
+    expect(cache.cacheSchemaVersion).toBe('1.5.0')
     expect(cache.baselineArtifacts).toEqual(computeBaselineArtifactIdentity(dir))
   }
 }
@@ -80,7 +81,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
   })
 
   it('workspace membership never expands selected roots and selected worker removal removes its package and targets', async () => {
-    const { root, output } = setup('workspace-add-remove')
+    const { root, output } = setup()
     const before = output('before-full'), out = output('after-incremental')
     write(root, 'Cargo.toml', fs.readFileSync(path.join(root, 'Cargo.toml'), 'utf8').replace('members = ["crates/worker"]', 'members = []'))
     await run(root, before, { src: ['src'], incremental: true })
@@ -119,7 +120,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
     ['exclude', () => {}, true, { exclude: ['src/extra.rs', 'crates/worker'] }],
   ]
   it.each(scenarios)('%s converges with full extraction and removes stale evidence', async (name, mutate, config, options = {}) => {
-    const { root, output } = setup(name)
+    const { root, output } = setup()
     const before = output('before-full'), changed = output('after-incremental', 'changed-files'), affected = output('after-incremental', 'affected-neighborhood'), full = output('after-full')
     await run(root, before, { incremental: true, callGraph: true })
     const beforeHash = sha(fs.readFileSync(path.join(before, 'code-graph.json')))
@@ -156,7 +157,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
   })
 
   it('genuine no-change preserves all bytes without parser preparation or extraction', async () => {
-    const { root, output } = setup('no-change'), out = output('after-incremental')
+    const { root, output } = setup(), out = output('after-incremental')
     await run(root, out, { incremental: true })
     const bytes = Object.fromEntries(fs.readdirSync(out).map(f => [f, sha(fs.readFileSync(path.join(out, f)))]))
     const prepare = vi.spyOn(parser, 'prepareRustParser'), extract = vi.spyOn(RustAdapter.prototype, 'extractFromSource')
@@ -170,7 +171,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
   })
 
   it('falls back truthfully when Rust structural neighbors have no supported N11 file mapping', async () => {
-    const { root, output } = setup('unsupported-rust-neighborhood'), out = output('after-incremental')
+    const { root, output } = setup(), out = output('after-incremental')
     await run(root, out, { incremental: true })
     write(root, 'src/beta.rs', 'pub struct Other;\nimpl Other { pub fn run(&self) -> u16 { 3 } }\n')
     const result = await run(root, out, { incremental: true, refreshScope: 'affected-neighborhood' })
@@ -180,7 +181,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
   })
 
   it('retains safe affected-neighborhood reuse for Rust file/symbol evidence without structural neighbors', async () => {
-    const { root, output } = setup('safe-rust-neighborhood'), out = output('after-incremental')
+    const { root, output } = setup(), out = output('after-incremental')
     fs.unlinkSync(path.join(root, 'Cargo.toml'))
     await run(root, out, { incremental: true })
     write(root, 'src/alpha/nested.rs', 'pub fn nested() -> u16 { 4 }\n')
@@ -192,7 +193,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
 
   it.each(['changed-files', 'affected-neighborhood'] as const)('rejects damaged baselines before %s no-change or partial reuse', async refreshScope => {
     for (const damage of ['manifest-hash', 'symbol-hash', 'graph-corrupt', 'graph-missing', 'cache-corrupt', 'schema', 'incomplete']) {
-      const { root, output } = setup('damaged-' + refreshScope + '-' + damage), before = output('before-full'), out = output('damaged-cache')
+      const { root, output } = setup(), before = output('before-full'), out = output('damaged-cache')
       await run(root, before, { incremental: true })
       fs.cpSync(before, out, { recursive: true })
       const cache = json(out, 'cache-metadata.json')
@@ -222,7 +223,7 @@ describe('B12 F11 serialized Rust incremental correctness', () => {
   })
 
   it('simulates incompatible parser/grammar identity through the real fingerprint producer', async () => {
-    const { root, output } = setup('parser-revision'), out = output('after-incremental')
+    const { root, output } = setup(), out = output('after-incremental')
     await run(root, out, { incremental: true })
     const original = parser.RUST_PARSER_REVISION
     const spy = vi.spyOn(parser, 'RUST_PARSER_REVISION', 'get').mockReturnValue((original + ':simulated-incompatible') as typeof original)

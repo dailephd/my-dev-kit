@@ -14,10 +14,9 @@
  * 120 chars, same as every other language) rather than new dedicated
  * fields — the same choice the Python adapter already made for decorators.
  *
- * Known conservative-parser limitations (documented, not defects): braces
- * inside string/template literals can perturb depth tracking; only
- * single-line `//` comments and single-line-opening `/* ... *\/` block
- * comments are stripped reliably; nested (e.g. companion object) and member
+ * Comments and supported literals are masked before lexical matching.
+ * Unhandled templates and incomplete lexical regions remain partial.
+ * Nested (e.g. companion object) and member
  * declarations are not extracted as symbols; call-graph extraction is not
  * implemented (Kotlin's trailing-lambda call syntax makes regex-based call
  * detection too unreliable to be worth the false-positive risk).
@@ -66,14 +65,14 @@ const ENUM_CLASS_PATTERN = /\benum\s+class\b/
 const FUNCTION_PATTERN = /\bfun\s+(?:<[^>]*>\s*)?(?:([A-Za-z_][\w.<>?]*)\.)?([A-Za-z_]\w*)\s*\(/
 const PROPERTY_PATTERN = /\b(val|var)\s+(?:<[^>]*>\s*)?(?:([A-Za-z_][\w.<>?]*)\.)?([A-Za-z_]\w*)\s*[:=]/
 const PACKAGE_PATTERN = /^package\s+([\w.]+)/
-const IMPORT_PATTERN = /^import\s+([\w.*]+)/
+const IMPORT_PATTERN = /^import[ \t]+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\.\*)?)(?:[ \t]+as[ \t]+([A-Za-z_]\w*))?[ \t]*;?[ \t]*$/
+const IMPORT_RESERVED_NAMES = new Set('as break class continue do else false for fun if import in interface is null object package return super this throw true try typealias typeof val var when while'.split(' '))
 const PRIVATE_MODIFIER_PATTERN = /\bprivate\b/
 
 const SIGNATURE_MAX_LENGTH = 120
 
 interface LineScanState {
   depth: number
-  inBlockComment: boolean
   pendingAnnotations: string[]
 }
 
@@ -82,17 +81,81 @@ function stripLineComment(line: string): string {
   return index === -1 ? line : line.slice(0, index)
 }
 
-/** Handles only block comments that open and close within the scan (a `/* ... *\/` fully containing multiple lines is tracked via `inBlockComment`, not parsed token-by-token). */
-function stripBlockCommentSpans(line: string): string {
-  let result = line
-  let start = result.indexOf('/*')
-  while (start !== -1) {
-    const end = result.indexOf('*/', start + 2)
-    if (end === -1) break
-    result = result.slice(0, start) + result.slice(end + 2)
-    start = result.indexOf('/*')
-  }
-  return result
+/** Same-width masks keep literal text out of matching without joining tokens across comments. */
+function scanKotlinLines(rawLines: string[], uncertain: Map<string, string>): { code: string; text: string; topLevel: boolean }[] {
+  let comments = 0
+  let raw = false
+  let quarantined = false
+  const delimiters: string[] = []
+  const lines = rawLines.map((line) => {
+    const topLevel = delimiters.length === 0
+    let code = ''
+    let text = ''
+    const mask = (value: string, literal = false): void => {
+      code += (literal ? '~' : ' ').repeat(value.length)
+      text += literal ? value : ' '.repeat(value.length)
+    }
+    for (let i = 0; i < line.length;) {
+      if (quarantined) { mask(line.slice(i)); break }
+      const rest = line.slice(i)
+      if (comments > 0) {
+        if (rest.startsWith('/*')) { comments++; mask('/*'); i += 2 }
+        else if (rest.startsWith('*/')) { comments--; mask('*/'); i += 2 }
+        else { mask(line[i]!); i++ }
+      } else if (raw) {
+        if (rest.startsWith('"""')) { raw = false; mask('"""', true); i += 3 }
+        else if (rest.startsWith('${')) {
+          uncertain.set('kotlin-string-template', 'Template expressions are outside the verified lexical profile; subsequent text is not enumerated.')
+          quarantined = true
+        } else { mask(line[i]!, true); i++ }
+      } else if (rest.startsWith('//')) { mask(rest); break }
+      else if (rest.startsWith('/*')) { comments++; mask('/*'); i += 2 }
+      else if (rest.startsWith('"""')) {
+        raw = true; mask('"""', true); i += 3
+      } else if (line[i] === '"' || line[i] === "'") {
+        const quote = line[i]!
+        let end = i + 1
+        for (; end < line.length; end++) {
+          if (line[end] === '\\') {
+            if (!/^(?:\\[tbnr'"\\$]|\\u[0-9a-fA-F]{4})/.test(line.slice(end))) uncertain.set('kotlin-literal-escape', 'An unsupported literal escape prevents verified lexical enumeration.')
+            end++; continue
+          }
+          if (quote === '"' && line.slice(end, end + 2) === '${') {
+            uncertain.set('kotlin-string-template', 'Template expressions are outside the verified lexical profile; subsequent text is not enumerated.')
+            quarantined = true
+            break
+          }
+          if (line[end] === quote) break
+        }
+        if (end >= line.length) {
+          uncertain.set('unterminated-kotlin-literal', 'A quoted literal did not close on its line; subsequent text is not enumerated.')
+          quarantined = true
+        }
+        if (quote === "'" && !/^(?:[^'\\]|\\[tbnr'"\\$]|\\u[0-9a-fA-F]{4})$/.test(line.slice(i + 1, end))) uncertain.set('kotlin-character-literal', 'An unsupported character literal prevents verified lexical enumeration.')
+        mask(line.slice(i, Math.min(end + 1, line.length)), true)
+        i = end + 1
+      } else if (rest.startsWith('*/')) {
+        uncertain.set('kotlin-unmatched-comment', 'A block comment terminator has no matching opener.')
+        mask('*/'); i += 2
+      } else if (line[i] === '`') {
+        uncertain.set('kotlin-escaped-identifier', 'Escaped identifiers are outside the verified lexical profile; subsequent text is not enumerated.')
+        quarantined = true
+      } else {
+        code += line[i]; text += line[i]; i++
+      }
+    }
+    for (const char of code) {
+      if ('({['.includes(char)) delimiters.push(char)
+      else if (')}]'.includes(char) && delimiters.pop() !== ({ ')': '(', '}': '{', ']': '[' } as Record<string, string>)[char]) {
+        uncertain.set('kotlin-unbalanced-delimiters', 'Mismatched delimiters prevent verified lexical enumeration.')
+      }
+    }
+    return { code, text, topLevel }
+  })
+  if (comments) uncertain.set('unterminated-block-comment', 'A block comment was not closed.')
+  if (raw) uncertain.set('unterminated-kotlin-raw-string', 'A raw string literal was not closed.')
+  if (delimiters.length) uncertain.set('kotlin-unbalanced-delimiters', 'Unclosed delimiters prevent verified lexical enumeration.')
+  return lines
 }
 
 function countNetBraces(line: string): number {
@@ -194,6 +257,9 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   const topFacts: SourceAuditFact[] = []
   const nestedFacts: SourceAuditFact[] = []
   const uncertain = new Map<string, string>()
+  const importUncertain = new Map<string, string>()
+  if (/\r(?!\n)|[\u2028\u2029]/.test(sourceText)) importUncertain.set('kotlin-line-boundary', 'Only LF and CRLF line boundaries are verified for explicit-import enumeration.')
+  const lexicalLines = scanKotlinLines(rawLines, importUncertain)
   const scopes: KotlinScope[] = []
   const hold: { pending: PendingKotlinScope | null } = { pending: null }
   const seenQualified = new Set<string>()
@@ -202,7 +268,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   let jvmCoverageComplete = true
   let packageDeclarations = 0
 
-  const state: LineScanState = { depth: 0, inBlockComment: false, pendingAnnotations: [] }
+  const state: LineScanState = { depth: 0, pendingAnnotations: [] }
   const base = { id: '', extractionMethod: 'kotlin-lexical' as const }
 
   // Kotlin declarations without a modifier are public; scripts have a different top-level scope, so they stay unknown.
@@ -245,26 +311,16 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   }
 
   for (let i = 0; i < rawLines.length; i++) {
-    const rawLine = rawLines[i]
     const lineNumber = i + 1
-
-    let line = rawLine
-    if (state.inBlockComment) {
-      const end = line.indexOf('*/')
-      if (end === -1) continue
-      line = line.slice(end + 2)
-      state.inBlockComment = false
-    }
-
-    line = stripBlockCommentSpans(line)
-    const openBlockStart = line.indexOf('/*')
-    if (openBlockStart !== -1) {
-      line = line.slice(0, openBlockStart)
-      state.inBlockComment = true
-    }
-    line = stripLineComment(line)
-
+    const { code: line, text, topLevel: lexicalTopLevel } = lexicalLines[i]!
     const trimmed = line.trim()
+    const importMatch = trimmed.match(IMPORT_PATTERN)
+    const importNames = importMatch ? [...importMatch[1]!.split('.'), ...(importMatch[2] ? [importMatch[2]] : [])] : []
+    const validImport = lexicalTopLevel && state.depth === 0 && importMatch !== null
+      && !(importMatch[1]!.endsWith('.*') && importMatch[2])
+      && importNames.every(name => !IMPORT_RESERVED_NAMES.has(name) && !/^_+$/.test(name))
+    if (/\bimport\b/.test(line) && !validImport) importUncertain.set('kotlin-import-syntax', 'An import occurs outside the supported whole-directive profile.')
+    if (trimmed.startsWith('#!') || trimmed.startsWith('@file:')) importUncertain.set('kotlin-import-directive', 'Script directives and file annotations are outside the verified import profile.')
     const inlineCompanion = trimmed.match(/^(?:(?:public|internal|private)\s+)?object\s+([A-Za-z_]\w*)\s*\{\s*companion\s+object\s+([A-Za-z_]\w*)\s*\{\s*\}\s*\}\s*$/)
     if (!inlineCompanion && (trimmed.match(/\b(?:class|interface|object)\s+[A-Za-z_]\w*/g)?.length ?? 0) > 1) jvmCoverageComplete = false
     if (/\btypealias\b|`/.test(trimmed) || /;\s*(?:fun|val|var)\b/.test(trimmed)) jvmCoverageComplete = false
@@ -280,8 +336,8 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
     if (isScript && (line.includes(';') || (line.match(/\b(?:class|interface|object)\b/g)?.length ?? 0) > 1)) {
       uncertain.set('kotlin-script-multiple-statements', 'Multiple or inline script declarations cannot be enumerated by the line profile.')
     }
-    if (line.includes('"""')) uncertain.set('raw-string-literal', 'A raw string literal can hide braces from the depth scanner.')
-    if (literalBraceImbalance(line)) uncertain.set('brace-in-literal', 'A string or character literal contains an unbalanced brace that can corrupt scope depth.')
+    if (text.includes('"""')) uncertain.set('raw-string-literal', 'Raw string declaration semantics are outside the declaration line profile.')
+    if (literalBraceImbalance(text)) uncertain.set('brace-in-literal', 'A literal brace is outside the qualified declaration nesting profile.')
 
     while (scopes.length > 0 && depthBeforeLine < scopes[scopes.length - 1]!.bodyDepth) scopes.pop()
 
@@ -307,22 +363,23 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
       }
       if (/^package\b/.test(trimmed)) packageKnown = false
 
-      const importMatch = trimmed.match(IMPORT_PATTERN)
-      if (importMatch) {
+      if (validImport && importMatch) {
         imports.push(importMatch[1])
         const segments = importMatch[1].split('.')
         topFacts.push({
           ...base, kind: 'import', span: kotlinSpan(filePath, lineNumber), sourceSpecifier: importMatch[1],
           importedNames: [segments[segments.length - 1]!], importResolution: 'observed',
-          jvmImportTarget: importMatch[1].includes('*') || /\bas\b/.test(trimmed) || !/^import\s+[\w.]+\s*;?$/.test(trimmed) ? { kind: 'unsupported', qualifiedName: null } : { kind: 'kotlin-direct', qualifiedName: importMatch[1] },
+          jvmImportTarget: importMatch[1].includes('*') || importMatch[2] ? { kind: 'unsupported', qualifiedName: null } : { kind: 'kotlin-direct', qualifiedName: importMatch[1] },
         })
         continue
       }
+      // A rejected directive must not be reinterpreted as a declaration.
+      if (/^import\b/.test(trimmed)) continue
     }
 
     if (trimmed.startsWith('@')) {
       if (/\b(?:class|interface|object|fun|val|var)\b/.test(trimmed)) jvmCoverageComplete = false
-      state.pendingAnnotations.push(trimmed)
+      state.pendingAnnotations.push(text.trim())
       continue
     }
 
@@ -338,7 +395,7 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
           kind,
           location: { file: filePath, line: lineNumber },
           exported,
-          signature: buildSignature(state, trimmed),
+          signature: buildSignature(state, text.trim()),
         })
         if (exported) exports.push(name)
         const explicit = explicitKotlinVisibility(trimmed.slice(0, matchIndex))
@@ -412,14 +469,14 @@ export function extractKotlinSource(filePath: string, sourceText: string): Extra
   }
 
   if (state.depth !== 0) uncertain.set('unbalanced-braces', 'Brace depth did not return to zero at the end of the file.')
-  if (state.inBlockComment) uncertain.set('unterminated-block-comment', 'A block comment was not closed.')
+  for (const [code, message] of importUncertain) uncertain.set(code, message)
 
   const capabilities = auditCapabilityMap('unsupported')
   const diagnostics: SourceAuditExtractionPayload['diagnostics'] = []
   const settled = uncertain.size === 0
   capabilities.declarations = settled ? 'complete' : 'partial'
   capabilities.jvmDeclarations = isScript ? 'unsupported' : settled && packageKnown && jvmCoverageComplete ? 'complete' : 'partial'
-  capabilities.imports = settled ? 'complete' : 'partial'
+  capabilities.imports = importUncertain.size === 0 ? 'complete' : 'partial'
   capabilities.exports = 'partial'
   capabilities['source-ranges'] = 'partial'
   diagnostics.push({ code: 'lexical-line-ranges', message: 'The lexical scanner records declaration start lines only; columns and end ranges are unknown.', span: null })

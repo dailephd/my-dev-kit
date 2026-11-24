@@ -31,6 +31,19 @@ export const SOURCE_AUDIT_FILE_STATUSES = [
 ] as const
 export type SourceAuditFileStatus = (typeof SOURCE_AUDIT_FILE_STATUSES)[number]
 
+export const SOURCE_AUDIT_FEATURE_SCHEMA_VERSION = '1.2.0'
+export type SourceAuditSchemaVersion = typeof SOURCE_AUDIT_SCHEMA_VERSION | typeof SOURCE_AUDIT_FEATURE_SCHEMA_VERSION
+export const DYNAMIC_OPERAND_FORMS = ['string-literal', 'qualified-string-binding', 'computed'] as const
+
+export interface AmbientClassification {
+  profile: 'typescript-ambient-stub-v1'
+  contentSha256: string
+  scope: 'entire-file'
+  outcome: 'proven-ambient-only' | 'not-ambient-only' | 'undetermined'
+  witnessFactIds: string[]
+  reasonCode: 'EXECUTABLE_SYNTAX_PRESENT' | 'UNSUPPORTED_AMBIENT_PROFILE' | 'PARSE_UNCERTAINTY' | null
+}
+
 export const SOURCE_AUDIT_CAPABILITIES = [
   'declarations',
   'jvmDeclarations',
@@ -149,8 +162,11 @@ export interface JvmImportTarget {
 
 export interface SourceAuditFact {
   id: string
-  kind: SourceAuditFactKind
+  kind: SourceAuditFactKind | 'dynamic-import-expression'
   span: SourceAuditSpan
+  operandSpan?: SourceAuditSpan
+  operandForm?: (typeof DYNAMIC_OPERAND_FORMS)[number]
+  literalImportFactId?: string
   extractionMethod: SourceAuditExtractionMethod
   name?: string
   jvmDeclaration?: JvmDeclarationIdentity
@@ -186,7 +202,8 @@ export interface SourceAuditFile {
   sizeBytes: number | null
   lineCount: number | null
   analyzerId: string | null
-  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus>
+  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus> & { 'dynamic-import-expressions'?: SourceAuditCapabilityStatus; 'direct-test-modifiers'?: SourceAuditCapabilityStatus }
+  ambientClassification?: AmbientClassification
   facts: SourceAuditFact[]
   warnings: string[]
   diagnostics: Array<{
@@ -198,7 +215,7 @@ export interface SourceAuditFile {
 
 export interface SourceAuditEvidenceArtifact {
   artifactKind: typeof SOURCE_AUDIT_ARTIFACT_KIND
-  schemaVersion: typeof SOURCE_AUDIT_SCHEMA_VERSION
+  schemaVersion: SourceAuditSchemaVersion
   producer: {
     packageName: '@dailephd/my-dev-kit'
     packageVersion: string
@@ -225,7 +242,7 @@ export interface SourceAuditEvidenceArtifact {
 }
 
 export interface SourceAuditPageEnvelope {
-  schemaVersion: typeof SOURCE_AUDIT_SCHEMA_VERSION
+  schemaVersion: SourceAuditSchemaVersion
   snapshotId: string
   pageIndex: number
   pageSize: number

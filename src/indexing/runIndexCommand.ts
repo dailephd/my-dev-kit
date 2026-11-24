@@ -125,6 +125,7 @@ import {
 } from '../android/index.js'
 
 export interface RunIndexCommandOptions {
+  sourceAuditSchema?: '1.1.0' | '1.2.0'
   root?: string
   src?: string[]
   language?: string
@@ -233,6 +234,9 @@ export async function runIndexCommand(options: RunIndexCommandOptions): Promise<
     throw new Error('The index command requires at least one --src <path> source root.')
   }
 
+  if (options.sourceAuditSchema !== undefined && options.sourceAuditSchema !== '1.1.0' && options.sourceAuditSchema !== '1.2.0') {
+    throw new Error('Unsupported --source-audit-schema; expected 1.1.0 or 1.2.0.')
+  }
   if (options.language && !SUPPORTED_LANGUAGES.has(options.language)) {
     throw new Error(`Unsupported language "${options.language}". Supported values: typescript, javascript, python.`)
   }
@@ -399,6 +403,7 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
 
   const configFiles = discoverSourceFiles({ repoRoot: projectRoot, sourceRoots: normalizedSourceRoots, userExcludes: options.exclude }).files
   const configFingerprint = computeConfigFingerprint({
+    sourceAuditSchema: options.sourceAuditSchema,
     rustCargoFingerprint: discoverCargoStructure(projectRoot, configFiles.filter(f => f.relPath.endsWith('.rs')).map(f => f.relPath)).fingerprint,
     configuredImportsFingerprint: new ConfiguredImportResolver(projectRoot).fingerprint(configFiles.filter(f => /\.(?:ts|tsx|js|jsx|cjs)$/.test(f.relPath)).map(f => f.relPath), resolveJsTsCandidates),
     sourceRoots: normalizedSourceRoots,
@@ -740,6 +745,7 @@ async function runIncrementalIndex(params: RunIncrementalIndexParams): Promise<R
       symbolIndex: baseline.baseline.symbolIndex,
       fileHashes: new Map(currentFileEntries.map(file => [file.path, file.contentHash])),
       producerVersion: VERSION,
+      schemaVersion: options.sourceAuditSchema,
     }).artifact)
     const apiEvidence = serializeApiRelationshipEvidence(buildApiRelationshipEvidence({
       symbolIndex: baseline.baseline.symbolIndex, codeGraph: baseline.baseline.codeGraph,
@@ -1292,6 +1298,7 @@ function finishIndexBuild(
       symbolIndex: finalSymbolIndex,
       fileHashes: auditFileHashes,
       producerVersion: VERSION,
+      schemaVersion: options.sourceAuditSchema,
     }).artifact
   )
 

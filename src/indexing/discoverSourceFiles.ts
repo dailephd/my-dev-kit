@@ -5,6 +5,9 @@ import { TextDecoder } from 'node:util'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { createDefaultRegistry, type LanguageRegistry } from '../languages/registry.js'
 import { readSourceBytes } from '../lookup/getSourceSlice.js'
+import { extractAuditObservations } from '../symbol-index/auditObservations.js'
+import { extractDeclarationFileAudit } from '../symbol-index/symbolExtractor.js'
+import type { FileSummary } from '../symbol-index/types.js'
 import { AUDIT_CONTENT_MAX_BYTES } from '../symbol-index/auditEvidenceTypes.js'
 
 export const DEFAULT_IGNORED_DIRECTORY_NAMES = [
@@ -96,17 +99,8 @@ export interface AuditSelectedFile {
   selectionStatus: AuditSelectionStatus
   /** Raw content identity only; never makes an unsupported file a semantic indexing input. */
   contentSha256?: string
-}
-
-/** Narrow raw test-input eligibility, separate from the programming-language registry. */
-export function isAuditJsonContentPath(relPath: string): boolean {
-  const segments = toForwardSlash(relPath).split('/').map(segment => segment.toLowerCase())
-  const basename = segments.pop() ?? ''
-  if (!basename.endsWith('.json') || ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'tsconfig.json', 'jsconfig.json'].includes(basename) || basename.endsWith('.lock.json')) return false
-  if (segments.some(segment => segment === 'generated' || segment === 'vendor' ||
-    (DEFAULT_IGNORED_DIRECTORY_NAMES as readonly string[]).includes(segment) ||
-    DEFAULT_IGNORED_DIRECTORY_PREFIXES.some(prefix => segment.startsWith(prefix)))) return false
-  return segments.some(segment => ['test', 'tests', '__tests__', 'fixtures'].includes(segment))
+  rawContentSha256?: string
+  auditOnlySummary?: Pick<FileSummary, 'language' | 'lineCount' | 'sourceAudit'>
 }
 
 /**
@@ -262,30 +256,34 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     } catch {
       // Existing behavior is unchanged for counters; the audit ledger keeps the
       // known path as unreadable so it can never silently disappear.
-      if (shouldExcludeByFilePattern(relPath)) state.excludedPaths.add(relPath)
-      else recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
+      recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
       continue
     }
 
-    if (shouldExcludeByFilePattern(relPath)) {
+    if (shouldExcludeByFilePattern(entry.name)) {
       recordSkipped(state, relPath, 'file-pattern')
+      recordAuditOnlyDeclaration(state, relPath, absPath, stat.size)
       continue
     }
 
     if (!state.registry.supportsFile(entry.name)) {
       recordSkipped(state, relPath, 'unsupported')
       let contentSha256: string | undefined
-      if (isAuditJsonContentPath(relPath) && stat.size <= AUDIT_CONTENT_MAX_BYTES) {
+      let rawContentSha256: string | undefined
+      // Selection grants raw byte authority independently of semantic language support.
+      // Keep the existing bounded, containment-safe text profile; never manufacture facts.
+      if (stat.size <= AUDIT_CONTENT_MAX_BYTES) {
         try {
           const bytes = readSourceBytes(state.repoRoot, relPath, AUDIT_CONTENT_MAX_BYTES)
+          if (bytes.length === stat.size) rawContentSha256 = createHash('sha256').update(bytes).digest('hex')
           // Fatal decoding rejects invalid UTF-8 instead of authenticating replacement-character text.
           new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-          if (!bytes.includes(0) && bytes.length === stat.size) contentSha256 = createHash('sha256').update(bytes).digest('hex')
+          if (!bytes.includes(0) && bytes.length === stat.size) contentSha256 = rawContentSha256
         } catch {
           // Keep the selected unsupported record without a hash; absence can never be complete.
         }
       }
-      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported', contentSha256 })
+      recordSelected(state, { relPath, absPath, sizeBytes: stat.size, selectionStatus: 'unsupported', contentSha256, rawContentSha256 })
       continue
     }
 
@@ -297,6 +295,37 @@ function collectFiles(dir: string, state: DiscoveryState, currentSourceRoot: str
     trackLargestFile(state.result.largestFiles, { path: relPath, sizeBytes: stat.size })
     maybeEmitProgress(state, currentSourceRoot)
   }
+}
+
+function recordAuditOnlyDeclaration(state: DiscoveryState, relPath: string, absPath: string, sizeBytes: number): void {
+  let bytes: Buffer
+  try {
+    bytes = readSourceBytes(state.repoRoot, relPath)
+    if (bytes.length !== sizeBytes) throw new Error('Declaration file changed during discovery')
+  } catch {
+    recordSelected(state, { relPath, absPath, sizeBytes: null, selectionStatus: 'unreadable' })
+    return
+  }
+
+  let sourceText: string
+  try {
+    if (bytes.includes(0)) throw new Error('Declaration file contains binary content')
+    sourceText = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+  } catch {
+    recordSelected(state, { relPath, absPath, sizeBytes, selectionStatus: 'unsupported' })
+    return
+  }
+
+  const extraction = extractDeclarationFileAudit(relPath, sourceText)
+  recordSelected(state, {
+    relPath, absPath, sizeBytes, selectionStatus: 'supported',
+    contentSha256: createHash('sha256').update(bytes).digest('hex'),
+    auditOnlySummary: {
+      language: extraction.language,
+      lineCount: extraction.lineCount,
+      sourceAudit: extractAuditObservations(relPath, sourceText, extraction),
+    },
+  })
 }
 
 function isDefaultIgnoredDirectory(name: string, exactNames: Set<string>): boolean {
@@ -311,7 +340,7 @@ function recordSkipped(
   reason: SkippedPathSample['reason']
 ): void {
   state.result.totalFilesSkipped += 1
-  if (reason !== 'unsupported') state.excludedPaths.add(relPath)
+  if (reason === 'default-ignore' || reason === 'user-exclude') state.excludedPaths.add(relPath)
   if (reason === 'default-ignore') state.result.skippedByDefaultIgnore += 1
   if (reason === 'user-exclude') state.result.skippedByUserExclude += 1
   if (reason === 'file-pattern') state.result.skippedByFilePattern += 1
@@ -326,7 +355,7 @@ function recordSelected(state: DiscoveryState, file: AuditSelectedFile): void {
     state.selectedByPath.set(file.relPath, file)
     return
   }
-  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes || existing.contentSha256 !== file.contentSha256) {
+  if (existing.selectionStatus !== file.selectionStatus || existing.sizeBytes !== file.sizeBytes || existing.contentSha256 !== file.contentSha256 || existing.rawContentSha256 !== file.rawContentSha256) {
     state.incompleteReasons.add('conflicting-selection-identity')
   }
 }
@@ -341,7 +370,7 @@ function finalizeAuditSelection(state: DiscoveryState): void {
 }
 
 function shouldExcludeByFilePattern(relPath: string): boolean {
-  return DEFAULT_FILE_EXCLUDE_PATTERNS.some((pattern) => relPath.includes(pattern))
+  return DEFAULT_FILE_EXCLUDE_PATTERNS.some((pattern) => relPath.toLowerCase().endsWith(pattern))
 }
 
 function normalizeExcludeRules(values: string[]): ExcludeRule[] {

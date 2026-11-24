@@ -193,16 +193,13 @@ genuinely missing core evidence or an explicit `test-commands` request.
 Historical limitation (v1.12.3 through the published v1.15.0): the shared
 test-file classifier did not recognize Python `test_*.py` / `*_test.py` naming
 as related-test evidence, so Python tests were absent from `selectedTests` and
-responsibility mappings stayed partial. That limitation is corrected in an
-unreleased implementation candidate after v1.15.0 (KIT-PYTEST-01, below); it is not part of any
-published release and `package.json` is still `1.15.0`.
+responsibility mappings stayed partial. That limitation was corrected in the v1.15.1 package (KIT-PYTEST-01, below), not in v1.15.0. Current `package.json` metadata is `1.15.1`; release-channel verification remains separate from metadata.
 
 <a id="python-test-discovery-kit-pytest-01-unreleased"></a>
 
-### Python related-test discovery (KIT-PYTEST-01, unreleased implementation candidate)
+### Python related-test discovery (KIT-PYTEST-01, v1.15.1)
 
-**Status: implemented after v1.15.0 as an unreleased candidate; unpublished and not
-part of `@dailephd/my-dev-kit@1.15.0`.** The change lives only in
+**Status: implemented in v1.15.1; not part of `@dailephd/my-dev-kit@1.15.0`.** The change lives only in
 `src/context/testInfrastructureDiscovery.ts`; `responsibilityMapping.ts`, the
 capsule/audit schemas (`"1.0.0"`), the command syntax and every public option
 are unchanged, and no artifact schema changed. These are separate claims and
@@ -308,6 +305,14 @@ The retrieval-regression runner gains additive `search` and `source` task execut
 - **Failure behavior.** Successful results are JSON. Argument and evidence errors exit with code 2 and print a code-prefixed plain-text message; a JSON error object is not guaranteed.
 - **Kit facts versus Lab policy.** Kit supplies source facts, existence and occurrence evidence. Lab keeps audit rules, severity, policy, findings and reports. An exact occurrence is not automatically a syntactic reference, and a candidate's existence is not proof of unique semantic binding.
 - **Graph identity.** File-dependency edge IDs in `code-graph.json` stay unique when a file depends on one target through several statement kinds: the first kind (import, re-export, export-all) keeps the historical ID and the others receive a `#<kind>` suffix. Node and edge validation was not weakened.
+
+### Planned v1.15.2 capability-isolation patch (KIT-FACTS-01 maintenance)
+
+**Status: planned immediate correction, not shipped by the current 1.15.1 package.** Kotlin script explicit-import enumeration must be qualified independently from declaration, export and JVM identity completeness. The existing per-file, per-capability source-audit contract remains authoritative: a partial or unsupported capability cannot prove a negative, and complete selected inventory cannot prove complete semantic analysis.
+
+For the supported lexical profile, a complete `imports` capability covers every **explicit** import directive, including recognized alias/wildcard forms; it does not cover implicit Kotlin/Gradle DSL imports or resolved runtime dependencies. Any malformed directive or unresolved lexical boundary that may affect enumeration leaves `imports` partial or failed with diagnostic evidence. Executable top-level script statements alone are not import ambiguity. `declarations` stays partial where script declaration completeness is unproven, and no ordinary script JVM declaration identity is invented. All fact payloads remain source-anchored and producer-authenticated.
+
+The implementation must change the producer extractor revision so old per-file cache records cannot claim newly strengthened completeness. Retain source-audit schema `1.1.0`, stable file/fact/lookup contracts, and existing containment and snapshot checks unless a concrete incompatibility is first established. Downstream Lab v0.10.1 must qualify each predicate independently; Kit cannot assign a Lab PASS, severity or audit applicability state.
 
 ## Static-evidence boundary
 
@@ -452,3 +457,48 @@ Contract changes require synchronized implementation, tests, detailed schema or
 command documentation, compatibility notes, and preservation checks. Current
 behavior may correct stale status, but it must not erase future roadmap scope.
 Release history and versioned schema details remain append-preserving.
+
+## Coordinated R3 import evidence
+
+The private cache schema for v1.16.0 is `1.5.0` and the source-audit
+extractor revision is `source-audit-v1.6.0`. This invalidates the previous
+private cache for incremental reuse. The public source-audit artifact still
+defaults to `1.1.0`, with `1.2.0` selected explicitly.
+
+An ordinary `present` result records an observed selected candidate. Extension
+heuristics can yield a candidate even when default Node ESM lacks an exact
+source reference. The expression-domain response carries
+`qualifiedPositiveWitnesses` separately. A witness binds the linked literal
+fact, exact selected path, target content digest and ordinary proof under
+the qualified default ESM reference rules.
+
+A finite operand set describes evaluated alternatives. A consumer must still
+check each alternative's resolution, candidate enumeration and selection
+coverage. A disjoint proof concerns the authenticated selected domain and
+its declared premises. Reverse-reference absence additionally requires
+coverage of the relevant origins. Indeterminate operands, unresolved
+profiles and incomplete evidence leave the affected predicate unknown.
+
+Exact-byte occurrence authenticates one selected file against its recorded
+content hash and returns overlapping, half-open byte offsets. It distinguishes
+whole-file scan and count completeness from returned-match completeness. A
+capped match list can retain a positive witness. An exact zero can support
+absence only after complete authentication and scanning for the same predicate.
+Absent hashes, out-of-budget scans, and stale content cannot support absence.
+Byte-literal proof leaves decoding, command and line context, executable
+syntax, and runtime behavior outside the claim. Lab owns applicability and
+reporting for predicates it can establish from these bytes.
+
+### Direct test modifier observations
+
+Opt-in source-audit schema 1.2.0 may include the optional per-file capability
+`direct-test-modifiers`. It reports completeness for the existing TypeScript AST
+profile of direct dot calls to `describe`, `it` and `test` with `.skip` or `.only`.
+A complete claim requires authenticated parsed JavaScript or TypeScript, supported
+runner bindings and retention of the relevant facts. Computed keys, optional calls,
+ambiguous bindings and relevant modifier chains leave the predicate partial.
+The claim does not enumerate aliases, titles, embedded commands or runtime
+registration. The wider `test-observations` capability keeps its own status.
+Consumers must qualify the producer and traverse its exact-file fact pages.
+Missing claims, including older caches, establish no additional completeness.
+Strict older 1.2.0 readers may reject the added capability. Schema 1.1.0 remains unchanged.

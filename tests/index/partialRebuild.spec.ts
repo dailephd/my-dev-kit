@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { runCli } from '../lookup/testCli.js'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,18 +13,6 @@ import { loadTrustedBaseline } from '../../src/indexing/trustedBaseline.js'
 import { selectAffectedNeighborhood } from '../../src/indexing/affectedNeighborhood.js'
 
 const tempDirs: string[] = []
-
-function runCli(args: string[]) {
-  return spawnSync(process.execPath, [tsxCliPath(), 'src/cli.ts', ...args], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    shell: false,
-  })
-}
-
-function tsxCliPath(): string {
-  return join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs')
-}
 
 /** Fixture with a re-export chain and export-all so cross-file dependency edges are exercised. */
 function createFixture(): string {

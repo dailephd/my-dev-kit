@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { runCli as runSharedCli } from '../lookup/testCli.js'
 import { CANONICAL_FIXTURE_ROOT } from './androidV110CombinedFixture.spec.js'
 
 const tempDirs: string[] = []
@@ -83,13 +84,13 @@ describe('search integration matrix', () => {
   })
 
   it('resource: canonical, @form, bare multi-type, localized/qualified duplicates, binary, missing', () => {
-    expect(json(runCli(['search', '--index', outDir, '--resource', 'string/app_name', '--json'])).results.length).toBe(2)
-    expect(json(runCli(['search', '--index', outDir, '--resource', '@string/app_name', '--json'])).results.length).toBe(2)
-    const bare = json(runCli(['search', '--index', outDir, '--resource', 'icon', '--json']))
+    expect(json(runSharedCli(['search', '--index', outDir, '--resource', 'string/app_name', '--json'])).results.length).toBe(2)
+    expect(json(runSharedCli(['search', '--index', outDir, '--resource', '@string/app_name', '--json'])).results.length).toBe(2)
+    const bare = json(runSharedCli(['search', '--index', outDir, '--resource', 'icon', '--json']))
     expect(bare.results.map((r: any) => r.androidMetadata.type).sort()).toEqual(['drawable', 'mipmap'])
-    expect(json(runCli(['search', '--index', outDir, '--resource', 'color/brand_primary', '--json'])).results.length).toBe(2)
-    expect(json(runCli(['search', '--index', outDir, '--resource', 'mipmap/icon', '--json'])).results.length).toBe(1)
-    expect(json(runCli(['search', '--index', outDir, '--resource', 'string/does_not_exist', '--json'])).results).toEqual([])
+    expect(json(runSharedCli(['search', '--index', outDir, '--resource', 'color/brand_primary', '--json'])).results.length).toBe(2)
+    expect(json(runSharedCli(['search', '--index', outDir, '--resource', 'mipmap/icon', '--json'])).results.length).toBe(1)
+    expect(json(runSharedCli(['search', '--index', outDir, '--resource', 'string/does_not_exist', '--json'])).results).toEqual([])
   })
 
   it('android-component: FQCN, raw, dot-prefixed, unqualified, simple-name ambiguity, alias, missing, no-match', () => {

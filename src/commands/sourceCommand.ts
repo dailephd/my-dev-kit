@@ -1,3 +1,9 @@
+import { assertAuditBatchOptions, emitAuditBatch } from './emitAuditBatch.js'
+import { assertAuditStreamOptions, runAuditStream } from './runAuditStream.js'
+import type { SourceAuditEvidenceArtifact } from '../symbol-index/auditEvidenceTypes.js'
+import { readAuditBatch, type SourceBatchItem } from '../lookup/readAuditBatch.js'
+import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
+import { findExactByteMatches } from '../source/findExactByteMatches.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { Command } from 'commander'
@@ -18,7 +24,7 @@ import {
   DEFAULT_CONTEXT_LINES,
   MAX_CONTEXT_LINES,
 } from '../source/findExactMatches.js'
-import { readSourceAuditEvidence } from '../lookup/readSourceAuditEvidence.js'
+import { createSourceAuditFrameReader, readSourceAuditEvidence, isCanonicalAuditRelativePath, SourceAuditEvidenceError } from '../lookup/readSourceAuditEvidence.js'
 import { toForwardSlash } from '../io/pathUtils.js'
 import { renderExactMatchResult } from '../source/renderExactMatches.js'
 import { findReactRegion, ReactRegionNotFoundError } from '../source/findReactRegion.js'
@@ -51,6 +57,7 @@ import {
   buildClassificationCommandSummary,
   findClassificationEntryByTargetId,
   loadClassificationArtifact,
+  resolveClassificationArtifactPath,
   type ClassificationCommandSummary,
 } from '../classification/resolveClassificationForCommands.js'
 
@@ -75,6 +82,7 @@ export function registerSourceCommand(program: Command): void {
     .option('--symbol <name>', 'symbol name, qualified declaration name, or exact declaration ID')
     .option('--include-local-component-tree', 'include a bounded local React component-tree source bundle for --symbol')
     .option('--prop <name>', 'highlight a prop name inside --include-local-component-tree output')
+    .option('--contains-bytes-hex <hex>', 'find overlapping bytes in one authenticated selected file (requires --json)')
     .option('--contains <string>', 'exact string to search for across indexed source files; with --file and --json, search exactly that one selected file')
     .option('--react-region <region>', 'React region name (component, hook, JSX region, or prop type) to retrieve')
     .option(
@@ -96,9 +104,30 @@ export function registerSourceCommand(program: Command): void {
     .option('--max-bundle-lines <n>', 'max total lines across all blocks in bundle (default: 300)', parseInteger)
     .option('--max-blocks <n>', 'max number of blocks in bundle (default: 20)', parseInteger)
     .option('--format <json|plain|numbered>', 'output format')
+    .option('--audit-stream', 'read finite authenticated source frames from stdin (requires --json)')
+    .option('--audit-batch-file <path>', 'read 1–32 authenticated audit source requests (requires --json)')
     .option('--out <path>', 'write output to file')
     .option('--json', 'print JSON output (alias for --format json)')
     .action(function (this: Command, options: SourceCommandOptions) {
+      if (options.auditStream) {
+        assertAuditStreamOptions(this, options)
+        const read = createSourceAuditFrameReader(options.index, resolved => [
+          resolved.artifactPaths.symbolIndex, resolveClassificationArtifactPath(resolved.manifest, resolved.indexDir),
+        ])
+        return runAuditStream('source', read, () => createSourceAuditItemReader(options))
+      }
+      if (options.auditBatchFile !== undefined) {
+        assertAuditBatchOptions(this, options)
+        return emitAuditBatch(readAuditBatch(options.index, options.auditBatchFile, 'source', createSourceAuditItemReader(options)))
+      }
+      if (options.containsBytesHex !== undefined) {
+        const allowed = new Set(['index', 'file', 'containsBytesHex', 'json'])
+        if (!options.file || !options.json || Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
+          throw new Error('INVALID_BYTE_SELECTOR: --contains-bytes-hex requires --file and --json and excludes other source modes.')
+        }
+        console.log(JSON.stringify(findExactByteMatches(readSourceAuditEvidence(options.index), options.file, options.containsBytesHex), null, 2))
+        return
+      }
       return withSourceAuthority(createSourceAuthority(options), () => {
       try {
       const reachabilityMode = resolveReachabilityMode(options)
@@ -174,16 +203,13 @@ export function registerSourceCommand(program: Command): void {
         loadCodeGraph: mode === 'node',
         loadSymbolIndex: mode === 'symbol' || mode === 'node',
       })
-      let target: SourceTarget
       if (mode === 'line-range') {
-        target = {
-          mode,
-          filePath: options.file!,
-          startLine: options.start!,
-          endLine: options.end!,
-          warnings: [],
-        }
-      } else if (mode === 'symbol') {
+        const result = readLineRange(artifacts.resolved.manifest, options.index, options.file!, options.start!, options.end!, options.maxLines)
+        emitSourceResult(result, format, options)
+        return
+      }
+      let target: SourceTarget
+      if (mode === 'symbol') {
         target = resolveSymbolTarget(artifacts.symbolIndex!, options.file!, options.symbol!, options.maxLines)
       } else {
         const nodeTarget = resolveFileNodeTarget(artifacts.codeGraph!, options.node!, options.maxLines)
@@ -233,6 +259,39 @@ export function registerSourceCommand(program: Command): void {
       }
       })
     })
+}
+
+function readLineRange(manifest: IndexManifest, indexDir: string, filePath: string, startLine: number, endLine: number, maxLines: number, readText?: () => string): SourceSlice {
+  return getSourceSlice({
+    indexDir, projectRoot: manifest.projectRoot, filePath, startLine, endLine, maxLines, readText, mode: 'line-range',
+    classificationSummary: resolveClassificationSummaryForTarget(manifest, indexDir, filePath, undefined),
+  })
+}
+
+function createSourceAuditItemReader(options: SourceCommandOptions) {
+  const authorizeRange = createSourceAuthority(options)
+  let manifest: IndexManifest | undefined
+  return (artifact: SourceAuditEvidenceArtifact, item: SourceBatchItem): unknown => {
+    switch (item.selector) {
+      case 'exact-file-occurrence':
+        return readExactFileOccurrence(artifact, item.path, item.literal, item.context ?? DEFAULT_CONTEXT_LINES)
+      case 'exact-file-byte-occurrence':
+        return findExactByteMatches(artifact, item.path, item.needleHex)
+      case 'line-range': {
+        const file = isCanonicalAuditRelativePath(item.path) && artifact.files.find(record => record.path === item.path)
+        if (!file) throw new SourceAuditEvidenceError('INVALID_AUDIT_PATH', 'Expected a canonical selected file.')
+        if (!file.contentSha256) throw new SourceAuditEvidenceError('STALE_SOURCE_EVIDENCE', 'Selected file has no verified content identity.')
+        manifest ??= loadSourceArtifacts({ indexDir: options.index, loadCodeGraph: false, loadSymbolIndex: false }).resolved.manifest
+        const rangeManifest = manifest
+        if (rangeManifest.projectRoot !== artifact.source.projectRoot || rangeManifest.sourceAuditEvidence?.snapshotId !== artifact.source.snapshotId) {
+          throw new SourceAuditEvidenceError('AUDIT_EVIDENCE_INVALID', 'Range manifest does not match the batch snapshot.')
+        }
+        return withSourceAuthority(authorizeRange, () =>
+          readLineRange(rangeManifest, options.index, item.path, item.start, item.end, item.maxLines ?? options.maxLines,
+            () => readAuthenticatedAuditBytes(artifact, file).toString('utf8')))
+      }
+    }
+  }
 }
 
 function createSourceAuthority(options: SourceCommandOptions): (root: string, file: string) => void {
@@ -290,16 +349,20 @@ function createSourceAuthority(options: SourceCommandOptions): (root: string, fi
 function handleExactFileOccurrence(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
   if (format !== 'json') throw new Error('--file with --contains requires --json.')
   if (options.out !== undefined) throw new Error('--file with --contains does not support --out.')
-  if (options.context < 0) throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
-  // Read-only: the identity-verified artifact selects the file; content is read only through the containment-safe reader.
-  const artifact = readSourceAuditEvidence(options.index)
+  assertOccurrenceContext(options.context)
   const result = findExactFileOccurrences({
-    artifact,
-    filePath: options.file!,
-    value: options.contains!,
-    contextLines: options.context,
+    artifact: readSourceAuditEvidence(options.index), filePath: options.file!, value: options.contains!, contextLines: options.context,
   })
   console.log(JSON.stringify(result, null, 2))
+}
+
+function assertOccurrenceContext(context: number): void {
+  if (context < 0) throw new Error(`--context must be a non-negative integer (0 to ${MAX_CONTEXT_LINES}).`)
+}
+
+function readExactFileOccurrence(artifact: ReturnType<typeof readSourceAuditEvidence>, filePath: string, value: string, contextLines: number) {
+  assertOccurrenceContext(contextLines)
+  return findExactFileOccurrences({ artifact, filePath, value, contextLines })
 }
 
 function handleExactMatch(options: SourceCommandOptions, format: SourceOutputFormat | undefined): void {
@@ -1345,6 +1408,9 @@ function loadOptionalFrontendArtifact(resolved: ResolvedIndexManifest): Frontend
 }
 
 interface SourceCommandOptions {
+  auditBatchFile?: string
+  auditStream?: boolean
+  containsBytesHex?: string
   index: string
   node?: string
   route?: string

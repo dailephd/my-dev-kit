@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import * as cacheMetadata from '../../src/indexing/cacheMetadata.js'
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { join, dirname } from 'node:path'
+import { runCli } from '../lookup/testCli.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { buildFrameworkRoutes } from '../../src/graph/buildFrameworkRoutes.js'
 import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
@@ -233,7 +233,6 @@ describe('B06 JavaScript framework source evidence', () => {
 })
 
 describe('B06 shared retrieval and incremental integration', () => {
-  const cli = (args: string[]) => spawnSync(process.execPath, [resolve('node_modules/tsx/dist/cli.mjs'), 'src/cli.ts', ...args], { encoding: 'utf8', shell: false, windowsHide: true })
   it('preserves all generic consumers for Express and NestJS without executing target source', async () => {
     const root = fixture({ 'src/app.ts': "throw new Error('MUST NEVER EXECUTE');\n" + express, 'src/c.ts': nest })
     await runIndexCommand({ root, src: ['src'], out: 'index' })
@@ -253,19 +252,19 @@ describe('B06 shared retrieval and incremental integration', () => {
       const evidence = buildEvidenceGroups({ role: 'architecture', candidateFiles: [], candidateNodes: [], focusIntake: { focusFiles: [], focusSymbols: [], unresolvedFocusFiles: [], unresolvedFocusSymbols: [], ambiguousFocusSymbols: [], warnings: [] }, changedSurface: { available: false, diffRequested: false, files: [], symbols: [], conflicts: [], warnings: [] }, requestedEvidenceKinds: [], codeGraph: graph, symbolIndex: index, selectedGraph, repoRoot: root })
       expect(evidence.groups.flatMap(g => g.items).find(item => item.nodeId === route.id)?.metadata).toMatchObject({ framework, nodeKind: 'framework-route', handlerId: route.routeMetadata.handlerId })
       for (const command of ['lookup', 'slice', 'source']) {
-        const result = cli([command, '--index', idxPath, '--node', route.id, ...(command === 'source' ? ['--max-lines', '4'] : ['--depth', '1']), '--json'])
+        const result = runCli([command, '--index', idxPath, '--node', route.id, ...(command === 'source' ? ['--max-lines', '4'] : ['--depth', '1']), '--json'])
         expect(result.status, result.stderr).toBe(0)
         expect(result.stdout).toContain(command === 'source' ? needle : route.routeMetadata.handlerId)
         if (command === 'source') expect(result.stdout).toContain('bounded declaration excerpt')
       }
     }
-    const view = cli(['view', '--index', idxPath, '--graph', 'code', '--format', 'dot', '--out', join(root, 'code.dot'), '--json'])
+    const view = runCli(['view', '--index', idxPath, '--graph', 'code', '--format', 'dot', '--out', join(root, 'code.dot'), '--json'])
     expect(view.status, view.stderr).toBe(0)
     const dot = readFileSync(join(root, 'code.dot'), 'utf8')
     expect(dot).toContain('framework-route:')
     expect(dot).toContain('nestjs')
     expect(dot).toContain('express')
-    const context = cli(['context', '--index', idxPath, '--query', 'express GET /items', '--out', join(root, 'capsule.json'), '--audit-out', join(root, 'audit.json'), '--json'])
+    const context = runCli(['context', '--index', idxPath, '--query', 'express GET /items', '--out', join(root, 'capsule.json'), '--audit-out', join(root, 'audit.json'), '--json'])
     expect(context.status, context.stderr).toBe(0)
     expect(readFileSync(join(root, 'capsule.json'), 'utf8')).toContain('framework-route')
   }, 30000)
@@ -293,10 +292,10 @@ describe('B06 shared retrieval and incremental integration', () => {
     const graph = JSON.parse(readFileSync(join(root, 'full/code-graph.json'), 'utf8'))
     const id = routeId('src/router.ts', 'express', 'symbol:src/router.ts#h', 'GET', '/items', 0)
     expect(graph.edges.filter((e: { kind: string }) => e.kind === 'framework-router-mounts-route').map((e: { source: string; target: string; metadata: { prefix: string } }) => [e.source, e.target, e.metadata.prefix]).sort()).toEqual([['file:src/app.ts', id, '/v2'], ['file:src/app.ts', id, '/v3']])
-    const diff = cli(['graph-diff', '--before', join(root, 'before'), '--after', join(root, 'full'), '--json'])
+    const diff = runCli(['graph-diff', '--before', join(root, 'before'), '--after', join(root, 'full'), '--json'])
     expect(diff.status, diff.stderr).toBe(0)
     expect(diff.stdout).toContain('framework-mount:')
-    const same = cli(['graph-diff', '--before', join(root, 'incremental'), '--after', join(root, 'full'), '--json'])
+    const same = runCli(['graph-diff', '--before', join(root, 'incremental'), '--after', join(root, 'full'), '--json'])
     expect(same.status, same.stderr).toBe(0)
     writeFileSync(join(root, 'src/router.ts'), "import {Router} from 'express'; export const router=Router(); function h(){}; router.post('/changed',h);")
     const routerChanged = await runIndexCommand(options)

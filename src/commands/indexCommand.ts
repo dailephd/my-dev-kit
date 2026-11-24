@@ -10,6 +10,7 @@ export function registerIndexCommand(program: Command): void {
     .description('Index a local TypeScript, JavaScript, or Python codebase.')
     .option('--root <path>', 'project root', '.')
     .option('--src <path>', 'source root to index; may be repeated', collectValues, [])
+    .option('--source-audit-schema <version>', 'source-audit schema (1.1.0 or 1.2.0)', '1.1.0')
     .option('--language <language>', 'source language: typescript, javascript, or python')
     .option('--out <dir>', 'output directory', '.my-dev-kit')
     .option('--exclude <path-or-name>', 'directory name or relative path prefix to exclude; may be repeated', collectValues, [])

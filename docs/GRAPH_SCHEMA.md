@@ -1235,6 +1235,13 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## source-audit-evidence.json (v1.15.0)
 
+Kit v1.16.0 retains `1.1.0` as the default and accepts `index --source-audit-schema 1.2.0` for extended evidence. The manifest reference and page envelopes reflect the requested artifact schema. The optional per-file `direct-test-modifiers` capability in `1.2.0` qualifies a bounded executable modifier predicate independently of the wider observation family. A missing capability proves no additional completeness. Strict older `1.2.0` readers may reject the capability. See the [proof contract](CONTRACTS.md#direct-test-modifier-observations).
+
+The artifact and cache metadata below describe the v1.15.0 baseline.
+For the v1.16.0 default and opt-in artifact schemas,
+cache revision and proof response families, see
+[Coordinated R3 import evidence](CONTRACTS.md#coordinated-r3-import-evidence).
+
 Status: implemented in v1.15.0 (KIT-FACTS-01 producer). Artifact kind `my-dev-kit-v1-source-audit-evidence`, schema version `1.1.0`. Types: `src/symbol-index/auditEvidenceTypes.ts`; validator: `src/symbol-index/validateAuditEvidence.ts`; producer: `src/indexing/buildSourceAuditEvidence.ts`. Commands: [COMMANDS.md](COMMANDS.md#source-audit-selectors-v1150-unreleased).
 
 Schema versions around it: manifest `1.0.0`, symbol index `3`, code graph `1.1.0` (all unchanged), private cache metadata `1.4.0` (advanced from `1.3.0`), extractor contract revision `source-audit-v1.5.0`.
@@ -1261,6 +1268,10 @@ Lifecycle. `index` projects the artifact from one source-discovery traversal and
 Not claimed: the artifact does not prove complete semantic resolution, runtime behavior, test success, security findings or policy compliance; Lab audit policy, severity and finding categories are not part of it.
 
 <a id="api-relationship-evidencejson-v1150-unreleased"></a>
+
+### Planned v1.15.2 capability interpretation correction
+
+**Not implemented in the current v1.15.1 package.** The proposed Kotlin script repair changes how existing `files[].capabilities.imports` and `files[].capabilities.declarations` statuses are established; it does not add a new source-audit artifact, fact kind, field, or command selector. One file may legitimately report complete explicit imports and partial declarations. Complete imports mean enumeration of supported explicit import directives only, not implicit Gradle/Kotlin imports or semantic dependency resolution. Unsupported lexing that could conceal an import still prevents a complete claim. Existing `facts[]`, diagnostics, selected inventory, pagination, source hashes, and snapshot validation remain authoritative. An extractor contract revision and private cache invalidation will distinguish new evidence from old results; old persisted evidence must not be silently promoted.
 
 ## api-relationship-evidence.json (v1.15.0)
 

@@ -75,6 +75,73 @@ const TS_FILES: Record<string, string> = {
   'lib/o.ts': 'export const o = 1\n',
 }
 
+it('proves the selected immediate target of one constant import while retaining unknown alternatives', async () => {
+  const origin = 'src/loader.ts'
+  const source = 'const peer = "./peer.js"\nexport const load = () => import(peer)\nexport const other = (target: string) => import(target)\n'
+  const root = makeProject({ [origin]: source, 'src/peer.ts': 'export const value = 1\n' })
+  const out = await build(root)
+  const artifact = readSourceAuditEvidence(out)
+  const record = artifact.files.find(file => file.path === origin)!
+  expect(record.capabilities.imports).toBe('partial')
+  const imports = record.facts.filter(fact => fact.kind === 'import')
+  expect(imports.map(fact => fact.sourceSpecifier)).toEqual(['./peer.js'])
+  expect(resolveAuditImportTarget(out, imports[0]!.id)).toMatchObject({
+    schemaVersion: '1.1.0', snapshotId: artifact.source.snapshotId,
+    originFile: origin, status: 'present', candidatePaths: ['src/peer.ts'],
+  })
+  writeFileSync(join(root, origin), source.replace('./peer.js', './gone.js'))
+  expect(failure(() => resolveAuditImportTarget(out, imports[0]!.id)).code).toBe('STALE_SOURCE_EVIDENCE')
+})
+
+describe('qualified immediate re-export target proofs', () => {
+  it.each([
+    "export { value } from './peer.js'",
+    "export { value as alias } from './peer.js'",
+    "export * from './peer.js'",
+    "export * as namespace from './peer.js'",
+  ])('reuses selected target authority for %s without claiming binding', async statement => {
+    const out = await build(makeProject({ 'src/barrel.ts': statement, 'src/peer.ts': 'export const value = 1\n' }))
+    const artifact = readSourceAuditEvidence(out)
+    const fact = artifact.files.find(f => f.path === 'src/barrel.ts')!.facts.find(f => f.kind === 'export' && f.sourceSpecifier)!
+    const proof = resolveAuditImportTarget(out, fact.id)
+    expect(proof).toMatchObject({ mode: 'audit-import-target', schemaVersion: '1.1.0', importFactId: fact.id,
+      snapshotId: artifact.source.snapshotId, status: 'present', candidatePaths: ['src/peer.ts'] })
+    expect(proof.declarationProof).toBeUndefined()
+    const native = runCli(['lookup', '--index', out, '--audit-import-target', fact.id, '--json'])
+    expect(native.status).toBe(0)
+    expect(JSON.parse(native.stdout)).toEqual(proof)
+  })
+
+  it('preserves chains, cycles, external, unselected and unresolved target boundaries', async () => {
+    const out = await build(makeProject({
+      'src/a.ts': "export * from './b.js'\nexport * from 'external'\nexport * from '../lib/out.js'\nexport * from './absent.js'\nexport const direct = 1\n",
+      'src/b.ts': "export * from './a.js'\nexport * from './c.js'\n",
+      'src/c.ts': "export * from 'unresolved-external'\n",
+      'lib/out.ts': 'export const outside = 1\n',
+      'src/dynamic.ts': 'export const load = (target: string) => import(target)\n',
+      'src/unknown.input': 'possible references are not semantic evidence',
+    }))
+    const artifact = readSourceAuditEvidence(out)
+    const proof = (file: string, specifier: string) => resolveAuditImportTarget(out,
+      artifact.files.find(f => f.path === file)!.facts.find(f => f.kind === 'export' && f.sourceSpecifier === specifier)!.id)
+    for (const [file, specifier] of [['src/a.ts', './b.js'], ['src/b.ts', './a.js'], ['src/b.ts', './c.js']]) {
+      expect(proof(file, specifier).status).toBe('present')
+    }
+    expect(proof('src/a.ts', 'external').status).toBe('indeterminate')
+    expect(proof('src/c.ts', 'unresolved-external').status).toBe('indeterminate')
+    expect(proof('src/a.ts', '../lib/out.js').status).toBe('outside-selected-roots')
+    expect(proof('src/a.ts', './absent.js').status).toBe('proven-missing')
+    expect(artifact.coverage.inventoryComplete).toBe(true)
+    expect(artifact.files.find(f => f.path === 'src/dynamic.ts')!.capabilities.imports).toBe('partial')
+    expect(artifact.files.find(f => f.path === 'src/unknown.input')!.capabilities.imports).toBe('unsupported')
+    const direct = artifact.files.find(f => f.path === 'src/a.ts')!.facts.find(f => f.kind === 'export' && f.name === 'direct')!
+    expect(failure(() => resolveAuditImportTarget(out, direct.id)).code).toBe('AUDIT_FACT_NOT_IMPORT')
+    rewriteArtifact(out, a => { a.coverage.inventoryComplete = false })
+    expect(proof('src/a.ts', './absent.js').status).toBe('indeterminate')
+    expect(proof('src/a.ts', './b.js').status).toBe('present')
+  })
+})
+
 describe('qualified JVM declaration-domain proofs', () => {
   it('proves arbitrary-filename and nested Java declarations and static owners without member binding', async () => {
     const root = makeProject({

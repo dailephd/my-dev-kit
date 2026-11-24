@@ -145,7 +145,7 @@ describe('B07 static frontend associations', () => {
     expect(r.relatedTests.items[0].relationship).toBe('imports-selected-production-file')
     expect(r.relatedTests.truncated).toBe(true)
   })
-  it('invalidates a real B06 configuration fingerprint without changing cache schema', async () => {
+  it('invalidates a B06 configuration fingerprint under the current cache schema', async () => {
     const { root } = fixture({ 'src/helper.ts': 'export const value=1', 'tests/helper.test.ts': 'import {value} from "../src/helper"' })
     const options = {root, src:['src','tests'], out:'index', incremental:true}
     const original = JSON.stringify
@@ -161,12 +161,13 @@ describe('B07 static frontend associations', () => {
     try { await runIndexCommand(options) } finally { JSON.stringify = original }
     const cachePath = path.join(root, 'index/cache-metadata.json')
     const cache = JSON.parse(fs.readFileSync(cachePath,'utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.4.0')
+    expect(cache.cacheSchemaVersion).toBe('1.5.0')
     expect(b06Fingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(cache.configFingerprint).not.toBe(b06Fingerprint)
     cache.configFingerprint = b06Fingerprint
     fs.writeFileSync(cachePath,JSON.stringify(cache))
     const result = await runIndexCommand(options)
     expect(result.mode === 'index' && result.cache.mode).toBe('incremental-full-config-changed')
+    expect(JSON.parse(fs.readFileSync(cachePath, 'utf8')).cacheSchemaVersion).toBe('1.5.0')
   })
 })

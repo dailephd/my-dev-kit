@@ -36,7 +36,7 @@ import type { ExtractionResult } from './symbolExtractor.js'
 export interface SourceAuditExtractionPayload {
   jvmPackageName?: string
   facts: SourceAuditFact[]
-  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus>
+  capabilities: Record<SourceAuditCapability, SourceAuditCapabilityStatus> & { 'direct-test-modifiers'?: SourceAuditCapabilityStatus }
   diagnostics: SourceAuditFile['diagnostics']
 }
 
@@ -114,7 +114,7 @@ export function failedAuditPayload(code: string, message: string): SourceAuditEx
 }
 
 /** Deterministic artifact-wide fact identity: no timestamps, output paths, random values or absolute paths. */
-export function auditFactId(path: string, kind: SourceAuditFactKind, line: number, column: number | null, ordinal: number): string {
+export function auditFactId(path: string, kind: SourceAuditFact['kind'], line: number, column: number | null, ordinal: number): string {
   return `audit-fact:${encodeURIComponent(path)}#${encodeURIComponent(kind)}#${line}#${column === null ? 'u' : column}#${ordinal}`
 }
 
@@ -203,17 +203,19 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
 
   const lines = sourceText.split('\n')
   const counters: Counters = { dropped: new Map(), adjusted: new Map(), downgraded: new Set() }
-  const capabilities = auditCapabilityMap('unsupported')
+  const capabilities: SourceAuditExtractionPayload['capabilities'] = auditCapabilityMap('unsupported')
   for (const capability of AUDIT_PRODUCER_CAPABILITIES) {
     const status = raw.capabilities?.[capability]
     capabilities[capability] = isOneOf(status, SOURCE_AUDIT_CAPABILITY_STATUSES) ? status : 'unsupported'
   }
 
   const pending: Pending[] = []
+  let unknownDroppedFact = false
   const droppedKinds = new Set<SourceAuditCapability>()
   const drop = (reason: string, kind: unknown): void => {
     bump(counters.dropped, reason)
     if (isOneOf(kind, PRODUCED_KINDS)) droppedKinds.add(KIND_CAPABILITY[kind as ProducedKind])
+    else unknownDroppedFact = true
     droppedKinds.add('source-ranges')
   }
 
@@ -253,7 +255,9 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
 
     if (kind === 'declaration') {
       if (!fact.name || !fact.declarationKind) return drop('incomplete-declaration', kind)
-      if (!fact.symbolId) {
+      if (fact.declarationKind === 'ambient-module' && fact.extractionMethod === 'typescript-ast') {
+        delete fact.symbolId
+      } else if (!fact.symbolId) {
         const match = matchSymbol(fact, extraction)
         if (match === 'none' || match === 'ambiguous') return drop(match === 'none' ? 'declaration-without-symbol' : 'ambiguous-declaration-symbol', kind)
         fact.symbolId = match.nodeId
@@ -333,6 +337,10 @@ export function extractAuditObservations(filePath: string, sourceText: string, e
     if (capabilities[capability] === 'complete') capabilities[capability] = 'partial'
   }
   for (const capability of droppedKinds) downgrade(capability)
+  const modifiers = raw.capabilities['direct-test-modifiers']
+  if (modifiers === 'complete' || modifiers === 'partial') {
+    capabilities['direct-test-modifiers'] = unknownDroppedFact || droppedKinds.has('test-observations') ? 'partial' : modifiers
+  }
   if (droppedKinds.has('declarations') || counters.downgraded.has('declarations')) downgrade('jvmDeclarations')
   if (capabilities.jvmDeclarations === 'complete' && facts.some((fact) => fact.kind === 'declaration' && !fact.jvmDeclaration)) downgrade('jvmDeclarations')
   for (const capability of counters.downgraded) downgrade(capability)

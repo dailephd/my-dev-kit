@@ -1,18 +1,13 @@
 /**
- * v1.15.0 Batch 1: pure in-memory projection of discovery and index evidence
- * into the Batch 0 source-audit evidence contract.
- *
- * This function reads no files, walks no directories, runs no parsers, hashes
- * nothing and writes nothing. Every file-derived value comes from the supplied
- * discovery ledger, symbol index and content-hash map. Batch 1 extracts no new
- * language facts, so no capability is ever reported `complete` and every
- * record carries an empty `facts` array; absence of facts is never presented
- * as completeness. The artifact is not persisted or registered here.
+ * Projects the selection ledger, ordinary index summaries and audit-only
+ * summaries into the managed source-audit artifact without reading live files.
  */
 
+import { readSourceBytes } from '../lookup/getSourceSlice.js'
+import { extractVersionedAudit } from '../symbol-index/symbolExtractor.js'
+import type { SourceAuditSchemaVersion } from '../symbol-index/auditEvidenceTypes.js'
 import { createHash } from 'node:crypto'
 import {
-  DEFAULT_FILE_EXCLUDE_PATTERNS,
   DEFAULT_IGNORED_DIRECTORY_NAMES,
   DEFAULT_IGNORED_DIRECTORY_PREFIXES,
   languageNameForPath,
@@ -36,7 +31,7 @@ import { validateSourceAuditEvidence } from '../symbol-index/validateAuditEviden
 import type { SourceAuditEvidenceReference } from './manifestTypes.js'
 
 /** Source extractor contract revision folded into the snapshot identity. */
-export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.5.0'
+export const SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION = 'source-audit-v1.6.0'
 
 export interface BuildSourceAuditEvidenceInput {
   projectRoot: string
@@ -47,6 +42,7 @@ export interface BuildSourceAuditEvidenceInput {
   /** Lowercase SHA-256 of the exact bytes each file's evidence was produced from, keyed by relative path. */
   fileHashes: ReadonlyMap<string, string>
   producerVersion: string
+  schemaVersion?: SourceAuditSchemaVersion
 }
 
 export interface BuildSourceAuditEvidenceResult {
@@ -162,6 +158,8 @@ interface SelectedEntry {
   sizeBytes: number | null
   selectionStatus: AuditSelectedFile['selectionStatus']
   contentSha256?: string
+  rawContentSha256?: string
+  auditOnlySummary?: AuditSelectedFile['auditOnlySummary']
 }
 
 /** Deduplicates by canonical path; conflicting identities keep the most conservative status and flag the ledger. */
@@ -171,16 +169,17 @@ function dedupeSelected(selected: readonly AuditSelectedFile[], reasons: Set<str
     const relPath = toForwardSlash(file.relPath)
     const existing = byPath.get(relPath)
     if (!existing) {
-      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus, contentSha256: file.contentSha256 })
+      byPath.set(relPath, { relPath, sizeBytes: file.sizeBytes, selectionStatus: file.selectionStatus, contentSha256: file.contentSha256, rawContentSha256: file.rawContentSha256, auditOnlySummary: file.auditOnlySummary })
       continue
     }
-    if (existing.selectionStatus === file.selectionStatus && existing.sizeBytes === file.sizeBytes && existing.contentSha256 === file.contentSha256) continue
+    if (existing.selectionStatus === file.selectionStatus && existing.sizeBytes === file.sizeBytes && existing.contentSha256 === file.contentSha256 && existing.rawContentSha256 === file.rawContentSha256) continue
     reasons.add('conflicting-selection-identity')
     if (SELECTION_STATUS_RANK[file.selectionStatus] > SELECTION_STATUS_RANK[existing.selectionStatus]) {
       existing.selectionStatus = file.selectionStatus
     }
     if (existing.sizeBytes !== file.sizeBytes) existing.sizeBytes = null
     if (existing.contentSha256 !== file.contentSha256) existing.contentSha256 = undefined
+    if (existing.rawContentSha256 !== file.rawContentSha256) existing.rawContentSha256 = undefined
   }
   return [...byPath.values()].sort((a, b) => compareText(a.relPath, b.relPath))
 }
@@ -193,7 +192,7 @@ interface FileProjection {
 
 function projectFile(
   entry: SelectedEntry,
-  summary: FileSummary | undefined,
+  summary: Pick<FileSummary, 'language' | 'lineCount' | 'sourceAudit' | 'warnings'> | undefined,
   hash: string | undefined,
   roots: readonly string[],
 ): FileProjection {
@@ -240,7 +239,7 @@ function projectFile(
     return { record, unreadable: true, identityGap: true }
   }
 
-  // Supported file selected for indexing.
+  // Supported graph or audit-only file.
   if (!summary) {
     const unreadable = validHash === null
     const record: SourceAuditFile = {
@@ -331,7 +330,35 @@ function projectFile(
   return { record, unreadable: false, identityGap: validHash === null }
 }
 
+function projectVersionedFile(projectRoot: string, record: SourceAuditFile): void {
+  record.capabilities['dynamic-import-expressions'] = 'unsupported'
+  if (record.language !== 'typescript' && record.language !== 'javascript') return
+  if (record.status !== 'parsed' && record.status !== 'partial') return
+  record.capabilities['dynamic-import-expressions'] = 'partial'
+  if (!record.contentSha256) return
+  const bytes = readSourceBytes(projectRoot, record.path)
+  if (createHash('sha256').update(bytes).digest('hex') !== record.contentSha256) {
+    throw new Error(`Source changed while projecting audit observations for ${record.path}.`)
+  }
+  let text: string
+  try {
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+  } catch {
+    return
+  }
+  const result = extractVersionedAudit(record.path, text, record.facts, record.contentSha256)
+  record.capabilities['dynamic-import-expressions'] = result.complete ? 'complete' : 'partial'
+  record.facts.push(...result.facts)
+  record.facts.sort((a, b) => a.span.startLine - b.span.startLine ||
+    (a.span.startColumn ?? -1) - (b.span.startColumn ?? -1) || compareText(a.id, b.id))
+  if (result.ambientClassification) {
+    record.ambientClassification = result.ambientClassification
+    if (result.ambientClassification.outcome === 'proven-ambient-only') record.capabilities.declarations = 'complete'
+  }
+}
+
 export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): BuildSourceAuditEvidenceResult {
+  const schemaVersion = input.schemaVersion ?? SOURCE_AUDIT_SCHEMA_VERSION
   const reasons = new Set<string>()
   const ledger = input.discovery.auditSelection
 
@@ -341,7 +368,6 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
   const excludes = sortedUnique([
     ...DEFAULT_IGNORED_DIRECTORY_NAMES.map((name) => `default-directory:${normalizeRule(name)}`),
     ...DEFAULT_IGNORED_DIRECTORY_PREFIXES.map((prefix) => `default-directory-prefix:${normalizeRule(prefix)}`),
-    ...DEFAULT_FILE_EXCLUDE_PATTERNS.map((pattern) => `default-file-pattern:${pattern}`),
     ...userRules.map((rule) => `user:${rule}`),
   ])
 
@@ -361,7 +387,17 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
       reasons.add('noncanonical-selected-path')
       continue
     }
-    const projection = projectFile(entry, summariesByPath.get(entry.relPath), input.fileHashes.get(entry.relPath) ?? entry.contentSha256, sourceRoots)
+    const summary = entry.auditOnlySummary ?? summariesByPath.get(entry.relPath)
+    const projection = projectFile(entry, summary, (schemaVersion === '1.2.0' ? entry.rawContentSha256 : undefined) ?? entry.contentSha256 ?? input.fileHashes.get(entry.relPath), sourceRoots)
+    if (schemaVersion === '1.2.0') {
+      projectVersionedFile(input.projectRoot, projection.record)
+      const record = projection.record
+      const modifiers = summary?.sourceAudit?.capabilities['direct-test-modifiers']
+      if (modifiers !== undefined && ['typescript', 'javascript'].includes(record.language) &&
+          ['complete', 'partial'].includes(record.capabilities['test-observations'])) {
+        record.capabilities['direct-test-modifiers'] = record.status === 'parsed' && record.contentSha256 ? modifiers : 'partial'
+      }
+    }
     files.push(projection.record)
     if (projection.unreadable) unreadableFileCount += 1
     if (projection.record.status === 'unsupported') unsupportedFileCount += 1
@@ -380,7 +416,7 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
   const discoveryExcludes = sortedUnique(input.discovery.userExcludes.map(normalizeRule).filter((rule) => rule.length > 0))
   const excludesMatch = discoveryExcludes.length === userRules.length && discoveryExcludes.every((rule, i) => rule === userRules[i])
   const observedExclusions =
-    input.discovery.skippedByDefaultIgnore + input.discovery.skippedByUserExclude + input.discovery.skippedByFilePattern
+    input.discovery.skippedByDefaultIgnore + input.discovery.skippedByUserExclude
   const accountingConsistent = observedExclusions === 0 || ledger.excludedPathCount > 0
   const rulesRecorded = excludes.length > 0
   if (!excludesMatch) reasons.add('configured-excludes-inconsistent')
@@ -391,12 +427,12 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
 
   const recordsByPath = new Map(files.map((file) => [file.path, file]))
   const selectionFingerprint = sha256OfJson({
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion,
     sourceRoots,
     excludes,
   })
   const snapshotId = sha256OfJson({
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion,
     selectionFingerprint,
     extractorContractRevision: SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION,
     files: selected.map((entry) => {
@@ -414,7 +450,7 @@ export function buildSourceAuditEvidence(input: BuildSourceAuditEvidenceInput): 
 
   const artifact: SourceAuditEvidenceArtifact = {
     artifactKind: SOURCE_AUDIT_ARTIFACT_KIND,
-    schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+    schemaVersion,
     producer: { packageName: '@dailephd/my-dev-kit', packageVersion: input.producerVersion },
     source: {
       projectRoot: toForwardSlash(input.projectRoot),
@@ -456,7 +492,7 @@ export function serializeSourceAuditEvidence(artifact: SourceAuditEvidenceArtifa
     json,
     reference: {
       path: 'source-audit-evidence.json',
-      schemaVersion: SOURCE_AUDIT_SCHEMA_VERSION,
+      schemaVersion: artifact.schemaVersion,
       sha256: createHash('sha256').update(Buffer.from(json, 'utf8')).digest('hex'),
       snapshotId: artifact.source.snapshotId,
     },

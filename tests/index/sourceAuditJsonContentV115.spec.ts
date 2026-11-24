@@ -8,6 +8,7 @@ import { readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidenc
 import { findExactFileOccurrences } from '../../src/source/findExactMatches.js'
 import { SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
 import { runCli } from '../lookup/testCli.js'
+import * as sourceReader from '../../src/lookup/getSourceSlice.js'
 
 const owned: string[] = []
 afterAll(() => { for (const dir of owned) rmSync(dir, { recursive: true, force: true }) })
@@ -53,7 +54,7 @@ describe('selected JSON test-content source evidence', () => {
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     expect(manifest.sourceAuditEvidence.snapshotId).toBe(artifact.source.snapshotId)
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.5.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
   })
 
   it('uses the same exact-file CLI authority without exposing JSON through other source modes', async () => {
@@ -75,16 +76,51 @@ describe('selected JSON test-content source evidence', () => {
       expect(query(out, file)).toMatchObject({ complete: true, matchCount: 1 })
     })
 
-  it('does not grant raw content to metadata, unrelated JSON, generated or vendor files', async () => {
+  it('authenticates explicitly selected text independently of metadata or fixture role', async () => {
     const ineligible = ['package.json', 'src/settings.json', 'src/contests/payload.json', 'tests/package-lock.json',
       'tests/package.json', 'tests/tsconfig.json', 'tests/generated/payload.json', 'tests/vendor/payload.json']
     const root = project(Object.fromEntries(ineligible.map(file => [file, '{}\n'])))
     const out = join(root, 'out')
     await runIndexCommand({ root, src: ['.'], out })
     for (const file of ineligible) {
-      expect(fileRecord(out, file)?.contentSha256).toBeNull()
-      expect(query(out, file)).toMatchObject({ complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE' })
+      expect(fileRecord(out, file)).toMatchObject({ status: 'unsupported', contentSha256: digest('{}\n'), facts: [] })
+      expect(query(out, file)).toMatchObject({ complete: true, matchCount: 0 })
     }
+  })
+
+  it.each(['readme.md', 'layout.xml', 'build.gradle', 'local.properties', 'settings.toml', 'case.input', 'case.txt', 'LICENSE', 'result.tap'])(
+    'authenticates selected unsupported text %s without semantic capabilities', async basename => {
+      const file = `tests/fixtures/${basename}`
+      const out = await build(project({ [file]: 'raw witness\r\n' }))
+      const record = fileRecord(out, file)!
+      expect(record).toMatchObject({ status: 'unsupported', contentSha256: digest('raw witness\r\n'), facts: [] })
+      expect(Object.values(record.capabilities).every(status => status === 'unsupported')).toBe(true)
+      expect(query(out, file, 'witness')).toMatchObject({ complete: true, matchCount: 1 })
+      expect(query(out, file, 'absent')).toMatchObject({ complete: true, matchCount: 0 })
+      writeFileSync(join(readSourceAuditEvidence(out).source.projectRoot, file), 'changed bytes')
+      expect(() => query(out, file, 'absent')).toThrow()
+    })
+
+  it('certifies empty selected text and preserves unreadable and binary limitations', async () => {
+    const empty = 'tests/fixtures/empty.txt'
+    const binary = 'tests/fixtures/keystore.jks'
+    const root = project({ [empty]: '', [binary]: Buffer.from([0, 255, 1]) })
+    const out = await build(root)
+    expect(fileRecord(out, empty)?.contentSha256).toBe(digest(''))
+    expect(query(out, empty)).toMatchObject({ complete: true, scannedBytes: 0, matchCount: 0 })
+    expect(fileRecord(out, binary)?.contentSha256).toBeNull()
+    expect(query(out, binary)).toMatchObject({ complete: false, reasonCode: 'CONTENT_HASH_UNAVAILABLE' })
+    writeFileSync(join(root, empty), 'read must fail')
+    const original = sourceReader.readSourceBytes
+    const spy = vi.spyOn(sourceReader, 'readSourceBytes').mockImplementation((...args: Parameters<typeof original>) => {
+      if (args[1] === empty) throw new Error('synthetic unreadable source')
+      return original(...args)
+    })
+    try {
+      await build(root)
+      expect(fileRecord(out, empty)?.contentSha256).toBeNull()
+      expect(query(out, empty).complete).toBe(false)
+    } finally { spy.mockRestore() }
   })
 
   it.each(['build', 'dist', 'node_modules', 'target', '.cache'])('keeps default-ignored %s content unselected', async dir => {
@@ -201,7 +237,7 @@ describe('selected JSON test-content source evidence', () => {
     expect(contents(out, 'code-graph.json')).toEqual(graph)
     const manifest = JSON.parse(contents(out, 'manifest.json').toString('utf8'))
     const cache = JSON.parse(contents(out, 'cache-metadata.json').toString('utf8'))
-    expect(cache.cacheSchemaVersion).toBe('1.4.0')
+    expect(cache.cacheSchemaVersion).toBe('1.5.0')
     expect(cache.baselineArtifacts.manifestSha256).toBe(digest(contents(out, 'manifest.json')))
     expect(manifest.sourceAuditEvidence.sha256).toBe(digest(contents(out, 'source-audit-evidence.json')))
     await runIndexCommand({ root, src: ['src', 'tests'], out: join(root, 'full') })
@@ -225,4 +261,139 @@ describe('selected JSON test-content source evidence', () => {
     const rebuilt = await runIndexCommand({ root, src: ['src'], out, incremental: true })
     expect(rebuilt.mode === 'index' && rebuilt.cache?.mode).toBe('incremental-full-config-changed')
   })
+})
+
+
+describe('audit-only TypeScript declaration files', () => {
+  const stub = 'declare module "server-only";'
+  const declarations = ['src/dashboard/server-only.d.ts', 'src/reporting/server-only.d.ts', 'src/shared/server-only.d.ts']
+
+  it('authenticates independent ambient facts and isolates declaration files from the ordinary graph', async () => {
+    const root = project({
+      'src/app.ts': 'import { Widget } from "./widget"; export const value = Widget;',
+      'src/widget.tsx': 'export function Widget() { return <span />; }',
+      'src/contains.d.ts.middle.ts': 'export const included = true;',
+      'src/excluded.d.ts': stub,
+      'outside/outside.d.ts': stub,
+      ...Object.fromEntries(declarations.map(file => [file, stub])),
+    })
+    const out = await build(root, { exclude: ['src/excluded.d.ts'] })
+    const artifact = readSourceAuditEvidence(out)
+    const graph = JSON.parse(contents(out, 'code-graph.json').toString())
+    const symbols = JSON.parse(contents(out, 'symbol-index.json').toString())
+    expect(symbols.files.map((file: { path: string }) => file.path).sort()).toEqual([
+      'src/app.ts', 'src/contains.d.ts.middle.ts', 'src/widget.tsx',
+    ])
+    expect(JSON.stringify(graph)).not.toContain('server-only.d.ts')
+    expect(graph.edges.some((edge: { kind: string }) => edge.kind === 'imports')).toBe(true)
+    expect(fileRecord(out, 'src/app.ts')?.facts).toContainEqual(expect.objectContaining({
+      kind: 'import', sourceSpecifier: './widget',
+    }))
+    expect(artifact.files.map(file => file.path)).not.toContain('src/excluded.d.ts')
+    expect(artifact.files.map(file => file.path)).not.toContain('outside/outside.d.ts')
+
+    const ids = declarations.map(path => {
+      const record = artifact.files.find(file => file.path === path)!
+      expect(record).toMatchObject({
+        language: 'typescript', status: 'parsed', contentSha256: digest(stub), sizeBytes: Buffer.byteLength(stub),
+        capabilities: { declarations: 'complete', imports: 'complete', exports: 'complete', 'source-ranges': 'complete' },
+      })
+      expect(record.facts).toHaveLength(1)
+      const [fact] = record.facts
+      expect(fact).toMatchObject({
+        kind: 'declaration', declarationKind: 'ambient-module', name: 'server-only', extractionMethod: 'typescript-ast',
+        span: { path, startLine: 1, startColumn: 0, endLine: 1, endColumn: stub.length },
+      })
+      expect(fact).not.toHaveProperty('symbolId')
+      return fact.id
+    })
+    expect(new Set(ids).size).toBe(declarations.length)
+    const inventory = runCli(['lookup', '--index', out, '--audit-files', '--json'])
+    expect(inventory.status).toBe(0)
+    const inventoryPage = JSON.parse(inventory.stdout)
+    expect(inventoryPage).toMatchObject({ schemaVersion: '1.1.0', snapshotId: artifact.source.snapshotId })
+    expect(inventoryPage.files.map((file: { path: string }) => file.path)).toEqual(expect.arrayContaining(declarations))
+    const exact = runCli(['lookup', '--index', out, '--audit-file', declarations[0], '--json'])
+    expect(exact.status).toBe(0)
+    expect(JSON.parse(exact.stdout)).toMatchObject({ schemaVersion: '1.1.0', status: 'found', facts: [{ id: ids[0] }] })
+    expect(readSourceAuditEvidence(await build(root, { out: join(root, 'repeat'), exclude: ['src/excluded.d.ts'] }))).toEqual(artifact)
+  }, 60_000)
+
+  it('keeps syntax uncertainty, unsupported bytes and read failures explicit', async () => {
+    const root = project({
+      'src/anchor.ts': 'export const anchor = 1;',
+      'src/mixed.d.ts': stub + '\ndeclare namespace Example { type Item = import("./target").Item }',
+      'src/broken.d.ts': 'declare module "broken',
+      'src/binary.d.ts': Buffer.from([0, 255, 1]),
+      'src/unreadable.d.ts': stub,
+    })
+    const read = sourceReader.readSourceBytes
+    const spy = vi.spyOn(sourceReader, 'readSourceBytes').mockImplementation((...args) => {
+      if (args[1] === 'src/unreadable.d.ts') throw new Error('simulated unreadable file')
+      return read(...args)
+    })
+    let out: string
+    try {
+      out = await build(root)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(fileRecord(out, 'src/mixed.d.ts')).toMatchObject({
+      capabilities: { declarations: 'partial', imports: 'partial', exports: 'partial', 'source-ranges': 'complete' },
+      facts: [{ kind: 'declaration', name: 'server-only' }],
+    })
+    expect(fileRecord(out, 'src/broken.d.ts')).toMatchObject({
+      status: 'partial', facts: [], capabilities: { declarations: 'partial', imports: 'partial', exports: 'partial', 'source-ranges': 'partial' },
+    })
+    expect(fileRecord(out, 'src/binary.d.ts')).toMatchObject({
+      status: 'unsupported', contentSha256: null, facts: [], capabilities: { declarations: 'unsupported' },
+    })
+    expect(fileRecord(out, 'src/unreadable.d.ts')).toMatchObject({
+      status: 'failed', contentSha256: null, facts: [], capabilities: { declarations: 'failed' },
+    })
+    expect(readSourceAuditEvidence(out).coverage.inventoryComplete).toBe(false)
+  })
+
+  it('republishes on audit-only add, change and deletion while keeping the ordinary graph and cache compatible', async () => {
+    const path = 'src/module.d.ts'
+    const root = project({ 'src/app.ts': 'export const value = 1;' })
+    const out = await build(root, { incremental: true })
+    const graph = contents(out, 'code-graph.json')
+    const symbols = contents(out, 'symbol-index.json')
+    const snapshots = new Set([readSourceAuditEvidence(out).source.snapshotId])
+    const refresh = async (content: string, exclude: string[] = []) => {
+      await build(root, { incremental: true, exclude })
+      const artifact = readSourceAuditEvidence(out)
+      const full = await build(root, { out: join(root, 'fresh'), exclude })
+      expect(artifact).toEqual(readSourceAuditEvidence(full))
+      const withoutTimestamp = (bytes: Buffer) => {
+        const { createdAt: _createdAt, buildTime: _buildTime, ...artifact } = JSON.parse(bytes.toString())
+        return artifact
+      }
+      if (exclude.length === 0) {
+        expect(contents(out, 'code-graph.json')).toEqual(graph)
+        expect(contents(out, 'symbol-index.json')).toEqual(symbols)
+      } else {
+        expect(withoutTimestamp(contents(out, 'code-graph.json'))).toEqual(withoutTimestamp(graph))
+        expect(withoutTimestamp(contents(out, 'symbol-index.json'))).toEqual(withoutTimestamp(symbols))
+      }
+      const reference = JSON.parse(contents(out, 'manifest.json').toString()).sourceAuditEvidence
+      expect(reference).toMatchObject({ snapshotId: artifact.source.snapshotId, sha256: digest(contents(out, 'source-audit-evidence.json')) })
+      if (content) expect(fileRecord(out, path)?.contentSha256).toBe(digest(content))
+      else expect(fileRecord(out, path)).toBeUndefined()
+      return artifact.source.snapshotId
+    }
+    writeFileSync(join(root, path), stub)
+    snapshots.add(await refresh(stub))
+    const modified = 'declare module "changed";'
+    writeFileSync(join(root, path), modified)
+    expect(() => query(out, path, 'server-only')).toThrow(/changed after it was indexed/)
+    snapshots.add(await refresh(modified))
+    rmSync(join(root, path))
+    expect(() => query(out, path, 'changed')).toThrow(/no longer exists/)
+    expect(await refresh('')).toBe([...snapshots][0])
+    expect(snapshots.size).toBe(3)
+    writeFileSync(join(root, path), stub)
+    expect(await refresh('', [path])).not.toBe([...snapshots][0])
+  }, 60_000)
 })

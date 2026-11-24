@@ -330,6 +330,58 @@ Prerequisites and freshness:
 
 Exit codes and errors: argument errors and evidence failures exit with code 2. Successful results are JSON on stdout. Failures print a code-prefixed plain-text message such as `INVALID_AUDIT_PAGE: ...`, `AUDIT_FACT_NOT_FOUND`, `AUDIT_FACT_NOT_IMPORT` or `STALE_SOURCE_EVIDENCE`; no JSON error object is guaranteed, so consumers must not parse failures as JSON. Nothing is written to the index or to the target source.
 
+### Bounded audit batches (v1.16.0)
+
+Use one command family per request file.
+
+```text
+my-dev-kit lookup --index <index-dir> --audit-batch-file <absolute-json-path> --json
+my-dev-kit source --index <index-dir> --audit-batch-file <absolute-json-path> --json
+```
+
+The request object has schemaVersion "1.0.0", mode "audit-batch-request", family "lookup" or "source", expectedSnapshotId, selectionFingerprint, and requests. Both identity values come from the selected source-audit artifact. The request file must be valid UTF-8, at most 64 KiB, and a regular file at a canonical absolute path with no symlink or junction hops. Its real parent directory is the caller-owned input directory. The batch selector requires --json and excludes all single selectors, format options, and --out.
+
+Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters, excluding spaces, a selector, and the fields for that selector. IDs are unique within the batch. Unknown fields are rejected.
+
+| Family | selector | Fields and defaults |
+| --- | --- | --- |
+| lookup | audit-files | page (0) |
+| lookup | audit-file | path, page (0) |
+| lookup | audit-import-target | factId |
+| lookup | audit-import-domain | factId (requires artifact schema 1.2.0) |
+| source | exact-file-occurrence | path, literal, context (3) |
+| source | exact-file-byte-occurrence | path, needleHex (requires artifact schema 1.2.0) |
+| source | line-range | path, start, end, maxLines (160) |
+
+Use canonical forward-slash project-relative paths. Pages are zero-based and line ranges are one-based and inclusive. Batches reuse the authenticated artifact within the invocation. Each live read retains its own containment, source identity, and freshness checks. A batched line range additionally verifies that the exact bytes used to render the range match the snapshot.
+
+The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, snapshotId, selectionFingerprint, inputSha256 (the exact request file digest), requestedCount, returnedCount, complete, and ordered results. Each result echoes id and selector. An item with status "ok" carries its original selector JSON in response. An item with status "error" has error.code and error.exitCode and carries no evidence. Expect known standalone error codes where available, with UNSAFE_SOURCE and COMMAND_ERROR for errors without a standalone code.
+
+Any item error makes complete false and sets exit 2. Invalid input, artifact or identity errors, and output over 8 MiB fail globally with exit 2 and no response envelope. Accept a usable batch only after verifying the exit, the complete JSON envelope, the identities and counts, and the ordered IDs and selectors. Envelope completeness describes delivery of the requested responses. Per-item paging, proof and coverage fields retain their original meaning, including partial, truncated or indeterminate evidence.
+
+### Finite audit streams (v1.16.0)
+
+Use an absolute index directory. The stream accepts the existing batch selectors for its command family.
+
+```text
+my-dev-kit lookup --index <absolute-index-dir> --audit-stream --json
+my-dev-kit source --index <absolute-index-dir> --audit-stream --json
+```
+
+Send one UTF-8 JSON record terminated by LF, then read its response before sending the next record. The first request authenticates the session index and returns its snapshot and selection identity. Compare both identities on every response before using its proof.
+
+```json
+{"schemaVersion":"1.0.0","requestId":"frame-1","requests":[{"id":"page-0","selector":"audit-files","page":0}]}
+```
+
+Frame IDs use 1–64 printable ASCII characters excluding spaces, and are unique within one process. Each input record contains 1–32 existing batch items. Item IDs are unique within their frame. The input limit is 64 KiB excluding LF, and the output limit is 8 MiB including LF and the stream envelope.
+
+Every response carries schemaVersion "1.0.0", requestId and status. A complete response embeds the existing batch envelope in batch. Its inputSha256 authenticates the exact bytes of the input record excluding LF, including any trailing CR. An incomplete response embeds an incomplete batch envelope or an error with code and fatal. Do not use any item from an incomplete frame as evidence. If an input has no valid ID, requestId is null.
+
+Submit at most 8,192 frames. Close stdin to finish. An incomplete frame makes the final exit code 2. A typed item failure or response overflow can be followed by an independent frame. Framing, duplicate ID, index identity and read failures are fatal. Partial lines at EOF are rejected. The session stops after 60 seconds awaiting a frame, 30 seconds blocked on output, or at the 100-minute session deadline. A frame in a synchronous proof reader is checked before its response is emitted. Use a caller-owned process timeout and require the terminating LF before consuming a frame.
+
+The session reauthenticates the manifest and registered source-audit artifact for each frame and rejects index changes. Parsed static metadata can be reused only after that check. Source ranges use their current symbol and classification data. Each live query retains its original freshness, containment, source-byte and proof checks.
+
 ## source
 
 Retrieve bounded current source corresponding to indexed identity or a supported source selector.
@@ -757,3 +809,29 @@ There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-s
 **Unexpected zero-match or empty graph:** check the semantic result and required scope. A valid empty result is not proof of sufficient context or successful application behavior.
 
 **Workflow needs a missing command:** verify the command's actual owner and installation. Record unsupported/manual/library-only boundaries in the ecosystem feedback report rather than invent a flag or secretly require a source checkout.
+
+## Coordinated source-evidence commands in v1.16.0
+
+The following selectors are provided in v1.16.0.
+`index --source-audit-schema 1.2.0` selects the extended artifact; the
+default is `1.1.0`. The artifact, inventory and file fact pages use the
+selected artifact schema. Validate the other response families independently:
+
+| Command | Response schema |
+| --- | --- |
+| `lookup --audit-import-target <fact-id> --json` | 1.1.0 |
+| `lookup --audit-import-domain <fact-id> --json` | 1.0.0 |
+| `source --file <path> --contains <text> --json` | 1.1.0 |
+| `source --file <path> --contains-bytes-hex <hex> --json` | 1.0.0 |
+
+Use the same managed index for inventory, file facts and proofs. Pass the
+authenticated import-expression fact ID to the domain selector and the literal
+import fact ID to the ordinary target selector. The domain selector excludes
+other lookup modes and paging. The byte selector requires one exact selected
+file and excludes other source modes. See [the proof contract](CONTRACTS.md#coordinated-r3-import-evidence).
+
+The byte needle is even-length hexadecimal for 1 to 4,096 bytes. The
+selector scans at most 200,000 bytes in that file and returns up to 200
+overlapping match offsets. Read the scan, count and match-completeness
+fields before interpreting an empty or capped response. This selector
+requires an index produced with `--source-audit-schema 1.2.0`.

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildSourceAuditEvidence } from '../../src/indexing/buildSourceAuditEvidence.js'
+import { buildSourceAuditEvidence, SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } from '../../src/indexing/buildSourceAuditEvidence.js'
 import { buildCacheFileEntries, classifyChangedFilePaths, type CacheFileEntry } from '../../src/indexing/cacheMetadata.js'
 import { discoverSourceFiles } from '../../src/indexing/discoverSourceFiles.js'
 import { buildPartialSymbolIndex } from '../../src/indexing/partialRebuild.js'
@@ -95,6 +95,56 @@ function partialProjection(
 }
 
 describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
+  it('versions the extractor snapshot independently of the public schema', () => {
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
+    const artifact = fullProjection(makeProject({ 'src/App.kt': 'class App\n' })).artifact
+    expect(artifact.schemaVersion).toBe('1.1.0')
+    const identity = (revision: string) => sha(JSON.stringify({
+      schemaVersion: artifact.schemaVersion,
+      selectionFingerprint: artifact.source.selectionFingerprint,
+      extractorContractRevision: revision,
+      files: artifact.files.map((file) => ({
+        path: file.path, contentSha256: file.contentSha256, selectionStatus: 'supported',
+        language: file.language, role: file.role, status: file.status,
+      })),
+    }))
+    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.6.0'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.4'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.3'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.2'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.1'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.0'))
+  })
+
+  it('refreshes changed Kotlin script capabilities and reuses compatible mixed-language evidence', () => {
+    const root = makeProject({
+      ...BASE,
+      'src/App.kt': 'package sample\nimport sample.Other\nclass App\n',
+      'src/build.gradle.kts': 'import sample.Other trailing\nprintln("hello")\n',
+      'src/script.kts': 'import sample.Other as Alias\nimport sample.*\nprintln("hello")\n',
+      'src/helper.py': 'def helper():\n    return 1\n',
+    })
+    const base = baseline(root)
+    const unchanged = partialProjection(root, base)
+    expect(unchanged.partial.freshlyExtractedPaths).toEqual([])
+    expect(unchanged.partial.reusedPaths).toContain('src/build.gradle.kts')
+    expect(unchanged.projection.artifact).toEqual(fullProjection(root).artifact)
+    expect(unchanged.projection.artifact.files.find(f => f.path === 'src/build.gradle.kts')!.capabilities.imports).toBe('partial')
+    const corrected = 'import sample.Other\nprintln("hello")\n'
+    write(root, 'src/build.gradle.kts', corrected)
+    const changed = partialProjection(root, base)
+    expect(changed.classification.changed).toEqual(['src/build.gradle.kts'])
+    expect(changed.partial.freshlyExtractedPaths).toEqual(['src/build.gradle.kts'])
+    expect(changed.partial.reusedPaths).toContain('src/App.kt')
+    const script = changed.projection.artifact.files.find(f => f.path === 'src/build.gradle.kts')!
+    expect(script.contentSha256).toBe(sha(corrected))
+    expect(script.capabilities).toMatchObject({ imports: 'complete', declarations: 'partial', jvmDeclarations: 'unsupported' })
+    expect(changed.projection.artifact).toEqual(fullProjection(root).artifact)
+    const subsequent = partialProjection(root, baseline(root))
+    expect(subsequent.partial.freshlyExtractedPaths).toEqual([])
+    expect(subsequent.projection.artifact).toEqual(changed.projection.artifact)
+  })
+
   it('produces an equivalent projection from trusted reused evidence and a full build of the same input', () => {
     const root = makeProject(BASE)
     const base = baseline(root)
