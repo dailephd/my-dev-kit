@@ -1235,8 +1235,10 @@ Top-level fields: `artifactKind`, `schemaVersion`, `createdAt`, `projectRoot`, `
 
 ## source-audit-evidence.json (v1.15.0)
 
+Kit v1.16.0 retains `1.1.0` as the default and accepts `index --source-audit-schema 1.2.0` for extended evidence. The manifest reference and page envelopes reflect the requested artifact schema. The optional per-file `direct-test-modifiers` capability in `1.2.0` qualifies a bounded executable modifier predicate independently of the wider observation family. A missing capability proves no additional completeness. Strict older `1.2.0` readers may reject the capability. See the [proof contract](CONTRACTS.md#direct-test-modifier-observations).
+
 The artifact and cache metadata below describe the v1.15.0 baseline.
-For the coordinated candidate's default and opt-in artifact schemas,
+For the v1.16.0 default and opt-in artifact schemas,
 cache revision and proof response families, see
 [Coordinated R3 import evidence](CONTRACTS.md#coordinated-r3-import-evidence).
 

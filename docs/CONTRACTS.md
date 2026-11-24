@@ -460,7 +460,7 @@ Release history and versioned schema details remain append-preserving.
 
 ## Coordinated R3 import evidence
 
-The private cache schema for this candidate is `1.5.0` and the source-audit
+The private cache schema for v1.16.0 is `1.5.0` and the source-audit
 extractor revision is `source-audit-v1.6.0`. This invalidates the previous
 private cache for incremental reuse. The public source-audit artifact still
 defaults to `1.1.0`, with `1.2.0` selected explicitly.

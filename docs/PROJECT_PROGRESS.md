@@ -4,7 +4,7 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.15.1` is the version represented by this repository. Version 1.15.0 is the preceding release.
+`@dailephd/my-dev-kit@1.16.0` is the version represented by this repository. Version 1.15.1 is the preceding release.
 
 ## Version 1.15.1
 
@@ -233,10 +233,12 @@ Version 1.10.2 corrects the v1.10.1 release-state documentation and does not cha
 - Schema and artifact fields: [GRAPH_SCHEMA.md](GRAPH_SCHEMA.md)
 - Release history: [CHANGELOG.md](../CHANGELOG.md)
 
-## Coordinated source-evidence candidate
+## Coordinated source-evidence history
 
-The published Kit baseline is 1.15.1. The local producer for the coordinated
-v1.16.0 Kit and v0.11.0 Lab work still has package metadata 1.15.1.
+The coordinated Kit and Lab implementation used Kit metadata 1.15.1 before
+the release version bump. Version 1.16.0 includes the bounded source-evidence
+capabilities documented in [Commands](COMMANDS.md#coordinated-source-evidence-commands-in-v1160)
+and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
 The B5 implementation baseline is `c2eb844c0dae8ff061e1d5b65e257bf0551a7a66`.
 The Kit audit-batch fixture path correction passed on plain and junction-backed
 temporary paths. Its rebuild reproduced the qualified B5 archive and installed
@@ -252,9 +254,12 @@ Registry Kit 1.15.1 has a separate package identity. Lab B4 covered the
 installed Windows consumer, and a later Step 5 run exercised the installed
 Lab candidate on native Linux with the authenticated R3 producer.
 
-Final product acceptance and separate release readiness remain pending under
-the [adopted policy](ROADMAP.md#version-1160). SW-123 and iworkhere.space
-retain their historical mandatory gaps and exit 2. Reconciled documentation
-changes candidate source identity, and changes to packaged documents also
-change archive identity. The existing CLI qualification and earlier
-archive receipts remain bound to the observed bytes.
+The Kit implementation at `5b4e6a783691f6b5e434ac1de6e83df8d9e43f85` passed
+pre-release readiness, including 4,540 native tests across 270 files and
+exact-candidate Windows, Linux and macOS CI. The versioned package and its
+hosted release checks carry their own artifact and source identities.
+
+Under the [adopted policy](ROADMAP.md#version-1160), SW-123 and iworkhere.space
+retain their historical mandatory gaps and exit 2. Lab v0.11.0 formal
+acceptance depends on independently authenticating the published Kit
+artifact and validating the migrated dependency.

@@ -770,7 +770,7 @@ Boundaries: the evidence is static and bounded. It supports enumeration of the s
 
 ### Planned v1.15.2 Kotlin-script capability isolation
 
-**Historical correction plan.** In the v1.15.1 baseline, the Kotlin lexical adapter could make both `declarations` and `imports` partial on an executable top-level Gradle statement. The coordinated v1.16.0 candidate separates those capabilities in the existing adapter. The plan below records the original design and scope.
+**Historical correction plan.** In the v1.15.1 baseline, the Kotlin lexical adapter could make both `declarations` and `imports` partial on an executable top-level Gradle statement. Version 1.16.0 separates those capabilities in the existing adapter. The plan below records the original design and scope.
 
 The required ownership flow is: tokenize and validate supported lexical regions; identify explicit import directives independently; identify declaration/nesting/JVM/visibility uncertainty independently; emit only observed facts with honest per-capability statuses and diagnostics; build the managed source-audit projection using the existing index, hash and manifest machinery. `imports: complete` will mean exhaustive **explicit** import enumeration in the qualified lexical domain, never implicit Kotlin or Gradle DSL imports or dependency-resolution completeness. Unsupported import grammar or ambiguous comment/string/structural boundaries prevents that claim. Executable script statements may leave declarations partial and JVM declarations unsupported while imports are complete.
 

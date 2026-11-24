@@ -330,7 +330,7 @@ Prerequisites and freshness:
 
 Exit codes and errors: argument errors and evidence failures exit with code 2. Successful results are JSON on stdout. Failures print a code-prefixed plain-text message such as `INVALID_AUDIT_PAGE: ...`, `AUDIT_FACT_NOT_FOUND`, `AUDIT_FACT_NOT_IMPORT` or `STALE_SOURCE_EVIDENCE`; no JSON error object is guaranteed, so consumers must not parse failures as JSON. Nothing is written to the index or to the target source.
 
-### Bounded audit batches (v1.16.0 candidate)
+### Bounded audit batches (v1.16.0)
 
 Use one command family per request file.
 
@@ -359,7 +359,7 @@ The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, sna
 
 Any item error makes complete false and sets exit 2. Invalid input, artifact or identity errors, and output over 8 MiB fail globally with exit 2 and no response envelope. Accept a usable batch only after verifying the exit, the complete JSON envelope, the identities and counts, and the ordered IDs and selectors. Envelope completeness describes delivery of the requested responses. Per-item paging, proof and coverage fields retain their original meaning, including partial, truncated or indeterminate evidence.
 
-### Finite audit streams (v1.16.0 candidate)
+### Finite audit streams (v1.16.0)
 
 Use an absolute index directory. The stream accepts the existing batch selectors for its command family.
 
@@ -810,9 +810,9 @@ There is no current standalone `refs`, `trace-props`, `trace-events`, web/full-s
 
 **Workflow needs a missing command:** verify the command's actual owner and installation. Record unsupported/manual/library-only boundaries in the ecosystem feedback report rather than invent a flag or secretly require a source checkout.
 
-## Coordinated source-evidence commands in the local R3 candidate
+## Coordinated source-evidence commands in v1.16.0
 
-The following selectors describe the qualified local R3 package.
+The following selectors are provided in v1.16.0.
 `index --source-audit-schema 1.2.0` selects the extended artifact; the
 default is `1.1.0`. The artifact, inventory and file fact pages use the
 selected artifact schema. Validate the other response families independently:

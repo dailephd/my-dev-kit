@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.16.0 - 2026-11-24
+
+- Source-audit evidence adds audit-only declaration-file selection, whole-file ambient classification, and explicit-import evidence that remains usable when another Kotlin import capability is partial.
+- Opt-in source-audit schema `1.2.0` adds finite computed-import-domain and authenticated exact-byte occurrence queries. Exact selected-path witnesses, possible targets, disjoint domains, and indeterminate results carry distinct proof obligations. The default artifact schema remains `1.1.0`.
+- Opt-in `1.2.0` may include the optional `direct-test-modifiers` capability for qualified executable `.skip` and `.only` observations. Broader observation completeness remains independent. Strict older `1.2.0` readers may reject the capability.
+- Bounded audit batches and finite audit streams reuse the authenticated lookup and source proof owners. Whole-origin reference coverage and unauthenticated build mappings remain outside the bounded proof claim.
+
 ## 1.15.1 - 2026-11-14
 
 - Python test-discovery correction: `context` and related-test classification now recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). Previously, the shared related-test classifier did not generally discover Python test files by name. Pytest configuration parsing remains incomplete, dynamic imports remain unsupported, and fixture/conftest linkage is not universally inferred. Related tests are static evidence, not execution proof. No new public command, flag, or artifact schema major.
