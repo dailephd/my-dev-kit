@@ -17,14 +17,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function fixture() {
+async function fixture(withImport = false) {
   // CI can expose the temporary directory through a symlink or junction.
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'kit-audit-batch-')))
   roots.push(root)
   const project = join(root, 'p')
   mkdirSync(join(project, 'src'), { recursive: true })
   const source = join(project, sourcePath)
-  writeFileSync(source, original)
+  writeFileSync(source, withImport ? 'import "./peer.js"\r\n' + original : original)
+  if (withImport) writeFileSync(join(project, 'src/peer.ts'), 'export const peer = 1\n')
   const index = join(root, 'i')
   await runIndexCommand({ root: project, src: ['src'], out: index, sourceAuditSchema: '1.2.0' })
   const audit = readSourceAuditEvidence(index)
@@ -33,10 +34,28 @@ async function fixture() {
     schemaVersion: '1.0.0', mode: 'audit-batch-request', family, expectedSnapshotId: audit.source.snapshotId,
     selectionFingerprint: audit.source.selectionFingerprint, requests,
   }))
-  return { root, project, source, index, input, writeRequest }
+  return { root, project, source, index, input, writeRequest, audit }
 }
 
 describe('bounded audit batches', () => {
+  it('returns the same qualified ordinary proof as the standalone selector', async () => {
+    const f = await fixture(true)
+    const factId = f.audit.files.find(file => file.path === sourcePath)!.facts.find(fact => fact.sourceSpecifier === './peer.js')!.id
+    const item = { id: 'ordinary', selector: 'audit-import-target', factId }
+    f.writeRequest('lookup', [item])
+    const prefix = ['lookup', '--index', f.index, '--json']
+    const single = runCli([...prefix, '--audit-import-target', factId])
+    const batch = runCli([...prefix, '--audit-batch-file', f.input])
+    expect(single.status, single.stderr).toBe(0)
+    expect(batch.status, batch.stderr).toBe(0)
+    const proof = JSON.parse(single.stdout)
+    expect(proof.sourceReferenceProof).toMatchObject({
+      candidateDomain: ['src/peer.js', 'src/peer.ts', 'src/peer.tsx'],
+      qualifiedReference: { targetPath: 'src/peer.ts' },
+    })
+    expect(JSON.parse(batch.stdout).results).toEqual([{ id: item.id, selector: item.selector, status: 'ok', response: proof }])
+  }, 30_000)
+
   it('preserves the installed source selectors’ JSON responses and binds ordered IDs to exact input bytes', async () => {
     const f = await fixture()
     const items = [

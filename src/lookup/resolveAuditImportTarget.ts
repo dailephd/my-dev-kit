@@ -1,13 +1,41 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createDefaultRegistry } from '../languages/registry.js'
 import { PythonAdapter } from '../languages/python/adapter.js'
 import { TypeScriptAdapter, enumerateJsTsCandidatePaths } from '../languages/typescript/adapter.js'
+import { ConfiguredImportResolver } from '../languages/typescript/configuredImportResolver.js'
 import type { SourceAuditEvidenceArtifact, SourceAuditFact, SourceAuditFile } from '../symbol-index/auditEvidenceTypes.js'
 import { SOURCE_AUDIT_SCHEMA_VERSION } from '../symbol-index/auditEvidenceTypes.js'
 import { assertSourceAuditFileFresh, readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
-import { ensureInsideProjectRoot, UnsafeSourceError } from './getSourceSlice.js'
+import { ensureInsideProjectRoot, readSourceBytes, UnsafeSourceError } from './getSourceSlice.js'
+
+interface SourceReferencePremise {
+  role: 'config' | 'package-metadata' | 'candidate' | 'path'
+  path: string
+  state: 'absent' | 'file' | 'directory'
+  contentSha256: string | null
+}
+
+interface SourceReferenceProof {
+  schemaVersion: '1.0.0'
+  profile: 'js-ts-selected-source-reference-v1'
+  pathIdentityProfile: 'selected-source-path-v1'
+  snapshotId: string
+  selectionFingerprint: string
+  selectedDomainDigest: string
+  originFile: string
+  originContentSha256: string
+  importFactId: string
+  sourceSpecifier: string
+  resolutionPlatform: 'win32' | 'posix'
+  candidateEnumerationComplete: boolean
+  candidateDomain: string[] | null
+  qualifiedReference: { targetPath: string; targetContentSha256: string; referenceKind: 'selected-source-reference' } | null
+  premiseRefs: SourceReferencePremise[]
+  reasonCode: string | null
+}
 
 /**
  * Filesystem/source-selection evidence for one recorded import or JS/TS re-export fact. It is NOT a claim that the import
@@ -24,6 +52,7 @@ export interface AuditImportTargetProof {
   candidatePaths: string[]
   selectionComplete: boolean
   reasonCode: string
+  sourceReferenceProof?: SourceReferenceProof
   declarationProof?: {
     scope: 'selected-ordinary-jvm-sources'
     targetKind: NonNullable<SourceAuditFact['jvmImportTarget']>['kind']
@@ -179,7 +208,11 @@ export function resolveAuditImportTargetFromArtifact(artifact: SourceAuditEviden
 
   const esm = fact.kind === 'export' || file.facts.some(entry => entry.literalImportFactId === fact.id)
   const resolution = resolveAuditTargetCandidates(artifact, file, specifier, fact.importedNames ?? [], esm)
-  return proof(resolution.status, resolution.candidatePaths, resolution.reasonCode)
+  const legacy = proof(resolution.status, resolution.candidatePaths, resolution.reasonCode)
+  if (artifact.schemaVersion !== '1.2.0' || !file.contentSha256 || fact.extractionMethod !== 'typescript-ast' ||
+      (file.language !== 'typescript' && file.language !== 'javascript') ||
+      Buffer.byteLength(specifier) > 4096 || Buffer.byteLength(file.path) > 4096) return legacy
+  return { ...legacy, sourceReferenceProof: buildSourceReferenceProof(artifact, file, fact, specifier, legacy) }
 }
 
 /** A completeness premise belongs to the candidate resolver, independent of operand evaluation. */
@@ -267,6 +300,200 @@ function hasCanonicalPath(projectRoot: string, origin: string): boolean {
     return path.relative(physicalRoot, physicalOrigin).split(path.sep).join('/') === origin
   } catch {
     return false
+  }
+}
+
+const MAX_REFERENCE_CANDIDATES = 256
+const MAX_REFERENCE_PREMISES = 1024
+const MAX_REFERENCE_BYTES = 1024 * 1024
+const hashReferenceBytes = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
+
+class UnqualifiedReference extends Error {}
+
+/** Check each existing component before concluding absence under a missing parent. */
+function inspectReferencePath(
+  root: string, relative: string, states = new Map<string, SourceReferencePremise['state']>(),
+): SourceReferencePremise['state'] {
+  const segments = relative.split('/')
+  if (!insideProjectRoot(relative) || Buffer.byteLength(relative) > 4096 ||
+      segments.some(segment => !isOrdinaryPathSegment(segment) || segment.toLowerCase() === 'node_modules')) {
+    throw new UnqualifiedReference('UNQUALIFIED_PATH_IDENTITY')
+  }
+  let current = root
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment)
+    let state = states.get(current)
+    if (!state) {
+      let stat: fs.Stats | undefined
+      try {
+        stat = fs.lstatSync(current)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new UnqualifiedReference('PATH_PROBE_FAILED')
+      }
+      if (stat) {
+        if (stat.isSymbolicLink() || fs.realpathSync.native(current) !== current) {
+          throw new UnqualifiedReference('UNQUALIFIED_PATH_IDENTITY')
+        }
+        if (!stat.isFile() && !stat.isDirectory()) throw new UnqualifiedReference('UNSUPPORTED_PATH_ENTRY')
+      }
+      state = !stat ? 'absent' : stat.isFile() ? 'file' : 'directory'
+      states.set(current, state)
+    }
+    if (index === segments.length - 1 || state === 'absent') return state
+    if (state !== 'directory') throw new UnqualifiedReference('UNSUPPORTED_PATH_ENTRY')
+  }
+  return 'directory'
+}
+
+/** Proof-local observations share one byte identity per path, including across roles. */
+class ReferencePremises {
+  private readonly pathStates = new Map<string, SourceReferencePremise['state']>()
+  private readonly observations = new Map<string, {
+    state: SourceReferencePremise['state']; bytes: Buffer | null; contentSha256: string | null; sizeBytes: number | null
+  }>()
+  private readonly refs = new Map<string, SourceReferencePremise>()
+  private serializedBytes = 0
+
+  constructor(private readonly root: string) {}
+
+  capture(role: SourceReferencePremise['role'], relative: string, limit = MAX_REFERENCE_BYTES) {
+    const key = role + '\0' + relative
+    let observation = this.observations.get(relative)
+    if (!observation) {
+      const state = inspectReferencePath(this.root, relative, this.pathStates)
+      const bytes = state === 'file' ? readSourceBytes(this.root, relative, limit) : null
+      observation = {
+        state, bytes: role === 'config' ? bytes : null,
+        contentSha256: bytes && hashReferenceBytes(bytes), sizeBytes: bytes?.length ?? null,
+      }
+      this.observations.set(relative, observation)
+    }
+    if (!this.refs.has(key)) {
+      const { state, contentSha256 } = observation
+      const premise = { role, path: relative, state, contentSha256 }
+      this.serializedBytes += Buffer.byteLength(JSON.stringify(premise)) + 1
+      if (this.refs.size >= MAX_REFERENCE_PREMISES || this.serializedBytes > MAX_REFERENCE_BYTES) {
+        throw new UnqualifiedReference('REFERENCE_PREMISE_BUDGET_EXCEEDED')
+      }
+      this.refs.set(key, premise)
+    }
+    return observation
+  }
+
+  recheck(): SourceReferencePremise[] {
+    const pathStates = new Map<string, SourceReferencePremise['state']>()
+    for (const [relative, observed] of this.observations) {
+      if (inspectReferencePath(this.root, relative, pathStates) !== observed.state ||
+          (observed.state === 'file' && hashReferenceBytes(readSourceBytes(this.root, relative, observed.sizeBytes!)) !== observed.contentSha256)) {
+        throw new UnqualifiedReference('REFERENCE_PREMISE_CHANGED')
+      }
+    }
+    return [...this.refs.values()].sort((a, b) => compareText(a.role, b.role) || compareText(a.path, b.path))
+  }
+}
+
+function declarationBlockers(base: string): string[] {
+  const ext = path.posix.extname(base).toLowerCase()
+  if (!ext) return ['.d.ts', '.d.mts', '.d.cts'].flatMap(suffix => [base + suffix, base + '/index' + suffix])
+  const stem = base.slice(0, -ext.length)
+  if (ext === '.js' || ext === '.jsx') return [stem + '.d.ts']
+  if (ext === '.mjs' || ext === '.cjs') return [stem + (ext === '.mjs' ? '.d.mts' : '.d.cts')]
+  return []
+}
+
+function buildSourceReferenceProof(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, fact: SourceAuditFact, specifier: string, legacy: AuditImportTargetProof,
+): SourceReferenceProof {
+  const { projectRoot, selectionFingerprint, snapshotId } = artifact.source
+  const records = new Map(artifact.files.map(entry => [entry.path, entry]))
+  const identity = {
+    schemaVersion: '1.0.0', profile: 'js-ts-selected-source-reference-v1', pathIdentityProfile: 'selected-source-path-v1',
+    snapshotId, selectionFingerprint, selectedDomainDigest: hashReferenceBytes(JSON.stringify([...records.keys()].sort())),
+    originFile: file.path, originContentSha256: file.contentSha256!, importFactId: fact.id, sourceSpecifier: specifier,
+    resolutionPlatform: process.platform === 'win32' ? 'win32' : 'posix',
+  } as const
+  const incomplete = (reasonCode: string): SourceReferenceProof => ({
+    ...identity, candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null, premiseRefs: [], reasonCode,
+  })
+  if (!legacy.selectionComplete) return incomplete('SELECTION_INCOMPLETE')
+  if (/[%?#\\\x00-\x20]|\s$/.test(specifier) || specifier.endsWith('/') ||
+      specifier.replace(/^(?:\.\.?\/)+/, '').split('/').some(segment => !isOrdinaryPathSegment(segment))) {
+    return incomplete('UNSUPPORTED_SPECIFIER_SHAPE')
+  }
+  const relative = /^(?:\.\.?)(?:\/|$)/.test(specifier)
+  if (!relative && /^(?:[./\\]|[A-Za-z][A-Za-z0-9+.-]*:)/.test(specifier)) return incomplete('UNSUPPORTED_SPECIFIER_SHAPE')
+
+  try {
+    const root = fs.realpathSync.native(projectRoot)
+    if (inspectReferencePath(root, file.path) !== 'file') return incomplete('UNQUALIFIED_ORIGIN')
+    const normalized = relative ? jsTsPath(projectRoot, file.path, specifier, false) : null
+    if (relative && (!normalized || !('localPath' in normalized))) return incomplete('UNSUPPORTED_RELATIVE_PATH')
+    const premises = new ReferencePremises(root)
+    const resolver = new ConfiguredImportResolver(root, configPath => {
+      const observation = premises.capture('config', configPath)
+      if (observation.state === 'directory') throw new UnqualifiedReference('UNSUPPORTED_CONFIG')
+      return observation.bytes
+    })
+    const configured = resolver.sourceReferenceBases(specifier, file.path, relative)
+    if (!configured) return incomplete('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+    const bases = normalized && 'localPath' in normalized ? [normalized.localPath] : configured
+    const domain = new Set<string>()
+    const targets: Array<{ path: string; contentSha256: string }> = []
+    for (const base of bases) {
+      if (!base) return incomplete('UNQUALIFIED_MAPPING_TARGET')
+      const candidates = enumerateJsTsCandidatePaths(relativeCandidate(file.path, base), file.path)
+      if (!candidates?.length) return incomplete('UNSUPPORTED_CANDIDATE_SHAPE')
+      for (const candidate of candidates) domain.add(candidate)
+      if (domain.size > MAX_REFERENCE_CANDIDATES) return incomplete('REFERENCE_CANDIDATE_BUDGET_EXCEEDED')
+
+      if (!candidates.includes(base)) {
+        const literal = premises.capture('path', base)
+        if (literal.state === 'file') return incomplete('EXTENSIONLESS_FILE_PRESENT')
+        if (premises.capture('package-metadata', base + '/package.json').state !== 'absent') {
+          return incomplete('UNSUPPORTED_DIRECTORY_METADATA')
+        }
+        for (const entry of [base + '.json', base + '.node', base + '/index.json', base + '/index.node']) {
+          if (premises.capture('path', entry).state !== 'absent') return incomplete('UNSUPPORTED_SOURCE_ENTRY')
+        }
+      }
+      for (const blocker of declarationBlockers(base)) {
+        if (premises.capture('path', blocker).state !== 'absent') return incomplete('DECLARATION_RESOLUTION_BLOCKER')
+      }
+      for (const candidate of candidates) {
+        const selected = records.get(candidate)
+        const observed = premises.capture('candidate', candidate, selected?.sizeBytes ?? MAX_REFERENCE_BYTES)
+        if (observed.state === 'absent' && !selected) continue
+        if (observed.state !== 'file' || !selected?.contentSha256 || observed.contentSha256 !== selected.contentSha256 ||
+            observed.sizeBytes !== selected.sizeBytes ||
+            (selected.language !== 'typescript' && selected.language !== 'javascript')) {
+          return incomplete('UNQUALIFIED_CANDIDATE_STATE')
+        }
+        targets.push({ path: candidate, contentSha256: selected.contentSha256 })
+      }
+      // Only an entirely absent qualified mapping admits its next fallback.
+      if (targets.length > 0) break
+    }
+    if (!domain.size || (!relative && !targets.length)) return incomplete('BARE_SPECIFIER_FALLBACK_UNKNOWN')
+    const contradictsTarget = (candidate: string): boolean => !targets.some(target => target.path === candidate)
+    if ((legacy.status === 'proven-missing' && targets.length > 0) ||
+        (legacy.status === 'present' && legacy.candidatePaths.some(contradictsTarget)) ||
+        fact.targetPaths?.some(contradictsTarget)) return incomplete('RECORDED_TARGET_CONFLICT')
+    const singleton = targets.length === 1 ? targets[0] : undefined
+    const premiseRefs = premises.recheck()
+    if (fs.realpathSync.native(projectRoot) !== root || inspectReferencePath(root, file.path) !== 'file') {
+      return incomplete('UNQUALIFIED_ORIGIN')
+    }
+    assertSourceAuditFileFresh(artifact, file)
+    const result: SourceReferenceProof = {
+      ...identity, candidateEnumerationComplete: true, candidateDomain: [...domain].sort(),
+      qualifiedReference: singleton ? {
+        targetPath: singleton.path, targetContentSha256: singleton.contentSha256, referenceKind: 'selected-source-reference',
+      } : null,
+      premiseRefs, reasonCode: null,
+    }
+    return Buffer.byteLength(JSON.stringify(result)) <= MAX_REFERENCE_BYTES ? result : incomplete('REFERENCE_RESPONSE_BUDGET_EXCEEDED')
+  } catch (error) {
+    return incomplete(error instanceof UnqualifiedReference ? error.message : 'REFERENCE_PREMISE_UNAVAILABLE')
   }
 }
 

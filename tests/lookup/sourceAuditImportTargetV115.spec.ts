@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -22,9 +22,9 @@ function makeProject(files: Record<string, string>): string {
   }
   return root
 }
-async function build(root: string, src: string[] = ['src'], exclude: string[] = []): Promise<string> {
+async function build(root: string, src: string[] = ['src'], exclude: string[] = [], sourceAuditSchema?: '1.2.0'): Promise<string> {
   const out = join(root, 'out')
-  await runIndexCommand({ root, src, out, ...(exclude.length ? { exclude } : {}) })
+  await runIndexCommand({ root, src, out, sourceAuditSchema, ...(exclude.length ? { exclude } : {}) })
   return out
 }
 /** Fact id of the import in `file` whose specifier is `specifier`. */
@@ -74,6 +74,231 @@ const TS_FILES: Record<string, string> = {
   'src/vendor/v.ts': 'export const v = 1\n',
   'lib/o.ts': 'export const o = 1\n',
 }
+
+const rawHash = (text: string | Buffer) => createHash('sha256').update(text).digest('hex')
+const extensions = ['.cjs', '.cts', '.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']
+const directAndIndex = (base: string) => extensions.flatMap(ext => [base + ext, base + '/index' + ext]).sort()
+const ordinary = 'src/main.ts'
+const selectedSource = 'export const value = 1\n'
+const extended = (root: string, exclude: string[] = []) => build(root, ['src'], exclude, '1.2.0')
+const selectedReference = (targetPath: string) => ({
+  targetPath, targetContentSha256: rawHash(selectedSource), referenceKind: 'selected-source-reference',
+})
+const inspect = (out: string, specifier: string) => resolveAuditImportTarget(out, importId(out, ordinary, specifier))
+const unknown = (proof: ReturnType<typeof inspect>) => {
+  expect(proof.sourceReferenceProof).toMatchObject({
+    candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null, reasonCode: expect.stringMatching(/^[A-Z_]+$/),
+  })
+}
+
+describe('ordinary selected-source reference extension', () => {
+  it('keeps the legacy envelope and emits the exact deterministic wire shape only for the explicit profile', async () => {
+    const source = 'import "./peer.ts"\r\n'
+    const root = makeProject({ [ordinary]: source, 'src/peer.ts': selectedSource })
+    const old = inspect(await build(root), './peer.ts')
+    expect(old).not.toHaveProperty('sourceReferenceProof')
+    const out = await extended(root)
+    const artifact = readSourceAuditEvidence(out)
+    const { sourceReferenceProof, ...legacy } = inspect(out, './peer.ts')
+    expect(legacy).toEqual({ ...old, snapshotId: artifact.source.snapshotId })
+    expect(sourceReferenceProof).toEqual({
+      schemaVersion: '1.0.0', profile: 'js-ts-selected-source-reference-v1', pathIdentityProfile: 'selected-source-path-v1',
+      snapshotId: artifact.source.snapshotId, selectionFingerprint: artifact.source.selectionFingerprint,
+      selectedDomainDigest: rawHash(JSON.stringify(['src/main.ts', 'src/peer.ts'])),
+      originFile: ordinary, originContentSha256: rawHash(source), importFactId: legacy.importFactId, sourceSpecifier: './peer.ts',
+      resolutionPlatform: process.platform === 'win32' ? 'win32' : 'posix',
+      candidateEnumerationComplete: true, candidateDomain: ['src/peer.ts'],
+      qualifiedReference: selectedReference('src/peer.ts'),
+      premiseRefs: [
+        { role: 'candidate', path: 'src/peer.ts', state: 'file', contentSha256: rawHash(selectedSource) },
+        ...['jsconfig.json', 'src/jsconfig.json', 'src/tsconfig.json', 'tsconfig.json']
+          .map(path => ({ role: 'config', path, state: 'absent', contentSha256: null })),
+      ],
+      reasonCode: null,
+    })
+    expect(inspect(out, './peer.ts').sourceReferenceProof).toEqual(sourceReferenceProof)
+  })
+
+  it('separates bounded multi-target, absent, directory-index and extension-substituted results', async () => {
+    const root = makeProject({
+      [ordinary]: ['multi', 'gone', 'dir', 'sub.mjs', 'plain', 'package-name'].map(name =>
+        `import "${name === 'package-name' ? name : './' + name}"`).join('\n'),
+      'src/multi.ts': selectedSource, 'src/multi/index.jsx': selectedSource,
+      'src/dir/index.ts': selectedSource, 'src/sub.mts': selectedSource, 'src/plain': 'extensionless file',
+    })
+    const out = await extended(root)
+    for (const name of ['multi', 'gone', 'dir']) {
+      const proof = inspect(out, './' + name).sourceReferenceProof!
+      expect(proof).toMatchObject({
+        candidateEnumerationComplete: true, candidateDomain: directAndIndex('src/' + name), reasonCode: null,
+        qualifiedReference: name === 'dir' ? selectedReference('src/dir/index.ts') : null,
+      })
+      expect(proof.premiseRefs.filter(ref => ref.role === 'candidate' && ref.state === 'file').map(ref => ref.path))
+        .toEqual(name === 'dir' ? ['src/dir/index.ts'] : name === 'multi' ? ['src/multi.ts', 'src/multi/index.jsx'] : [])
+    }
+    expect(inspect(out, './dir').sourceReferenceProof!.premiseRefs).toEqual(expect.arrayContaining([
+      { role: 'path', path: 'src/dir', state: 'directory', contentSha256: null },
+      { role: 'path', path: 'src/dir/index.d.ts', state: 'absent', contentSha256: null },
+      { role: 'package-metadata', path: 'src/dir/package.json', state: 'absent', contentSha256: null },
+    ]))
+    expect(inspect(out, './sub.mjs').sourceReferenceProof).toMatchObject({
+      candidateDomain: ['src/sub.mjs', 'src/sub.mts'], qualifiedReference: selectedReference('src/sub.mts'),
+    })
+    unknown(inspect(out, './plain'))
+    unknown(inspect(out, 'package-name'))
+    writeFileSync(join(root, 'src/dir/package.json'), '{"main":"somewhere.js"}')
+    expect(inspect(out, './dir').sourceReferenceProof?.reasonCode).toBe('UNSUPPORTED_DIRECTORY_METADATA')
+    rmSync(join(root, 'src/dir/package.json'))
+    writeFileSync(join(root, 'src/dir/index.d.ts'), 'export declare const value: string')
+    expect(inspect(out, './dir').sourceReferenceProof?.reasonCode).toBe('DECLARATION_RESOLUTION_BLOCKER')
+    rmSync(join(root, 'src/dir/index.d.ts'))
+    writeFileSync(join(root, 'src/dir/index.json'), '{}')
+    expect(inspect(out, './dir').sourceReferenceProof?.reasonCode).toBe('UNSUPPORTED_SOURCE_ENTRY')
+    writeFileSync(join(root, 'src/gone.ts'), selectedSource)
+    unknown(inspect(out, './gone'))
+  })
+
+  it('authenticates raw configuration and inherited bytes, ordered alias fallback and nearer-config absence', async () => {
+    const parent = Buffer.from('\ufeff{/* comment */"compilerOptions":{"baseUrl":"..","paths":{"@/*":["missing/*","src/*"]},"strict":true}}\r\n')
+    const root = makeProject({
+      'tsconfig.json': '{"extends":"./cfg/base"}',
+      'cfg/base.json': parent.toString(),
+      [ordinary]: 'import "./peer"\nimport "@/peer"\n',
+      'src/peer.ts': selectedSource,
+    })
+    const out = await extended(root)
+    const alias = inspect(out, '@/peer')
+    expect(inspect(out, './peer').sourceReferenceProof?.qualifiedReference).toEqual(selectedReference('src/peer.ts'))
+    expect(alias.sourceReferenceProof).toMatchObject({
+      candidateEnumerationComplete: true,
+      candidateDomain: [...directAndIndex('missing/peer'), ...directAndIndex('src/peer')].sort(),
+      qualifiedReference: selectedReference('src/peer.ts'),
+    })
+    expect(alias.sourceReferenceProof!.premiseRefs).toEqual(expect.arrayContaining([
+      { role: 'config', path: 'cfg/base.json', state: 'file', contentSha256: rawHash(parent) },
+      { role: 'config', path: 'cfg/base', state: 'absent', contentSha256: null },
+      { role: 'config', path: 'src/tsconfig.json', state: 'absent', contentSha256: null },
+    ]))
+    const edited = Buffer.concat([parent, Buffer.from('\r\n')])
+    writeFileSync(join(root, 'cfg/base.json'), edited)
+    expect(inspect(out, '@/peer').sourceReferenceProof!.premiseRefs).toContainEqual({
+      role: 'config', path: 'cfg/base.json', state: 'file', contentSha256: rawHash(edited),
+    })
+    mkdirSync(join(root, 'missing'))
+    writeFileSync(join(root, 'missing/peer.ts'), selectedSource)
+    unknown(inspect(out, '@/peer')) // an unselected earlier fallback may not be bypassed
+    rmSync(join(root, 'missing/peer.ts'))
+    writeFileSync(join(root, 'cfg/base.json'), '{"compilerOptions":{"rootDirs":["../src"]}}')
+    unknown(inspect(out, '@/peer'))
+    unknown(inspect(out, './peer'))
+    writeFileSync(join(root, 'cfg/base.json'), parent)
+    writeFileSync(join(root, 'src/tsconfig.json'), '{"compilerOptions":{"paths":{"@/*":["./gone"]}}}')
+    unknown(inspect(out, '@/peer'))
+    writeFileSync(join(root, 'src/jsconfig.json'), '{}')
+    unknown(inspect(out, './peer'))
+    rmSync(join(root, 'src/tsconfig.json'))
+    rmSync(join(root, 'src/jsconfig.json'))
+    writeFileSync(join(root, 'tsconfig.json'), '{"extends":"external-config"}')
+    unknown(inspect(out, './peer'))
+  })
+
+  it('admits a baseUrl route and refuses ambiguous mappings and resolution-changing options', async () => {
+    const root = makeProject({ [ordinary]: 'import "peer"\n', 'src/peer.ts': selectedSource, 'tsconfig.json': '{"compilerOptions":{"baseUrl":"./src"}}' })
+    const out = await extended(root)
+    expect(inspect(out, 'peer').sourceReferenceProof?.qualifiedReference).toEqual(selectedReference('src/peer.ts'))
+    for (const compilerOptions of [
+      { paths: { '*': ['./src/peer'], '*eer': ['./src/peer'] } },
+      { baseUrl: './src', moduleSuffixes: ['.native', ''] },
+      { baseUrl: './src', moduleResolution: 'nodenext' },
+      { baseUrl: './src', customConditions: ['custom'] },
+    ]) {
+      writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions }))
+      unknown(inspect(out, 'peer'))
+    }
+  })
+
+  it('rejects excluded candidates, unsafe ancestors and noncanonical Windows spelling', async () => {
+    const root = makeProject({
+      [ordinary]: 'import "./peer.js"\nimport "./link/child"\nimport "../../../outside"\nimport "./PEER.ts"\n',
+      'src/peer.ts': selectedSource, 'src/peer.js': selectedSource,
+    })
+    const outside = makeProject({ 'child.ts': selectedSource })
+    symlinkSync(realpathSync(outside), join(root, 'src/link'), process.platform === 'win32' ? 'junction' : 'dir')
+    const out = await extended(root, ['src/peer.js'])
+    for (const specifier of ['./peer.js', './link/child', '../../../outside']) unknown(inspect(out, specifier))
+    if (process.platform === 'win32') unknown(inspect(out, './PEER.ts'))
+    rmSync(join(outside, 'child.ts'))
+    rmdirSync(outside)
+    unknown(inspect(out, './link/child')) // now dangling; still cannot prove the descendants absent
+  })
+
+  it('fails closed when ordered mapping candidates exceed the domain budget', async () => {
+    const paths = { alias: [...Array.from({ length: 16 }, (_unused, i) => './missing/' + i), './src/peer'] }
+    const root = makeProject({
+      [ordinary]: 'import "alias"\n', 'src/peer.ts': selectedSource, 'tsconfig.json': JSON.stringify({ compilerOptions: { paths } }),
+    })
+    const proof = inspect(await extended(root), 'alias')
+    expect(proof.sourceReferenceProof?.reasonCode).toBe('REFERENCE_CANDIDATE_BUDGET_EXCEEDED')
+    unknown(proof)
+  })
+
+  it('bounds large serialized proof responses without truncating a complete array', async () => {
+    // Large in UTF-8 without multiplying native path segments or Windows I/O.
+    const deep = Array.from({ length: 8 }, () => '界'.repeat(75)).join('/')
+    const paths = { alias: [...Array.from({ length: 15 }, (_unused, i) => './missing' + i + '/' + deep + '/peer'), './src/peer'] }
+    const root = makeProject({ [ordinary]: 'import "alias"\n', 'src/peer.ts': selectedSource })
+    const out = await extended(root)
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { paths } }))
+    const proof = inspect(out, 'alias')
+    expect(proof.sourceReferenceProof?.reasonCode).toBe('REFERENCE_RESPONSE_BUDGET_EXCEEDED')
+    unknown(proof)
+  })
+
+  it('bounds configuration discovery premises and omits oversized specifiers', async () => {
+    const folder = 'src/' + Array.from({ length: 504 }, () => 'd').join('/')
+    const origin = folder + '/main.ts'
+    const root = makeProject({ [origin]: 'import "./peer"\n', [folder + '/peer.ts']: selectedSource })
+    const out = await build(root, [folder], [], '1.2.0')
+    const proof = resolveAuditImportTarget(out, importId(out, origin, './peer'))
+    expect(proof.sourceReferenceProof?.reasonCode).toBe('REFERENCE_PREMISE_BUDGET_EXCEEDED')
+    unknown(proof)
+    const longSpecifier = './' + 'é'.repeat(2100)
+    const otherRoot = makeProject({ [ordinary]: `import "${longSpecifier}"\n` })
+    const artifact = readSourceAuditEvidence(await extended(otherRoot))
+    // If the source-fact size limit already drops the specifier, no proof is possible.
+    const fact = artifact.files[0]!.facts.find(fact => fact.sourceSpecifier === longSpecifier)
+    if (fact) expect(resolveAuditImportTarget(join(otherRoot, 'out'), fact.id)).not.toHaveProperty('sourceReferenceProof')
+    else expect(artifact.files[0]!.capabilities.imports).toBe('partial')
+  }, 30_000)
+
+  it('partitions the extension away from Python and JVM proofs on schema 1.2.0', async () => {
+    const root = makeProject({
+      'src/pkg/__init__.py': '', 'src/pkg/main.py': 'from .peer import value\n', 'src/pkg/peer.py': 'value = 1\n',
+      'src/q/Main.java': 'package q;\nimport p.Peer;\npublic class Main {}\n',
+      'src/p/Peer.java': 'package p;\npublic class Peer {}\n',
+    })
+    const out = await extended(root)
+    const artifact = readSourceAuditEvidence(out)
+    for (const language of ['python', 'java']) {
+      const fact = artifact.files.find(file => file.language === language && file.facts.some(fact => fact.kind === 'import'))!
+        .facts.find(fact => fact.kind === 'import')!
+      const proof = resolveAuditImportTarget(out, fact.id)
+      expect(proof).not.toHaveProperty('sourceReferenceProof')
+      if (language === 'java') expect(proof.declarationProof).toMatchObject({ scope: 'selected-ordinary-jvm-sources' })
+    }
+  })
+
+  it.each(["export * from './peer.js'", "export * as ns from './peer.js'", "export { absent as alias } from './peer.js'"])(
+    'qualifies the immediate re-export without inferring bindings: %s', async statement => {
+      const root = makeProject({ [ordinary]: statement, 'src/peer.ts': selectedSource })
+      const out = await extended(root)
+      const fact = readSourceAuditEvidence(out).files.find(file => file.path === ordinary)!.facts.find(fact => fact.exportOrigin === 're-export')!
+      expect(resolveAuditImportTarget(out, fact.id).sourceReferenceProof).toMatchObject({
+        importFactId: fact.id, sourceSpecifier: './peer.js', qualifiedReference: selectedReference('src/peer.ts'),
+      })
+    },
+  )
+})
 
 it('proves the selected immediate target of one constant import while retaining unknown alternatives', async () => {
   const origin = 'src/loader.ts'

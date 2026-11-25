@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { afterEach, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
+import { readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidence.js'
 import { cliArgs } from '../lookup/testCli.js'
 
 const scratch: string[] = []
@@ -13,18 +14,43 @@ afterEach(() => {
   for (const folder of scratch.splice(0)) fs.rmSync(folder, { recursive: true, force: true })
 })
 
-async function fixture() {
+async function fixture(withImport = false) {
   const root = fs.mkdtempSync(join(tmpdir(), 'kit-stream-'))
   scratch.push(root)
   const target = join(root, 'p')
   fs.mkdirSync(join(target, 'src'), { recursive: true })
   const source = join(target, 'src', 'a.ts')
-  fs.writeFileSync(source, 'export const probe = "yes"\r\n')
+  fs.writeFileSync(source, (withImport ? 'import "./b.js"\r\n' : '') + 'export const probe = "yes"\r\n')
   fs.writeFileSync(join(target, 'src', 'b.ts'), 'export const other = "yes"\n')
   const index = join(root, 'i')
   await runIndexCommand({ root: target, src: ['src'], out: index, sourceAuditSchema: '1.2.0' })
   return { root, target, source, index }
 }
+
+it('matches the standalone ordinary proof and rechecks premises on later frames', async () => {
+  const f = await fixture(true)
+  const artifact = readSourceAuditEvidence(f.index)
+  const factId = artifact.files.find(file => file.path === 'src/a.ts')!.facts.find(fact => fact.sourceSpecifier === './b.js')!.id
+  const item = { id: 'ordinary', selector: 'audit-import-target', factId }
+  const standalone = spawnSync(process.execPath, cliArgs(['lookup', '--index', f.index, '--audit-import-target', factId, '--json']),
+    { encoding: 'utf8', windowsHide: true })
+  expect(standalone.status, standalone.stderr).toBe(0)
+  const proof = JSON.parse(standalone.stdout)
+  expect(proof.sourceReferenceProof).toMatchObject({
+    candidateDomain: ['src/b.js', 'src/b.ts', 'src/b.tsx'], qualifiedReference: { targetPath: 'src/b.ts' },
+  })
+  const lookup = open(f.index)
+  try {
+    const first = await lookup.send(frame('initial', [item]))
+    expect(first.batch.results).toEqual([{ id: item.id, selector: item.selector, status: 'ok', response: proof }])
+    fs.writeFileSync(join(f.target, 'src/b.js'), 'export const extra = 1\n')
+    const second = await lookup.send(frame('changed', [item]))
+    expect(second.batch.results[0].response.sourceReferenceProof).toMatchObject({
+      candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null,
+    })
+    expect(await lookup.end()).toBe(0)
+  } finally { lookup.kill() }
+}, 30_000)
 
 const frame = (requestId: string, requests: unknown[]) => JSON.stringify({ schemaVersion: '1.0.0', requestId, requests })
 const fact = (path: string) => ({ selector: 'audit-file', id: path, path })
