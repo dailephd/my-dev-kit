@@ -16,7 +16,7 @@ import { prepareRustParser } from '../../src/languages/rust/parser.js'
 import { RustAdapter } from '../../src/languages/rust/adapter.js'
 import { TypeScriptAdapter } from '../../src/languages/typescript/adapter.js'
 import { SOURCE_AUDIT_CAPABILITIES, type SourceAuditFact, type SourceAuditFactKind } from '../../src/symbol-index/auditEvidenceTypes.js'
-import { extractAuditObservations, type SourceAuditExtractionPayload } from '../../src/symbol-index/auditObservations.js'
+import { auditFactId, extractAuditObservations, type SourceAuditExtractionPayload } from '../../src/symbol-index/auditObservations.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { assignDeclarationIdentities } from '../../src/symbol-index/declarationIdentity.js'
 import type { ExtractionResult } from '../../src/symbol-index/symbolExtractor.js'
@@ -169,9 +169,87 @@ describe('v1.15.0 Batch 2 TypeScript and JavaScript facts', () => {
     expect(named(payload, 'export', 'build')).toMatchObject({ exportOrigin: 'commonjs' })
     expect(named(payload, 'export', 'VERSION')).toMatchObject({ exportOrigin: 'commonjs' })
     expect(payload.capabilities.exports).toBe('complete')
-    // A destructured top-level declaration is outside the extraction profile and must make declarations partial.
-    expect(payload.capabilities.declarations).toBe('partial')
-    expect(payload.diagnostics.map((d) => d.code)).toContain('destructured-declaration-unsupported')
+    expect(payload.capabilities.declarations).toBe('complete')
+    expect(named(payload, 'declaration', 'join')).toMatchObject({
+      declarationKind: 'const', exported: false, exportOrigin: 'none',
+      symbolId: 'symbol:src/language-javascript.cjs#join',
+      span: { startLine: 2, startColumn: 8, endLine: 2, endColumn: 12 },
+    })
+    expect(payload.diagnostics.map((d) => d.code)).not.toContain('destructured-declaration-unsupported')
+  })
+
+  it('enumerates only local leaves in top-level patterns and links explicit exports to their declarations', () => {
+    const path = 'src/bindings.ts'
+    const lines = [
+      'export const ordinary = 1, { shorthand, original: local = fallback, nested: { value: inner }, ...rest } = input',
+      'let [first, , [third = initial], ...tail] = sequence, plain = 2',
+      'const { key: aliased } = { initializerKey: source }',
+      'export { aliased as publicName }',
+      ';({ ignored: assignment } = input)',
+      'function scope() { const { blockOnly } = input }',
+      'export const {} = input, [,] = sequence',
+    ]
+    const { payload } = audit(path, lines.join('\n'))
+    expect(payload.capabilities).toMatchObject({ declarations: 'complete', exports: 'complete', 'source-ranges': 'complete' })
+    expect(payload.diagnostics.map(d => d.code)).not.toContain('destructured-export-unsupported')
+    const leaves = [
+      ['shorthand', 1, 'const', true], ['local', 1, 'const', true], ['inner', 1, 'const', true], ['rest', 1, 'const', true],
+      ['first', 2, 'variable', false], ['third', 2, 'variable', false], ['tail', 2, 'variable', false], ['aliased', 3, 'const', true],
+    ] as const
+    expect(ofKind(payload, 'declaration').map(fact => fact.name)).toEqual([
+      'ordinary', 'shorthand', 'local', 'inner', 'rest', 'first', 'third', 'tail', 'plain', 'aliased', 'scope',
+    ])
+    expect(ofKind(payload, 'export').map(fact => fact.name)).toEqual(['ordinary', 'shorthand', 'local', 'inner', 'rest', 'publicName'])
+    for (const [name, line, declarationKind, exported] of leaves) {
+      const column = lines[line - 1]!.indexOf(name)
+      const span = { path, startLine: line, startColumn: column, endLine: line, endColumn: column + name.length }
+      const symbolId = `symbol:${path}#${name}`
+      expect(named(payload, 'declaration', name)).toMatchObject({
+        span, symbolId, declarationKind, exported,
+        visibility: exported ? 'public' : 'module',
+        exportOrigin: exported ? 'declared-export' : 'none',
+        id: auditFactId(path, 'declaration', line, column, 0),
+      })
+      if (line === 1) {
+        expect(named(payload, 'export', name)).toMatchObject({
+          span, symbolId, exportOrigin: 'declared-export', exported: true,
+          id: auditFactId(path, 'export', line, column, 0),
+        })
+      }
+    }
+    const ordinary = audit(path, 'export const ordinary = 1').payload
+    expect(named(payload, 'declaration', 'ordinary')).toEqual(named(ordinary, 'declaration', 'ordinary'))
+    expect(named(payload, 'export', 'ordinary')).toEqual(named(ordinary, 'export', 'ordinary'))
+    const aliasOnly = audit(path, '\n\n\nexport { aliased as publicName }').payload
+    expect(named(payload, 'export', 'publicName')).toEqual(named(aliasOnly, 'export', 'publicName'))
+  })
+
+  it('keeps repeated binding facts distinct and preserves the existing ordinary symbol identity', () => {
+    const path = 'src/repeated.js'
+    const before = audit(path, ' '.repeat(25) + 'var shared = 0').payload
+    const { payload, extraction } = audit(path, 'var { shared } = input;  var shared = 0; var [shared] = input')
+    const declarations = ofKind(payload, 'declaration')
+    expect(declarations).toHaveLength(3)
+    expect(declarations[1]).toEqual(named(before, 'declaration', 'shared'))
+    expect(new Set(declarations.map(fact => fact.id)).size).toBe(3)
+    expect(new Set(declarations.map(fact => fact.symbolId))).toEqual(new Set(extraction.symbols.map(symbol => symbol.nodeId)))
+    expect(new Set(declarations.map(fact => fact.symbolId)).size).toBe(3)
+    expect(payload.capabilities.declarations).toBe('complete')
+  })
+
+  it('preserves parser, namespace and ambient declaration limits alongside binding extraction', () => {
+    const malformed = audit('src/bad.ts', 'export const { broken: } = input').payload
+    expect(malformed.capabilities).toMatchObject({ declarations: 'partial', exports: 'partial', 'source-ranges': 'partial' })
+    expect(malformed.diagnostics.map(d => d.code)).toContain('syntax-errors')
+    expect(ofKind(malformed, 'declaration')).toEqual([])
+    const namespace = audit('src/ns.ts', 'const { local } = input\nexport namespace N { export const { hidden } = input }').payload
+    expect(named(namespace, 'declaration', 'local').span.endColumn).toBe(13)
+    expect(ofKind(namespace, 'declaration')).toHaveLength(1)
+    expect(namespace.capabilities).toMatchObject({ declarations: 'partial', exports: 'partial' })
+    expect(namespace.diagnostics.map(d => d.code)).toEqual(expect.arrayContaining(['module-declaration-unsupported', 'module-export-unsupported']))
+    const ambient = audit('src/ambient.ts', 'declare const { ambient } = input').payload
+    expect(ambient.capabilities.declarations).toBe('partial')
+    expect(ofKind(ambient, 'declaration')).toEqual([])
   })
 
   it('resolves a .cjs specifier to a .cts file and reports unresolved and ambiguous imports without proving absence', () => {

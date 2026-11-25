@@ -16,6 +16,7 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { auditCapabilityMap, auditFactId, type SourceAuditExtractionPayload } from './auditObservations.js'
 import type { AmbientClassification, SourceAuditFact } from './auditEvidenceTypes.js'
+import { assignDeclarationIdentities, legacyDeclarationId, qualifiedDeclarationId } from './declarationIdentity.js'
 import { API_RELATIONSHIP_PRODUCER, API_RELATIONSHIP_METHODS, type ApiSourceObservations, type ApiSourceObservation } from './apiRelationshipEvidenceTypes.js'
 import {
   type SymbolDefinition,
@@ -116,10 +117,12 @@ export function extractFromSource(
   const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false, unsafeRequireBinding: false }
   extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings, auditCollector)
   const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
-  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
-
+  const apiRelationships = extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null)
+  const bindings: AuditBinding[] = []
+  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector, bindings)
+  if (bindings.length) addAuditBindingSymbols(sourceFile, filePath, endLineLimit, symbols, sourceAudit.facts, bindings)
   return {
-    apiRelationships: extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null),
+    apiRelationships,
     sourceAudit,
     importBindings,
     commonJsExports,
@@ -148,7 +151,7 @@ export function extractDeclarationFileAudit(filePath: string, sourceText: string
   return {
     language: 'typescript',
     lineCount: sourceText.split('\n').length,
-    sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector, true),
+    sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector),
     imports: [], exports: [], symbols: [], reExportSpecifiers: [], exportAllSpecifiers: [],
   }
 }
@@ -955,7 +958,57 @@ export function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts
   return literals
 }
 
-function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector, auditOnly = false): SourceAuditExtractionPayload {
+interface AuditBinding {
+  identifier: ts.Identifier
+  kind: 'const' | 'variable'
+  explicit: boolean
+  facts: SourceAuditFact[]
+}
+
+function visitBindingIdentifiers(name: ts.BindingName, visit: (identifier: ts.Identifier) => void): void {
+  if (ts.isIdentifier(name)) visit(name)
+  else for (const element of name.elements) if (!ts.isOmittedExpression(element)) visitBindingIdentifiers(element.name, visit)
+}
+
+function addAuditBindingSymbols(
+  sf: ts.SourceFile, filePath: string, endLineLimit: number | null, symbols: SymbolDefinition[],
+  facts: SourceAuditFact[], bindings: AuditBinding[],
+): void {
+  const ordinary = assignDeclarationIdentities(filePath, symbols)
+  const counts = new Map<string, number>()
+  const bindingLines = new Map<string, Set<number>>()
+  for (const symbol of ordinary) {
+    if (!symbol.ownerKey) counts.set(symbol.name, (counts.get(symbol.name) ?? 0) + 1)
+  }
+  for (const { identifier, kind, explicit, facts: bindingFacts } of bindings) {
+    const name = identifier.text
+    const ordinal = counts.get(name) ?? 0
+    const nodeId = ordinal === 0 ? legacyDeclarationId(filePath, name) : qualifiedDeclarationId(filePath, '', name, ordinal)
+    counts.set(name, ordinal + 1)
+    const location = locationOf(identifier, sf, filePath, endLineLimit)
+    const lines = bindingLines.get(name) ?? new Set<number>()
+    lines.add(location.line)
+    bindingLines.set(name, lines)
+    symbols.push({ name, kind, location, exported: explicit, nodeId })
+    for (const fact of bindingFacts) fact.symbolId = nodeId
+  }
+  // Preserve a previously unique ordinary symbol match if a new same-line
+  // binding would make the normalizer's line-based lookup ambiguous.
+  for (const fact of facts) {
+    if ((fact.kind !== 'declaration' && fact.kind !== 'export') || fact.symbolId ||
+        !fact.name || !bindingLines.get(fact.name)?.has(fact.span.startLine)) continue
+    const matches = ordinary.filter(symbol => symbol.name === fact.name &&
+      symbol.location.line === fact.span.startLine && (!fact.declarationKind || symbol.kind === fact.declarationKind))
+    if (matches.length === 1) {
+      fact.symbolId = matches[0]!.nodeId
+      if (fact.kind === 'declaration') fact.ownerKey = matches[0]!.ownerKey ?? null
+    }
+  }
+  // Keep ordinary IDs fixed even when a newly enumerated binding precedes them.
+  for (const [index, symbol] of ordinary.entries()) symbols[index]!.nodeId = symbol.nodeId
+}
+
+function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector, bindings?: AuditBinding[]): SourceAuditExtractionPayload {
   const facts: SourceAuditFact[] = []
   const capabilities = auditCapabilityMap('unsupported')
   capabilities.declarations = 'complete'
@@ -1003,7 +1056,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   }
 
   for (const statement of sf.statements) {
-    if (auditOnly) {
+    if (!bindings) {
       if (ts.isEmptyStatement(statement)) continue
       if (exact && !ts.isExternalModule(sf) && isBodylessAmbientModule(statement)) {
         facts.push({ ...base, kind: 'declaration', span: span(statement), name: statement.name.text, declarationKind: 'ambient-module' })
@@ -1068,7 +1121,13 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
       const kind = statement.declarationList.flags & ts.NodeFlags.Const ? 'const' : 'variable'
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) declare(declaration, declaration.name.text, kind, explicit, false)
-        else {
+        else if (exact && bindings && !ts.getModifiers(statement)?.some(modifier => modifier.kind === ts.SyntaxKind.DeclareKeyword)) {
+          visitBindingIdentifiers(declaration.name, (identifier) => {
+            const start = facts.length
+            declare(identifier, identifier.text, kind, explicit, false)
+            bindings.push({ identifier, kind, explicit, facts: facts.slice(start) })
+          })
+        } else {
           partial('declarations', 'destructured-declaration-unsupported', 'A destructured top-level declaration is not enumerated.', declaration)
           if (explicit) partial('exports', 'destructured-export-unsupported', 'A destructured exported declaration is not enumerated.', declaration)
         }
@@ -1081,7 +1140,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
 
   // Audit-only files use the bounded statement profile above. Unsupported
   // subtrees are not scanned as executable code.
-  if (auditOnly) return { facts, capabilities, diagnostics }
+  if (!bindings) return { facts, capabilities, diagnostics }
 
   // CommonJS imports and exports observed by the existing module-evidence pass.
   for (const entry of collector.requires) {
@@ -1204,12 +1263,8 @@ function collectTsObservations(
   // Declaration census: a name declared more than once (or non-uniquely) is shadowed/ambiguous for ownership checks.
   const declared = new Map<string, number>()
   const addName = (name: string): void => { declared.set(name, (declared.get(name) ?? 0) + 1) }
-  const addBinding = (name: ts.BindingName): void => {
-    if (ts.isIdentifier(name)) addName(name.text)
-    else for (const element of name.elements) if (!ts.isOmittedExpression(element)) addBinding(element.name)
-  }
   const censusVisit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) addBinding(node.name)
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) visitBindingIdentifiers(node.name, identifier => addName(identifier.text))
     else if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) && node.name) addName(node.name.text)
     else if (ts.isImportClause(node) && node.name) addName(node.name.text)
     else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node) || ts.isImportEqualsDeclaration(node)) addName(node.name.text)
