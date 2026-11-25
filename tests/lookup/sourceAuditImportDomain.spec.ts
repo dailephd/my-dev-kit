@@ -1,13 +1,14 @@
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { existsSync, realpathSync, statSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, realpathSync, statSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { getSourceAuditFilePage, readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidence.js'
 import { resolveAuditImportTarget } from '../../src/lookup/resolveAuditImportTarget.js'
-import { resolveAuditImportDomain } from '../../src/lookup/resolveAuditImportDomain.js'
+import { resolveAuditImportDomain, resolveAuditImportDomainFromArtifact } from '../../src/lookup/resolveAuditImportDomain.js'
 import { validateSourceAuditEvidence } from '../../src/symbol-index/validateAuditEvidence.js'
 import { runCli } from './testCli.js'
 
@@ -17,10 +18,14 @@ afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: 
 async function indexed(source: (root: string) => string, other: Record<string, string> = {}, origin = 'origin.ts') {
   const root = mkdtempSync(join(tmpdir(), 'kit-b2-domain-'))
   roots.push(root)
-  mkdirSync(join(root, 'src'))
   const path = 'src/' + origin
+  mkdirSync(dirname(join(root, path)), { recursive: true })
   writeFileSync(join(root, path), source(root))
-  for (const [name, content] of Object.entries(other)) writeFileSync(join(root, 'src', name), content)
+  for (const [name, content] of Object.entries(other)) {
+    const file = join(root, 'src', name)
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, content)
+  }
   const out = join(root, 'out')
   await runIndexCommand({ root, src: ['src'], out, sourceAuditSchema: '1.2.0' })
   const audit = readSourceAuditEvidence(out)
@@ -31,6 +36,133 @@ async function indexed(source: (root: string) => string, other: Record<string, s
 }
 
 describe('authenticated dynamic import domains and ambient classification', () => {
+  it('qualifies an immutable computed singleton with its exact expression and premise identities', async () => {
+    const origin = 'export {}\nconst stem = "./peer"\nvoid import(stem + ".mjs")\n'
+    const target = 'throw new Error("selected source must not execute")\r\n'
+    const fixture = await indexed(() => origin, { 'peer.mjs': target })
+    const fact = fixture.expressions[0]!
+    expect(fact).toMatchObject({ kind: 'dynamic-import-expression', operandForm: 'computed' })
+    expect(fact).not.toHaveProperty('literalImportFactId')
+    expect(fixture.page.facts.filter(entry => entry.kind === 'import')).toEqual([])
+    const proof = fixture.query(0)
+    const targetSha = createHash('sha256').update(target).digest('hex')
+    const originSha = createHash('sha256').update(origin).digest('hex')
+    const absent = (role: string, path: string) => ({ role, path, state: 'absent', contentSha256: null })
+    expect(proof).toMatchObject({
+      outcome: 'finite', domainComplete: true, qualifiedPositiveWitnesses: [], disjointProof: null,
+      operandAlternatives: [{ alternativeIndex: 0, specifier: './peer.mjs', premiseIndexes: [0, 1],
+        resolution: { status: 'present', candidateEnumerationComplete: true, candidatePaths: ['src/peer.mjs', 'src/peer.mts'] } }],
+      premiseRefs: [
+        { type: 'source-span', filePath: fixture.path, contentSha256: originSha, role: 'operand',
+          span: { path: fixture.path, startLine: 3, startColumn: 12, endLine: 3, endColumn: 25 } },
+        { type: 'source-span', filePath: fixture.path, contentSha256: originSha, role: 'binding',
+          span: { path: fixture.path, startLine: 2, startColumn: 6, endLine: 2, endColumn: 21 } },
+      ],
+    })
+    expect('expressionReferenceProof' in proof && proof.expressionReferenceProof).toEqual({
+      schemaVersion: '1.0.0', profile: 'js-ts-computed-exact-source-reference-v1', expressionFactId: fact.id,
+      alternativeIndex: 0, specifier: './peer.mjs', targetPath: 'src/peer.mjs', targetContentSha256: targetSha,
+      premiseIndexes: [0, 1],
+      resolutionPremiseRefs: [
+        { role: 'candidate', path: 'src/peer.mjs', state: 'file', contentSha256: targetSha },
+        absent('candidate', 'src/peer.mts'),
+        ...['jsconfig.json', 'src/jsconfig.json', 'src/tsconfig.json', 'tsconfig.json'].map(path => absent('config', path)),
+        absent('path', 'src/peer.d.mts'),
+      ],
+    })
+    expect(JSON.stringify(fixture.query(0))).toBe(JSON.stringify(proof))
+
+    for (const key of ['span', 'operandSpan'] as const) {
+      const altered = structuredClone(fixture.audit)
+      const alteredFact = altered.files.find(file => file.path === fixture.path)!.facts.find(entry => entry.id === fact.id)!
+      alteredFact[key]!.startColumn!++
+      expect(() => resolveAuditImportDomainFromArtifact(altered, fact.id)).toThrow(/Recorded call and operand/)
+    }
+    writeFileSync(join(fixture.root, fixture.path), origin + '// changed')
+    expect(() => fixture.query(0)).toThrow(/STALE_SOURCE_EVIDENCE/)
+  })
+
+  it('keeps finite bounds independent of singleton, exact spelling and default-configuration qualification', async () => {
+    const fixture = await indexed(root => [
+      'const spec = "./"; declare const choose: boolean;',
+      'void import(spec + (choose ? "peer.mjs" : "other.mjs"));',
+      'void import(spec + "amb.js");',
+      'void import(spec + "sub.mjs");',
+      'void import(spec + "dir");',
+      'void import("@" + "/peer");',
+      ...['./p%65er.mjs', './peer.mjs?q', './peer.mjs#tag', pathToFileURL(join(root, 'src/peer.mjs')).href, '/absolute.mjs']
+        .map(value => 'void import("" + ' + JSON.stringify(value) + ');'),
+      'void import(spec + "peer.mjs");',
+    ].join('\n'), {
+      'peer.mjs': '', 'other.mjs': '', 'amb.js': '', 'amb.ts': '', 'sub.mts': '', 'dir/index.ts': '',
+    })
+    for (const [i, proof] of fixture.expressions.map((_fact, index) => [index, fixture.query(index)] as const)) {
+      expect(proof).toMatchObject({ outcome: 'finite', domainComplete: true, qualifiedPositiveWitnesses: [] })
+      if (i < 10) expect(proof).not.toHaveProperty('expressionReferenceProof')
+      else expect(proof).toHaveProperty('expressionReferenceProof')
+    }
+    expect(fixture.query(0).operandAlternatives).toHaveLength(2)
+    expect(fixture.query(1).operandAlternatives[0]?.resolution).toMatchObject({
+      candidateEnumerationComplete: true, candidatePaths: ['src/amb.js', 'src/amb.ts', 'src/amb.tsx'],
+    })
+    writeFileSync(join(fixture.root, 'src', 'tsconfig.json'), '{"compilerOptions":{"paths":{"@/*":["./*"]}}}')
+    for (const query of [4, 10]) expect(fixture.query(query)).not.toHaveProperty('expressionReferenceProof')
+    expect(fixture.query(10).operandAlternatives[0]?.resolution.candidateEnumerationComplete).toBe(false)
+    writeFileSync(join(fixture.root, 'src', 'tsconfig.json'), '{"compilerOptions":{"moduleSuffixes":[".custom",""]}}')
+    expect(fixture.query(10)).not.toHaveProperty('expressionReferenceProof')
+  })
+
+  it('rechecks candidate state and keeps legacy completeness when a declaration premise blocks the new witness', async () => {
+    const fixture = await indexed(() => 'void import("./" + "peer.mjs")', { 'peer.mjs': '' })
+    expect(fixture.query(0)).toHaveProperty('expressionReferenceProof')
+    const blocker = join(fixture.root, 'src/peer.d.mts')
+    writeFileSync(blocker, 'export {}')
+    expect(fixture.query(0)).not.toHaveProperty('expressionReferenceProof')
+    expect(fixture.query(0).operandAlternatives[0]?.resolution.candidateEnumerationComplete).toBe(true)
+    rmSync(blocker)
+    const competitor = join(fixture.root, 'src/peer.mts')
+    writeFileSync(competitor, 'export {}')
+    expect(fixture.query(0)).not.toHaveProperty('expressionReferenceProof')
+    expect(fixture.query(0).operandAlternatives[0]?.resolution.candidateEnumerationComplete).toBe(false)
+    rmSync(competitor)
+    writeFileSync(join(fixture.root, 'src/peer.mjs'), 'export {}')
+    expect(() => fixture.query(0)).toThrow(/STALE_SOURCE_EVIDENCE/)
+  })
+
+  it('rejects a replaced path identity even when the selected bytes still match', async () => {
+    const fixture = await indexed(() => 'void import("./dir/" + "peer.mjs")', { 'dir/peer.mjs': 'export {}' })
+    expect(fixture.query(0)).toHaveProperty('expressionReferenceProof')
+    const previous = join(fixture.root, 'src/dir')
+    const moved = join(fixture.root, 'src/moved')
+    renameSync(previous, moved)
+    symlinkSync(moved, previous, process.platform === 'win32' ? 'junction' : 'dir')
+    expect(fixture.query(0)).toMatchObject({ outcome: 'finite', domainComplete: true })
+    expect(fixture.query(0)).not.toHaveProperty('expressionReferenceProof')
+  })
+
+  it('omits only the extension when the complete response would exceed 1 MiB', async () => {
+    const folder = [...Array.from({ length: 5 }, () => '界'.repeat(50)), 'a'.repeat(95),
+      ...Array.from({ length: 325 }, () => 'd')].join('/')
+    const guards = '${true ? "" : ""}'.repeat(220)
+    const fixture = await indexed(() => 'void import(`./peer' + guards + '.mjs`)\nvoid import("./" + "peer.mjs")',
+      { [folder + '/peer.mjs']: 'export {}' }, folder + '/origin.ts')
+    const proof = fixture.query(0)
+    const small = fixture.query(1)
+    expect(proof).toMatchObject({ outcome: 'finite', domainComplete: true, operandAlternatives: [
+      { resolution: { status: 'present', candidateEnumerationComplete: true } },
+    ] })
+    expect(proof.premiseRefs).toHaveLength(221)
+    expect(proof).not.toHaveProperty('expressionReferenceProof')
+    expect(small).toHaveProperty('expressionReferenceProof')
+    if (!('expressionReferenceProof' in small)) throw new Error('Missing small control extension')
+    const extended = { ...proof, expressionReferenceProof: {
+      ...small.expressionReferenceProof, expressionFactId: fixture.expressions[0]!.id,
+      premiseIndexes: proof.operandAlternatives[0]!.premiseIndexes,
+    } }
+    expect(Buffer.byteLength(JSON.stringify(proof))).toBeLessThan(1024 * 1024)
+    expect(Buffer.byteLength(JSON.stringify(extended))).toBeGreaterThan(1024 * 1024)
+  }, 60_000)
+
   it('preserves ordinary facts and records one typed expression per call with exact operands', async () => {
     const fixture = await indexed(() => [
       'export {}; const peer = "./peer.ts";', 'import(peer);', 'import("./peer");',
@@ -46,6 +178,7 @@ describe('authenticated dynamic import domains and ambient classification', () =
       outcome: 'finite', domainComplete: true,
       qualifiedPositiveWitnesses: [{ targetPath: 'src/peer.ts', targetProof: { status: 'present' } }],
     })
+    expect(fixture.query(0)).not.toHaveProperty('expressionReferenceProof')
     expect(fixture.query(2)).toMatchObject({ outcome: 'finite', qualifiedPositiveWitnesses: [] })
     expect(fixture.query(3)).toMatchObject({ outcome: 'indeterminate', domainComplete: false, disjointProof: null })
     const bad = structuredClone(fixture.audit)
@@ -85,6 +218,7 @@ describe('authenticated dynamic import domains and ambient classification', () =
       const query = fixture.query(i)
       expect(query).toMatchObject({ outcome: 'finite', disjointProof: null, operandAlternatives: [{ specifier: operand }] })
       expect(query.qualifiedPositiveWitnesses.map(w => w.targetPath)).toEqual([target])
+      expect(query).not.toHaveProperty('expressionReferenceProof')
       expect(resolveAuditImportTarget(fixture.out, fact.literalImportFactId!))
         .toMatchObject({ status: 'present', candidatePaths: [target], sourceSpecifier: operand })
       expect(fixture.query(i)).toEqual(query)
@@ -210,6 +344,7 @@ describe('authenticated dynamic import domains and ambient classification', () =
     })
     expect(fixture.query(1)).toMatchObject({ outcome: 'finite', operandAlternatives: [{ specifier: './peer' }] })
     expect(fixture.query(2)).toMatchObject({ outcome: 'disjoint-selected-domain', disjointProof: { rule: 'fixed-normalized-path-v1' } })
+    expect(fixture.query(2)).not.toHaveProperty('expressionReferenceProof')
   })
 
   it('refuses shadowing, reassignment, mutated builtins, unknown CWD and the website-style runtime operand', async () => {
@@ -228,9 +363,13 @@ describe('authenticated dynamic import domains and ambient classification', () =
     ].join('\n'))
     expect(fixture.expressions).toHaveLength(4)
     expect(fixture.expressions[0]).toMatchObject({ operandForm: 'computed', operandSpan: { startLine: 5, startColumn: 7 } })
-    for (const i of [0, 1, 2, 3]) expect(fixture.query(i)).toMatchObject({
-      outcome: 'indeterminate', domainComplete: false, qualifiedPositiveWitnesses: [], disjointProof: null,
-    })
+    for (const i of [0, 1, 2, 3]) {
+      const proof = fixture.query(i)
+      expect(proof).toMatchObject({
+        outcome: 'indeterminate', domainComplete: false, qualifiedPositiveWitnesses: [], disjointProof: null,
+      })
+      expect(proof).not.toHaveProperty('expressionReferenceProof')
+    }
     const mutated = await indexed(() => [
       'import path from "node:path";', 'path.join = runCustom;', 'import(path.join(".", "peer"));',
     ].join('\n'))

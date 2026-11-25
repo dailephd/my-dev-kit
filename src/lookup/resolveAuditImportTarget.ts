@@ -240,15 +240,22 @@ function runtimeProfileIsDefault(): boolean {
   }
 }
 
-/** Qualify only implicit default source mapping. A source snapshot does not pin compiler options. */
-function defaultSourceMapping(projectRoot: string, origin: string): boolean {
+function* defaultConfigurationPaths(origin: string): Iterable<string> {
   let directory = path.posix.dirname(origin)
   for (;;) {
-    if (['tsconfig.json', 'jsconfig.json'].some(name =>
-      probeCandidate(projectRoot, path.posix.join(directory, name)) !== 'absent')) return false
-    if (directory === '.') return true
+    yield path.posix.join(directory, 'tsconfig.json')
+    yield path.posix.join(directory, 'jsconfig.json')
+    if (directory === '.') return
     directory = path.posix.dirname(directory)
   }
+}
+
+/** Qualify only implicit default source mapping. A source snapshot does not pin compiler options. */
+function defaultSourceMapping(projectRoot: string, origin: string): boolean {
+  for (const config of defaultConfigurationPaths(origin)) {
+    if (probeCandidate(projectRoot, config) !== 'absent') return false
+  }
+  return true
 }
 
 function isOrdinaryPathSegment(segment: string): boolean {
@@ -399,6 +406,44 @@ function declarationBlockers(base: string): string[] {
   if (ext === '.js' || ext === '.jsx') return [stem + '.d.ts']
   if (ext === '.mjs' || ext === '.cjs') return [stem + (ext === '.mjs' ? '.d.mts' : '.d.cts')]
   return []
+}
+
+/** Authenticate the already-enumerated domain for one exact, default-profile relative destination. */
+export function captureDefaultExactReferencePremises(
+  artifact: SourceAuditEvidenceArtifact, origin: SourceAuditFile, specifier: string,
+  target: SourceAuditFile, candidates: readonly string[],
+): SourceReferencePremise[] | null {
+  if (!/^\.\.?\//.test(specifier) || /[\\%?#\s\x00-\x1f]/.test(specifier) ||
+      specifier.replace(/^(?:\.\.?\/)+/, '').split('/').some(segment => !isOrdinaryPathSegment(segment)) ||
+      path.posix.normalize(path.posix.join(path.posix.dirname(origin.path), specifier)) !== target.path ||
+      !target.contentSha256 || target.sizeBytes === null ||
+      (target.language !== 'typescript' && target.language !== 'javascript')) return null
+  try {
+    if (!isQualifiedDefaultEsmSelectedReference(artifact, origin, specifier, target.path)) return null
+    const { projectRoot } = artifact.source
+    const root = fs.realpathSync.native(projectRoot)
+    if (inspectReferencePath(root, origin.path) !== 'file') return null
+    const premises = new ReferencePremises(root)
+    for (const config of defaultConfigurationPaths(origin.path)) {
+      if (premises.capture('config', config).state !== 'absent') return null
+    }
+    for (const blocker of declarationBlockers(target.path)) {
+      if (premises.capture('path', blocker).state !== 'absent') return null
+    }
+    for (const candidate of candidates) {
+      if (candidate === target.path) {
+        const observed = premises.capture('candidate', candidate, target.sizeBytes)
+        if (observed.state !== 'file' || observed.contentSha256 !== target.contentSha256 || observed.sizeBytes !== target.sizeBytes) return null
+      } else if (premises.capture('candidate', candidate).state !== 'absent') return null
+    }
+    const refs = premises.recheck()
+    if (fs.realpathSync.native(projectRoot) !== root || inspectReferencePath(root, origin.path) !== 'file') return null
+    assertSourceAuditFileFresh(artifact, origin)
+    return refs
+  } catch {
+    // Qualification is additive. A failure here does not alter the parent domain.
+    return null
+  }
 }
 
 function buildSourceReferenceProof(
