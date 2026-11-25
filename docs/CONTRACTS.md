@@ -502,3 +502,11 @@ registration. The wider `test-observations` capability keeps its own status.
 Consumers must qualify the producer and traverse its exact-file fact pages.
 Missing claims, including older caches, establish no additional completeness.
 Strict older 1.2.0 readers may reject the added capability. Schema 1.1.0 remains unchanged.
+
+## Planned KIT-FACTS-02 proof boundary
+
+The [v1.16.1 plan](ROADMAP.md#version-1161) proposes compatible source-audit correction; no new public schema or CLI behavior is established.
+
+Enumerate actual supported top-level local binding identifiers and explicit exports with source-authenticated spans and deterministic identities. Property keys, holes, initializer references, assignment patterns and unsupported lexical scopes are not inferred declarations. Complete syntactic enumeration covers only its supported profile. A computed import can be completely observed yet have an indeterminate destination; finite/exact/disjoint claims require their own verified binding, resolution, origin and selection premises. Generated-module naming does not prove exclusion.
+
+Preserve default schema 1.1.0, opt-in 1.2.0, unchanged fact identities, strict freshness/containment and pagination. Strengthened completeness invalidates incompatible cached extraction. Prove old/new reader-writer compatibility; a closed reader that cannot consume a changed shape requires explicit migration or reconsideration of the patch. Missing, stale, malformed, truncated and unknown evidence do not prove absence. Lab owns detector applicability.

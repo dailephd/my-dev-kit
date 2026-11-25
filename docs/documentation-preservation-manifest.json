@@ -32,6 +32,7 @@
       "## Version 1.14.0",
       "## Version 1.15.0",
       "## Version 1.16.0",
+      "## Version 1.16.1",
       "## Version 1.17.0",
       "## Version 2.0.0"
     ],
@@ -64,6 +65,7 @@
       "1.14.0",
       "1.15.0",
       "1.16.0",
+      "1.16.1",
       "1.17.0",
       "2.0.0"
     ],
@@ -166,6 +168,12 @@
         "ownership-oriented search",
         "endLine",
         "symbol-end-unknown"
+      ],
+      "1.16.1": [
+        "KIT-FACTS-02",
+        "destructured",
+        "computed-import",
+        "Acceptance criteria"
       ],
       "1.17.0": [
         "frontend-source retrieval gaps",

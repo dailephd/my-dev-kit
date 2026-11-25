@@ -6,6 +6,10 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 `@dailephd/my-dev-kit@1.16.0` is the version represented by this repository. Version 1.15.1 is the preceding release.
 
+## Next corrective planning reservation (2026-11-25)
+
+The v1.16.0 product baseline remains unchanged. [KIT-FACTS-02 / v1.16.1](ROADMAP.md#version-1161) is planned and not implemented. Next action: authenticate historical/current-pair reproduction and isolate the residual binding/export and bounded computed-import evidence gaps with Lab. No new acceptance or release preparation is established; existing target incomplete outcomes and evidence identities remain unchanged. The v1.17.0 frontend milestone is preserved.
+
 ## Version 1.15.1
 
 Version 1.15.1 corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). Package, lockfile and CLI versions agree at 1.15.1.

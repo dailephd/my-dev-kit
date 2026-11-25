@@ -858,3 +858,7 @@ Android support introduced through v1.10.0 includes static Gradle, manifest, res
 The main artifacts (`symbol-index.json`, `code-graph.json`) carry compact semantic metadata rather than full role detail. Compact metadata uses short arrays with role names, confidence, and artifact references. Full detail is in the separate semantic artifacts.
 
 This keeps the structural artifacts small enough for most project sizes while allowing detailed inspection through `data-model.json` and related artifacts. The `manifest.json` artifact registry allows consumers to load only what they need.
+
+## Planned KIT-FACTS-02 extension boundary
+
+The [v1.16.1 corrective reservation](ROADMAP.md#version-1161) is planned, not implemented. Current TypeScript AST extraction in `src/symbol-index/symbolExtractor.ts` explicitly leaves unsupported top-level destructured declarations partial. Extend that owner and existing audit types/validator, index artifact/snapshot/cache and authenticated lookup only for demonstrated residual gaps. Declaration/export enumeration and dynamic-import observation are independent of target resolution. Reuse the bounded expression-domain and selected-domain proof owners; no second parser/index or general evaluator. Lab owns audit applicability, coverage, findings and exit policy. See [Contracts](CONTRACTS.md#planned-kit-facts-02-proof-boundary).

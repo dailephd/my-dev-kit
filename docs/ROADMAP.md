@@ -1997,6 +1997,39 @@ Planned boundaries:
 This milestone is optional for the first ECO-01 executable-evidence integration.
 
 
+## Version 1.16.1
+
+**Status: planned corrective patch; not implemented.** Adopted planning reservation, 2026-11-25. **KIT-FACTS-02 — JavaScript/TypeScript binding and dynamic-import evidence correction.** This is an additive continuation of KIT-FACTS-01 and the v1.16.0 source-evidence producer.
+
+### Purpose and admission
+
+An external code-rot audit was blocked on a top-level destructured binding initialized by a computed dynamic import. The historical incomplete-evidence refusal is legitimate, not a proven target-source defect. The current AST extractor explicitly leaves unsupported top-level destructured declarations (and explicitly exported destructuring) partial. Version 1.16.0 already provides dynamic-import-expression observations, bounded operand evaluation, exact ESM witnesses and selected-domain proofs.
+
+First authenticate the historical receipts and actual executable/archive/integrity/schema/selection identities; a dependency declaration is not proof of the executed producer. Reproduce with a minimized synthetic fixture and the current qualified Kit 1.16.0 / Lab 0.11.0 pair. Freeze the remaining obligations and independent source/span oracle before editing. Keep private target source, identity and raw reports local; publish only synthetic fixtures and redacted diagnostics. If a responsibility already passes, do not repeat implementation or force a redundant patch. If the correction requires incompatible public contracts, obtain a separate compatibility/version decision.
+
+### Planned correction and existing owners
+
+- K01 — Historical and current-pair reproduction, precise source owner and predicate inventory, independent positive and negative fixture expectations.
+- K02 — Extend the existing AST declaration extraction in `src/symbol-index/symbolExtractor.ts` to enumerate supported top-level object/array patterns: shorthand, aliases, nested patterns, defaults, rest and holes. Emit actual local binding identifiers, declaration kinds, deterministic identities and exact source spans. Property keys, initializer references, assignment destructuring and unrelated lexical scopes are not inferred declarations. Retain partial status for unsupported or malformed constructs.
+- K03 — Enumerate supported explicitly exported destructured bindings through existing export semantics. An alias's local binding is the exported name. Preserve unchanged ordinary facts and identities; do not infer an imported module's exports from the consumer binding.
+- K04 — Reuse existing computed-expression inventory and finite/exact/selected-domain proof surfaces. Investigate a narrowly bounded generated-module destination proof using immutable binding provenance, qualified path construction, temporary-directory provenance and file-URL conversion only when a reproduced required predicate needs it. A bundler call or temporary-looking path cannot establish containment, existence, unique resolution or exclusion. Emit a positive/disjoint witness only when every premise is proven; otherwise retain indeterminate resolution. No arbitrary runtime evaluation, whole-origin closure or general build-dependent mapping.
+- K05 — Extend existing `auditEvidenceTypes.ts`, `validateAuditEvidence.ts`, `buildSourceAuditEvidence.ts` and `readSourceAuditEvidence.ts` only as required. Preserve authenticated selection, source hash/snapshot, exact-file pagination, caps, containment and deterministic ordering. Strengthened completeness requires a new extractor revision and invalidation of incompatible cached extraction. No new CLI command or flag is planned. Retain default schema 1.1.0 and explicit 1.2.0 unless a separately approved compatibility decision requires change.
+- K06 — Qualify exact packed producer and existing-reader compatibility. Extend existing source-audit language, observation, contract, inventory, incremental, lookup/import-domain and containment test owners. Do not add a parallel parser, index or resolution engine.
+
+### Acceptance criteria
+
+- Independently annotated named, object/array, alias, nested, default, rest, hole and exported binding fixtures enumerate correct names and spans, including literal and computed import initializers. Existing ordinary declarations/imports retain their behavior. Unsupported syntax or ambiguous identity never establishes complete absence.
+- Complete enumeration of observed import expressions is not complete resolution. Prove any new bounded profile with positive and negative controls for shadowing/mutation, unknown/mixed alternatives, unsupported path construction and insufficient selection. Genuinely unknown destinations remain unknown.
+- Stale, missing, malformed, mismatched, truncated and escaping evidence fails closed or stays incomplete as appropriate. Validate fresh/warm cache, deterministic artifact, exact lookup and old reader compatibility.
+- Relevant existing source-evidence/security regressions and independent package, docs, native/hosted readiness gates pass. Exact local packed producer/consumer pair is qualified against independent fixtures and the preserved SW-121 oracle; never substitute a differently packaged producer.
+- A complete controlled audit demonstrates supported behavior; a deliberately unresolved mandatory control retains natural incomplete exit 2. Authorized unchanged external-target replay covers the full applicable audit and reports actual coverage/gaps; product acceptance and target certification remain separate.
+
+### Dependencies and exclusions
+
+Paired reservation: Lab v0.11.1 / LAB-FACTS-02. See [coordinated roadmap](ECOSYSTEM_COORDINATED_ROADMAP.md#714-coordinated-source-evidence-corrective-patch--2026-11-25). Independently qualify local candidates before coordinated readiness. Producer-first publication only after old-reader compatibility; otherwise qualify the consumer dual-reader before enabling a new writer. No implementation version bump, release preparation, merge, tag or publication is authorized by this planning entry.
+
+Preserve v1.17.0 frontend retrieval, v2.0.0 artifact/plugin architecture, existing v1.19.0 binary/context and Python relative-import allocations, and release-unallocated KIT-OPS-01. Whole-origin runtime reference closure, arbitrary computed-import resolution and build-dependent mapping remain unallocated outside the specifically proven bounded correction.
+
 ## Version 1.17.0
 
 **Status: planned.**
