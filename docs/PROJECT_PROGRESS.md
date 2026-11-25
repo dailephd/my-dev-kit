@@ -8,7 +8,9 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Next corrective planning reservation (2026-11-25)
 
-The v1.16.0 product baseline remains unchanged. [KIT-FACTS-02 / v1.16.1](ROADMAP.md#version-1161) is planned and not implemented. Next action: authenticate historical/current-pair reproduction and isolate the residual binding/export and bounded computed-import evidence gaps with Lab. No new acceptance or release preparation is established; existing target incomplete outcomes and evidence identities remain unchanged. The v1.17.0 frontend milestone is preserved.
+The v1.16.0 product baseline remains unchanged. [KIT-FACTS-02 / v1.16.1](ROADMAP.md#version-1161) is planned and not implemented. A newer external report explicitly names Kit 1.16.0 / Lab 0.11.0: full requested file selection was achieved, but mandatory audit coverage remained INCOMPLETE. Its raw receipts, exact target identity and reported package gitHead/tag discrepancies still require authentication; this planning update does not independently verify them.
+
+Next action: review the retained architecture report and current-pair audit evidence, account for all required obligations, then retrieve missing Kit/Lab ownership, contract and test witnesses for ordinary imports/re-exports and reverse references, destructured bindings/exports, bounded computed imports and actual conditional-test observations. Treat package provenance separately from semantic coverage. Freeze supported profiles, compatibility/version decisions and implementation batches before source edits. Reuse sufficient evidence and preserve original snapshot identities. No new acceptance or release preparation is established; existing target incomplete outcomes and historical evidence remain unchanged. The v1.17.0 frontend milestone is preserved.
 
 ## Version 1.15.1
 
