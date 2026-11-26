@@ -25,6 +25,8 @@ my-dev-kit provides this structural and semantic view through deterministic loca
 
 Version 1.16.0 is the version represented by this package. It provides authenticated selected-file and import-domain evidence, bounded batch and stream queries, exact-byte occurrence, and optional predicate-specific executable test modifier qualification. The source-audit artifact defaults to `1.1.0`; the extended mode is `1.2.0`. See [Commands](COMMANDS.md#coordinated-source-evidence-commands-in-v1160) and [Contracts](CONTRACTS.md#coordinated-r3-import-evidence).
 
+The implemented, unreleased 1.16.1 correction strengthens authenticated bindings, bounded ordinary and computed references, and explicit Playwright modifier proof. See the [current implementation record](PROJECT_PROGRESS.md#next-corrective-planning-reservation-2026-11-25).
+
 Version 1.15.1 is the previous release. It corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). It retains all existing Python, JavaScript/TypeScript, framework, Rust, Android and graph-guided workflows. See [ROADMAP.md](ROADMAP.md#version-1140), [PROJECT_PROGRESS.md](https://github.com/dailephd/my-dev-kit/blob/main/docs/PROJECT_PROGRESS.md#version-1151) and [COMMANDS.md](COMMANDS.md).
 
 The v1.13.0 release adds the Android retrieval benchmark, public Android example, and workflow documentation. The Android sample provides static retrieval evidence; it is not built or executed as an Android application.

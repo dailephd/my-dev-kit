@@ -136,6 +136,8 @@ DOT output does not require Graphviz. SVG and PNG output require a local Graphvi
 
 This package represents `@dailephd/my-dev-kit@1.16.0`. It adds bounded import-domain and exact-byte evidence for authenticated selections, audit-only declaration-file selection, and finite batch and stream queries. The default source-audit schema remains `1.1.0`. Opt-in schema `1.2.0` includes the optional direct test-modifier capability. See the [source-evidence commands](docs/COMMANDS.md#coordinated-source-evidence-commands-in-v1160) and [proof limits](docs/CONTRACTS.md#coordinated-r3-import-evidence).
 
+The current source also contains the implemented, unreleased KIT-FACTS-02 correction for 1.16.1. It adds bounded static source-reference qualification, exact destructured binding evidence, and explicitly requested Playwright modifier evidence. See [implementation status](docs/PROJECT_PROGRESS.md#next-corrective-planning-reservation-2026-11-25) and [proof contracts](docs/CONTRACTS.md#kit-facts-02-proof-boundary).
+
 ## Version 1.15.1
 
 Version 1.15.1 corrects Python test-discovery so that `context` and related-test classification recognize standard Python test file naming conventions (`test_*.py` and `*_test.py`). It retains all existing Python, JavaScript/TypeScript, framework, Rust, Android and graph-guided workflows. Earlier releases remain documented in the [changelog](CHANGELOG.md). Install with `npm install -g @dailephd/my-dev-kit`; see [commands](docs/COMMANDS.md) and the [roadmap](docs/ROADMAP.md#version-1140).

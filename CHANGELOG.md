@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### KIT-FACTS-02 (target 1.16.1)
+
+- Record supported top-level destructured bindings and explicit exports with exact local identities and source spans.
+- Qualify bounded JavaScript/TypeScript imports and immediate re-exports, including contained local Bundler configurations. Expose finite source-reference domains and exact computed positives where their premises hold.
+- Offer explicit page-zero Playwright skip and only provenance through lookup, batch, and stream. Unnegotiated requests retain their legacy response shape.
+- Invalidate incompatible source extraction and preserve the default `1.1.0` and explicit `1.2.0` artifact layouts.
+
 ## 1.16.0 - 2026-11-24
 
 - Source-audit evidence adds audit-only declaration-file selection, whole-file ambient classification, and explicit-import evidence that remains usable when another Kotlin import capability is partial.

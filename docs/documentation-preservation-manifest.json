@@ -111,7 +111,7 @@
       "1.13.0",
       "1.14.0"
     ],
-    "implementedUnreleasedVersions": [],
+    "implementedUnreleasedVersions": ["1.16.1"],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",

@@ -503,10 +503,32 @@ Consumers must qualify the producer and traverse its exact-file fact pages.
 Missing claims, including older caches, establish no additional completeness.
 Strict older 1.2.0 readers may reject the added capability. Schema 1.1.0 remains unchanged.
 
-## Planned KIT-FACTS-02 proof boundary
+## KIT-FACTS-02 proof boundary
 
-The [v1.16.1 plan](ROADMAP.md#version-1161) proposes compatible source-audit correction; no new public schema or CLI behavior is established.
+The [1.16.1 correction](ROADMAP.md#version-1161) is implemented and unreleased. The coordinated version reservation is a corrective patch with additive lookup interfaces and qualified legacy compatibility.
 
-Enumerate actual supported top-level local binding identifiers and explicit exports with source-authenticated spans and deterministic identities. Property keys, holes, initializer references, assignment patterns and unsupported lexical scopes are not inferred declarations. Complete syntactic enumeration covers only its supported profile. A computed import can be completely observed yet have an indeterminate destination; finite/exact/disjoint claims require their own verified binding, resolution, origin and selection premises. Generated-module naming does not prove exclusion.
+### Bindings and ordinary source references
 
-Preserve default schema 1.1.0, opt-in 1.2.0, unchanged fact identities, strict freshness/containment and pagination. Strengthened completeness invalidates incompatible cached extraction. Prove old/new reader-writer compatibility; a closed reader that cannot consume a changed shape requires explicit migration or reconsideration of the patch. Missing, stale, malformed, truncated and unknown evidence do not prove absence. Lab owns detector applicability.
+The TypeScript AST extractor represents supported top-level object and array declaration patterns, including aliases, nesting, defaults, rest, and holes. Each actual local identifier carries its declaration kind, deterministic binding identity, and exact source span. Explicitly exported destructuring exposes the local names. Property keys, holes, initializer references, assignment patterns, and unrelated nested scopes contribute no declaration. Unsupported or malformed constructs can leave coverage partial.
+
+`FACTS02-ORDINARY-SOURCE-REFERENCE/1.0.0` adds `sourceReferenceProof` to applicable JS/TS import-target responses, including immediate re-exports. It binds the fact and origin hash to the snapshot, selection fingerprint, selected-domain digest, platform, and authenticated premises. A complete finite candidate domain gives an upper bound. A qualified positive needs a unique selected source candidate with current byte identity under that profile. Candidate existence and graph edges carry weaker evidence. A complete bound can exclude a candidate outside it. Applicable physical absence also requires qualified absent paths. Outside-selection, conflicting, or stale evidence withholds that claim. General runtime module resolution is outside the proof.
+
+### Configured ordinary references
+
+The proof evaluates effective local TypeScript/JavaScript configuration from captured bytes, including supported contained relative inheritance. Bundler resolution qualifies with compatible effective ES module or Preserve mode. The bounded profile supports contained relative JS/TS references, extension substitution, extensionless file and directory-index candidates, and configured `paths`/`baseUrl` routes within the local alias profile. Modern `.mjs`/`.mts` and `.cjs`/`.cts` families require explicit suffixes in Bundler mode. Alias fallback requires qualified absence across the earlier mapping's candidates. Unselected or conflicting file candidates, package metadata that could route a directory, declaration files, and competing non-source entries can withhold qualification.
+
+A6-R1 recognizes `noUncheckedIndexedAccess` and `types` as non-routing in the qualified Bundler profile. Language-service plugin configuration and `resolveJsonModule` are tolerated in that profile, with competing JSON entries guarded separately. Package-based or escaping inheritance, unsupported effective modes, non-default module suffixes, and unsupported routing options such as custom conditions remain outside the proof. Configuration, candidate, and competing-path freshness are required. Full TypeScript compiler and runtime bundler resolution remain outside the profile.
+
+### Computed import domains
+
+`FACTS02-COMPUTED-POSITIVE-REFERENCE/1.0.0` adds the optional `expressionReferenceProof` to the existing import-domain response. Finite operand enumeration can succeed while destination enumeration stays incomplete. The additional positive requires a parsed AST computed import, one qualified complete alternative, one exact selected target, authenticated origin/operand/target premises, and the separate default ESM resolver profile. Existing `qualifiedPositiveWitnesses` for linked literal imports retain their own import fact and target proof. Per-alternative candidate completeness and selected-domain bounds govern exclusion. The explicit disjoint outcome requires authenticated absence premises. Unknown runtime destinations remain indeterminate. Ordinary Bundler qualification does not extend computed destination resolution.
+
+### Playwright modifier observation
+
+`FACTS02-PLAYWRIGHT-MODIFIER-PROVENANCE/1.0.0` records bounded named `test` provenance from `@playwright/test`, a local extension using a qualified base binding, or a one-hop import of a qualified extended runner. It binds exact origin and wrapper content identities, import, binding and extension spans, and supported `skip` and `only` observations. Independently accounted legacy modifier facts survive. Unsupported uses, partial source analysis or missing modifier-specific evidence can yield partial coverage while qualified observations survive. General diagnostic truncation alone does not make modifier coverage partial. Conditions remain syntactic observations.
+
+`FACTS02-PLAYWRIGHT-PROOF-REQUEST/1.0.0` requires an explicit page-zero `audit-file` request using artifact schema `1.2.0`. A suitable response can carry the supplemental `testModifierProof` member and retains existing facts and pagination. Closed legacy readers continue to use unnegotiated requests. See the [commands](COMMANDS.md#supplemental-playwright-modifier-proof-kit-facts-02-implemented-unreleased).
+
+### Deferred capability boundaries
+
+General package resolution and package subpaths, arbitrary bundler plugins and package mapping, unsupported dotted source basenames, general JSON asset routing, PowerShell source analysis, and semantic global augmentation modeling remain deferred. The computed profile also leaves broader extensionless or alias destinations, runtime-generated module destinations, runtime temporary-path construction, `pathToFileURL` call-result evaluation, worker-location-derived destinations, and unrestricted wrapper parameter analysis outside support. Authenticated finite operands can still lack qualified destination or exclusion premises.

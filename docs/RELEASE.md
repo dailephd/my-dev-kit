@@ -17,6 +17,8 @@ The npm package is published manually. There is no automated release workflow fo
 
 ## Before release
 
+For KIT-FACTS-02, the qualified implementation archive still carries 1.16.0. Authorized release preparation must advance Kit package, lockfile, and runtime version together, then build and qualify the exact 1.16.1 archive and clean installed runtime. Record source/tag and registry archive, integrity, and executable identities separately. The earlier implementation archive remains bound to its original source. After authorized Kit publication, confirm registry bytes and legacy compatibility before Lab advances its exact Kit dependency. See [coordinated sequencing](ECOSYSTEM_COORDINATED_ROADMAP.md#714-coordinated-source-evidence-corrective-patch--2026-11-25).
+
 Confirm the release branch is clean and the package metadata is correct.
 
 Required checks:

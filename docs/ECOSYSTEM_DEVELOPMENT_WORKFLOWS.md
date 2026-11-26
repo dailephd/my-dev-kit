@@ -642,6 +642,8 @@ Reproduce the defect on the exact published artifact and record tag, peeled comm
 
 ### Multi-repository coordinated workflow
 
+For the implemented FACTS02 correction, use the retained exact local producer and consumer evidence for implementation-stage parity. Readiness is assessed per repository. Release preparation authenticates the new Kit bytes, then Lab admits the real registry producer and qualifies the packed consumer with that dependency. A downstream audit retains its native exit and target certification. Any separately authorized downstream release-gate disposition has its own evidence and authority.
+
 Record every repository/commit pair, package/API/schema dependency, compatibility rule, and release order before editing. Keep separate repository histories and edit scopes. Validate each candidate locally, then test actual producer-consumer artifacts using exact packs or commits. Observer-to-Orchestrator consumption and historical Lab replay are separate evidence claims. Do not claim a fresh four-tool replay from an older fixed fixture.
 
 After explicit release authorization, publish upstream-first where dependencies require it. Reinstall and validate the exact published upstream in the consumer before releasing the consumer. No single current command coordinates all repository releases.

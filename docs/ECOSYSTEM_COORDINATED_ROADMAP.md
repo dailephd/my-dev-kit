@@ -484,7 +484,7 @@ These reservations were adopted by ECO-00 on 2026-09-25. Published history does 
 - 1.14.0: existing framework expansion, with explicit facts needed by future full-stack contracts; preserve all existing planned framework work.
 - 1.15.0 / KIT-API-01: supported UI/client/API/schema/data relationships and contract-oriented change evidence, building on 1.14.0. No complete static proof of authorization or migrations.
 - 1.16.0: coordinated source-evidence producer (released). Original ECO-00 1.16.0 / KIT-OPS-01 bounded configuration/instrumentation/deployment-source facts remain planned and unimplemented, release unallocated; not required for the initial rollout.
-- 1.16.1 / KIT-FACTS-02: conditional corrective patch reservation (planned); see Section 7.1.4.
+- 1.16.1 / KIT-FACTS-02: corrective patch, IMPLEMENTED_UNRELEASED; see Section 7.1.4.
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
 #### 7.1.1 Post-ECO-00 Kit v1.12.5 additive patch decision — 2026-09-28
@@ -524,17 +524,17 @@ This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or creat
 
 Later source-evidence decisions superseded the earlier version reservations, not their feature scope: Kit 1.16.0 and Lab 0.11.0 are the released coordinated producer/consumer pair. KIT-OPS-01 and LAB-A11Y-01 remain planned, unimplemented and release-unallocated. The dated 7.1.1–7.1.3 statements preserve their historical mapping. Existing product acceptance and target certification are distinct.
 
-Reserve Kit 1.16.1 / KIT-FACTS-02 and Lab 0.11.1 / LAB-FACTS-02 as conditional corrections before the next feature releases. The [Kit roadmap](ROADMAP.md#version-1161) and [Lab roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#v0111--predicate-scoped-audit-qualification-correction-lab-facts-02) own detailed scope and acceptance. A newer external report explicitly names the released pair and reports full requested file selection but incomplete mandatory audit coverage. Authenticate its retained receipts and prior two-repository retrieval report before rerunning work; do not treat this as only an older-pair failure or equate its counts with historical target records. Classify every obligation and reuse sufficient evidence rather than forcing an unnecessary patch.
+Kit 1.16.1 / KIT-FACTS-02 and Lab 0.11.1 / LAB-FACTS-02 retain their corrective-patch allocations before the next feature releases. Both are IMPLEMENTED_UNRELEASED. Their evidence extensions are additive and legacy compatibility is qualified. The [Kit roadmap](ROADMAP.md#version-1161) and [Lab roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#v0111--predicate-scoped-audit-qualification-correction-lab-facts-02) own detailed scope and acceptance. A newer external report explicitly names the released pair and reports full requested file selection but incomplete mandatory audit coverage. That report and the two-repository retrieval evidence informed the original qualification and obligation classification. The result remains distinct from historical target records.
 
 The revised investigation explicitly includes ordinary static imports/re-exports and reverse-reference coverage, supported destructured declarations/exports, each reported computed-import site, actual conditional-test syntax and separate package provenance discrepancies. Kit owns qualified observations, supported static resolution profiles and bounded target-domain proofs. Lab owns acquisition integrity, applicability, predicate qualification, target-scoped reference/exclusion use, independent findings, coverage, diagnostics and exit policy. Candidate existence, source references, exact runtime references, finite target bounds and complete relevant-origin coverage are distinct claims. Complete file selection or expression enumeration does not complete an audit. Unresolved mandatory work retains natural exit 2; target findings and claimed false positives require their own adjudication.
 
-The reported earlier architecture investigation was partial and stopped at retrieval bootstrap: an intended package version was identified, but no installed executable or repository index was qualified, created or reused. This is not a coordinated readiness result. The next evidence task authenticates the report and reusable bounded-source witnesses, corrects contained acquisition prerequisites, qualifies the actual retrieval executable, and creates required indexes where matching artifacts are absent. It then retrieves only missing architecture, contract, caller and test witnesses with Kit, including acquisition/proof validation and pagination, cache invalidation, applicability and reader/writer compatibility. The Global Planner then freezes the supported profile, producer/consumer split, compatibility/version decision, edit owners and acceptance matrix. A documentation-only successor must not silently relabel old source snapshots. Keep target source/identity/raw evidence local and publish only synthetic fixtures and redacted diagnostics. Preserve historical results; only complete authorized replay can establish a new target-certification result.
+The reported earlier architecture investigation was partial and stopped at retrieval bootstrap: an intended package version was identified, but no installed executable or repository index was qualified, created or reused. This is not a coordinated readiness result. The subsequent evidence task authenticated retained witnesses, qualified the pinned retrieval executable and established matching navigation indexes. Bounded retrieval verified acquisition, proof validation, pagination, cache invalidation, applicability, and reader/writer compatibility before the Planner approved the implementation profile and acceptance matrix. A documentation-only successor must not silently relabel old source snapshots. Keep target source/identity/raw evidence local and publish only synthetic fixtures and redacted diagnostics. Preserve historical results; only complete authorized replay can establish a new target-certification result.
 
 Qualify exact local packed candidates independently and then together; prove old/new reader compatibility before producer-first publication. If a new mandatory shape would break a supported reader, qualify the consumer dual-reader first. Assess the reserved patch versions against both missing-capability scope and compatibility before implementation. Compare source, exact archive, installed CLI, registry metadata and release-tag identities as a separate provenance gate; do not infer semantic causality or repair old provenance from a metadata mismatch alone. No implementation, package version, merge or publication authorization is implied. Preserve Kit v1.17.0, Lab v0.12.0 and all later feature assignments, including v1.19.0 / v0.19.0 deferred binary/context and Python relative-import capabilities. Broader runtime reference closure, arbitrary computed-import resolution and build-dependent mapping remain unallocated. No Orchestrator or Observer change is required.
 
 The KIT-FACTS-02 compatibility decision keeps the legacy exact-file page as the default under both artifact schemas. The supplemental Playwright modifier proof requires an explicit page-zero lookup request against schema 1.2.0. Lab producer admission and integration remain separate from Kit qualification.
 
-The authorized A6 producer scope includes bounded static local JS/TS references under authenticated Bundler-compatible TypeScript configurations and independent modifier completeness when general diagnostics reach their cap. Global augmentation extraction and PowerShell source evidence remain separate unimplemented capabilities without release assignments. Runtime-generated import destinations remain unsupported. The Kit 1.16.1 and Lab 0.11.1 reservations remain conditional.
+The authorized A6 producer scope includes bounded static local JS/TS references under authenticated Bundler-compatible TypeScript configurations and independent modifier completeness when general diagnostics reach their cap. Global augmentation extraction and PowerShell source evidence remain separate unimplemented capabilities without release assignments. Runtime-generated import destinations remain unsupported. Implementation-stage exact package qualification and coordinated external regression are complete. Separate Step 5 readiness and release preparation remain pending. The qualified local archives carry the 1.16.0 and 0.11.0 package metadata.
 
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
@@ -560,7 +560,7 @@ ECO-00 rejects the earlier proposal to reuse 0.6.0 for LAB-EVIDENCE-01 because 0
 - 0.9.0-0.9.2: agent-success, provider telemetry/scheduler, and hardened prompt/report/gallery work, unchanged.
 - 0.10.0 / LAB-EVIDENCE-01: authorized verification capture/import, evidence identity/integrity, pure adapter contracts, controlled target boundary, and isolated ecosystem certification harness. Reuse existing process/browser/report infrastructure; not an unrestricted task runner.
 - 0.11.0: coordinated source-evidence consumer (released). Earlier ECO-00 0.11.0 / LAB-A11Y-01 quality-audit substrate and bounded live accessibility adapters, manual-review requirements and explicit target-state provenance remain planned and unimplemented, release unallocated.
-- 0.11.1 / LAB-FACTS-02: conditional predicate-scoped correction and qualified producer migration (planned); see Section 7.1.4.
+- 0.11.1 / LAB-FACTS-02: predicate-scoped correction, IMPLEMENTED_UNRELEASED; see Section 7.1.4.
 - 0.12.0 / LAB-WEBSEC-01: bounded local web-app security profile through the existing security-validation owner; no remote or manual pentesting by default.
 - 0.13.0 / LAB-PERF-01: performance budget/regression adapters, statistical comparison and applicability rules.
 - 0.14.0 / LAB-API-01: API/schema compatibility evidence and project-owned database/migration verification.
@@ -585,7 +585,7 @@ This table describes *capability prerequisites*, not permanent package pins.
 | ECO-04 | Observer performance/browser evidence | Lab metric/policy evaluation + generic Orchestrator intake | Observer, Lab | Kit |
 | ECO-05 | Kit supported API/data relationship evidence; project-native execution evidence | Lab API/migration evaluation + generic Orchestrator intake | Kit, Lab | Observer unless UI runtime verification selected |
 | ECO-06 | domain-specific native/adapted evidence | generic evidence intake | mostly Lab; bounded Kit additions where justified | Observer for non-browser profiles |
-| KIT-FACTS-02 / LAB-FACTS-02 (conditional) | Qualified binding/test observations, supported static import profiles and bounded reference domains | Predicate-scoped reference/exclusion qualification, diagnostics and truthful incomplete results | Kit and/or Lab as demonstrated by authenticated obligations, profile and compatibility decisions | Orchestrator, Observer |
+| KIT-FACTS-02 / LAB-FACTS-02 (implemented unreleased) | Qualified binding/test observations, supported static import profiles and bounded reference domains | Predicate-scoped reference/exclusion qualification, diagnostics and truthful incomplete results | Kit and/or Lab as demonstrated by authenticated obligations, profile and compatibility decisions | Orchestrator, Observer |
 
 ### 7.6 Version-number collision rules
 
@@ -602,12 +602,12 @@ ECO-00 resolved the Lab collision by preserving all existing 0.6.0-0.9.2 assignm
 
 ### 7.7 Adopted release train view
 
-The release train preserves the ECO-00 baseline and later adopted ordering, including conditional corrective reservations. It does not designate the current release of every repository; consult each repository's latest published state and current-state documentation. Unallocated historical reservations are shown separately.
+The release train preserves the ECO-00 baseline and later adopted ordering, including the implemented-unreleased corrective reservations. It does not designate the current release of every repository; consult each repository's latest published state and current-state documentation. Unallocated historical reservations are shown separately.
 
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 coordinated source evidence] --> K161[1.16.1 KIT-FACTS-02 conditional] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 coordinated source evidence] --> K161[1.16.1 KIT-FACTS-02 implemented unreleased] --> K17[1.17 frontend retrieval completion]
     KOPS["KIT-OPS-01: release unallocated"]
   end
 
@@ -622,7 +622,7 @@ flowchart LR
   subgraph LAB[lab]
     L060[0.6.0 freshness] --> L061[0.6.1 neighborhoods] --> L062[0.6.2 staleness] --> L063[0.6.3 partial-refresh planning]
     L063 --> L07[0.7 scaling] --> L08[0.8 retrieval] --> L09[0.9 agent/provider work] --> L010[0.10 LAB-EVIDENCE-01]
-    L010 --> L011[0.11 coordinated source evidence] --> L0111[0.11.1 LAB-FACTS-02 conditional] --> L012[0.12 web security] --> L013[0.13 performance] --> L014[0.14 API assurance]
+    L010 --> L011[0.11 coordinated source evidence] --> L0111[0.11.1 LAB-FACTS-02 implemented unreleased] --> L012[0.12 web security] --> L013[0.13 performance] --> L014[0.14 API assurance]
     LA11Y["LAB-A11Y-01: release unallocated"]
   end
 
