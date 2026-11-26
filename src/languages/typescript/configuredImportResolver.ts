@@ -26,7 +26,11 @@ const SOURCE_REFERENCE_COMPILER_OPTIONS = new Set([
 // Language-service plugins do not configure the compiler's local file lookup.
 // JSON resolution is outside the source profile and is checked by the caller's
 // non-source candidate guards.
-const BUNDLER_SOURCE_REFERENCE_OPTIONS = new Set(['plugins', 'resolveJsonModule'])
+// Indexed-access checking and ambient type inclusion leave the explicit local
+// file candidates unchanged.
+const BUNDLER_SOURCE_REFERENCE_OPTIONS = new Set([
+  'plugins', 'resolveJsonModule', 'noUncheckedIndexedAccess', 'types',
+])
 
 function sourceReferenceMode(config: Options | null): 'legacy' | 'bundler' | null {
   const { module, moduleResolution, target } = config?.proofOptions ?? {}

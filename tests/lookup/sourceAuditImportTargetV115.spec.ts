@@ -92,6 +92,49 @@ const unknown = (proof: ReturnType<typeof inspect>) => {
 }
 
 describe('ordinary selected-source reference extension', () => {
+  it('qualifies Bundler source references with indexed-access checking and ambient type inclusion', async () => {
+    const root = makeProject({
+      [ordinary]: 'import "./peer"\n', 'src/peer.ts': selectedSource,
+      'tsconfig.json': '{"compilerOptions":{"module":"esnext","moduleResolution":"bundler"}}',
+    })
+    const out = await extended(root)
+    const lookup = () => inspect(out, './peer').sourceReferenceProof
+    const config = join(root, 'tsconfig.json')
+    const bundler = { module: 'esnext', moduleResolution: 'bundler' }
+    for (const extra of [
+      {}, { noUncheckedIndexedAccess: true }, { types: ['node'] }, { noUncheckedIndexedAccess: true, types: ['node'] },
+    ]) {
+      const text = JSON.stringify({ compilerOptions: { ...bundler, ...extra } })
+      writeFileSync(config, text)
+      const proof = lookup()
+      expect(proof, JSON.stringify(extra)).toMatchObject({
+        candidateEnumerationComplete: true, qualifiedReference: selectedReference('src/peer.ts'), reasonCode: null,
+      })
+      expect(proof?.premiseRefs).toContainEqual({
+        role: 'config', path: 'tsconfig.json', state: 'file', contentSha256: rawHash(text),
+      })
+    }
+    const typeOptions = { noUncheckedIndexedAccess: true, types: ['node'] }
+    for (const unsupported of [
+      { ...bundler, ...typeOptions, typeRoots: ['./ambient'] },
+      { ...bundler, ...typeOptions, rootDirs: ['src', 'generated'] },
+      { ...bundler, ...typeOptions, moduleSuffixes: ['.native', ''] },
+      { ...bundler, ...typeOptions, noUncheckedIndexedAccess: 'true' },
+      { ...bundler, ...typeOptions, types: 'node' },
+      { ...typeOptions, module: 'commonjs', moduleResolution: 'node10' },
+    ]) {
+      writeFileSync(config, JSON.stringify({ compilerOptions: unsupported }))
+      expect(lookup()).toMatchObject({
+        candidateEnumerationComplete: false, qualifiedReference: null, reasonCode: 'UNQUALIFIED_CONFIGURATION_OR_MAPPING',
+      })
+    }
+    writeFileSync(config, JSON.stringify({ compilerOptions: { ...bundler, ...typeOptions } }))
+    writeFileSync(join(root, 'src/peer.jsx'), selectedSource)
+    expect(lookup()).toMatchObject({
+      candidateEnumerationComplete: false, qualifiedReference: null, reasonCode: 'UNQUALIFIED_CANDIDATE_STATE',
+    })
+  })
+
   it('qualifies bounded relative and configured references with effective Bundler options', async () => {
     const base = '{"compilerOptions":{"module":"commonjs","moduleResolution":"bundler","strict":true,"resolveJsonModule":true,"plugins":[{"name":"unused-language-service-plugin"}]}}\n'
     const config = '{"extends":"./config/base","compilerOptions":{"module":"preserve","paths":{"#no":["./missing"],"local":["./missing","./src/peer"],"lib/*":["./src/*"]}}}\n'
