@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { getSourceAuditFilePage, readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidence.js'
 import { resolveAuditImportTarget } from '../../src/lookup/resolveAuditImportTarget.js'
-import { resolveAuditImportDomain, resolveAuditImportDomainFromArtifact } from '../../src/lookup/resolveAuditImportDomain.js'
+import { appendComputedReferenceWithinBudget, resolveAuditImportDomain, resolveAuditImportDomainFromArtifact } from '../../src/lookup/resolveAuditImportDomain.js'
 import { validateSourceAuditEvidence } from '../../src/symbol-index/validateAuditEvidence.js'
 import { runCli } from './testCli.js'
 
@@ -141,27 +141,44 @@ describe('authenticated dynamic import domains and ambient classification', () =
   })
 
   it('omits only the extension when the complete response would exceed 1 MiB', async () => {
-    const folder = [...Array.from({ length: 5 }, () => '界'.repeat(50)), 'a'.repeat(95),
-      ...Array.from({ length: 325 }, () => 'd')].join('/')
-    const guards = '${true ? "" : ""}'.repeat(220)
-    const fixture = await indexed(() => 'void import(`./peer' + guards + '.mjs`)\nvoid import("./" + "peer.mjs")',
-      { [folder + '/peer.mjs']: 'export {}' }, folder + '/origin.ts')
+    const fixture = await indexed(() => 'void import("./" + "peer.mjs")', { 'peer.mjs': 'export {}' })
     const proof = fixture.query(0)
-    const small = fixture.query(1)
-    expect(proof).toMatchObject({ outcome: 'finite', domainComplete: true, operandAlternatives: [
+    if (!('expressionReferenceProof' in proof) || !proof.expressionReferenceProof) {
+      throw new Error('Missing native control extension')
+    }
+    const { expressionReferenceProof, ...parent } = proof
+    expect(parent).toMatchObject({ outcome: 'finite', domainComplete: true, operandAlternatives: [
       { resolution: { status: 'present', candidateEnumerationComplete: true } },
     ] })
-    expect(proof.premiseRefs).toHaveLength(221)
-    expect(proof).not.toHaveProperty('expressionReferenceProof')
-    expect(small).toHaveProperty('expressionReferenceProof')
-    if (!('expressionReferenceProof' in small)) throw new Error('Missing small control extension')
-    const extended = { ...proof, expressionReferenceProof: {
-      ...small.expressionReferenceProof, expressionFactId: fixture.expressions[0]!.id,
-      premiseIndexes: proof.operandAlternatives[0]!.premiseIndexes,
-    } }
-    expect(Buffer.byteLength(JSON.stringify(proof))).toBeLessThan(1024 * 1024)
-    expect(Buffer.byteLength(JSON.stringify(extended))).toBeGreaterThan(1024 * 1024)
-  }, 60_000)
+    expect(expressionReferenceProof).toMatchObject({ targetPath: 'src/peer.mjs' })
+
+    // Supply synthetic resolution records to the serialization decision without
+    // creating their paths on disk. Keep each path below the individual path budget.
+    const resolutionPremiseRefs = Array.from({ length: 300 }, (_, i) => ({
+      role: 'config' as const, state: 'absent' as const, contentSha256: null, path: `missing-${i}/tsconfig.json`,
+    }))
+    const extension = { ...expressionReferenceProof, resolutionPremiseRefs }
+    const wireBytes = () => Buffer.byteLength(JSON.stringify({ ...parent, expressionReferenceProof: extension }), 'utf8')
+    const limit = 1024 * 1024
+    let remaining = limit - wireBytes()
+    for (const premise of resolutionPremiseRefs) {
+      if (remaining === 0) break
+      const bytes = Math.min(remaining, 3600)
+      const segments = Math.floor(bytes / 181)
+      const suffixBytes = bytes % 181
+      premise.path = ('界'.repeat(60) + '/').repeat(segments) +
+        'x'.repeat(suffixBytes) + premise.path
+      remaining -= bytes
+    }
+    const last = resolutionPremiseRefs.at(-1)!
+    expect(wireBytes()).toBe(limit)
+    expect(appendComputedReferenceWithinBudget(parent, extension)).toEqual({ ...parent, expressionReferenceProof: extension })
+
+    last.path += 'x'
+    expect(wireBytes()).toBe(limit + 1)
+    expect(appendComputedReferenceWithinBudget(parent, extension)).toBe(parent)
+    expect(parent).not.toHaveProperty('expressionReferenceProof')
+  })
 
   it('preserves ordinary facts and records one typed expression per call with exact operands', async () => {
     const fixture = await indexed(() => [

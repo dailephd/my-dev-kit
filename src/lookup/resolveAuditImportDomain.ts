@@ -31,6 +31,14 @@ interface ExpressionReferenceProof {
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const MAX_RESPONSE_BYTES = 1024 * 1024
 
+/** An independently qualified parent remains usable when its supplement exceeds the wire budget. */
+export function appendComputedReferenceWithinBudget<Parent extends object>(
+  parent: Parent, expressionReferenceProof: ExpressionReferenceProof,
+): Parent & { expressionReferenceProof?: ExpressionReferenceProof } {
+  const extended = { ...parent, expressionReferenceProof }
+  return Buffer.byteLength(JSON.stringify(extended), 'utf8') <= MAX_RESPONSE_BYTES ? extended : parent
+}
+
 /** Evaluate only syntactic forms grounded in the authenticated origin. */
 function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.Node, role: Role) => void): string[] {
   const bindings = new Map<string, ts.VariableDeclaration>()
@@ -231,8 +239,7 @@ export function resolveAuditImportDomainFromArtifact(artifact: SourceAuditEviden
       alternativeIndex: 0, specifier, targetPath: target.path, targetContentSha256: target.contentSha256!,
       premiseIndexes: indexes, resolutionPremiseRefs,
     }
-    const extended = { ...result, expressionReferenceProof }
-    return Buffer.byteLength(JSON.stringify(extended), 'utf8') <= MAX_RESPONSE_BYTES ? extended : result
+    return appendComputedReferenceWithinBudget(result, expressionReferenceProof)
   } catch (error) {
     if (error instanceof DomainGap) return incomplete(error.reason)
     throw error

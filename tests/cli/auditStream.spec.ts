@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 async function fixture(prefix = '', sibling = 'export const other = "yes"\n') {
-  const root = fs.mkdtempSync(join(tmpdir(), 'kit-stream-'))
+  const root = fs.realpathSync.native(fs.mkdtempSync(join(tmpdir(), 'kit-stream-')))
   scratch.push(root)
   const target = join(root, 'p')
   fs.mkdirSync(join(target, 'src'), { recursive: true })

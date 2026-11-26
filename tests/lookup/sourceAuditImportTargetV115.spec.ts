@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
 import { readSourceAuditEvidence, SourceAuditEvidenceError } from '../../src/lookup/readSourceAuditEvidence.js'
-import { resolveAuditImportTarget } from '../../src/lookup/resolveAuditImportTarget.js'
+import { isBoundedReferenceSpecifier, ReferencePremises, resolveAuditImportTarget } from '../../src/lookup/resolveAuditImportTarget.js'
 import { runCli } from './testCli.js'
 
 const tempDirs: string[] = []
@@ -392,21 +392,31 @@ describe('ordinary selected-source reference extension', () => {
   })
 
   it('bounds configuration discovery premises and omits oversized specifiers', async () => {
-    const folder = 'src/' + Array.from({ length: 504 }, () => 'd').join('/')
-    const origin = folder + '/main.ts'
-    const root = makeProject({ [origin]: 'import "./peer"\n', [folder + '/peer.ts']: selectedSource })
-    const out = await build(root, [folder], [], '1.2.0')
-    const proof = resolveAuditImportTarget(out, importId(out, origin, './peer'))
-    expect(proof.sourceReferenceProof?.reasonCode).toBe('REFERENCE_PREMISE_BUDGET_EXCEEDED')
-    unknown(proof)
-    const longSpecifier = './' + 'é'.repeat(2100)
-    const otherRoot = makeProject({ [ordinary]: `import "${longSpecifier}"\n` })
+    const root = makeProject({ [ordinary]: 'import "./peer.ts"\n', 'src/peer.ts': selectedSource })
+    const proof = inspect(await extended(root), './peer.ts')
+    expect(proof.sourceReferenceProof).toMatchObject({
+      qualifiedReference: selectedReference('src/peer.ts'),
+      premiseRefs: expect.arrayContaining([
+        { role: 'config', path: 'src/tsconfig.json', state: 'absent', contentSha256: null },
+      ]),
+    })
+
+    // Exercise the real collector with distinct, short config probes under an
+    // absent ancestor. Native containment checks still run on every probe.
+    const premises = new ReferencePremises(realpathSync.native(root))
+    for (let i = 0; i < 1024; i++) premises.capture('config', `absent/d${i}/tsconfig.json`)
+    expect(premises.recheck()).toHaveLength(1024)
+    expect(() => premises.capture('config', 'absent/d0/tsconfig.json')).not.toThrow()
+    expect(() => premises.capture('config', 'absent/d1024/tsconfig.json')).toThrow('REFERENCE_PREMISE_BUDGET_EXCEEDED')
+
+    const atLimit = './' + 'é'.repeat(2047)
+    expect(isBoundedReferenceSpecifier(atLimit)).toBe(true)
+    expect(isBoundedReferenceSpecifier(atLimit + 'x')).toBe(false)
+    const otherRoot = makeProject({ [ordinary]: `import "${atLimit}x"\n` })
     const artifact = readSourceAuditEvidence(await extended(otherRoot))
-    // If the source-fact size limit already drops the specifier, no proof is possible.
-    const fact = artifact.files[0]!.facts.find(fact => fact.sourceSpecifier === longSpecifier)
-    if (fact) expect(resolveAuditImportTarget(join(otherRoot, 'out'), fact.id)).not.toHaveProperty('sourceReferenceProof')
-    else expect(artifact.files[0]!.capabilities.imports).toBe('partial')
-  }, 30_000)
+    expect(artifact.files[0]!.facts.find(fact => fact.sourceSpecifier === atLimit + 'x')).toBeUndefined()
+    expect(artifact.files[0]!.capabilities.imports).toBe('partial')
+  })
 
   it('partitions the extension away from Python and JVM proofs on schema 1.2.0', async () => {
     const root = makeProject({

@@ -211,7 +211,7 @@ export function resolveAuditImportTargetFromArtifact(artifact: SourceAuditEviden
   const legacy = proof(resolution.status, resolution.candidatePaths, resolution.reasonCode)
   if (artifact.schemaVersion !== '1.2.0' || !file.contentSha256 || fact.extractionMethod !== 'typescript-ast' ||
       (file.language !== 'typescript' && file.language !== 'javascript') ||
-      Buffer.byteLength(specifier) > 4096 || Buffer.byteLength(file.path) > 4096) return legacy
+      !isBoundedReferenceSpecifier(specifier) || Buffer.byteLength(file.path) > 4096) return legacy
   return { ...legacy, sourceReferenceProof: buildSourceReferenceProof(artifact, file, fact, specifier, legacy) }
 }
 
@@ -310,6 +310,10 @@ function hasCanonicalPath(projectRoot: string, origin: string): boolean {
   }
 }
 
+export function isBoundedReferenceSpecifier(specifier: string): boolean {
+  return Buffer.byteLength(specifier, 'utf8') <= 4096
+}
+
 const MAX_REFERENCE_CANDIDATES = 256
 const MAX_REFERENCE_PREMISES = 1024
 const MAX_REFERENCE_BYTES = 1024 * 1024
@@ -353,7 +357,7 @@ function inspectReferencePath(
 }
 
 /** Proof-local observations share one byte identity per path, including across roles. */
-class ReferencePremises {
+export class ReferencePremises {
   private readonly pathStates = new Map<string, SourceReferencePremise['state']>()
   private readonly observations = new Map<string, {
     state: SourceReferencePremise['state']; bytes: Buffer | null; contentSha256: string | null; sizeBytes: number | null
