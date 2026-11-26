@@ -95,11 +95,12 @@ it('returns equivalent qualified file-page modifier proofs and reauthenticates a
   const f = await fixture('import { test } from "./b";\ntest.skip(guard, "reason");\n',
     'import { test as base } from "@playwright/test";\nexport const test = base.extend({});\n')
   const artifact = readSourceAuditEvidence(f.index)
-  const item = fact('src/a.ts')
+  const legacyItem = { ...fact('src/a.ts'), id: 'legacy' }
+  const item = { ...fact('src/a.ts'), testModifierProof: true }
   const prefix = ['lookup', '--index', f.index, '--json']
-  const run = (selector: string, value: string) => spawnSync(process.execPath, cliArgs([...prefix, selector, value]),
+  const run = (...args: string[]) => spawnSync(process.execPath, cliArgs([...prefix, ...args]),
     { encoding: 'utf8', windowsHide: true })
-  const single = run('--audit-file', item.path)
+  const single = run('--audit-file', item.path, '--test-modifier-proof')
   expect(single.status, single.stderr).toBe(0)
   const response = JSON.parse(single.stdout)
   expect(response.testModifierProof).toMatchObject({
@@ -107,24 +108,43 @@ it('returns equivalent qualified file-page modifier proofs and reauthenticates a
     runnerBinding: { kind: 'imported-extended-playwright', wrapper: { path: 'src/b.ts' } },
     observations: [{ modifier: 'skip', calleeSpan: { path: 'src/a.ts', startLine: 2, startColumn: 0, endLine: 2, endColumn: 9 } }],
   })
+  const legacy = run('--audit-file', item.path)
+  expect(legacy.status, legacy.stderr).toBe(0)
+  const { testModifierProof: _proof, ...legacyPage } = response
+  expect(JSON.parse(legacy.stdout)).toEqual(legacyPage)
+  const nonzero = run('--audit-file', item.path, '--test-modifier-proof', '--page', '1')
+  expect(nonzero.status).toBe(2)
+  expect(nonzero.stderr).toMatch(/^INVALID_TEST_MODIFIER_PROOF_SELECTOR:/)
   const file = join(f.root, 'batch.json')
   fs.writeFileSync(file, JSON.stringify({
     schemaVersion: '1.0.0', mode: 'audit-batch-request', family: 'lookup', expectedSnapshotId: artifact.source.snapshotId,
-    selectionFingerprint: artifact.source.selectionFingerprint, requests: [item],
+    selectionFingerprint: artifact.source.selectionFingerprint, requests: [legacyItem, item],
   }))
   const batch = run('--audit-batch-file', file)
   expect(batch.status, batch.stderr).toBe(0)
-  const results = [{ id: item.id, selector: item.selector, status: 'ok', response }]
+  const results = [
+    { id: legacyItem.id, selector: legacyItem.selector, status: 'ok', response: legacyPage },
+    { id: item.id, selector: item.selector, status: 'ok', response },
+  ]
   expect(JSON.parse(batch.stdout).results).toEqual(results)
   const lookup = open(f.index)
   try {
-    expect((await lookup.send(frame('initial-modifiers', [item]))).batch.results).toEqual(results)
+    expect((await lookup.send(frame('initial-modifiers', [legacyItem, item]))).batch.results).toEqual(results)
     fs.writeFileSync(join(f.target, 'src/b.ts'), 'export const test = makeAnUnknownRunner();\n')
-    const { testModifierProof: _proof, ...legacyPage } = response
     expect((await lookup.send(frame('changed-wrapper', [item]))).batch.results).toEqual([
       { id: item.id, selector: item.selector, status: 'ok', response: legacyPage },
     ])
     expect(await lookup.end()).toBe(0)
+  } finally { lookup.kill() }
+}, 30_000)
+
+it('rejects malformed file proof negotiation in the stream request parser', async () => {
+  const f = await fixture()
+  const lookup = open(f.index)
+  try {
+    const result = await lookup.send(frame('invalid-proof', [{ ...fact('src/a.ts'), testModifierProof: false }]))
+    expect(result).toMatchObject({ status: 'incomplete', error: { code: 'INVALID_AUDIT_BATCH', fatal: true } })
+    expect(await lookup.end()).toBe(2)
   } finally { lookup.kill() }
 }, 30_000)
 

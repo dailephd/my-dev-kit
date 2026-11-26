@@ -42,6 +42,7 @@ interface LookupCommandOptions {
   resolveClassification?: boolean
   auditFiles?: boolean
   auditFile?: string
+  testModifierProof?: true
   auditImportTarget?: string
   page?: number
 }
@@ -63,6 +64,7 @@ export function registerLookupCommand(program: Command): void {
     )
     .option('--audit-files', 'page through the recorded source-audit file inventory (requires --json)')
     .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
+    .option('--test-modifier-proof', 'request supplemental Playwright modifier evidence with --audit-file --json on schema 1.2.0 page zero')
     .option('--audit-import-domain <fact-id>', 'prove a bounded selected import expression domain (requires --json)')
     .option('--audit-import-target <fact-id>', 'prove whether one recorded source-audit import fact has an existing target in the selected inventory (requires --json)')
     .option('--audit-stream', 'read finite authenticated lookup frames from stdin (requires --json)')
@@ -70,6 +72,13 @@ export function registerLookupCommand(program: Command): void {
     .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
     .action(function (this: Command, options: LookupCommandOptions) {
+      if (options.testModifierProof) {
+        const allowed = new Set(['index', 'auditFile', 'page', 'json', 'testModifierProof'])
+        if (options.auditFile === undefined || !options.json ||
+            Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
+          throw new Error('INVALID_TEST_MODIFIER_PROOF_SELECTOR: --test-modifier-proof requires --audit-file and --json and excludes other lookup options except --index and --page.')
+        }
+      }
       if (options.auditStream) {
         assertAuditStreamOptions(this, options)
         return runAuditStream('lookup', createSourceAuditFrameReader(options.index), () => readLookupAuditItem)
@@ -117,14 +126,16 @@ export function registerLookupCommand(program: Command): void {
           return
         }
         const pageIndex = options.page ?? 0
-        if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('--page must be a nonnegative integer.')
+        if (!options.testModifierProof && (!Number.isInteger(pageIndex) || pageIndex < 0)) {
+          throw new Error('--page must be a nonnegative integer.')
+        }
         // Read-only: reports the stored, identity-verified artifact. It never indexes, repairs or writes.
         const artifact = readSourceAuditEvidence(options.index)
         if (options.auditFiles === true) {
           console.log(JSON.stringify(getSourceAuditInventoryPage(artifact, pageIndex), null, 2))
           return
         }
-        const page = readFreshSourceAuditFilePage(artifact, options.auditFile as string, pageIndex, resolveAuditImportTargetFromArtifact)
+        const page = readFreshSourceAuditFilePage(artifact, options.auditFile as string, pageIndex, resolveAuditImportTargetFromArtifact, options.testModifierProof)
         console.log(JSON.stringify(page, null, 2))
         return
       }
@@ -227,7 +238,7 @@ function printReachabilityLookupResult(result: ReachabilityLookupResult): void {
 function readLookupAuditItem(artifact: SourceAuditEvidenceArtifact, item: LookupBatchItem): unknown {
   switch (item.selector) {
     case 'audit-files': return getSourceAuditInventoryPage(artifact, item.page ?? 0)
-    case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact)
+    case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact, item.testModifierProof)
     case 'audit-import-target': return resolveAuditImportTargetFromArtifact(artifact, item.factId)
     case 'audit-import-domain': return resolveAuditImportDomainFromArtifact(artifact, item.factId)
   }

@@ -150,6 +150,29 @@ describe('v1.15.0 Batch 4 public lookup command', () => {
     expect(existsSync(join(tmpdir(), 'my-dev-kit-v115-must-not-exist'))).toBe(false)
   })
 
+  it('rejects a modifier proof request against the default artifact schema', () => {
+    const result = runCli(['lookup', '--index', out, '--audit-file', 'src/a.ts', '--test-modifier-proof', '--json'])
+    expect(result.status).toBe(2)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toMatch(/^INVALID_TEST_MODIFIER_PROOF_SCHEMA:/)
+  })
+
+  it('rejects incompatible standalone proof options', () => {
+    for (const options of [
+      ['--audit-files', '--json'],
+      ['--audit-file', 'src/a.ts'],
+      ['--audit-file', 'src/a.ts', '--audit-import-domain', 'fact', '--json'],
+      ['--audit-file', 'src/a.ts', '--node', 'node', '--json'],
+      ['--audit-stream', '--json'],
+      ['--audit-batch-file', out, '--json'],
+    ]) {
+      const result = runCli(['lookup', '--index', out, '--test-modifier-proof', ...options])
+      expect(result.status).toBe(2)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toMatch(/^INVALID_TEST_MODIFIER_PROOF_SELECTOR:/)
+    }
+  })
+
   it('returns not-selected for an unselected path and exit 2 beyond the terminal page', () => {
     const missing = runCli(['lookup', '--index', out, '--audit-file', 'src/none.ts', '--json'])
     expect(missing.status).toBe(0)

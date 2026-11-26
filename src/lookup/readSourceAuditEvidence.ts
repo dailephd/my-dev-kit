@@ -30,6 +30,8 @@ export type SourceAuditErrorCode =
   | 'STALE_SOURCE_EVIDENCE'
   | 'INVALID_AUDIT_PATH'
   | 'INVALID_AUDIT_PAGE'
+  | 'INVALID_TEST_MODIFIER_PROOF_SELECTOR'
+  | 'INVALID_TEST_MODIFIER_PROOF_SCHEMA'
   | 'AUDIT_FACT_NOT_FOUND'
   | 'AUDIT_FACT_NOT_IMPORT'
 
@@ -267,10 +269,19 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
 export function readFreshSourceAuditFilePage(
   artifact: SourceAuditEvidenceArtifact, relativePath: string, pageIndex: number,
   resolveImportTarget: typeof resolveAuditImportTargetFromArtifact,
+  testModifierProof?: true,
 ): SourceAuditFilePage {
+  if (testModifierProof) {
+    if (pageIndex !== 0) {
+      throw new SourceAuditEvidenceError('INVALID_TEST_MODIFIER_PROOF_SELECTOR', 'A test modifier proof requires page zero.')
+    }
+    if (artifact.schemaVersion !== '1.2.0') {
+      throw new SourceAuditEvidenceError('INVALID_TEST_MODIFIER_PROOF_SCHEMA', 'A test modifier proof requires source-audit artifact schema 1.2.0.')
+    }
+  }
   const page = getSourceAuditFilePage(artifact, relativePath, pageIndex)
   if (!page.file) return page
-  if (pageIndex !== 0 || page.schemaVersion !== '1.2.0' || !isTestModifierProofSource(page.file)) {
+  if (!testModifierProof || !isTestModifierProofSource(page.file)) {
     assertSourceAuditFileFresh(artifact, page.file)
     return page
   }

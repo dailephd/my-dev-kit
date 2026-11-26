@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
-import { readAuditBatch } from '../../src/lookup/readAuditBatch.js'
+import { readAuditBatch, validateAuditRequests } from '../../src/lookup/readAuditBatch.js'
 import {
   readFreshSourceAuditFilePage, readSourceAuditEvidence,
 } from '../../src/lookup/readSourceAuditEvidence.js'
@@ -131,7 +131,7 @@ describe('bounded audit batches', () => {
 
   it('omits supplemental file proofs if only the legacy batch fits the transport budget', async () => {
     const f = await fixture()
-    const item = { id: 'first', selector: 'audit-file', path: 'src/a.ts' }
+    const item = { id: 'first', selector: 'audit-file', path: 'src/a.ts', testModifierProof: true }
     f.writeRequest('lookup', [item, { ...item, id: 'second' }])
     const legacy = { body: 'x'.repeat(4 * 1024 * 1024 - 1024) }
     const supplemental = { body: 'y'.repeat(2048) }
@@ -144,5 +144,19 @@ describe('bounded audit batches', () => {
       expect(result.response.body).toBe(legacy.body)
       expect(result.response).not.toHaveProperty('testModifierProof')
     }
+  })
+
+  it('admits explicit true only for page-zero file requests', () => {
+    const item = { id: 'one', selector: 'audit-file', path: sourcePath }
+    expect(validateAuditRequests([item, { ...item, id: 'two', testModifierProof: true }], 'lookup'))
+      .toEqual([item, { ...item, id: 'two', testModifierProof: true }])
+    for (const value of [false, null, 'true', 1, {}, []]) {
+      expect(() => validateAuditRequests([{ ...item, testModifierProof: value }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    }
+    expect(() => validateAuditRequests([{ ...item, page: 1, testModifierProof: true }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    expect(() => validateAuditRequests([{ id: 'one', selector: 'audit-files', testModifierProof: true }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    expect(() => validateAuditRequests([{
+      id: 'one', selector: 'line-range', path: sourcePath, start: 1, end: 2, testModifierProof: true,
+    }], 'source')).toThrow(/INVALID_AUDIT_BATCH/)
   })
 })

@@ -13,7 +13,7 @@ interface AuditBatchItem {
 
 export type LookupBatchItem = AuditBatchItem & (
   | { selector: 'audit-files'; page?: number }
-  | { selector: 'audit-file'; path: string; page?: number }
+  | { selector: 'audit-file'; path: string; page?: number; testModifierProof?: true }
   | { selector: 'audit-import-target' | 'audit-import-domain'; factId: string }
 )
 
@@ -68,8 +68,8 @@ function string(value: unknown): value is string {
 function validateItem(raw: unknown, family: AuditBatchFamily): BatchItem {
   const item = auditRequestRecord(raw)
   if (typeof item.id !== 'string' || !/^[\x21-\x7e]{1,64}$/.test(item.id)) invalid('Expected a printable ASCII request ID of 1–64 characters.')
-  const fields = (requiredStrings: string[], requiredNumbers: string[], optionalNumbers: string[]) => {
-    keys(item, ['id', 'selector', ...requiredStrings, ...requiredNumbers, ...optionalNumbers])
+  const fields = (requiredStrings: string[], requiredNumbers: string[], optionalNumbers: string[], extraKeys: string[] = []) => {
+    keys(item, ['id', 'selector', ...requiredStrings, ...requiredNumbers, ...optionalNumbers, ...extraKeys])
     if (!requiredStrings.every(key => string(item[key])) ||
         !requiredNumbers.every(key => Number.isSafeInteger(item[key])) ||
         !optionalNumbers.every(key => item[key] === undefined || Number.isSafeInteger(item[key]))) {
@@ -79,7 +79,13 @@ function validateItem(raw: unknown, family: AuditBatchFamily): BatchItem {
   if (family === 'lookup') {
     switch (item.selector) {
       case 'audit-files': fields([], [], ['page']); break
-      case 'audit-file': fields(['path'], [], ['page']); break
+      case 'audit-file':
+        fields(['path'], [], ['page'], ['testModifierProof'])
+        if (Object.hasOwn(item, 'testModifierProof') &&
+            (item.testModifierProof !== true || (item.page ?? 0) !== 0)) {
+          invalid('testModifierProof must be true and requires page zero.')
+        }
+        break
       case 'audit-import-target':
       case 'audit-import-domain': fields(['factId'], [], []); break
       default: invalid('Unsupported lookup selector.')

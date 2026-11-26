@@ -83,8 +83,8 @@ const write = (path: string, body: string) => {
   mkdirSync(dirname(destination), { recursive: true })
   writeFileSync(destination, body)
 }
-const page = (path: string, position = 0, current = artifact) =>
-  readFreshSourceAuditFilePage(current, path, position, resolveAuditImportTargetFromArtifact)
+const page = (path: string, position = 0, current = artifact, negotiate = true) =>
+  readFreshSourceAuditFilePage(current, path, position, resolveAuditImportTargetFromArtifact, negotiate ? true : undefined)
 const get = (path: string) => page(path).testModifierProof
 
 beforeAll(async () => {
@@ -106,6 +106,7 @@ it('returns the exact direct proof and keeps legacy pages, facts and title uncer
   const result = page(path)
   const { testModifierProof, ...legacy } = result
   expect(legacy).toEqual(getSourceAuditFilePage(artifact, path, 0))
+  expect(page(path, 0, artifact, false)).toEqual(legacy)
   expect(result.file?.capabilities).toMatchObject({ 'direct-test-modifiers': 'partial', 'test-observations': 'partial' })
   expect(result.facts.map(fact => fact.observationKind)).toContain('test-modifier-skip')
   expect(testModifierProof).toEqual({
@@ -249,15 +250,18 @@ it('respects the artifact schema, page position and unsupported language boundar
   const path = 'src/direct.spec.ts'
   const defaultIndex = join(root, 'default')
   await runIndexCommand({ root, src: ['src'], out: defaultIndex })
-  const legacy = page(path, 0, readSourceAuditEvidence(defaultIndex))
+  const defaultArtifact = readSourceAuditEvidence(defaultIndex)
+  const legacy = page(path, 0, defaultArtifact, false)
   expect(legacy.schemaVersion).toBe('1.1.0')
   expect(legacy).not.toHaveProperty('testModifierProof')
-  expect(page('src/budget.ts', 1)).not.toHaveProperty('testModifierProof')
+  expect(() => page(path, 0, defaultArtifact)).toThrow(/INVALID_TEST_MODIFIER_PROOF_SCHEMA/)
+  expect(() => page('src/budget.ts', 1)).toThrow(/INVALID_TEST_MODIFIER_PROOF_SELECTOR/)
+  expect(page('src/budget.ts', 1, artifact, false)).not.toHaveProperty('testModifierProof')
   expect(page('outside/fixture.ts')).toMatchObject({ status: 'not-selected', file: null })
   expect(page('outside/fixture.ts')).not.toHaveProperty('testModifierProof')
   expect(page('src/foreign.py')).not.toHaveProperty('testModifierProof')
   expect(() => validateSourceAuditFilePage({ ...legacy, testModifierProof: get(path) })).toThrow()
-  expect(() => validateSourceAuditFilePage({ ...page('src/budget.ts', 1), testModifierProof: get('src/budget.ts') })).toThrow()
+  expect(() => validateSourceAuditFilePage({ ...page('src/budget.ts', 1, artifact, false), testModifierProof: get('src/budget.ts') })).toThrow()
 })
 
 it('bounds observations with stable order and no complete claim after exhaustion', () => {

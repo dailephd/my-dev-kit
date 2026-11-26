@@ -309,6 +309,16 @@ Arguments and exclusivity:
 - `--page <n>` is valid only with `--audit-files` or `--audit-file`, is zero-based, defaults to `0`, and must be a nonnegative integer. It is rejected with `--audit-import-target` and when no audit selector is present.
 - `--audit-file` takes a canonical, forward-slash, project-root-relative selected path. Absolute paths, `..` traversal, backslashes and non-canonical forms are rejected with `INVALID_AUDIT_PATH`.
 
+#### Supplemental Playwright modifier proof (KIT-FACTS-02 candidate)
+
+```text
+my-dev-kit lookup --index <index-dir> --audit-file <relative-path> --page 0 --test-modifier-proof --json
+```
+
+`--test-modifier-proof` requires `--audit-file`, `--json`, effective page zero, and a source-audit artifact using schema `1.2.0`. Page zero is the default when `--page` is omitted. Incompatible options and a nonzero page fail with `INVALID_TEST_MODIFIER_PROOF_SELECTOR`. An unsupported artifact schema fails with `INVALID_TEST_MODIFIER_PROOF_SCHEMA`.
+
+Ordinary file-page requests retain the legacy response shape under both artifact schemas. A valid explicit request includes `testModifierProof` when Kit can qualify the runner. This supplemental evidence leaves facts and pagination unchanged. Conditional calls are recorded from syntax without evaluating the guard.
+
 Pagination:
 
 - The inventory page size is 64 files and the fact page size is 128 facts. The page envelope reports `pageIndex`, `pageSize`, `totalItems`, `totalPages`, `nextPageIndex` and `snapshotId`. `nextPageIndex` is `null` on the terminal page.
@@ -346,7 +356,7 @@ Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters
 | Family | selector | Fields and defaults |
 | --- | --- | --- |
 | lookup | audit-files | page (0) |
-| lookup | audit-file | path, page (0) |
+| lookup | audit-file | path, page (0), optional testModifierProof (true) |
 | lookup | audit-import-target | factId |
 | lookup | audit-import-domain | factId (requires artifact schema 1.2.0) |
 | source | exact-file-occurrence | path, literal, context (3) |
@@ -354,6 +364,8 @@ Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters
 | source | line-range | path, start, end, maxLines (160) |
 
 Use canonical forward-slash project-relative paths. Pages are zero-based and line ranges are one-based and inclusive. Batches reuse the authenticated artifact within the invocation. Each live read retains its own containment, source identity, and freshness checks. A batched line range additionally verifies that the exact bytes used to render the range match the snapshot.
+
+Batch and stream clients request the supplemental proof per item with `"testModifierProof": true` on a page-zero `audit-file` request. Omit the property for legacy behavior. Other values, selectors, or page positions are invalid input (`INVALID_AUDIT_BATCH`). An explicit request against an artifact other than schema `1.2.0` returns the item error `INVALID_TEST_MODIFIER_PROOF_SCHEMA`.
 
 The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, snapshotId, selectionFingerprint, inputSha256 (the exact request file digest), requestedCount, returnedCount, complete, and ordered results. Each result echoes id and selector. An item with status "ok" carries its original selector JSON in response. An item with status "error" has error.code and error.exitCode and carries no evidence. Expect known standalone error codes where available, with UNSAFE_SOURCE and COMMAND_ERROR for errors without a standalone code.
 
