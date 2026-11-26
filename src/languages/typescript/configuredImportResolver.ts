@@ -8,6 +8,8 @@ interface Options {
   links: number
   paths?: { value: Record<string, string[]>; directory: string }
   baseUrl?: string
+  proofOptions?: Pick<ts.CompilerOptions, 'module' | 'moduleResolution' | 'target'>
+  requiresBundlerProfile?: boolean
 }
 
 // A proof call supplies the same authenticated bytes used to parse each config.
@@ -21,6 +23,26 @@ const SOURCE_REFERENCE_COMPILER_OPTIONS = new Set([
   'declaration', 'declarationMap', 'sourceMap', 'outDir', 'rootDir', 'incremental',
   'noImplicitAny', 'strictNullChecks', 'noUnusedLocals', 'noUnusedParameters',
 ])
+// Language-service plugins do not configure the compiler's local file lookup.
+// JSON resolution is outside the source profile and is checked by the caller's
+// non-source candidate guards.
+const BUNDLER_SOURCE_REFERENCE_OPTIONS = new Set(['plugins', 'resolveJsonModule'])
+
+function sourceReferenceMode(config: Options | null): 'legacy' | 'bundler' | null {
+  const { module, moduleResolution, target } = config?.proofOptions ?? {}
+  // These are the pinned compiler's effective default module and Bundler gate.
+  const effectiveModule = module ?? (
+    (target ?? ts.ScriptTarget.ES5) >= ts.ScriptTarget.ES2015 ? ts.ModuleKind.ES2015 : ts.ModuleKind.CommonJS
+  )
+  if (moduleResolution === ts.ModuleResolutionKind.Bundler ||
+      (moduleResolution === undefined && effectiveModule === ts.ModuleKind.Preserve)) {
+    return effectiveModule === ts.ModuleKind.Preserve ||
+      (effectiveModule >= ts.ModuleKind.ES2015 && effectiveModule <= ts.ModuleKind.ESNext) ? 'bundler' : null
+  }
+  if (config?.requiresBundlerProfile || (moduleResolution !== undefined && moduleResolution !== ts.ModuleResolutionKind.Node10) ||
+      effectiveModule >= ts.ModuleKind.Node16) return null
+  return 'legacy'
+}
 
 function matchesMapping(key: string, specifier: string): boolean {
   const star = key.indexOf('*')
@@ -132,11 +154,19 @@ export class ConfiguredImportResolver {
       effective = { ...inherited, links: inherited.links + 1 }
     }
     const compiler = raw.compilerOptions ?? {}
-    if (!compiler || typeof compiler !== 'object' || Array.isArray(compiler) ||
-        ts.convertCompilerOptionsFromJson(compiler, path.dirname(file)).errors.length) return null
-    if (this.proofReader && (Object.keys(compiler).some(key => !SOURCE_REFERENCE_COMPILER_OPTIONS.has(key)) ||
-        (compiler.moduleResolution !== undefined && !['node', 'node10'].includes(String(compiler.moduleResolution).toLowerCase())) ||
-        ['node16', 'node18', 'node20', 'nodenext', 'preserve'].includes(String(compiler.module).toLowerCase()))) return null
+    if (!compiler || typeof compiler !== 'object' || Array.isArray(compiler)) return null
+    const { options, errors } = ts.convertCompilerOptionsFromJson(compiler, path.dirname(file))
+    if (errors.length) return null
+    if (this.proofReader) {
+      const additional = Object.keys(compiler).filter(key => !SOURCE_REFERENCE_COMPILER_OPTIONS.has(key))
+      if (additional.some(key => !BUNDLER_SOURCE_REFERENCE_OPTIONS.has(key))) return null
+      const proofOptions = { ...effective.proofOptions }
+      if (options.module !== undefined) proofOptions.module = options.module
+      if (options.moduleResolution !== undefined) proofOptions.moduleResolution = options.moduleResolution
+      if (options.target !== undefined) proofOptions.target = options.target
+      effective.proofOptions = proofOptions
+      effective.requiresBundlerProfile ||= additional.length > 0
+    }
     // Custom suffix probing is outside this selected-source correction. Ignoring
     // it could turn a platform-specific target into an incorrect ordinary edge.
     if (compiler.moduleSuffixes !== undefined && JSON.stringify(compiler.moduleSuffixes) !== '[""]') return null
@@ -175,20 +205,25 @@ export class ConfiguredImportResolver {
   }
 
   /** Ordered, lazy mapping bases. A null base blocks all later fallbacks. */
-  sourceReferenceBases(specifier: string, importer: string, relative: boolean): Iterable<string | null> | null {
+  sourceReferenceBases(specifier: string, importer: string, relative: boolean): {
+    mode: 'legacy' | 'bundler'; bases: Iterable<string | null>
+  } | null {
     const config = this.applicable(importer)
     if (!config && this.configSeen.has(importer)) return null
-    if (relative) return []
+    const mode = sourceReferenceMode(config)
+    if (!mode) return null
+    if (relative) return { mode, bases: [] }
     if (!config) return null
     const key = config.paths && winningMapping(config.paths.value, specifier)
     if (key === null) return null
     const mapped = key ? this.mappedBases(config, key, specifier) : []
     const fallback = config.baseUrl ? path.resolve(config.baseUrl, specifier) : null
     const resolver = this
-    return (function* () {
+    const bases = (function* () {
       yield* mapped
       if (fallback) yield resolver.safe(fallback) ? path.relative(resolver.root, fallback).replace(/\\/g, '/') : null
     })()
+    return { mode, bases }
   }
 
   private applicable(importer: string): Options | null {

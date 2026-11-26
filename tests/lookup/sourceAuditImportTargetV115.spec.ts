@@ -92,6 +92,100 @@ const unknown = (proof: ReturnType<typeof inspect>) => {
 }
 
 describe('ordinary selected-source reference extension', () => {
+  it('qualifies bounded relative and configured references with effective Bundler options', async () => {
+    const base = '{"compilerOptions":{"module":"commonjs","moduleResolution":"bundler","strict":true,"resolveJsonModule":true,"plugins":[{"name":"unused-language-service-plugin"}]}}\n'
+    const config = '{"extends":"./config/base","compilerOptions":{"module":"preserve","paths":{"#no":["./missing"],"local":["./missing","./src/peer"],"lib/*":["./src/*"]}}}\n'
+    const specifiers = ['./explicit.ts', './peer', './sub.js', './dir', 'local', 'lib/peer', './multi', './absent',
+      'lib/absent', './metadata', './declared', './modern', './asset.json', './peer.d.ts']
+    const origin = specifiers.map(name => `import '${name}'\n`).join('') + "export { value } from './forward'\n"
+    const root = makeProject({
+      [ordinary]: origin, 'config/base.json': base, 'tsconfig.json': config,
+      'src/explicit.ts': selectedSource, 'src/peer.ts': selectedSource, 'src/sub.ts': selectedSource,
+      'src/dir/index.ts': selectedSource, 'src/forward.ts': 'export const value = 1\n',
+      'src/multi.ts': selectedSource, 'src/multi/index.js': selectedSource, 'src/metadata/index.ts': selectedSource,
+      'src/metadata/package.json': '{}', 'src/declared.ts': selectedSource, 'src/declared.d.ts': 'export {}\n',
+      'src/modern.mts': selectedSource, 'src/asset.json': '{}',
+    })
+    const out = await extended(root)
+    for (const [specifier, target] of Object.entries({
+      './explicit.ts': 'src/explicit.ts', './peer': 'src/peer.ts', './sub.js': 'src/sub.ts',
+      './dir': 'src/dir/index.ts', './forward': 'src/forward.ts', local: 'src/peer.ts', 'lib/peer': 'src/peer.ts',
+    })) {
+      const factId = specifier === './forward'
+        ? readSourceAuditEvidence(out).files.find(file => file.path === ordinary)!.facts.find(fact => fact.exportOrigin === 're-export')!.id
+        : importId(out, ordinary, specifier)
+      const proof = resolveAuditImportTarget(out, factId).sourceReferenceProof
+      expect(proof).toMatchObject({
+        profile: 'js-ts-selected-source-reference-v1', candidateEnumerationComplete: true, reasonCode: null,
+        qualifiedReference: {
+          targetPath: target, targetContentSha256: rawHash(readFileSync(join(root, target))), referenceKind: 'selected-source-reference',
+        },
+      })
+      expect(proof?.premiseRefs).toEqual(expect.arrayContaining([
+        { role: 'config', path: 'src/tsconfig.json', state: 'absent', contentSha256: null },
+        { role: 'config', path: 'src/jsconfig.json', state: 'absent', contentSha256: null },
+        { role: 'config', path: 'tsconfig.json', state: 'file', contentSha256: rawHash(config) },
+        { role: 'config', path: 'config/base', state: 'absent', contentSha256: null },
+        { role: 'config', path: 'config/base.json', state: 'file', contentSha256: rawHash(base) },
+      ]))
+    }
+    expect(inspect(out, './peer').sourceReferenceProof?.candidateDomain).toEqual([
+      'src/peer.js', 'src/peer.jsx', 'src/peer.ts', 'src/peer.tsx',
+      'src/peer/index.js', 'src/peer/index.jsx', 'src/peer/index.ts', 'src/peer/index.tsx',
+    ])
+    expect(inspect(out, 'local').sourceReferenceProof?.premiseRefs).toContainEqual({
+      role: 'candidate', path: 'missing.ts', state: 'absent', contentSha256: null,
+    })
+    for (const specifier of ['./multi', './absent']) {
+      expect(inspect(out, specifier).sourceReferenceProof).toMatchObject({
+        candidateEnumerationComplete: true, qualifiedReference: null, reasonCode: null,
+      })
+    }
+    for (const [specifier, reasonCode] of Object.entries({
+      'lib/absent': 'BARE_SPECIFIER_FALLBACK_UNKNOWN', './metadata': 'UNSUPPORTED_DIRECTORY_METADATA',
+      './declared': 'DECLARATION_RESOLUTION_BLOCKER', './modern': 'UNSUPPORTED_CANDIDATE_SHAPE',
+      './asset.json': 'UNSUPPORTED_CANDIDATE_SHAPE', './peer.d.ts': 'DECLARATION_RESOLUTION_BLOCKER',
+    })) {
+      expect(inspect(out, specifier).sourceReferenceProof).toMatchObject({
+        candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null, reasonCode,
+      })
+    }
+  })
+
+  it('rechecks Bundler configuration and every competing file before qualifying a reference', async () => {
+    const config = '{"compilerOptions":{"target":"es2020","moduleResolution":"bundler"}}'
+    const root = makeProject({ [ordinary]: 'import "./peer"\n', 'src/peer.ts': selectedSource, 'tsconfig.json': config })
+    const out = await extended(root)
+    const read = () => inspect(out, './peer').sourceReferenceProof
+    expect(read()?.qualifiedReference).toEqual(selectedReference('src/peer.ts'))
+    const incompatible = [
+      '{"compilerOptions":{"module":"commonjs","moduleResolution":"bundler"}}',
+      '{"compilerOptions":{"module":"nodenext","moduleResolution":"bundler"}}',
+      '{"compilerOptions":{"moduleResolution":"bundler"}}',
+      '{"compilerOptions":{"target":"es2020","moduleResolution":"bundler","rootDirs":["src","generated"]}}',
+      '{"compilerOptions":{"target":"es2020","moduleResolution":"bundler","moduleSuffixes":[".native",""]}}',
+      '{"compilerOptions":{"target":"es2020","moduleResolution":"bundler","customConditions":["alternate"]}}',
+      '{"extends":"../outside.json"}',
+      '{"compilerOptions": {',
+    ]
+    for (const text of incompatible) {
+      writeFileSync(join(root, 'tsconfig.json'), text)
+      expect(read()).toMatchObject({ qualifiedReference: null, reasonCode: 'UNQUALIFIED_CONFIGURATION_OR_MAPPING' })
+    }
+    writeFileSync(join(root, 'tsconfig.json'), config)
+    writeFileSync(join(root, 'jsconfig.json'), '{}')
+    expect(read()?.reasonCode).toBe('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+    rmSync(join(root, 'jsconfig.json'))
+    writeFileSync(join(root, 'src/tsconfig.json'), incompatible[0])
+    expect(read()?.reasonCode).toBe('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+    rmSync(join(root, 'src/tsconfig.json'))
+    expect(read()?.qualifiedReference).toEqual(selectedReference('src/peer.ts'))
+    writeFileSync(join(root, 'src/peer.jsx'), selectedSource)
+    expect(read()?.reasonCode).toBe('UNQUALIFIED_CANDIDATE_STATE')
+    const excluded = await build(root, ['src'], ['src/peer.jsx'], '1.2.0')
+    expect(inspect(excluded, './peer').sourceReferenceProof?.reasonCode).toBe('UNQUALIFIED_CANDIDATE_STATE')
+  })
+
   it('keeps the legacy envelope and emits the exact deterministic wire shape only for the explicit profile', async () => {
     const source = 'import "./peer.ts"\r\n'
     const root = makeProject({ [ordinary]: source, 'src/peer.ts': selectedSource })

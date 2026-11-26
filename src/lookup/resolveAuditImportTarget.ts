@@ -408,6 +408,23 @@ function declarationBlockers(base: string): string[] {
   return []
 }
 
+// Use the shared enumeration, then apply the pinned Bundler profile's
+// substitution families. Modern extensions require an explicit suffix.
+function bundlerSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
+  const extension = path.posix.extname(base).toLowerCase()
+  if (!extension) {
+    const modern = /\.[cm][jt]s$/
+    return { paths: candidates.filter(candidate => !modern.test(candidate)), blockers: candidates.filter(candidate => modern.test(candidate)) }
+  }
+  const stem = base.slice(0, -extension.length)
+  if (/\.d\.[cm]?ts$/i.test(base)) throw new UnqualifiedReference('DECLARATION_RESOLUTION_BLOCKER')
+  if (/^(?:\.[jt]sx?)$/.test(extension)) {
+    return { paths: [...new Set([...candidates, ...['.ts', '.tsx', '.js', '.jsx'].map(suffix => stem + suffix)])], blockers: [stem + '.d.ts'] }
+  }
+  const family = extension[1]
+  return { paths: [...new Set([...candidates, stem + '.' + family + 'ts', stem + '.' + family + 'js'])], blockers: [stem + '.d.' + family + 'ts'] }
+}
+
 /** Authenticate the already-enumerated domain for one exact, default-profile relative destination. */
 export function captureDefaultExactReferencePremises(
   artifact: SourceAuditEvidenceArtifact, origin: SourceAuditFile, specifier: string,
@@ -481,13 +498,15 @@ function buildSourceReferenceProof(
     })
     const configured = resolver.sourceReferenceBases(specifier, file.path, relative)
     if (!configured) return incomplete('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
-    const bases = normalized && 'localPath' in normalized ? [normalized.localPath] : configured
+    const bases = normalized && 'localPath' in normalized ? [normalized.localPath] : configured.bases
     const domain = new Set<string>()
     const targets: Array<{ path: string; contentSha256: string }> = []
     for (const base of bases) {
       if (!base) return incomplete('UNQUALIFIED_MAPPING_TARGET')
-      const candidates = enumerateJsTsCandidatePaths(relativeCandidate(file.path, base), file.path)
-      if (!candidates?.length) return incomplete('UNSUPPORTED_CANDIDATE_SHAPE')
+      const enumerated = enumerateJsTsCandidatePaths(relativeCandidate(file.path, base), file.path)
+      if (!enumerated?.length) return incomplete('UNSUPPORTED_CANDIDATE_SHAPE')
+      const bundler = configured.mode === 'bundler' ? bundlerSourceCandidates(base, enumerated) : null
+      const candidates = bundler?.paths ?? enumerated
       for (const candidate of candidates) domain.add(candidate)
       if (domain.size > MAX_REFERENCE_CANDIDATES) return incomplete('REFERENCE_CANDIDATE_BUDGET_EXCEEDED')
 
@@ -503,6 +522,11 @@ function buildSourceReferenceProof(
       }
       for (const blocker of declarationBlockers(base)) {
         if (premises.capture('path', blocker).state !== 'absent') return incomplete('DECLARATION_RESOLUTION_BLOCKER')
+      }
+      for (const blocker of bundler?.blockers ?? []) {
+        if (premises.capture('path', blocker).state !== 'absent') {
+          return incomplete(/\.d\.[cm]?ts$/.test(blocker) ? 'DECLARATION_RESOLUTION_BLOCKER' : 'UNSUPPORTED_CANDIDATE_SHAPE')
+        }
       }
       for (const candidate of candidates) {
         const selected = records.get(candidate)

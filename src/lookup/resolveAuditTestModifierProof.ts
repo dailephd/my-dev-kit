@@ -401,7 +401,10 @@ export function resolveAuditTestModifierProof(
   const symbol = checker.getSymbolAtLocation(identifier)
   if (!symbol || symbol.declarations?.length !== 1) return undefined
   const reasons = new Set<TestModifierProofReason>()
-  if (origin.status !== 'parsed' || origin.diagnostics.some(diagnostic => /truncat|dropped/i.test(diagnostic.code))) {
+  // The walk qualifies every relevant modifier from authenticated bytes and
+  // requires an exact retained fact for each independently modeled legacy site.
+  // The shared diagnostic cap also covers unrelated analysis families.
+  if (origin.status !== 'parsed') {
     reasons.add('INCOMPLETE_SOURCE_ANALYSIS')
   }
   const observations = modifierObservations(sf, origin, identifier, checker, symbol, imports,

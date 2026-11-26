@@ -534,6 +534,8 @@ Qualify exact local packed candidates independently and then together; prove old
 
 The KIT-FACTS-02 compatibility decision keeps the legacy exact-file page as the default under both artifact schemas. The supplemental Playwright modifier proof requires an explicit page-zero lookup request against schema 1.2.0. Lab producer admission and integration remain separate from Kit qualification.
 
+The authorized A6 producer scope includes bounded static local JS/TS references under authenticated Bundler-compatible TypeScript configurations and independent modifier completeness when general diagnostics reach their cap. Global augmentation extraction and PowerShell source evidence remain separate unimplemented capabilities without release assignments. Runtime-generated import destinations remain unsupported. The Kit 1.16.1 and Lab 0.11.1 reservations remain conditional.
+
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.

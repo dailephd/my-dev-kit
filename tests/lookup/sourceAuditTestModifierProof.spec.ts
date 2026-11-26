@@ -14,6 +14,7 @@ const wrapper = base + 'export const test = base.extend({});\n'
 const hook = direct + 'test.beforeEach(() => {\n  test.skip(flag, "guard");\n});\ntest("title", () => {\n  test.only("focus", () => {});\n});\n'
 const imported = 'import { test } from "./support/fixture";\ntest.skip(flag, "guard");\n'
 const local = base + 'const test = base.extend({});\ntest.only("focus", () => {});\n'
+const noisy = direct + 'it.skip("legacy");\n' + 'it(dynamicTitle, () => {});\n'.repeat(32) + 'test.skip(flag, "condition");\n'
 const supportedNames = ['vitest', '@jest/globals', 'node:test']
 const legacySources = Object.fromEntries(supportedNames.map((module, index) => [
   `src/legacy-${index}.ts`, direct + `import { it } from "${module}";\nit.skip("legacy");\ntest.only();\n`,
@@ -66,6 +67,13 @@ const files = {
   'src/recovery.ts': direct + 'test.skip(\n',
   'src/foreign.py': 'print("test.skip()")\n',
   'src/budget.ts': direct + 'test.only();\n'.repeat(1025),
+  'src/noisy.spec.ts': noisy,
+  'src/noisy-unsupported.spec.ts': noisy + 'test.skip?.(flag);\n',
+  'src/bundler/tsconfig.json': '{"compilerOptions":{"module":"esnext","moduleResolution":"bundler"}}\n',
+  'src/bundler/fixture.ts': wrapper,
+  'src/bundler/wrapped.ts': imported.replace('./support/fixture', './fixture'),
+  'src/bundler/invalid.ts': imported.replace('./support/fixture', './unexported'),
+  'src/bundler/unexported.ts': local,
   ...legacySources,
 }
 
@@ -221,6 +229,59 @@ it('retains legacy observations and does not conflate other capabilities with mo
     expect(result.facts).toContainEqual(expect.objectContaining({ name: 'it', observationKind: 'test-modifier-skip' }))
   }
   expect(get('src/uncertain-import.ts')).toMatchObject({ coverage: 'complete', observations: [{ modifier: 'skip' }] })
+})
+
+it('uses independent modifier closure when title diagnostics reach the shared cap', () => {
+  const path = 'src/noisy.spec.ts'
+  const result = page(path)
+  const record = artifact.files.find(file => file.path === path)!
+  expect(record.diagnostics).toContainEqual(expect.objectContaining({ code: 'diagnostics-truncated' }))
+  expect(record.diagnostics).toContainEqual(expect.objectContaining({ code: 'dynamic-test-title' }))
+  expect(result.testModifierProof).toMatchObject({
+    coverage: 'complete', reasonCodes: [],
+    observations: [{ modifier: 'skip', calleeSpan: span(path, 35, 0, 9), callSpan: span(path, 35, 0, 28) }],
+  })
+  const unsupported = 'src/noisy-unsupported.spec.ts'
+  expect(artifact.files.find(file => file.path === unsupported)?.diagnostics).toContainEqual(
+    expect.objectContaining({ code: 'diagnostics-truncated' }),
+  )
+  expect(get(unsupported)).toMatchObject({
+    coverage: 'partial', reasonCodes: ['UNSUPPORTED_MODIFIER_FORM'],
+    observations: [{ modifier: 'skip', calleeSpan: span(unsupported, 35, 0, 9) }],
+  })
+
+  // Model a dropped legacy modifier whose diagnostic was beyond the cap.
+  const missing = structuredClone(artifact)
+  const legacyRecord = missing.files.find(file => file.path === path)!
+  legacyRecord.facts = legacyRecord.facts.filter(fact => fact.observationKind !== 'test-modifier-skip' || fact.name !== 'it')
+  expect(legacyRecord.facts).toHaveLength(record.facts.length - 1)
+  expect(page(path, 0, missing).testModifierProof).toMatchObject({
+    coverage: 'partial', reasonCodes: ['INCOMPLETE_SOURCE_ANALYSIS'],
+    observations: result.testModifierProof?.observations,
+  })
+})
+
+it('qualifies an imported wrapper using the embedded Bundler reference and keeps negotiation explicit', () => {
+  const path = 'src/bundler/wrapped.ts'
+  const config = 'src/bundler/tsconfig.json'
+  expect(page(path, 0, artifact, false)).not.toHaveProperty('testModifierProof')
+  expect(get(path)).toMatchObject({
+    coverage: 'complete', reasonCodes: [],
+    runnerBinding: {
+      kind: 'imported-extended-playwright', wrapper: {
+        path: 'src/bundler/fixture.ts', contentSha256: sha(wrapper),
+        importTargetProof: { sourceReferenceProof: {
+          sourceSpecifier: './fixture', candidateEnumerationComplete: true,
+          qualifiedReference: { targetPath: 'src/bundler/fixture.ts', targetContentSha256: sha(wrapper) },
+          premiseRefs: expect.arrayContaining([
+            { role: 'config', path: config, state: 'file', contentSha256: sha(files[config]) },
+          ]),
+        } },
+      },
+    },
+    observations: [{ modifier: 'skip', calleeSpan: span(path, 2, 0, 9) }],
+  })
+  expect(get('src/bundler/invalid.ts')).toBeUndefined()
 })
 
 it('checks stale origin, stale wrapper, a new competing file and changed configuration independently', () => {
