@@ -8,6 +8,7 @@ import { readAuditBatch } from '../../src/lookup/readAuditBatch.js'
 import {
   readFreshSourceAuditFilePage, readSourceAuditEvidence,
 } from '../../src/lookup/readSourceAuditEvidence.js'
+import { resolveAuditImportTargetFromArtifact } from '../../src/lookup/resolveAuditImportTarget.js'
 import { runCli } from './testCli.js'
 
 const roots: string[] = []
@@ -105,7 +106,7 @@ describe('bounded audit batches', () => {
             break
         }
       }
-      return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0)
+      return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact)
     })
     expect(result.complete).toBe(false)
     const response = JSON.parse(result.json)
@@ -126,5 +127,22 @@ describe('bounded audit batches', () => {
     f.writeRequest('lookup', [item, { ...item, id: 'second' }])
     const body = 'x'.repeat(4 * 1024 * 1024)
     expect(() => readAuditBatch(f.index, f.input, 'lookup', () => ({ body }))).toThrow(/AUDIT_BATCH_OUTPUT_LIMIT/)
+  })
+
+  it('omits supplemental file proofs if only the legacy batch fits the transport budget', async () => {
+    const f = await fixture()
+    const item = { id: 'first', selector: 'audit-file', path: 'src/a.ts' }
+    f.writeRequest('lookup', [item, { ...item, id: 'second' }])
+    const legacy = { body: 'x'.repeat(4 * 1024 * 1024 - 1024) }
+    const supplemental = { body: 'y'.repeat(2048) }
+    const batch = readAuditBatch(f.index, f.input, 'lookup', () => ({ ...legacy, testModifierProof: supplemental }))
+    expect(batch.complete).toBe(true)
+    const results = JSON.parse(batch.json).results
+    expect(results).toHaveLength(2)
+    for (const result of results) {
+      expect(result.status).toBe('ok')
+      expect(result.response.body).toBe(legacy.body)
+      expect(result.response).not.toHaveProperty('testModifierProof')
+    }
   })
 })

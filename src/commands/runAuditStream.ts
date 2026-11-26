@@ -126,10 +126,13 @@ export async function runAuditStream<F extends AuditBatchFamily>(
         const items = validateAuditRequests(input.requests, family)
         seen.add(requestId)
         const { artifact, assertCurrent } = read()
-        const batch = executeAuditBatch(artifact, frame.value.bytes, family, items, createItemReader())
+        const prefixFor = (status: 'complete' | 'incomplete') =>
+          JSON.stringify({ schemaVersion: '1.0.0', requestId, status }).slice(0, -1)
+        const wrapperBytes = Buffer.byteLength(prefixFor('incomplete')) + ',"batch":}'.length
+        const batch = executeAuditBatch(artifact, frame.value.bytes, family, items, createItemReader(), wrapperBytes)
         assertCurrent()
         if (performance.now() >= deadline) throw new FrameError('AUDIT_STREAM_TIMEOUT')
-        const prefix = JSON.stringify({ schemaVersion: '1.0.0', requestId, status: batch.complete ? 'complete' : 'incomplete' }).slice(0, -1)
+        const prefix = prefixFor(batch.complete ? 'complete' : 'incomplete')
         if (Buffer.byteLength(prefix) + Buffer.byteLength(batch.json) + ',"batch":}'.length > AUDIT_BATCH_MAX_OUTPUT) {
           throw new FrameError('AUDIT_BATCH_OUTPUT_LIMIT')
         }

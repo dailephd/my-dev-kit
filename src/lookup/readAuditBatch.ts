@@ -144,6 +144,7 @@ export function validateAuditRequests<F extends AuditBatchFamily>(raw: unknown, 
 export function executeAuditBatch<F extends AuditBatchFamily>(
   artifact: SourceAuditEvidenceArtifact, bytes: Uint8Array, family: F, items: readonly AuditBatchItemByFamily[F][],
   readItem: (artifact: SourceAuditEvidenceArtifact, item: AuditBatchItemByFamily[F]) => unknown,
+  reservedOutputBytes = 0,
 ): { json: string; complete: boolean } {
   const { snapshotId, selectionFingerprint } = artifact.source
   const inputSha256 = createHash('sha256').update(bytes).digest('hex')
@@ -154,26 +155,43 @@ export function executeAuditBatch<F extends AuditBatchFamily>(
   }
   const envelope = (complete: boolean, results: string[]) =>
     JSON.stringify({ ...header, complete }).slice(0, -1) + ',"results":[' + results.join(',') + ']}\n'
-  let size = Buffer.byteLength(envelope(false, []))
+  let legacySize = Buffer.byteLength(envelope(false, []))
+  let supplementalSize = 0
   let complete = true
-  const results: string[] = []
+  const legacyResults: string[] = []
+  const supplementalResults = new Map<number, string>()
   for (const item of items) {
     const identity = { id: item.id, selector: item.selector }
     let result: unknown
+    let expanded: string | undefined
     try {
       const response = readItem(artifact, item)
       if (response === undefined) throw new Error('AUDIT_BATCH_MISSING_RESULT: Selector returned no evidence.')
       result = { ...identity, status: 'ok', response }
+      if (item.selector === 'audit-file' && response && typeof response === 'object' && Object.hasOwn(response, 'testModifierProof')) {
+        const { testModifierProof: _proof, ...legacy } = response as { testModifierProof: unknown }
+        if (supplementalSize !== Infinity) expanded = JSON.stringify(result)
+        result = { ...identity, status: 'ok', response: legacy }
+      }
     } catch (error) {
       complete = false
       result = { ...identity, status: 'error', error: { code: auditErrorCode(error), exitCode: 2 } }
     }
     const serialized = JSON.stringify(result)
-    size += Buffer.byteLength(serialized) + (results.length === 0 ? 0 : 1)
-    if (size > AUDIT_BATCH_MAX_OUTPUT) {
+    const legacyBytes = Buffer.byteLength(serialized)
+    legacySize += legacyBytes + (legacyResults.length === 0 ? 0 : 1)
+    if (expanded !== undefined) supplementalSize += Buffer.byteLength(expanded) - legacyBytes
+    if (legacySize > AUDIT_BATCH_MAX_OUTPUT) {
       throw new Error('AUDIT_BATCH_OUTPUT_LIMIT: Serialized responses exceed 8 MiB.')
     }
-    results.push(serialized)
+    if (legacySize + supplementalSize + reservedOutputBytes > AUDIT_BATCH_MAX_OUTPUT) {
+      // Supplemental evidence must not turn a fitting fact response into an overflow.
+      supplementalResults.clear()
+      supplementalSize = Infinity
+    } else if (expanded !== undefined) {
+      supplementalResults.set(legacyResults.length, expanded)
+    }
+    legacyResults.push(serialized)
   }
-  return { json: envelope(complete, results), complete }
+  return { json: envelope(complete, legacyResults.map((result, index) => supplementalResults.get(index) ?? result)), complete }
 }

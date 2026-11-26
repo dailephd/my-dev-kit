@@ -124,7 +124,8 @@ export function registerLookupCommand(program: Command): void {
           console.log(JSON.stringify(getSourceAuditInventoryPage(artifact, pageIndex), null, 2))
           return
         }
-        console.log(JSON.stringify(readFreshSourceAuditFilePage(artifact, options.auditFile as string, pageIndex), null, 2))
+        const page = readFreshSourceAuditFilePage(artifact, options.auditFile as string, pageIndex, resolveAuditImportTargetFromArtifact)
+        console.log(JSON.stringify(page, null, 2))
         return
       }
       const reachabilityMode = resolveReachabilityMode(options)
@@ -226,7 +227,7 @@ function printReachabilityLookupResult(result: ReachabilityLookupResult): void {
 function readLookupAuditItem(artifact: SourceAuditEvidenceArtifact, item: LookupBatchItem): unknown {
   switch (item.selector) {
     case 'audit-files': return getSourceAuditInventoryPage(artifact, item.page ?? 0)
-    case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0)
+    case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact)
     case 'audit-import-target': return resolveAuditImportTargetFromArtifact(artifact, item.factId)
     case 'audit-import-domain': return resolveAuditImportDomainFromArtifact(artifact, item.factId)
   }

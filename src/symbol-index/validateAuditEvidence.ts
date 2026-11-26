@@ -27,6 +27,12 @@ import {
   SOURCE_AUDIT_ROLES,
   SOURCE_AUDIT_SCHEMA_VERSION,
   SOURCE_AUDIT_VISIBILITIES,
+  compareTestModifierObservations,
+  TEST_MODIFIER_PROOF_MAX_BYTES,
+  TEST_MODIFIER_PROOF_MAX_OBSERVATIONS,
+  TEST_MODIFIER_PROOF_MAX_PATH_BYTES,
+  TEST_MODIFIER_PROOF_PROFILE,
+  TEST_MODIFIER_PROOF_REASONS,
 } from './auditEvidenceTypes.js'
 import type {
   SourceAuditCapability,
@@ -34,6 +40,8 @@ import type {
   SourceAuditFactKind,
   SourceAuditFilePage,
   SourceAuditInventoryPage,
+  ExactAuditSpan,
+  TestModifierObservation,
 } from './auditEvidenceTypes.js'
 
 const ERROR_PREFIX = 'INVALID_SOURCE_AUDIT_EVIDENCE'
@@ -630,11 +638,15 @@ export function validateSourceAuditInventoryPage(value: unknown): asserts value 
 export function validateSourceAuditFilePage(value: unknown): asserts value is SourceAuditFilePage {
   const page = requireObj(value, '$')
   const keys = [...ENVELOPE_KEYS, 'mode', 'status', 'file', 'facts']
-  requireClosed(page, '$', keys, keys)
+  requireClosed(page, '$', [...keys, 'testModifierProof'], keys)
   if (page.mode !== 'audit-file') fail('$.mode', 'must equal "audit-file"')
   const status = requireOneOf(page.status, ['found', 'not-selected'] as const, '$.status')
   const expectedItems = validateEnvelope(page, '$', AUDIT_FACT_PAGE_SIZE)
   const facts = requireArray(page.facts, '$.facts')
+  const hasModifierProof = Object.hasOwn(page, 'testModifierProof')
+  if (hasModifierProof && (status !== 'found' || page.schemaVersion !== '1.2.0' || page.pageIndex !== 0)) {
+    fail('$.testModifierProof', 'is allowed only on a found schema 1.2.0 first page')
+  }
 
   if (status === 'not-selected') {
     if (page.file !== null) fail('$.file', 'must be null for a not-selected result')
@@ -650,4 +662,157 @@ export function validateSourceAuditFilePage(value: unknown): asserts value is So
   if (file.status === 'failed' || file.status === 'skipped' || file.status === 'unsupported') {
     if (pageFacts.length > 0 || page.totalItems !== 0) fail('$.facts', `must be empty for a ${file.status as string} file`)
   }
+  if (hasModifierProof) validateTestModifierProof(page.testModifierProof, page, file)
+}
+
+function requireModifierPath(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.includes('\0') || value.includes('\\') || /^[A-Za-z]:/.test(value) ||
+      Buffer.byteLength(value) > TEST_MODIFIER_PROOF_MAX_PATH_BYTES ||
+      value.split('/').some(part => part === '' || part === '.' || part === '..')) {
+    fail(path, 'must be a bounded canonical path')
+  }
+  return value
+}
+
+function requireExactModifierSpan(value: unknown, path: string, file: string): ExactAuditSpan {
+  validateSpan(value, path, file)
+  const span = value as ExactAuditSpan
+  if (span.startColumn === null || span.endLine === null || span.endColumn === null ||
+      (span.startLine === span.endLine && span.startColumn === span.endColumn)) fail(path, 'must be an exact nonempty span')
+  return span
+}
+
+function containsModifierSpan(outer: ExactAuditSpan, inner: ExactAuditSpan): boolean {
+  return (outer.startLine < inner.startLine || outer.startLine === inner.startLine && outer.startColumn <= inner.startColumn) &&
+    (outer.endLine > inner.endLine || outer.endLine === inner.endLine && outer.endColumn >= inner.endColumn)
+}
+
+function validateTestModifierProof(value: unknown, page: Obj, file: Obj): void {
+  const path = '$.testModifierProof'
+  if ((file.language !== 'typescript' && file.language !== 'javascript') ||
+      (file.status !== 'parsed' && file.status !== 'partial')) fail(path, 'requires an eligible JS/TS file')
+  const proof = requireObj(value, path)
+  const keys = ['schemaVersion', 'profile', 'snapshotId', 'selectionFingerprint', 'selectedDomainDigest',
+    'originFile', 'originContentSha256', 'coverage', 'runnerBinding', 'observations', 'reasonCodes']
+  requireClosed(proof, path, keys, keys)
+  if (proof.schemaVersion !== '1.0.0' || proof.profile !== TEST_MODIFIER_PROOF_PROFILE) fail(path, 'has an unsupported schema or profile')
+  const origin = requireModifierPath(proof.originFile, path + '.originFile')
+  requireSha(proof.selectionFingerprint, path + '.selectionFingerprint')
+  requireSha(proof.selectedDomainDigest, path + '.selectedDomainDigest')
+  if (proof.snapshotId !== page.snapshotId || origin !== file.path ||
+      requireSha(proof.originContentSha256, path + '.originContentSha256') !== file.contentSha256) fail(path, 'must bind to the page file')
+  const coverage = requireOneOf(proof.coverage, ['complete', 'partial'], path + '.coverage')
+  if (coverage === 'complete' && file.status !== 'parsed') fail(path + '.coverage', 'requires a parsed file for complete coverage')
+  const reasons = requireArray(proof.reasonCodes, path + '.reasonCodes')
+  if (reasons.length > TEST_MODIFIER_PROOF_REASONS.length || (reasons.length === 0) !== (coverage === 'complete')) {
+    fail(path + '.reasonCodes', 'must agree with coverage and respect the reason budget')
+  }
+  let previousReason = ''
+  for (const reason of reasons) {
+    const code = requireOneOf(reason, TEST_MODIFIER_PROOF_REASONS, path + '.reasonCodes')
+    if (code <= previousReason) fail(path + '.reasonCodes', 'must be unique and sorted')
+    previousReason = code
+  }
+
+  const runnerPath = path + '.runnerBinding'
+  const runner = requireObj(proof.runnerBinding, runnerPath)
+  const runnerKeys = ['kind', 'localName', 'bindingSpan', 'baseLocalName', 'baseImportSpan', 'extensionSpan', 'wrapper']
+  requireClosed(runner, runnerPath, runnerKeys, runnerKeys)
+  const kind = requireOneOf(runner.kind, ['direct-playwright', 'local-extended-playwright', 'imported-extended-playwright'], runnerPath + '.kind')
+  if (runner.localName !== 'test' || typeof runner.baseLocalName !== 'string' || !runner.baseLocalName) fail(runnerPath, 'has an invalid binding name')
+  const binding = requireExactModifierSpan(runner.bindingSpan, runnerPath + '.bindingSpan', origin)
+  const basePath = kind === 'imported-extended-playwright' ? validateModifierWrapper(runner.wrapper, proof, origin) : origin
+  if (kind !== 'imported-extended-playwright' && runner.wrapper !== null) fail(runnerPath + '.wrapper', 'must be null for an origin binding')
+  const base = requireExactModifierSpan(runner.baseImportSpan, runnerPath + '.baseImportSpan', basePath)
+  if (kind === 'direct-playwright') {
+    if (runner.baseLocalName !== 'test' || runner.extensionSpan !== null ||
+        !containsModifierSpan(base, binding) || !containsModifierSpan(binding, base)) fail(runnerPath, 'has inconsistent direct binding spans')
+  } else {
+    const extension = requireExactModifierSpan(runner.extensionSpan, runnerPath + '.extensionSpan', basePath)
+    const declaration = kind === 'local-extended-playwright' ? binding :
+      (runner.wrapper as { exportBindingSpan: ExactAuditSpan }).exportBindingSpan
+    if (!containsModifierSpan(declaration, extension)) fail(runnerPath + '.extensionSpan', 'must be inside its variable declaration')
+  }
+
+  const observations = requireArray(proof.observations, path + '.observations')
+  if (observations.length > TEST_MODIFIER_PROOF_MAX_OBSERVATIONS) fail(path + '.observations', 'exceeds the observation budget')
+  let previous: TestModifierObservation | undefined
+  for (const [index, item] of observations.entries()) {
+    const at = `${path}.observations[${index}]`
+    const observation = requireObj(item, at)
+    const keys = ['modifier', 'calleeSpan', 'callSpan']
+    requireClosed(observation, at, keys, keys)
+    const modifier = requireOneOf(observation.modifier, ['skip', 'only'] as const, at + '.modifier')
+    const calleeSpan = requireExactModifierSpan(observation.calleeSpan, at + '.calleeSpan', origin)
+    const callSpan = requireExactModifierSpan(observation.callSpan, at + '.callSpan', origin)
+    if (!containsModifierSpan(callSpan, calleeSpan)) fail(at + '.calleeSpan', 'must be contained within the call')
+    const current = { modifier, calleeSpan, callSpan }
+    if (previous && compareTestModifierObservations(previous, current) >= 0) fail(at, 'must have a unique, sorted identity')
+    previous = current
+  }
+  if (Buffer.byteLength(JSON.stringify(value)) > TEST_MODIFIER_PROOF_MAX_BYTES) fail(path, 'exceeds the serialized proof budget')
+}
+
+function validateModifierWrapper(value: unknown, proof: Obj, origin: string): string {
+  const path = '$.testModifierProof.runnerBinding.wrapper'
+  const wrapper = requireObj(value, path)
+  const keys = ['path', 'contentSha256', 'exportBindingSpan', 'importTargetProof']
+  requireClosed(wrapper, path, keys, keys)
+  const source = requireModifierPath(wrapper.path, path + '.path')
+  if (source === origin) fail(path + '.path', 'must identify a distinct selected file')
+  const hash = requireSha(wrapper.contentSha256, path + '.contentSha256')
+  requireExactModifierSpan(wrapper.exportBindingSpan, path + '.exportBindingSpan', source)
+
+  // Check the positive JS/TS subset of the ordinary envelope embedded here.
+  // Live candidate and premise qualification remains with the ordinary resolver.
+  const ordinaryPath = path + '.importTargetProof'
+  const referencePath = ordinaryPath + '.sourceReferenceProof'
+  const ordinary = requireObj(wrapper.importTargetProof, ordinaryPath)
+  const ordinaryKeys = ['schemaVersion', 'mode', 'snapshotId', 'importFactId', 'originFile', 'sourceSpecifier',
+    'status', 'candidatePaths', 'selectionComplete', 'reasonCode', 'sourceReferenceProof']
+  requireClosed(ordinary, ordinaryPath, ordinaryKeys, ordinaryKeys)
+  const reference = requireObj(ordinary.sourceReferenceProof, referencePath)
+  const referenceKeys = ['schemaVersion', 'profile', 'pathIdentityProfile', 'snapshotId', 'selectionFingerprint',
+    'selectedDomainDigest', 'originFile', 'originContentSha256', 'importFactId', 'sourceSpecifier', 'resolutionPlatform',
+    'candidateEnumerationComplete', 'candidateDomain', 'qualifiedReference', 'premiseRefs', 'reasonCode']
+  requireClosed(reference, referencePath, referenceKeys, referenceKeys)
+  const target = requireObj(reference.qualifiedReference, referencePath + '.qualifiedReference')
+  const targetKeys = ['targetPath', 'targetContentSha256', 'referenceKind']
+  requireClosed(target, referencePath + '.qualifiedReference', targetKeys, targetKeys)
+  if (ordinary.schemaVersion !== '1.1.0' || ordinary.mode !== 'audit-import-target' ||
+      ordinary.snapshotId !== proof.snapshotId || ordinary.originFile !== origin || ordinary.selectionComplete !== true ||
+      reference.schemaVersion !== '1.0.0' || reference.profile !== 'js-ts-selected-source-reference-v1' ||
+      reference.pathIdentityProfile !== 'selected-source-path-v1' || reference.snapshotId !== proof.snapshotId ||
+      reference.selectionFingerprint !== proof.selectionFingerprint || reference.selectedDomainDigest !== proof.selectedDomainDigest ||
+      reference.originFile !== origin || reference.originContentSha256 !== proof.originContentSha256 ||
+      reference.importFactId !== requireText(ordinary.importFactId, ordinaryPath + '.importFactId') ||
+      reference.sourceSpecifier !== requireText(ordinary.sourceSpecifier, ordinaryPath + '.sourceSpecifier') ||
+      reference.candidateEnumerationComplete !== true || reference.reasonCode !== null ||
+      target.targetPath !== source || target.targetContentSha256 !== hash || target.referenceKind !== 'selected-source-reference') {
+    fail(ordinaryPath, 'must qualify the exact wrapper and origin identities')
+  }
+  requireOneOf(ordinary.status, ['present', 'proven-missing', 'outside-selected-roots', 'indeterminate'], ordinaryPath + '.status')
+  requireText(ordinary.reasonCode, ordinaryPath + '.reasonCode')
+  for (const candidate of requireArray(ordinary.candidatePaths, ordinaryPath + '.candidatePaths')) {
+    requireModifierPath(candidate, ordinaryPath + '.candidatePaths')
+  }
+  requireOneOf(reference.resolutionPlatform, ['win32', 'posix'], referencePath + '.resolutionPlatform')
+  const domain = requireArray(reference.candidateDomain, referencePath + '.candidateDomain')
+  for (const candidate of domain) requireModifierPath(candidate, referencePath + '.candidateDomain')
+  if (!domain.includes(source)) fail(referencePath + '.candidateDomain', 'must contain the qualified wrapper')
+  let hasWrapperPremise = false
+  for (const value of requireArray(reference.premiseRefs, referencePath + '.premiseRefs')) {
+    const at = referencePath + '.premiseRefs'
+    const premise = requireObj(value, at)
+    const keys = ['role', 'path', 'state', 'contentSha256']
+    requireClosed(premise, at, keys, keys)
+    const role = requireOneOf(premise.role, ['config', 'package-metadata', 'candidate', 'path'], at + '.role')
+    const premisePath = requireModifierPath(premise.path, at + '.path')
+    const state = requireOneOf(premise.state, ['absent', 'file', 'directory'], at + '.state')
+    if (state === 'file') requireSha(premise.contentSha256, at + '.contentSha256')
+    else if (premise.contentSha256 !== null) fail(at + '.contentSha256', 'must be null for a non-file premise')
+    if (role === 'candidate' && premisePath === source && state === 'file' && premise.contentSha256 === hash) hasWrapperPremise = true
+  }
+  if (!hasWrapperPremise) fail(referencePath + '.premiseRefs', 'must include the exact selected wrapper bytes')
+  return source
 }
