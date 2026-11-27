@@ -283,6 +283,7 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1
 - Alternative Android selector: `--android-component <name>`.
 - `--depth <n>`: graph traversal depth, default 1.
 - `--resolve-classification`: resolve the full available classification entry for node lookup.
+- `--direct-external-reference-proof` opts into an additive proof with `--audit-import-target <fact-id> --json` on schema 1.2.0. Batch and stream import-target items opt in with `directExternalReferenceProof: true`.
 - `--audit-files`, `--audit-file <relative-path>`, `--audit-import-target <fact-id>` and `--page <n>` (v1.15.0): source-audit selectors, described in [Source-audit selectors](#source-audit-selectors-v1150-unreleased).
 - `--json`: structured result.
 
@@ -308,6 +309,18 @@ Arguments and exclusivity:
 - All three require `--json`. Without it the command fails; there is no plain-text audit format.
 - `--page <n>` is valid only with `--audit-files` or `--audit-file`, is zero-based, defaults to `0`, and must be a nonnegative integer. It is rejected with `--audit-import-target` and when no audit selector is present.
 - `--audit-file` takes a canonical, forward-slash, project-root-relative selected path. Absolute paths, `..` traversal, backslashes and non-canonical forms are rejected with `INVALID_AUDIT_PATH`.
+
+#### Supplemental Playwright modifier proof (KIT-FACTS-02)
+
+```text
+my-dev-kit lookup --index <index-dir> --audit-file <relative-path> --page 0 --test-modifier-proof --json
+```
+
+`--test-modifier-proof` requires `--audit-file`, `--json`, effective page zero, and a source-audit artifact using schema `1.2.0`. Page zero is the default when `--page` is omitted. Incompatible options and a nonzero page fail with `INVALID_TEST_MODIFIER_PROOF_SELECTOR`. An unsupported artifact schema fails with `INVALID_TEST_MODIFIER_PROOF_SCHEMA`.
+
+Only explicit `--index` and `--page` may accompany the required selector, JSON flag, and proof flag. The request requires a selected, hash-bearing JavaScript or TypeScript file at most 200,000 bytes with a UTF-8 path of at most 4,096 bytes, with parsed or partial source analysis. An eligible request can still return a legacy-shaped page if the runner or proof cannot be qualified. The extension can report complete or partial coverage. Conditional calls are recorded as syntax and their runtime guards remain unevaluated.
+
+Unnegotiated page-zero requests retain the legacy shape under both artifact schemas. A closed legacy page reader must omit the flag and the batch/stream item property. Facts and pagination stay in the existing contract. See the [proof boundary](CONTRACTS.md#kit-facts-02-proof-boundary).
 
 Pagination:
 
@@ -346,7 +359,7 @@ Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters
 | Family | selector | Fields and defaults |
 | --- | --- | --- |
 | lookup | audit-files | page (0) |
-| lookup | audit-file | path, page (0) |
+| lookup | audit-file | path, page (0), optional testModifierProof (true) |
 | lookup | audit-import-target | factId |
 | lookup | audit-import-domain | factId (requires artifact schema 1.2.0) |
 | source | exact-file-occurrence | path, literal, context (3) |
@@ -354,6 +367,8 @@ Submit 1–32 requests. Each item has an id of 1–64 printable ASCII characters
 | source | line-range | path, start, end, maxLines (160) |
 
 Use canonical forward-slash project-relative paths. Pages are zero-based and line ranges are one-based and inclusive. Batches reuse the authenticated artifact within the invocation. Each live read retains its own containment, source identity, and freshness checks. A batched line range additionally verifies that the exact bytes used to render the range match the snapshot.
+
+Batch and stream clients request the supplemental proof per item with `"testModifierProof": true` on a page-zero `audit-file` request. Omit the property for legacy behavior. Other values, selectors, or page positions are invalid input (`INVALID_AUDIT_BATCH`). An explicit request against an artifact other than schema `1.2.0` returns the item error `INVALID_TEST_MODIFIER_PROOF_SCHEMA`. Request the extension on the item itself. The top-level batch and stream selectors do not accept the standalone proof flag. If the supplemental proof would exceed the response budget, the transport can return the legacy page when it fits.
 
 The response envelope has schemaVersion "1.0.0", mode "audit-batch", family, snapshotId, selectionFingerprint, inputSha256 (the exact request file digest), requestedCount, returnedCount, complete, and ordered results. Each result echoes id and selector. An item with status "ok" carries its original selector JSON in response. An item with status "error" has error.code and error.exitCode and carries no evidence. Expect known standalone error codes where available, with UNSAFE_SOURCE and COMMAND_ERROR for errors without a standalone code.
 
@@ -829,6 +844,14 @@ authenticated import-expression fact ID to the domain selector and the literal
 import fact ID to the ordinary target selector. The domain selector excludes
 other lookup modes and paging. The byte selector requires one exact selected
 file and excludes other source modes. See [the proof contract](CONTRACTS.md#coordinated-r3-import-evidence).
+
+On schema `1.2.0`, the ordinary target selector also accepts an authenticated
+immediate re-export fact ID. With an admitted NodeNext configuration and ESM
+origin, `sourceReferenceProof` can qualify an explicit relative reference such
+as `./utility.js` to the selected `utility.ts` source. The proof captures the
+applicable configuration and package metadata. NodeNext coverage excludes
+extensionless and directory-index references, package fallback and runtime
+destinations. See [configured ordinary references](CONTRACTS.md#configured-ordinary-references).
 
 The byte needle is even-length hexadecimal for 1 to 4,096 bytes. The
 selector scans at most 200,000 bytes in that file and returns up to 200

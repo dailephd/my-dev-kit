@@ -120,6 +120,8 @@ The `classification` analyzer keeps the same security posture as the other seman
 
 ### Context capsule and retrieval audit security notes (v1.6.0)
 
+The implemented-unreleased FACTS02 audit lookups verify the indexed origin and the contained configuration, candidate, and wrapper premises they use. Stale, unsupported, or out-of-profile evidence can withhold a proof. These lookups make bounded static observations and leave runtime execution and general package routing outside the profile. See the [source-audit contracts](CONTRACTS.md#kit-facts-02-proof-boundary).
+
 The `context` command reads only artifacts already present in the selected index directory and writes bounded output to `--out` (and, when requested, `--audit-out`). Both output paths are resolved and validated the same way other artifact writes are — writes stay confined to the location the caller specifies; `context` does not write to `manifest.projectRoot` or any location outside the paths the caller passed. A context capsule never embeds a raw graph or artifact dump; all included evidence is bounded, capped, and reason-tagged, which limits how much source or structural detail a single capsule can expose relative to the underlying index.
 
 ### Graph-diff security notes (v1.8.0)

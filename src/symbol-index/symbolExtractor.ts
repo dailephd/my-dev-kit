@@ -16,6 +16,7 @@ import * as ts from 'typescript'
 import * as path from 'path'
 import { auditCapabilityMap, auditFactId, type SourceAuditExtractionPayload } from './auditObservations.js'
 import type { AmbientClassification, SourceAuditFact } from './auditEvidenceTypes.js'
+import { assignDeclarationIdentities, legacyDeclarationId, qualifiedDeclarationId } from './declarationIdentity.js'
 import { API_RELATIONSHIP_PRODUCER, API_RELATIONSHIP_METHODS, type ApiSourceObservations, type ApiSourceObservation } from './apiRelationshipEvidenceTypes.js'
 import {
   type SymbolDefinition,
@@ -116,10 +117,12 @@ export function extractFromSource(
   const auditCollector: TsAuditCollector = { requires: [], commonJsExports: [], unsupportedExportMutation: false, unsupportedRequire: false, unsafeRequireBinding: false }
   extractModuleEvidence(sourceFile, symbols, imports, exports, importBindings, commonJsExports, warnings, auditCollector)
   const frameworkRouteFacts = extractJsFrameworkEvidence(sourceFile, filePath, symbols, importBindings, commonJsExports, endLineLimit)
-  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector)
-
+  const apiRelationships = extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null)
+  const bindings: AuditBinding[] = []
+  const sourceAudit = buildTypeScriptAudit(sourceFile, filePath, endLineLimit === null, auditCollector, bindings)
+  if (bindings.length) addAuditBindingSymbols(sourceFile, filePath, endLineLimit, symbols, sourceAudit.facts, bindings)
   return {
-    apiRelationships: extractApiObservations(sourceFile, symbols, importBindings, frameworkRouteFacts, endLineLimit !== null),
+    apiRelationships,
     sourceAudit,
     importBindings,
     commonJsExports,
@@ -139,6 +142,24 @@ export function parseTypeScriptSource(filePath: string, sourceText: string, scri
   return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
+/** Inspect lexical bindings in the existing AST without loading, checking, or emitting a project. */
+export function createSourceBindingChecker(sf: ts.SourceFile): ts.TypeChecker {
+  const options: ts.CompilerOptions = {
+    allowJs: true, noResolve: true, noLib: true, types: [], target: ts.ScriptTarget.Latest,
+  }
+  return ts.createProgram([sf.fileName], options, {
+    getSourceFile: name => name === sf.fileName ? sf : undefined,
+    getDefaultLibFileName: () => '',
+    getCurrentDirectory: () => '',
+    getCanonicalFileName: name => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: name => name === sf.fileName,
+    readFile: name => name === sf.fileName ? sf.text : undefined,
+    writeFile: () => { throw new Error('Source binding inspection cannot emit files.') },
+  }).getTypeChecker()
+}
+
 /** Extracts audit evidence without constructing ordinary symbols or graph inputs. */
 export function extractDeclarationFileAudit(filePath: string, sourceText: string): ExtractionResult {
   const sourceFile = parseTypeScriptSource(filePath, sourceText, ts.ScriptKind.TS)
@@ -148,7 +169,7 @@ export function extractDeclarationFileAudit(filePath: string, sourceText: string
   return {
     language: 'typescript',
     lineCount: sourceText.split('\n').length,
-    sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector, true),
+    sourceAudit: buildTypeScriptAudit(sourceFile, filePath, hasParseErrors(sourceFile), collector),
     imports: [], exports: [], symbols: [], reExportSpecifiers: [], exportAllSpecifiers: [],
   }
 }
@@ -512,7 +533,7 @@ function locationOf(
  * `parseDiagnostics` is not part of the public `ts.SourceFile` typings, so it
  * is read defensively; an unreadable value counts as untrusted.
  */
-function hasParseErrors(sourceFile: ts.SourceFile): boolean {
+export function hasParseErrors(sourceFile: ts.SourceFile): boolean {
   const diagnostics = (sourceFile as { parseDiagnostics?: readonly unknown[] })
     .parseDiagnostics
   return !Array.isArray(diagnostics) || diagnostics.length > 0
@@ -785,12 +806,44 @@ function extractJsFrameworkEvidence(sf: ts.SourceFile, file: string, symbols: Sy
   return facts
 }
 
+function commonJsReceiverOwner(identifier: ts.Identifier, checker: ts.TypeChecker, sf: ts.SourceFile): 'local' | 'receiver' | 'ambiguous' {
+  for (let node: ts.Node = identifier; node !== sf; node = node.parent) {
+    if (ts.isWithStatement(node.parent) && node.parent.statement === node) return 'ambiguous'
+  }
+  // Resolve the lexical name, not the synthetic JS property symbol the checker
+  // may expose for identifiers used in CommonJS or expando property assignments.
+  const symbol = checker.resolveName(identifier.text, identifier, ts.SymbolFlags.Value | ts.SymbolFlags.Alias, false)
+  if (!symbol) return 'receiver'
+  const declaration = symbol.declarations?.[0]
+  if (!declaration || symbol.declarations?.length !== 1) return 'ambiguous'
+  if (declaration === sf || ts.isIdentifier(declaration)) return 'receiver'
+  if (declaration.getSourceFile() !== sf || ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Ambient ||
+      ts.isTypeOnlyImportDeclaration(declaration)) return 'ambiguous'
+  // A script's wrapper-level var or function may share/rebind the injected
+  // CommonJS parameter. A lexical block or an inner function has its own owner.
+  if (!ts.isExternalModule(sf) && (symbol.flags & ts.SymbolFlags.FunctionScopedVariable || ts.isFunctionDeclaration(declaration)) &&
+      !ts.isParameter(declaration)) {
+    let scope = declaration.parent
+    while (scope !== sf && !ts.isFunctionLike(scope) && !ts.isModuleBlock(scope) && !ts.isClassStaticBlockDeclaration(scope)) scope = scope.parent
+    if (scope === sf) return 'ambiguous'
+  }
+  return 'local'
+}
+
 function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[], audit?: TsAuditCollector): void {
   const shadowed = new Set<string>()
   const mutated = new Set<string>()
   let unsupportedExportMutation = false
   let wholeModuleAssignments = 0
-  const exportReceiver = (n: ts.Node): boolean => ts.isIdentifier(n) && n.text === 'exports' || ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
+  let checker: ts.TypeChecker | undefined
+  const receiverName = (node: ts.Node, name: 'exports' | 'module'): boolean => {
+    if (!ts.isIdentifier(node) || node.text !== name) return false
+    const owner = commonJsReceiverOwner(node, checker ??= createSourceBindingChecker(sf), sf)
+    if (owner === 'ambiguous') unsupportedExportMutation = true
+    return owner !== 'local'
+  }
+  const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && n.name.text === 'exports' && receiverName(n.expression, 'module')
+  const exportReceiver = (n: ts.Node): boolean => receiverName(n, 'exports') || isModule(n)
   const exportRoot = (n: ts.Node): boolean => exportReceiver(n) || (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && exportRoot(n.expression)
   const bindNames = (n: ts.BindingName): string[] => ts.isIdentifier(n) ? [n.text] : n.elements.flatMap(e => ts.isOmittedExpression(e) ? [] : bindNames(e.name))
   function scan(n: ts.Node): void {
@@ -805,8 +858,14 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name) shadowed.add(n.name.text)
     if (ts.isImportClause(n) && n.name) shadowed.add(n.name.text)
     if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n)) shadowed.add(n.name.text)
-    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) mutated.add(n.left.text)
-    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand)) mutated.add(n.operand.text)
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) {
+      mutated.add(n.left.text)
+      if (receiverName(n.left, 'exports') || receiverName(n.left, 'module')) unsupportedExportMutation = true
+    }
+    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand)) {
+      mutated.add(n.operand.text)
+      if (receiverName(n.operand, 'module')) unsupportedExportMutation = true
+    }
     ts.forEachChild(n, scan)
   }
   scan(sf)
@@ -854,22 +913,20 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs'); audit?.requires.push({ node: n, specifier: spec, names: [] }) }
     }
   }
-  const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
   function visit(n: ts.Node): void {
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
       const left = n.left
       let kind: CommonJsExportFact['assignmentKind'] | undefined
       let name: string | null = null
-      let global = ''
-      if (isModule(left)) { kind = 'module-exports'; global = 'module' }
+      if (isModule(left)) kind = 'module-exports'
       else if (ts.isPropertyAccessExpression(left)) {
-        if (ts.isIdentifier(left.expression) && left.expression.text === 'exports') { kind = 'exports-member'; global = 'exports'; name = left.name.text }
-        else if (isModule(left.expression)) { kind = 'module-exports-member'; global = 'module'; name = left.name.text }
+        if (receiverName(left.expression, 'exports')) { kind = 'exports-member'; name = left.name.text }
+        else if (isModule(left.expression)) { kind = 'module-exports-member'; name = left.name.text }
       }
       if (kind) {
         if (kind === 'module-exports') wholeModuleAssignments++
         const unconditional = ts.isExpressionStatement(n.parent) && ts.isSourceFile(n.parent.parent)
-        const safe = unconditional && !shadowed.has(global) && !mutated.has(global)
+        const safe = unconditional
         const add = (exportedName: string | null, rhs: ts.Node) => {
           facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
           audit?.commonJsExports.push({ node: n, fact: facts[facts.length - 1]! })
@@ -955,7 +1012,57 @@ export function singleUseModuleStringBindings(sf: ts.SourceFile): Map<string, ts
   return literals
 }
 
-function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector, auditOnly = false): SourceAuditExtractionPayload {
+interface AuditBinding {
+  identifier: ts.Identifier
+  kind: 'const' | 'variable'
+  explicit: boolean
+  facts: SourceAuditFact[]
+}
+
+function visitBindingIdentifiers(name: ts.BindingName, visit: (identifier: ts.Identifier) => void): void {
+  if (ts.isIdentifier(name)) visit(name)
+  else for (const element of name.elements) if (!ts.isOmittedExpression(element)) visitBindingIdentifiers(element.name, visit)
+}
+
+function addAuditBindingSymbols(
+  sf: ts.SourceFile, filePath: string, endLineLimit: number | null, symbols: SymbolDefinition[],
+  facts: SourceAuditFact[], bindings: AuditBinding[],
+): void {
+  const ordinary = assignDeclarationIdentities(filePath, symbols)
+  const counts = new Map<string, number>()
+  const bindingLines = new Map<string, Set<number>>()
+  for (const symbol of ordinary) {
+    if (!symbol.ownerKey) counts.set(symbol.name, (counts.get(symbol.name) ?? 0) + 1)
+  }
+  for (const { identifier, kind, explicit, facts: bindingFacts } of bindings) {
+    const name = identifier.text
+    const ordinal = counts.get(name) ?? 0
+    const nodeId = ordinal === 0 ? legacyDeclarationId(filePath, name) : qualifiedDeclarationId(filePath, '', name, ordinal)
+    counts.set(name, ordinal + 1)
+    const location = locationOf(identifier, sf, filePath, endLineLimit)
+    const lines = bindingLines.get(name) ?? new Set<number>()
+    lines.add(location.line)
+    bindingLines.set(name, lines)
+    symbols.push({ name, kind, location, exported: explicit, nodeId })
+    for (const fact of bindingFacts) fact.symbolId = nodeId
+  }
+  // Preserve a previously unique ordinary symbol match if a new same-line
+  // binding would make the normalizer's line-based lookup ambiguous.
+  for (const fact of facts) {
+    if ((fact.kind !== 'declaration' && fact.kind !== 'export') || fact.symbolId ||
+        !fact.name || !bindingLines.get(fact.name)?.has(fact.span.startLine)) continue
+    const matches = ordinary.filter(symbol => symbol.name === fact.name &&
+      symbol.location.line === fact.span.startLine && (!fact.declarationKind || symbol.kind === fact.declarationKind))
+    if (matches.length === 1) {
+      fact.symbolId = matches[0]!.nodeId
+      if (fact.kind === 'declaration') fact.ownerKey = matches[0]!.ownerKey ?? null
+    }
+  }
+  // Keep ordinary IDs fixed even when a newly enumerated binding precedes them.
+  for (const [index, symbol] of ordinary.entries()) symbols[index]!.nodeId = symbol.nodeId
+}
+
+function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: boolean, collector: TsAuditCollector, bindings?: AuditBinding[]): SourceAuditExtractionPayload {
   const facts: SourceAuditFact[] = []
   const capabilities = auditCapabilityMap('unsupported')
   capabilities.declarations = 'complete'
@@ -1003,7 +1110,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
   }
 
   for (const statement of sf.statements) {
-    if (auditOnly) {
+    if (!bindings) {
       if (ts.isEmptyStatement(statement)) continue
       if (exact && !ts.isExternalModule(sf) && isBodylessAmbientModule(statement)) {
         facts.push({ ...base, kind: 'declaration', span: span(statement), name: statement.name.text, declarationKind: 'ambient-module' })
@@ -1068,7 +1175,13 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
       const kind = statement.declarationList.flags & ts.NodeFlags.Const ? 'const' : 'variable'
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) declare(declaration, declaration.name.text, kind, explicit, false)
-        else {
+        else if (exact && bindings && !ts.getModifiers(statement)?.some(modifier => modifier.kind === ts.SyntaxKind.DeclareKeyword)) {
+          visitBindingIdentifiers(declaration.name, (identifier) => {
+            const start = facts.length
+            declare(identifier, identifier.text, kind, explicit, false)
+            bindings.push({ identifier, kind, explicit, facts: facts.slice(start) })
+          })
+        } else {
           partial('declarations', 'destructured-declaration-unsupported', 'A destructured top-level declaration is not enumerated.', declaration)
           if (explicit) partial('exports', 'destructured-export-unsupported', 'A destructured exported declaration is not enumerated.', declaration)
         }
@@ -1081,7 +1194,7 @@ function buildTypeScriptAudit(sf: ts.SourceFile, filePath: string, parseErrors: 
 
   // Audit-only files use the bounded statement profile above. Unsupported
   // subtrees are not scanned as executable code.
-  if (auditOnly) return { facts, capabilities, diagnostics }
+  if (!bindings) return { facts, capabilities, diagnostics }
 
   // CommonJS imports and exports observed by the existing module-evidence pass.
   for (const entry of collector.requires) {
@@ -1138,6 +1251,12 @@ function hasDefaultKeyword(node: ts.Node): boolean {
   return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false
 }
 
+export function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: true): {
+  path: string; startLine: number; startColumn: number; endLine: number; endColumn: number
+}
+export function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean): {
+  path: string; startLine: number; startColumn: number; endLine: number | null; endColumn: number | null
+}
 export function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, end: number, exact: boolean) {
   const from = sf.getLineAndCharacterOfPosition(start)
   const to = sf.getLineAndCharacterOfPosition(end)
@@ -1154,7 +1273,8 @@ export function auditSpanAt(sf: ts.SourceFile, filePath: string, start: number, 
 // v1.15.0 Batch 3: bounded literal observations from the same TypeScript AST
 // ---------------------------------------------------------------------------
 
-const TEST_FUNCTIONS = new Set(['describe', 'it', 'test'])
+export const TEST_FUNCTIONS: ReadonlySet<string> = new Set(['describe', 'it', 'test'])
+export const DIRECT_TEST_IMPORT_MODULES: ReadonlySet<string> = new Set(['vitest', '@jest/globals', 'node:test'])
 const LEGACY_TEST_ALIASES = new Set(['xit', 'xdescribe', 'xtest', 'fit', 'fdescribe', 'ftest'])
 const PROCESS_FUNCTIONS = new Set(['exec', 'execSync', 'execFile', 'execFileSync', 'spawn', 'spawnSync', 'fork'])
 const CHILD_PROCESS_MODULES = new Set(['child_process', 'node:child_process'])
@@ -1167,6 +1287,45 @@ const NPM_RUN = /\bnpm run ([A-Za-z0-9][A-Za-z0-9:_.-]*)/g
 const TEST_PATH = /(^|\/)(?:tests?|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/
 
 type StaticString = { kind: 'literal' | 'binding'; text: string; bound?: string } | { kind: 'ignored' } | { kind: 'dynamic' }
+
+export function collectAuditDeclarationCounts(
+  sf: ts.SourceFile, includeNamespaces = false, include = (_identifier: ts.Identifier) => true,
+): Map<string, number> {
+  const declared = new Map<string, number>()
+  const add = (identifier: ts.Identifier): void => {
+    if (!include(identifier)) return
+    declared.set(identifier.text, (declared.get(identifier.text) ?? 0) + 1)
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) visitBindingIdentifiers(node.name, add)
+    else if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) && node.name) add(node.name)
+    else if (ts.isImportClause(node) && node.name) add(node.name)
+    else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node) || ts.isImportEqualsDeclaration(node)) add(node.name)
+    else if (includeNamespaces && ts.isModuleDeclaration(node) && ts.isIdentifier(node.name)) add(node.name)
+    ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return declared
+}
+
+/** Shared bounded direct-modifier syntax. Binding qualification belongs to the caller. */
+export function inspectDirectTestModifierCall(call: ts.CallExpression): {
+  root: ts.Identifier; modifier: 'skip' | 'only' | null
+} | undefined {
+  const raw = call.expression
+  let current = unwrapExpression(raw)
+  let relevant = false
+  while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current) || ts.isCallExpression(current)) {
+    if (ts.isElementAccessExpression(current) || (ts.isPropertyAccessExpression(current) &&
+        (current.name.text === 'skip' || current.name.text === 'only'))) relevant = true
+    current = unwrapExpression(current.expression)
+  }
+  if (!relevant || !ts.isIdentifier(current)) return undefined
+  const modifier = ts.isPropertyAccessExpression(raw) && raw.expression === current &&
+    !raw.questionDotToken && !call.questionDotToken && (raw.name.text === 'skip' || raw.name.text === 'only')
+    ? raw.name.text : null
+  return { root: current, modifier }
+}
 
 /**
  * Collects identifier, test, fixture and process observations while walking the already-built AST.
@@ -1202,20 +1361,7 @@ function collectTsObservations(
   capabilities['direct-test-modifiers'] = exact ? 'complete' : 'partial'
 
   // Declaration census: a name declared more than once (or non-uniquely) is shadowed/ambiguous for ownership checks.
-  const declared = new Map<string, number>()
-  const addName = (name: string): void => { declared.set(name, (declared.get(name) ?? 0) + 1) }
-  const addBinding = (name: ts.BindingName): void => {
-    if (ts.isIdentifier(name)) addName(name.text)
-    else for (const element of name.elements) if (!ts.isOmittedExpression(element)) addBinding(element.name)
-  }
-  const censusVisit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) addBinding(node.name)
-    else if ((ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) && node.name) addName(node.name.text)
-    else if (ts.isImportClause(node) && node.name) addName(node.name.text)
-    else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node) || ts.isImportEqualsDeclaration(node)) addName(node.name.text)
-    ts.forEachChild(node, censusVisit)
-  }
-  censusVisit(sf)
+  const declared = collectAuditDeclarationCounts(sf)
   const uniquelyDeclared = (name: string): boolean => declared.get(name) === 1
 
   // Unaliased imports of the test names count as the runner; every other local declaration shadows it.
@@ -1238,7 +1384,7 @@ function collectTsObservations(
           if (element.propertyName || !TEST_FUNCTIONS.has(element.name.text)) continue
           importedTestNames.add(element.name.text)
           if (!clause?.isTypeOnly && !element.isTypeOnly && ts.isStringLiteral(statement.moduleSpecifier) &&
-              ['vitest', '@jest/globals', 'node:test'].includes(statement.moduleSpecifier.text)) qualifiedTestImports.add(element.name.text)
+              DIRECT_TEST_IMPORT_MODULES.has(statement.moduleSpecifier.text)) qualifiedTestImports.add(element.name.text)
         }
       }
       if (ts.isStringLiteral(statement.moduleSpecifier) && CHILD_PROCESS_MODULES.has(statement.moduleSpecifier.text)) {
@@ -1351,19 +1497,10 @@ function collectTsObservations(
   // modifier chain rooted in a runner may hide a relevant call. Bare aliases,
   // other dot calls, titles and embedded commands belong to the wider family.
   function checkModifierDomain(call: ts.CallExpression): void {
-    const raw = call.expression
-    let current = unwrapExpression(raw)
-    let relevant = false
-    while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current) || ts.isCallExpression(current)) {
-      if (ts.isElementAccessExpression(current) || (ts.isPropertyAccessExpression(current) &&
-          (current.name.text === 'skip' || current.name.text === 'only'))) relevant = true
-      current = unwrapExpression(current.expression)
-    }
-    if (!relevant || !ts.isIdentifier(current) || !TEST_FUNCTIONS.has(current.text)) return
-    const owner = declared.get(current.text)
-    const direct = ts.isPropertyAccessExpression(raw) && raw.expression === current &&
-      !raw.questionDotToken && !call.questionDotToken && (raw.name.text === 'skip' || raw.name.text === 'only')
-    if (!direct || (owner !== undefined && !(owner === 1 && qualifiedTestImports.has(current.text)))) {
+    const site = inspectDirectTestModifierCall(call)
+    if (!site || !TEST_FUNCTIONS.has(site.root.text)) return
+    const owner = declared.get(site.root.text)
+    if (!site.modifier || (owner !== undefined && !(owner === 1 && qualifiedTestImports.has(site.root.text)))) {
       capabilities['direct-test-modifiers'] = 'partial'
     }
   }

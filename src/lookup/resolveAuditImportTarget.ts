@@ -1,13 +1,45 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createHash } from 'node:crypto'
+import { isBuiltin } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import ts from 'typescript'
 import { createDefaultRegistry } from '../languages/registry.js'
 import { PythonAdapter } from '../languages/python/adapter.js'
 import { TypeScriptAdapter, enumerateJsTsCandidatePaths } from '../languages/typescript/adapter.js'
+import { ConfiguredImportResolver } from '../languages/typescript/configuredImportResolver.js'
 import type { SourceAuditEvidenceArtifact, SourceAuditFact, SourceAuditFile } from '../symbol-index/auditEvidenceTypes.js'
 import { SOURCE_AUDIT_SCHEMA_VERSION } from '../symbol-index/auditEvidenceTypes.js'
+import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
+import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { assertSourceAuditFileFresh, readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
-import { ensureInsideProjectRoot, UnsafeSourceError } from './getSourceSlice.js'
+import { ensureInsideProjectRoot, readSourceBytes, UnsafeSourceError } from './getSourceSlice.js'
+
+interface SourceReferencePremise {
+  role: 'config' | 'package-metadata' | 'candidate' | 'path'
+  path: string
+  state: 'absent' | 'file' | 'directory'
+  contentSha256: string | null
+}
+
+interface SourceReferenceProof {
+  schemaVersion: '1.0.0'
+  profile: 'js-ts-selected-source-reference-v1'
+  pathIdentityProfile: 'selected-source-path-v1'
+  snapshotId: string
+  selectionFingerprint: string
+  selectedDomainDigest: string
+  originFile: string
+  originContentSha256: string
+  importFactId: string
+  sourceSpecifier: string
+  resolutionPlatform: 'win32' | 'posix'
+  candidateEnumerationComplete: boolean
+  candidateDomain: string[] | null
+  qualifiedReference: { targetPath: string; targetContentSha256: string; referenceKind: 'selected-source-reference' } | null
+  premiseRefs: SourceReferencePremise[]
+  reasonCode: string | null
+}
 
 /**
  * Filesystem/source-selection evidence for one recorded import or JS/TS re-export fact. It is NOT a claim that the import
@@ -24,6 +56,8 @@ export interface AuditImportTargetProof {
   candidatePaths: string[]
   selectionComplete: boolean
   reasonCode: string
+  sourceReferenceProof?: SourceReferenceProof
+  directExternalReferenceProof?: DirectExternalReferenceProof
   declarationProof?: {
     scope: 'selected-ordinary-jvm-sources'
     targetKind: NonNullable<SourceAuditFact['jvmImportTarget']>['kind']
@@ -103,16 +137,22 @@ function classifyAbsentCandidates(
 
 /**
  * Read-only existence proof for one indexed import or JS/TS re-export fact. Uses the identity-verified source-audit artifact,
- * the existing language resolvers and the recorded selected inventory; it never reparses source, rebuilds
- * the index or writes anything. Unresolved is never translated into missing without a complete enumerated
+ * the existing language resolvers and the recorded selected inventory. NodeNext checks the mode of an
+ * existing fact using the same parser on authenticated origin bytes. This lookup never rebuilds the
+ * index or writes anything. Unresolved is never translated into missing without a complete enumerated
  * candidate set in a complete selection. Re-export chains are not traversed: a present immediate target
  * says nothing about its exported bindings, cycles, external dependencies or global reference coverage.
  */
-export function resolveAuditImportTarget(indexDir: string, importFactId: string): AuditImportTargetProof {
-  return resolveAuditImportTargetFromArtifact(readSourceAuditEvidence(indexDir), importFactId)
+export function resolveAuditImportTarget(indexDir: string, importFactId: string, directExternalReferenceProof?: true): AuditImportTargetProof {
+  return resolveAuditImportTargetFromArtifact(readSourceAuditEvidence(indexDir), importFactId, directExternalReferenceProof)
 }
 
-export function resolveAuditImportTargetFromArtifact(artifact: SourceAuditEvidenceArtifact, importFactId: string): AuditImportTargetProof {
+export function resolveAuditImportTargetFromArtifact(
+  artifact: SourceAuditEvidenceArtifact, importFactId: string, directExternalReferenceProof?: true,
+): AuditImportTargetProof {
+  if (directExternalReferenceProof && artifact.schemaVersion !== '1.2.0') {
+    throw new Error('Direct external reference proof requires source audit schema 1.2.0.')
+  }
   const { file, fact } = findImportFact(artifact, importFactId)
   // The origin file must still be the indexed one before any conclusion is drawn from its import.
   assertSourceAuditFileFresh(artifact, file)
@@ -179,7 +219,13 @@ export function resolveAuditImportTargetFromArtifact(artifact: SourceAuditEviden
 
   const esm = fact.kind === 'export' || file.facts.some(entry => entry.literalImportFactId === fact.id)
   const resolution = resolveAuditTargetCandidates(artifact, file, specifier, fact.importedNames ?? [], esm)
-  return proof(resolution.status, resolution.candidatePaths, resolution.reasonCode)
+  const legacy = proof(resolution.status, resolution.candidatePaths, resolution.reasonCode)
+  if (artifact.schemaVersion !== '1.2.0' || !file.contentSha256 || fact.extractionMethod !== 'typescript-ast' ||
+      (file.language !== 'typescript' && file.language !== 'javascript') ||
+      !isBoundedReferenceSpecifier(specifier) || Buffer.byteLength(file.path) > 4096) return legacy
+  const sourceReferenceProof = buildSourceReferenceProof(artifact, file, fact, specifier, legacy)
+  const external = directExternalReferenceProof && buildDirectExternalReferenceProof(artifact, file, fact, legacy, sourceReferenceProof)
+  return { ...legacy, sourceReferenceProof, ...(external ? { directExternalReferenceProof: external } : {}) }
 }
 
 /** A completeness premise belongs to the candidate resolver, independent of operand evaluation. */
@@ -207,15 +253,22 @@ function runtimeProfileIsDefault(): boolean {
   }
 }
 
-/** Qualify only implicit default source mapping. A source snapshot does not pin compiler options. */
-function defaultSourceMapping(projectRoot: string, origin: string): boolean {
+function* defaultConfigurationPaths(origin: string): Iterable<string> {
   let directory = path.posix.dirname(origin)
   for (;;) {
-    if (['tsconfig.json', 'jsconfig.json'].some(name =>
-      probeCandidate(projectRoot, path.posix.join(directory, name)) !== 'absent')) return false
-    if (directory === '.') return true
+    yield path.posix.join(directory, 'tsconfig.json')
+    yield path.posix.join(directory, 'jsconfig.json')
+    if (directory === '.') return
     directory = path.posix.dirname(directory)
   }
+}
+
+/** Qualify only implicit default source mapping. A source snapshot does not pin compiler options. */
+function defaultSourceMapping(projectRoot: string, origin: string): boolean {
+  for (const config of defaultConfigurationPaths(origin)) {
+    if (probeCandidate(projectRoot, config) !== 'absent') return false
+  }
+  return true
 }
 
 function isOrdinaryPathSegment(segment: string): boolean {
@@ -267,6 +320,538 @@ function hasCanonicalPath(projectRoot: string, origin: string): boolean {
     return path.relative(physicalRoot, physicalOrigin).split(path.sep).join('/') === origin
   } catch {
     return false
+  }
+}
+
+export function isBoundedReferenceSpecifier(specifier: string): boolean {
+  return Buffer.byteLength(specifier, 'utf8') <= 4096
+}
+
+const MAX_REFERENCE_CANDIDATES = 256
+const MAX_REFERENCE_PREMISES = 1024
+const MAX_REFERENCE_BYTES = 1024 * 1024
+const hashReferenceBytes = (bytes: Buffer | string): string => createHash('sha256').update(bytes).digest('hex')
+
+class UnqualifiedReference extends Error {}
+
+/** Check each existing component before concluding absence under a missing parent. */
+function inspectReferencePath(
+  root: string, relative: string, states = new Map<string, SourceReferencePremise['state']>(), external = false,
+): SourceReferencePremise['state'] {
+  const segments = relative.split('/')
+  if (!insideProjectRoot(relative) || Buffer.byteLength(relative) > 4096 ||
+      segments.some(segment => !isOrdinaryPathSegment(segment) || (!external && segment.toLowerCase() === 'node_modules'))) {
+    throw new UnqualifiedReference('UNQUALIFIED_PATH_IDENTITY')
+  }
+  let current = root
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment)
+    let state = states.get(current)
+    if (!state) {
+      let stat: fs.Stats | undefined
+      try {
+        stat = fs.lstatSync(current)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new UnqualifiedReference('PATH_PROBE_FAILED')
+      }
+      if (stat) {
+        if (stat.isSymbolicLink() || fs.realpathSync.native(current) !== current) {
+          throw new UnqualifiedReference('UNQUALIFIED_PATH_IDENTITY')
+        }
+        if (!stat.isFile() && !stat.isDirectory()) throw new UnqualifiedReference('UNSUPPORTED_PATH_ENTRY')
+      }
+      state = !stat ? 'absent' : stat.isFile() ? 'file' : 'directory'
+      states.set(current, state)
+    }
+    if (index === segments.length - 1 || state === 'absent') return state
+    if (state !== 'directory') throw new UnqualifiedReference('UNSUPPORTED_PATH_ENTRY')
+  }
+  return 'directory'
+}
+
+/** Proof-local observations share one byte identity per path, including across roles. */
+export class ReferencePremises {
+  private readonly pathStates = new Map<string, SourceReferencePremise['state']>()
+  private readonly observations = new Map<string, {
+    state: SourceReferencePremise['state']; bytes: Buffer | null; contentSha256: string | null; sizeBytes: number | null
+  }>()
+  private readonly refs = new Map<string, SourceReferencePremise>()
+  private serializedBytes = 0
+
+  constructor(private readonly root: string, private readonly external = false) {}
+
+  capture(role: SourceReferencePremise['role'], relative: string, limit = MAX_REFERENCE_BYTES) {
+    const key = role + '\0' + relative
+    let observation = this.observations.get(relative)
+    if (!observation) {
+      const state = inspectReferencePath(this.root, relative, this.pathStates, this.external)
+      const bytes = state === 'file' ? readSourceBytes(this.root, relative, limit) : null
+      observation = {
+        state, bytes: role === 'config' || role === 'package-metadata' ? bytes : null,
+        contentSha256: bytes && hashReferenceBytes(bytes), sizeBytes: bytes?.length ?? null,
+      }
+      this.observations.set(relative, observation)
+    }
+    if (!this.refs.has(key)) {
+      const { state, contentSha256 } = observation
+      const premise = { role, path: relative, state, contentSha256 }
+      this.serializedBytes += Buffer.byteLength(JSON.stringify(premise)) + 1
+      if (this.refs.size >= MAX_REFERENCE_PREMISES || this.serializedBytes > MAX_REFERENCE_BYTES) {
+        throw new UnqualifiedReference('REFERENCE_PREMISE_BUDGET_EXCEEDED')
+      }
+      this.refs.set(key, premise)
+    }
+    return observation
+  }
+
+  recheck(): SourceReferencePremise[] {
+    const pathStates = new Map<string, SourceReferencePremise['state']>()
+    for (const [relative, observed] of this.observations) {
+      if (inspectReferencePath(this.root, relative, pathStates, this.external) !== observed.state ||
+          (observed.state === 'file' && hashReferenceBytes(readSourceBytes(this.root, relative, observed.sizeBytes!)) !== observed.contentSha256)) {
+        throw new UnqualifiedReference('REFERENCE_PREMISE_CHANGED')
+      }
+    }
+    return [...this.refs.values()].sort((a, b) => compareText(a.role, b.role) || compareText(a.path, b.path))
+  }
+}
+
+interface DirectExternalReferenceProof extends Pick<SourceReferenceProof,
+  'schemaVersion' | 'pathIdentityProfile' | 'snapshotId' | 'selectionFingerprint' | 'selectedDomainDigest' |
+  'originFile' | 'originContentSha256' | 'importFactId' | 'sourceSpecifier' | 'resolutionPlatform'> {
+  profile: 'js-ts-direct-external-selected-exclusion-v1'
+  resolutionMode: 'nodenext-esm' | 'bundler-esm'
+  packageName: string
+  packageRoot: string
+  resolvedEntries: { path: string; contentSha256: string; roles: ('source' | 'type' | 'value')[] }[]
+  selectedDomainExcluded: true
+  premiseRefs: SourceReferencePremise[]
+}
+
+function readExternalPackageMetadata(premises: ReferencePremises, name: string): Record<string, unknown> {
+  const bytes = premises.capture('package-metadata', name).bytes
+  if (!bytes) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  const statement = ts.parseJsonText(name, text).statements[0]
+  const uniqueKeys = (node: ts.Node): boolean => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const keys = new Set<string>()
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name) || keys.has(property.name.text)) return false
+        keys.add(property.name.text)
+      }
+    }
+    return ts.forEachChild(node, child => uniqueKeys(child) ? undefined : false) !== false
+  }
+  if (!statement || !ts.isExpressionStatement(statement) || !ts.isObjectLiteralExpression(statement.expression) ||
+      !uniqueKeys(statement.expression)) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+  return JSON.parse(text)
+}
+
+const externalSelectedPrefixes = new WeakMap<SourceAuditEvidenceArtifact, ReadonlySet<string>>()
+
+function selectedInsideExternalPackage(artifact: SourceAuditEvidenceArtifact, packageRoot: string): boolean {
+  const fold = (name: string) => process.platform === 'win32' ? name.toLowerCase() : name
+  let prefixes = externalSelectedPrefixes.get(artifact)
+  if (!prefixes) {
+    const built = new Set<string>()
+    for (const entry of artifact.files) {
+      const segments = fold(entry.path).split('/')
+      if (!segments.includes('node_modules')) continue
+      for (let end = segments.indexOf('node_modules') + 1; end <= segments.length; end++) {
+        built.add(segments.slice(0, end).join('/'))
+      }
+    }
+    externalSelectedPrefixes.set(artifact, prefixes = built)
+  }
+  return prefixes.has(fold(packageRoot))
+}
+
+function buildDirectExternalReferenceProof(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, fact: SourceAuditFact,
+  parent: AuditImportTargetProof, ordinary: SourceReferenceProof,
+): DirectExternalReferenceProof | undefined {
+  const specifier = parent.sourceSpecifier
+  const packagePattern = /^(?<packageName>(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?<subpath>(?:\/[a-zA-Z0-9_][a-zA-Z0-9_.-]*)*)$/
+  const parts = packagePattern.exec(specifier)?.groups
+  if (!parts || isBuiltin(specifier) || !parent.selectionComplete || parent.status === 'present' || parent.candidatePaths.length ||
+      fact.targetPaths?.length || ordinary.candidateEnumerationComplete) return undefined
+  const { packageName, subpath } = parts
+  try {
+    const root = fs.realpathSync.native(artifact.source.projectRoot)
+    const premises = new ReferencePremises(root, true)
+    const resolver = new ConfiguredImportResolver(root, name => {
+      const observed = premises.capture('config', name)
+      if (observed.state === 'directory') throw new UnqualifiedReference('UNSUPPORTED_CONFIG')
+      return observed.bytes
+    })
+    const configured = resolver.externalReferenceOptions(file.path)
+    const scope = nearestReferencePackage(premises, file.path)
+    if (!configured || !scope || !isNodeNextEsmReference(artifact, file, fact, specifier,
+      configured.mode === 'bundler' ? 'module' : scope.type)) return undefined
+    const importer = readExternalPackageMetadata(premises, scope.path)
+    if (importer.name === packageName) return undefined
+    const declared = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap(key => {
+      const entries = importer[key]
+      return entries && typeof entries === 'object' && Object.hasOwn(entries, packageName)
+        ? [(entries as Record<string, unknown>)[packageName]] : []
+    })
+    // Resolve only an installed direct registry dependency. The declaration is
+    // a redirection guard, never the evidence that the package is external.
+    if (!declared.length || declared.some(value => typeof value !== 'string' ||
+        !/^[0-9v~^*<>=| .-]+$/.test(value))) return undefined
+    let directory = path.posix.dirname(file.path)
+    let packageRoot: string
+    for (;;) {
+      packageRoot = path.posix.join(directory, 'node_modules', packageName)
+      const state = premises.capture('path', packageRoot).state
+      if (state === 'directory') break
+      if (state !== 'absent' || directory === '.') return undefined
+      directory = path.posix.dirname(directory)
+    }
+    const metadata = readExternalPackageMetadata(premises, packageRoot + '/package.json')
+    if (metadata.name !== packageName || typeof metadata.version !== 'string' ||
+        metadata.browser !== undefined || metadata.typesVersions !== undefined) return undefined
+    const exports = metadata.exports
+    const exportKey = subpath ? '.' + subpath : '.'
+    const record = exports && typeof exports === 'object' && !Array.isArray(exports) ? exports as Record<string, unknown> : undefined
+    const route = record && Object.keys(record).some(key => key.startsWith('.')) ? record[exportKey]
+      : subpath ? undefined : exports
+    // Only exact subpaths and bounded standard ESM condition records qualify.
+    // TypeScript independently chooses the source/type route below.
+    const chooseValue = (target: unknown, depth = 0): string | undefined => {
+      if (typeof target === 'string') return target
+      if (depth === 4 || !target || typeof target !== 'object' || Array.isArray(target)) return undefined
+      const conditions = Object.entries(target)
+      if (conditions.some(([key]) => !['import', 'require', 'default', 'types', 'node'].includes(key)) ||
+          (configured.mode === 'bundler' && conditions.some(([key]) => key === 'node'))) return undefined
+      for (const [key, branch] of conditions) {
+        if (key === 'types' || key === 'require') continue
+        const value = chooseValue(branch, depth + 1)
+        if (value !== undefined) return value
+        // An unqualified earlier applicable branch cannot justify a fallback.
+        return undefined
+      }
+      return undefined
+    }
+    const main = metadata.main
+    const value = exports === undefined && !subpath && typeof main === 'string' &&
+      (configured.mode === 'nodenext' || metadata.module === undefined || metadata.module === main)
+      ? (main.startsWith('./') ? main : './' + main) : chooseValue(route)
+    if (typeof value !== 'string' || !/^\.\/(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.(?:mjs|cjs|js)$/.test(value) ||
+        value.split('/').includes('node_modules')) return undefined
+    const valuePath = path.posix.join(packageRoot, value)
+    if (premises.capture('candidate', valuePath).state !== 'file') return undefined
+
+    const relative = (candidate: string) => {
+      const key = path.relative(root, candidate).replace(/\\/g, '/')
+      if (key === '..' || key.startsWith('../') || path.posix.isAbsolute(key)) {
+        throw new UnqualifiedReference('EXTERNAL_PROBE_OUTSIDE_ROOT')
+      }
+      return key
+    }
+    const observe = (candidate: string) => {
+      const key = relative(candidate)
+      if (!key) return { state: 'directory', bytes: null }
+      return premises.capture(key.endsWith('/package.json') ? 'package-metadata' : 'path', key)
+    }
+    const host: ts.ModuleResolutionHost = {
+      fileExists: candidate => observe(candidate).state === 'file',
+      directoryExists: candidate => observe(candidate).state === 'directory',
+      readFile: candidate => observe(candidate).bytes?.toString('utf8'),
+      realpath: candidate => path.join(root, relative(candidate)),
+    }
+    const resolved = ts.resolveModuleName(specifier, path.join(root, file.path), configured.options, host,
+      undefined, undefined, ts.ModuleKind.ESNext).resolvedModule
+    if (!resolved?.isExternalLibraryImport || resolved.packageId?.name !== packageName ||
+        resolved.packageId.version !== metadata.version) return undefined
+    const sourcePath = relative(resolved.resolvedFileName)
+    if (!sourcePath.startsWith(packageRoot + '/')) return undefined
+    if (selectedInsideExternalPackage(artifact, packageRoot)) return undefined
+    const paths = [...new Set([sourcePath, valuePath])].sort(compareText)
+    const resolvedEntries = paths.map(entry => {
+      const observed = premises.capture('candidate', entry)
+      if (observed.state !== 'file' || !observed.contentSha256) throw new UnqualifiedReference('EXTERNAL_ENTRY_UNAVAILABLE')
+      const roles: DirectExternalReferenceProof['resolvedEntries'][number]['roles'] = []
+      if (entry === sourcePath) roles.push(/\.d\.[cm]?ts$/.test(entry) ? 'type' : 'source')
+      if (entry === valuePath) roles.push('value')
+      return { path: entry, contentSha256: observed.contentSha256, roles }
+    })
+    const premiseRefs = premises.recheck()
+    assertSourceAuditFileFresh(artifact, file)
+    if (fs.realpathSync.native(artifact.source.projectRoot) !== root) return undefined
+    const { schemaVersion, pathIdentityProfile, snapshotId, selectionFingerprint, selectedDomainDigest,
+      originFile, originContentSha256, importFactId, resolutionPlatform } = ordinary
+    return {
+      schemaVersion, pathIdentityProfile, snapshotId, selectionFingerprint, selectedDomainDigest,
+      originFile, originContentSha256, importFactId, resolutionPlatform, sourceSpecifier: specifier,
+      profile: 'js-ts-direct-external-selected-exclusion-v1',
+      resolutionMode: configured.mode === 'nodenext' ? 'nodenext-esm' : 'bundler-esm',
+      packageName, packageRoot, resolvedEntries, selectedDomainExcluded: true, premiseRefs,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function declarationBlockers(base: string): string[] {
+  const ext = path.posix.extname(base).toLowerCase()
+  if (!ext) return ['.d.ts', '.d.mts', '.d.cts'].flatMap(suffix => [base + suffix, base + '/index' + suffix])
+  const stem = base.slice(0, -ext.length)
+  if (ext === '.js' || ext === '.jsx') return [stem + '.d.ts']
+  if (ext === '.mjs' || ext === '.cjs') return [stem + (ext === '.mjs' ? '.d.mts' : '.d.cts')]
+  return []
+}
+
+// These explicit substitution families are shared by the pinned TypeScript
+// Bundler and NodeNext ESM resolvers. Declaration alternatives stay blockers.
+function explicitSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
+  const extension = path.posix.extname(base).toLowerCase()
+  const stem = base.slice(0, -extension.length)
+  if (/\.d\.[cm]?ts$/i.test(base)) throw new UnqualifiedReference('DECLARATION_RESOLUTION_BLOCKER')
+  if (/^(?:\.[jt]sx?)$/.test(extension)) {
+    return { paths: [...new Set([...candidates, ...['.ts', '.tsx', '.js', '.jsx'].map(suffix => stem + suffix)])], blockers: [stem + '.d.ts'] }
+  }
+  const family = extension[1]
+  return { paths: [...new Set([...candidates, stem + '.' + family + 'ts', stem + '.' + family + 'js'])], blockers: [stem + '.d.' + family + 'ts'] }
+}
+
+function bundlerSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
+  if (path.posix.extname(base)) return explicitSourceCandidates(base, candidates)
+  const modern = /\.[cm][jt]s$/
+  return { paths: candidates.filter(candidate => !modern.test(candidate)), blockers: candidates.filter(candidate => modern.test(candidate)) }
+}
+
+function nearestReferencePackage(premises: ReferencePremises, sourcePath: string): {
+  path: string; type: 'module' | 'commonjs' | undefined
+} | null {
+  let directory = path.posix.dirname(sourcePath)
+  for (;;) {
+    const name = path.posix.join(directory, 'package.json')
+    const metadata = premises.capture('package-metadata', name)
+    if (metadata.state !== 'absent') {
+      if (!metadata.bytes) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(metadata.bytes)
+      let value: unknown
+      try { value = JSON.parse(text) } catch { throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA') }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      // Reject duplicate top-level keys before relying on JSON's last-key-wins
+      // object. The pinned parser decodes escaped property names as well.
+      const statement = ts.parseJsonText(name, text).statements[0]
+      if (!statement || !ts.isExpressionStatement(statement) || !ts.isObjectLiteralExpression(statement.expression)) {
+        throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      }
+      const keys = new Set<string>()
+      for (const property of statement.expression.properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name) || keys.has(property.name.text)) {
+          throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+        }
+        keys.add(property.name.text)
+      }
+      const type = (value as { type?: unknown }).type
+      if (type !== undefined && type !== 'module' && type !== 'commonjs') throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      return { path: name, type }
+    }
+    if (directory === '.') return null
+    directory = path.posix.dirname(directory)
+  }
+}
+
+function isNodeNextEsmReference(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, fact: SourceAuditFact,
+  specifier: string, packageType: 'module' | 'commonjs' | undefined,
+): boolean {
+  if (!runtimeProfileIsDefault() || fact.span.endLine === null || fact.span.endColumn === null ||
+      /\.d\.[cm]?ts$/.test(file.path) ||
+      !(file.path.endsWith('.mts') || file.path.endsWith('.mjs') ||
+        packageType === 'module' && /\.[jt]sx?$/.test(file.path))) return false
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+    readAuthenticatedAuditBytes(artifact, file, MAX_REFERENCE_BYTES),
+  )
+  const sf = parseTypeScriptSource(file.path, text)
+  sf.impliedNodeFormat = ts.ModuleKind.ESNext
+  const options = { module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext }
+  const matches = (node: ts.Node) => {
+    const span = auditSpanAt(sf, file.path, node.getStart(sf), node.end, true)
+    return span.path === fact.span.path && span.startLine === fact.span.startLine &&
+      span.startColumn === fact.span.startColumn && span.endLine === fact.span.endLine && span.endColumn === fact.span.endColumn
+  }
+  const qualifies = (operand: ts.Expression | undefined) => operand && ts.isStringLiteral(operand) &&
+    operand.text === specifier && ts.getModeForUsageLocation(sf, operand, options) === ts.ModuleKind.ESNext
+  for (const statement of sf.statements) {
+    if (fact.kind === 'import' && ts.isImportDeclaration(statement) && matches(statement)) {
+      return !!qualifies(statement.moduleSpecifier)
+    }
+    if (fact.kind === 'export' && fact.exportOrigin === 're-export' && ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause
+      const nodes = !clause ? [statement] : ts.isNamespaceExport(clause) ? [clause] : clause.elements
+      if (nodes.some(matches)) return !!qualifies(statement.moduleSpecifier)
+    }
+  }
+  // A linked dynamic expression can supply an ordinary literal-import fact.
+  // Require the literal at the recorded span and leave computed operands to
+  // the separate expression proof profile.
+  if (fact.kind !== 'import' || !file.facts.some(entry => entry.literalImportFactId === fact.id)) return false
+  const literalImport = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    node.arguments.length === 1 && matches(node) && !!qualifies(node.arguments[0]) ||
+    ts.forEachChild(node, literalImport) === true
+  return literalImport(sf)
+}
+
+/** Authenticate the already-enumerated domain for one exact, default-profile relative destination. */
+export function captureDefaultExactReferencePremises(
+  artifact: SourceAuditEvidenceArtifact, origin: SourceAuditFile, specifier: string,
+  target: SourceAuditFile, candidates: readonly string[],
+): SourceReferencePremise[] | null {
+  if (!/^\.\.?\//.test(specifier) || /[\\%?#\s\x00-\x1f]/.test(specifier) ||
+      specifier.replace(/^(?:\.\.?\/)+/, '').split('/').some(segment => !isOrdinaryPathSegment(segment)) ||
+      path.posix.normalize(path.posix.join(path.posix.dirname(origin.path), specifier)) !== target.path ||
+      !target.contentSha256 || target.sizeBytes === null ||
+      (target.language !== 'typescript' && target.language !== 'javascript')) return null
+  try {
+    if (!isQualifiedDefaultEsmSelectedReference(artifact, origin, specifier, target.path)) return null
+    const { projectRoot } = artifact.source
+    const root = fs.realpathSync.native(projectRoot)
+    if (inspectReferencePath(root, origin.path) !== 'file') return null
+    const premises = new ReferencePremises(root)
+    for (const config of defaultConfigurationPaths(origin.path)) {
+      if (premises.capture('config', config).state !== 'absent') return null
+    }
+    for (const blocker of declarationBlockers(target.path)) {
+      if (premises.capture('path', blocker).state !== 'absent') return null
+    }
+    for (const candidate of candidates) {
+      if (candidate === target.path) {
+        const observed = premises.capture('candidate', candidate, target.sizeBytes)
+        if (observed.state !== 'file' || observed.contentSha256 !== target.contentSha256 || observed.sizeBytes !== target.sizeBytes) return null
+      } else if (premises.capture('candidate', candidate).state !== 'absent') return null
+    }
+    const refs = premises.recheck()
+    if (fs.realpathSync.native(projectRoot) !== root || inspectReferencePath(root, origin.path) !== 'file') return null
+    assertSourceAuditFileFresh(artifact, origin)
+    return refs
+  } catch {
+    // Qualification is additive. A failure here does not alter the parent domain.
+    return null
+  }
+}
+
+function buildSourceReferenceProof(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, fact: SourceAuditFact, specifier: string, legacy: AuditImportTargetProof,
+): SourceReferenceProof {
+  const { projectRoot, selectionFingerprint, snapshotId } = artifact.source
+  const records = new Map(artifact.files.map(entry => [entry.path, entry]))
+  const identity = {
+    schemaVersion: '1.0.0', profile: 'js-ts-selected-source-reference-v1', pathIdentityProfile: 'selected-source-path-v1',
+    snapshotId, selectionFingerprint, selectedDomainDigest: hashReferenceBytes(JSON.stringify([...records.keys()].sort())),
+    originFile: file.path, originContentSha256: file.contentSha256!, importFactId: fact.id, sourceSpecifier: specifier,
+    resolutionPlatform: process.platform === 'win32' ? 'win32' : 'posix',
+  } as const
+  const incomplete = (reasonCode: string): SourceReferenceProof => ({
+    ...identity, candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null, premiseRefs: [], reasonCode,
+  })
+  if (!legacy.selectionComplete) return incomplete('SELECTION_INCOMPLETE')
+  if (/[%?#\\\x00-\x20]|\s$/.test(specifier) || specifier.endsWith('/') ||
+      specifier.replace(/^(?:\.\.?\/)+/, '').split('/').some(segment => !isOrdinaryPathSegment(segment))) {
+    return incomplete('UNSUPPORTED_SPECIFIER_SHAPE')
+  }
+  const relative = /^(?:\.\.?)(?:\/|$)/.test(specifier)
+  if (!relative && /^(?:[./\\]|[A-Za-z][A-Za-z0-9+.-]*:)/.test(specifier)) return incomplete('UNSUPPORTED_SPECIFIER_SHAPE')
+
+  try {
+    const root = fs.realpathSync.native(projectRoot)
+    if (inspectReferencePath(root, file.path) !== 'file') return incomplete('UNQUALIFIED_ORIGIN')
+    const localPath = relative ? jsTsPath(projectRoot, file.path, specifier, false)?.localPath : undefined
+    if (relative && !localPath) return incomplete('UNSUPPORTED_RELATIVE_PATH')
+    const premises = new ReferencePremises(root)
+    const resolver = new ConfiguredImportResolver(root, configPath => {
+      const observation = premises.capture('config', configPath)
+      if (observation.state === 'directory') throw new UnqualifiedReference('UNSUPPORTED_CONFIG')
+      return observation.bytes
+    })
+    const configured = resolver.sourceReferenceBases(specifier, file.path, relative)
+    if (!configured) return incomplete('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+    const nodeNext = configured.mode === 'nodenext'
+    if (nodeNext) {
+      if (!localPath || !/\.(?:jsx?|[mc]js)$/.test(localPath) || /\.d\.(?:jsx?|[mc]js)$/i.test(localPath)) {
+        return incomplete('UNSUPPORTED_NODENEXT_SPECIFIER')
+      }
+      const originPackage = nearestReferencePackage(premises, file.path)
+      if (!isNodeNextEsmReference(artifact, file, fact, specifier, originPackage?.type)) {
+        return incomplete('UNQUALIFIED_NODENEXT_ESM_REFERENCE')
+      }
+      if (path.posix.dirname(localPath) !== path.posix.dirname(file.path) &&
+          nearestReferencePackage(premises, localPath)?.path !== originPackage?.path) {
+        return incomplete('UNQUALIFIED_NODENEXT_PACKAGE_BOUNDARY')
+      }
+    }
+    const bases = localPath ? [localPath] : configured.bases
+    const domain = new Set<string>()
+    const targets: Array<{ path: string; contentSha256: string }> = []
+    for (const base of bases) {
+      if (!base) return incomplete('UNQUALIFIED_MAPPING_TARGET')
+      const enumerated = enumerateJsTsCandidatePaths(relativeCandidate(file.path, base), file.path)
+      if (!enumerated?.length) return incomplete('UNSUPPORTED_CANDIDATE_SHAPE')
+      const family = nodeNext ? explicitSourceCandidates(base, enumerated)
+        : configured.mode === 'bundler' ? bundlerSourceCandidates(base, enumerated) : null
+      const candidates = family?.paths ?? enumerated
+      for (const candidate of candidates) domain.add(candidate)
+      if (domain.size > MAX_REFERENCE_CANDIDATES) return incomplete('REFERENCE_CANDIDATE_BUDGET_EXCEEDED')
+
+      if (!candidates.includes(base)) {
+        const literal = premises.capture('path', base)
+        if (literal.state === 'file') return incomplete('EXTENSIONLESS_FILE_PRESENT')
+        if (premises.capture('package-metadata', base + '/package.json').state !== 'absent') {
+          return incomplete('UNSUPPORTED_DIRECTORY_METADATA')
+        }
+        for (const entry of [base + '.json', base + '.node', base + '/index.json', base + '/index.node']) {
+          if (premises.capture('path', entry).state !== 'absent') return incomplete('UNSUPPORTED_SOURCE_ENTRY')
+        }
+      }
+      for (const blocker of declarationBlockers(base)) {
+        if (premises.capture('path', blocker).state !== 'absent') return incomplete('DECLARATION_RESOLUTION_BLOCKER')
+      }
+      for (const blocker of family?.blockers ?? []) {
+        if (premises.capture('path', blocker).state !== 'absent') {
+          return incomplete(/\.d\.[cm]?ts$/.test(blocker) ? 'DECLARATION_RESOLUTION_BLOCKER' : 'UNSUPPORTED_CANDIDATE_SHAPE')
+        }
+      }
+      for (const candidate of candidates) {
+        const selected = records.get(candidate)
+        const observed = premises.capture('candidate', candidate, selected?.sizeBytes ?? MAX_REFERENCE_BYTES)
+        if (observed.state === 'absent' && !selected) continue
+        if (observed.state !== 'file' || !selected?.contentSha256 || observed.contentSha256 !== selected.contentSha256 ||
+            observed.sizeBytes !== selected.sizeBytes ||
+            (selected.language !== 'typescript' && selected.language !== 'javascript')) {
+          return incomplete('UNQUALIFIED_CANDIDATE_STATE')
+        }
+        targets.push({ path: candidate, contentSha256: selected.contentSha256 })
+      }
+      // Only an entirely absent qualified mapping admits its next fallback.
+      if (targets.length > 0) break
+    }
+    if (!domain.size || (!relative && !targets.length)) return incomplete('BARE_SPECIFIER_FALLBACK_UNKNOWN')
+    const contradictsTarget = (candidate: string): boolean => !targets.some(target => target.path === candidate)
+    if ((legacy.status === 'proven-missing' && targets.length > 0) ||
+        (legacy.status === 'present' && legacy.candidatePaths.some(contradictsTarget)) ||
+        fact.targetPaths?.some(contradictsTarget)) return incomplete('RECORDED_TARGET_CONFLICT')
+    const singleton = targets.length === 1 ? targets[0] : undefined
+    const premiseRefs = premises.recheck()
+    if (fs.realpathSync.native(projectRoot) !== root || inspectReferencePath(root, file.path) !== 'file') {
+      return incomplete('UNQUALIFIED_ORIGIN')
+    }
+    assertSourceAuditFileFresh(artifact, file)
+    const result: SourceReferenceProof = {
+      ...identity, candidateEnumerationComplete: true, candidateDomain: [...domain].sort(),
+      qualifiedReference: singleton ? {
+        targetPath: singleton.path, targetContentSha256: singleton.contentSha256, referenceKind: 'selected-source-reference',
+      } : null,
+      premiseRefs, reasonCode: null,
+    }
+    return Buffer.byteLength(JSON.stringify(result)) <= MAX_REFERENCE_BYTES ? result : incomplete('REFERENCE_RESPONSE_BUDGET_EXCEEDED')
+  } catch (error) {
+    return incomplete(error instanceof UnqualifiedReference ? error.message : 'REFERENCE_PREMISE_UNAVAILABLE')
   }
 }
 

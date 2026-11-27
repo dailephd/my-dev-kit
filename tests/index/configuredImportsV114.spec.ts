@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import { buildCodeGraph } from '../../src/graph/buildCodeGraph.js'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
-import { allocateV114OutputDir } from '../helpers/v114OutputRoot.js'
+import { allocateV114OutputDir, V114_OUTPUT_ROOT_ENV } from '../helpers/v114OutputRoot.js'
 
-const task = allocateV114OutputDir('configured-imports-v114')
+// A linked worktree can use the owning project's approved external-to-worktree output root.
+const projectRoot = process.env[V114_OUTPUT_ROOT_ENV] ? dirname(execFileSync('git',
+  ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', windowsHide: true }).trim()) : undefined
+const task = allocateV114OutputDir('configured-imports-v114', { projectRoot })
 function fixture(files: Record<string, string>) {
   fs.mkdirSync(task, { recursive: true })
   const root = fs.mkdtempSync(join(task, 'config-'))

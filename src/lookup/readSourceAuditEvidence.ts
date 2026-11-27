@@ -5,6 +5,7 @@ import { isInsideRoot } from '../io/pathUtils.js'
 import { readIndexManifest, type ResolvedIndexManifest } from '../indexing/readIndexManifest.js'
 import { SOURCE_AUDIT_EVIDENCE_FILENAME } from '../indexing/managedArtifacts.js'
 import {
+  AUDIT_CONTENT_MAX_BYTES,
   AUDIT_FACT_PAGE_SIZE,
   AUDIT_INVENTORY_PAGE_SIZE,
   SOURCE_AUDIT_ARTIFACT_KIND,
@@ -20,6 +21,8 @@ import {
   validateSourceAuditInventoryPage,
 } from '../symbol-index/validateAuditEvidence.js'
 import { readSourceBytes, UnsafeSourceError } from './getSourceSlice.js'
+import { isTestModifierProofSource, resolveAuditTestModifierProof } from './resolveAuditTestModifierProof.js'
+import type { resolveAuditImportTargetFromArtifact } from './resolveAuditImportTarget.js'
 
 export type SourceAuditErrorCode =
   | 'AUDIT_EVIDENCE_UNAVAILABLE'
@@ -27,6 +30,8 @@ export type SourceAuditErrorCode =
   | 'STALE_SOURCE_EVIDENCE'
   | 'INVALID_AUDIT_PATH'
   | 'INVALID_AUDIT_PAGE'
+  | 'INVALID_TEST_MODIFIER_PROOF_SELECTOR'
+  | 'INVALID_TEST_MODIFIER_PROOF_SCHEMA'
   | 'AUDIT_FACT_NOT_FOUND'
   | 'AUDIT_FACT_NOT_IMPORT'
 
@@ -261,10 +266,61 @@ export function getSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, re
 }
 
 /** Reads a fact page and verifies live selected bytes before returning it. */
-export function readFreshSourceAuditFilePage(artifact: SourceAuditEvidenceArtifact, relativePath: string, pageIndex: number): SourceAuditFilePage {
+export function readFreshSourceAuditFilePage(
+  artifact: SourceAuditEvidenceArtifact, relativePath: string, pageIndex: number,
+  resolveImportTarget: typeof resolveAuditImportTargetFromArtifact,
+  testModifierProof?: true,
+): SourceAuditFilePage {
+  if (testModifierProof) {
+    if (pageIndex !== 0) {
+      throw new SourceAuditEvidenceError('INVALID_TEST_MODIFIER_PROOF_SELECTOR', 'A test modifier proof requires page zero.')
+    }
+    if (artifact.schemaVersion !== '1.2.0') {
+      throw new SourceAuditEvidenceError('INVALID_TEST_MODIFIER_PROOF_SCHEMA', 'A test modifier proof requires source-audit artifact schema 1.2.0.')
+    }
+  }
   const page = getSourceAuditFilePage(artifact, relativePath, pageIndex)
-  if (page.status === 'found' && page.file) assertSourceAuditFileFresh(artifact, page.file)
+  if (!page.file) return page
+  if (!testModifierProof || !isTestModifierProofSource(page.file)) {
+    assertSourceAuditFileFresh(artifact, page.file)
+    return page
+  }
+  const origin = artifact.files.find(file => file.path === relativePath)!
+  let bytes: Buffer
+  try {
+    bytes = readProofBytes(origin)
+  } catch (error) {
+    // Keep the legacy freshness error when the current source no longer fits
+    // the proof-time read bound.
+    assertSourceAuditFileFresh(artifact, origin)
+    throw error
+  }
+  let checkedWrapperReference = false
+  try {
+    const proof = resolveAuditTestModifierProof(artifact, origin, bytes, readProofBytes, (current, factId) => {
+      checkedWrapperReference = true
+      return resolveImportTarget(current, factId)
+    })
+    if (proof) page.testModifierProof = proof
+  } catch (error) {
+    // Proof-time parser depth or a stale/unsafe wrapper must never turn an
+    // otherwise fresh legacy page into a failure. Recheck the origin below.
+    if (!isUnavailableProofSource(error) && !(error instanceof RangeError)) throw error
+  }
+  if (checkedWrapperReference) assertSourceAuditFileFresh(artifact, page.file)
+  if (page.testModifierProof) validateSourceAuditFilePage(page)
   return page
+
+  function readProofBytes(file: SourceAuditFile): Buffer {
+    const bytes = readSourceAuditFileBytes(artifact, file, AUDIT_CONTENT_MAX_BYTES)
+    if (file.sizeBytes !== bytes.length) invalid('Selected record size contradicts authenticated bytes.')
+    return bytes
+  }
+}
+
+function isUnavailableProofSource(error: unknown): boolean {
+  return error instanceof SourceAuditEvidenceError &&
+    (error.code === 'STALE_SOURCE_EVIDENCE' || error.code === 'INVALID_AUDIT_PATH')
 }
 
 /**

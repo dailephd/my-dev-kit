@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
-import { readAuditBatch } from '../../src/lookup/readAuditBatch.js'
+import { readAuditBatch, validateAuditRequests } from '../../src/lookup/readAuditBatch.js'
 import {
   readFreshSourceAuditFilePage, readSourceAuditEvidence,
 } from '../../src/lookup/readSourceAuditEvidence.js'
+import { resolveAuditImportTargetFromArtifact } from '../../src/lookup/resolveAuditImportTarget.js'
 import { runCli } from './testCli.js'
 
 const roots: string[] = []
@@ -17,14 +18,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-async function fixture() {
+async function fixture(withImport = false) {
   // CI can expose the temporary directory through a symlink or junction.
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'kit-audit-batch-')))
   roots.push(root)
   const project = join(root, 'p')
   mkdirSync(join(project, 'src'), { recursive: true })
   const source = join(project, sourcePath)
-  writeFileSync(source, original)
+  writeFileSync(source, withImport ? 'import "./peer.js"\r\n' + original : original)
+  if (withImport) writeFileSync(join(project, 'src/peer.ts'), 'export const peer = 1\n')
   const index = join(root, 'i')
   await runIndexCommand({ root: project, src: ['src'], out: index, sourceAuditSchema: '1.2.0' })
   const audit = readSourceAuditEvidence(index)
@@ -33,10 +35,28 @@ async function fixture() {
     schemaVersion: '1.0.0', mode: 'audit-batch-request', family, expectedSnapshotId: audit.source.snapshotId,
     selectionFingerprint: audit.source.selectionFingerprint, requests,
   }))
-  return { root, project, source, index, input, writeRequest }
+  return { root, project, source, index, input, writeRequest, audit }
 }
 
 describe('bounded audit batches', () => {
+  it('returns the same qualified ordinary proof as the standalone selector', async () => {
+    const f = await fixture(true)
+    const factId = f.audit.files.find(file => file.path === sourcePath)!.facts.find(fact => fact.sourceSpecifier === './peer.js')!.id
+    const item = { id: 'ordinary', selector: 'audit-import-target', factId }
+    f.writeRequest('lookup', [item])
+    const prefix = ['lookup', '--index', f.index, '--json']
+    const single = runCli([...prefix, '--audit-import-target', factId])
+    const batch = runCli([...prefix, '--audit-batch-file', f.input])
+    expect(single.status, single.stderr).toBe(0)
+    expect(batch.status, batch.stderr).toBe(0)
+    const proof = JSON.parse(single.stdout)
+    expect(proof.sourceReferenceProof).toMatchObject({
+      candidateDomain: ['src/peer.js', 'src/peer.ts', 'src/peer.tsx'],
+      qualifiedReference: { targetPath: 'src/peer.ts' },
+    })
+    expect(JSON.parse(batch.stdout).results).toEqual([{ id: item.id, selector: item.selector, status: 'ok', response: proof }])
+  }, 30_000)
+
   it('preserves the installed source selectors’ JSON responses and binds ordered IDs to exact input bytes', async () => {
     const f = await fixture()
     const items = [
@@ -86,7 +106,7 @@ describe('bounded audit batches', () => {
             break
         }
       }
-      return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0)
+      return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact)
     })
     expect(result.complete).toBe(false)
     const response = JSON.parse(result.json)
@@ -107,5 +127,36 @@ describe('bounded audit batches', () => {
     f.writeRequest('lookup', [item, { ...item, id: 'second' }])
     const body = 'x'.repeat(4 * 1024 * 1024)
     expect(() => readAuditBatch(f.index, f.input, 'lookup', () => ({ body }))).toThrow(/AUDIT_BATCH_OUTPUT_LIMIT/)
+  })
+
+  it('omits supplemental file proofs if only the legacy batch fits the transport budget', async () => {
+    const f = await fixture()
+    const item = { id: 'first', selector: 'audit-file', path: 'src/a.ts', testModifierProof: true }
+    f.writeRequest('lookup', [item, { ...item, id: 'second' }])
+    const legacy = { body: 'x'.repeat(4 * 1024 * 1024 - 1024) }
+    const supplemental = { body: 'y'.repeat(2048) }
+    const batch = readAuditBatch(f.index, f.input, 'lookup', () => ({ ...legacy, testModifierProof: supplemental }))
+    expect(batch.complete).toBe(true)
+    const results = JSON.parse(batch.json).results
+    expect(results).toHaveLength(2)
+    for (const result of results) {
+      expect(result.status).toBe('ok')
+      expect(result.response.body).toBe(legacy.body)
+      expect(result.response).not.toHaveProperty('testModifierProof')
+    }
+  })
+
+  it('admits explicit true only for page-zero file requests', () => {
+    const item = { id: 'one', selector: 'audit-file', path: sourcePath }
+    expect(validateAuditRequests([item, { ...item, id: 'two', testModifierProof: true }], 'lookup'))
+      .toEqual([item, { ...item, id: 'two', testModifierProof: true }])
+    for (const value of [false, null, 'true', 1, {}, []]) {
+      expect(() => validateAuditRequests([{ ...item, testModifierProof: value }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    }
+    expect(() => validateAuditRequests([{ ...item, page: 1, testModifierProof: true }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    expect(() => validateAuditRequests([{ id: 'one', selector: 'audit-files', testModifierProof: true }], 'lookup')).toThrow(/INVALID_AUDIT_BATCH/)
+    expect(() => validateAuditRequests([{
+      id: 'one', selector: 'line-range', path: sourcePath, start: 1, end: 2, testModifierProof: true,
+    }], 'source')).toThrow(/INVALID_AUDIT_BATCH/)
   })
 })

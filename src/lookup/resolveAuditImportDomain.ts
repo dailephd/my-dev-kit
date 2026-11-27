@@ -1,11 +1,13 @@
-import { isQualifiedDefaultEsmSelectedReference } from './resolveAuditImportTarget.js'
 import { createHash } from 'node:crypto'
 import * as ts from 'typescript'
 import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
 import type { SourceAuditEvidenceArtifact, SourceAuditSpan } from '../symbol-index/auditEvidenceTypes.js'
 import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
-import { resolveAuditImportTarget, resolveAuditImportTargetFromArtifact, resolveAuditTargetCandidates } from './resolveAuditImportTarget.js'
+import {
+  captureDefaultExactReferencePremises, isQualifiedDefaultEsmSelectedReference, resolveAuditImportTarget,
+  resolveAuditImportTargetFromArtifact, resolveAuditTargetCandidates,
+} from './resolveAuditImportTarget.js'
 
 type Gap = 'UNSUPPORTED_EXPRESSION' | 'UNKNOWN_RUNTIME_VALUE' | 'UNQUALIFIED_BINDING' |
   'UNSUPPORTED_PATH_OPERATION' | 'PATH_IDENTITY_UNCERTAIN' | 'INCOMPLETE_REFERENCE_PROFILE' |
@@ -15,7 +17,27 @@ class DomainGap extends Error {
 }
 type Role = 'operand' | 'binding' | 'operation' | 'guard'
 type Premise = { type: 'source-span'; filePath: string; contentSha256: string; span: SourceAuditSpan; role: Role }
+interface ExpressionReferenceProof {
+  schemaVersion: '1.0.0'
+  profile: 'js-ts-computed-exact-source-reference-v1'
+  expressionFactId: string
+  alternativeIndex: 0
+  specifier: string
+  targetPath: string
+  targetContentSha256: string
+  premiseIndexes: number[]
+  resolutionPremiseRefs: NonNullable<ReturnType<typeof captureDefaultExactReferencePremises>>
+}
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
+const MAX_RESPONSE_BYTES = 1024 * 1024
+
+/** An independently qualified parent remains usable when its supplement exceeds the wire budget. */
+export function appendComputedReferenceWithinBudget<Parent extends object>(
+  parent: Parent, expressionReferenceProof: ExpressionReferenceProof,
+): Parent & { expressionReferenceProof?: ExpressionReferenceProof } {
+  const extended = { ...parent, expressionReferenceProof }
+  return Buffer.byteLength(JSON.stringify(extended), 'utf8') <= MAX_RESPONSE_BYTES ? extended : parent
+}
 
 /** Evaluate only syntactic forms grounded in the authenticated origin. */
 function evaluateOperand(sf: ts.SourceFile, root: ts.Expression, add: (node: ts.Node, role: Role) => void): string[] {
@@ -192,13 +214,32 @@ export function resolveAuditImportDomainFromArtifact(artifact: SourceAuditEviden
         })
       }
     }
-    const result = {
+    const parent = {
       ...base, outcome: disjoint ? 'disjoint-selected-domain' : 'finite', operandAlternatives, domainComplete: true,
       premiseRefs, qualifiedPositiveWitnesses,
       disjointProof: disjoint ? { rule: 'fixed-normalized-path-v1', values: [...new Set(paths)].sort(), premiseIndexes } : null,
       reasonCode: null,
     }
-    return Buffer.byteLength(JSON.stringify(result), 'utf8') <= 1048576 ? result : incomplete('QUERY_BUDGET_EXCEEDED')
+    const result: typeof parent & { expressionReferenceProof?: ExpressionReferenceProof } = parent
+    if (Buffer.byteLength(JSON.stringify(result), 'utf8') > MAX_RESPONSE_BYTES) return incomplete('QUERY_BUDGET_EXCEEDED')
+    if (disjoint || fact.literalImportFactId || fact.operandForm !== 'computed' || ts.isStringLiteral(operand) ||
+        fact.extractionMethod !== 'typescript-ast' || file.status !== 'parsed' ||
+        !selectionComplete || operandAlternatives.length !== 1) return result
+
+    const { specifier, resolution, premiseIndexes: indexes } = operandAlternatives[0]!
+    if (resolution.status !== 'present' || !resolution.candidateEnumerationComplete) return result
+    const candidates = new Set(resolution.candidatePaths)
+    const selected = artifact.files.filter(entry => candidates.has(entry.path))
+    if (selected.length !== 1) return result
+    const target = selected[0]!
+    const resolutionPremiseRefs = captureDefaultExactReferencePremises(artifact, file, specifier, target, resolution.candidatePaths)
+    if (!resolutionPremiseRefs) return result
+    const expressionReferenceProof: ExpressionReferenceProof = {
+      schemaVersion: '1.0.0', profile: 'js-ts-computed-exact-source-reference-v1', expressionFactId: fact.id,
+      alternativeIndex: 0, specifier, targetPath: target.path, targetContentSha256: target.contentSha256!,
+      premiseIndexes: indexes, resolutionPremiseRefs,
+    }
+    return appendComputedReferenceWithinBudget(result, expressionReferenceProof)
   } catch (error) {
     if (error instanceof DomainGap) return incomplete(error.reason)
     throw error

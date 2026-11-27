@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { afterEach, expect, it } from 'vitest'
 import { runIndexCommand } from '../../src/indexing/runIndexCommand.js'
+import { readSourceAuditEvidence } from '../../src/lookup/readSourceAuditEvidence.js'
 import { cliArgs } from '../lookup/testCli.js'
 
 const scratch: string[] = []
@@ -13,22 +14,139 @@ afterEach(() => {
   for (const folder of scratch.splice(0)) fs.rmSync(folder, { recursive: true, force: true })
 })
 
-async function fixture() {
-  const root = fs.mkdtempSync(join(tmpdir(), 'kit-stream-'))
+async function fixture(prefix = '', sibling = 'export const other = "yes"\n') {
+  const root = fs.realpathSync.native(fs.mkdtempSync(join(tmpdir(), 'kit-stream-')))
   scratch.push(root)
   const target = join(root, 'p')
   fs.mkdirSync(join(target, 'src'), { recursive: true })
   const source = join(target, 'src', 'a.ts')
-  fs.writeFileSync(source, 'export const probe = "yes"\r\n')
-  fs.writeFileSync(join(target, 'src', 'b.ts'), 'export const other = "yes"\n')
+  fs.writeFileSync(source, prefix + 'export const probe = "yes"\r\n')
+  fs.writeFileSync(join(target, 'src', 'b.ts'), sibling)
   const index = join(root, 'i')
   await runIndexCommand({ root: target, src: ['src'], out: index, sourceAuditSchema: '1.2.0' })
   return { root, target, source, index }
 }
 
+it('matches the standalone ordinary proof and rechecks premises on later frames', async () => {
+  const f = await fixture('import "./b.js"\r\n')
+  const artifact = readSourceAuditEvidence(f.index)
+  const factId = artifact.files.find(file => file.path === 'src/a.ts')!.facts.find(fact => fact.sourceSpecifier === './b.js')!.id
+  const item = { id: 'ordinary', selector: 'audit-import-target', factId }
+  const standalone = spawnSync(process.execPath, cliArgs(['lookup', '--index', f.index, '--audit-import-target', factId, '--json']),
+    { encoding: 'utf8', windowsHide: true })
+  expect(standalone.status, standalone.stderr).toBe(0)
+  const proof = JSON.parse(standalone.stdout)
+  expect(proof.sourceReferenceProof).toMatchObject({
+    candidateDomain: ['src/b.js', 'src/b.ts', 'src/b.tsx'], qualifiedReference: { targetPath: 'src/b.ts' },
+  })
+  const lookup = open(f.index)
+  try {
+    const first = await lookup.send(frame('initial', [item]))
+    expect(first.batch.results).toEqual([{ id: item.id, selector: item.selector, status: 'ok', response: proof }])
+    fs.writeFileSync(join(f.target, 'src/b.js'), 'export const extra = 1\n')
+    const second = await lookup.send(frame('changed', [item]))
+    expect(second.batch.results[0].response.sourceReferenceProof).toMatchObject({
+      candidateEnumerationComplete: false, candidateDomain: null, qualifiedReference: null,
+    })
+    expect(await lookup.end()).toBe(0)
+  } finally { lookup.kill() }
+}, 30_000)
+
 const frame = (requestId: string, requests: unknown[]) => JSON.stringify({ schemaVersion: '1.0.0', requestId, requests })
 const fact = (path: string) => ({ selector: 'audit-file', id: path, path })
 const inventory = [{ selector: 'audit-files', id: 'p0' }]
+
+it('returns equivalent computed witnesses over standalone, batch and stream lookups', async () => {
+  const f = await fixture('const prefix = "./"; void import(prefix + "b.ts")\r\n')
+  const artifact = readSourceAuditEvidence(f.index)
+  const factId = artifact.files.find(file => file.path === 'src/a.ts')!.facts.find(entry => entry.kind === 'dynamic-import-expression')!.id
+  const item = { id: 'computed', selector: 'audit-import-domain', factId }
+  const prefix = ['lookup', '--index', f.index, '--json']
+  const run = (selector: string, value: string) => spawnSync(process.execPath, cliArgs([...prefix, selector, value]),
+    { encoding: 'utf8', windowsHide: true })
+  const single = run('--audit-import-domain', factId)
+  expect(single.status, single.stderr).toBe(0)
+  const proof = JSON.parse(single.stdout)
+  expect(proof).toMatchObject({
+    qualifiedPositiveWitnesses: [],
+    expressionReferenceProof: { expressionFactId: factId, targetPath: 'src/b.ts', premiseIndexes: [0, 1] },
+  })
+  const file = join(f.root, 'batch.json')
+  fs.writeFileSync(file, JSON.stringify({
+    schemaVersion: '1.0.0', mode: 'audit-batch-request', family: 'lookup', expectedSnapshotId: artifact.source.snapshotId,
+    selectionFingerprint: artifact.source.selectionFingerprint, requests: [item],
+  }))
+  const batch = run('--audit-batch-file', file)
+  expect(batch.status, batch.stderr).toBe(0)
+  const results = [{ id: item.id, selector: item.selector, status: 'ok', response: proof }]
+  expect(JSON.parse(batch.stdout).results).toEqual(results)
+  const lookup = open(f.index)
+  try {
+    expect((await lookup.send(frame('initial-computed', [item]))).batch.results).toEqual(results)
+    fs.writeFileSync(join(f.target, 'src/jsconfig.json'), '{}')
+    const after = (await lookup.send(frame('new-config', [item]))).batch.results[0].response
+    expect(after).toMatchObject({ domainComplete: true, operandAlternatives: [{ resolution: { candidateEnumerationComplete: false } }] })
+    expect(after).not.toHaveProperty('expressionReferenceProof')
+    expect(await lookup.end()).toBe(0)
+  } finally { lookup.kill() }
+}, 30_000)
+
+it('returns equivalent qualified file-page modifier proofs and reauthenticates a changed wrapper on the next frame', async () => {
+  const f = await fixture('import { test } from "./b";\ntest.skip(guard, "reason");\n',
+    'import { test as base } from "@playwright/test";\nexport const test = base.extend({});\n')
+  const artifact = readSourceAuditEvidence(f.index)
+  const legacyItem = { ...fact('src/a.ts'), id: 'legacy' }
+  const item = { ...fact('src/a.ts'), testModifierProof: true }
+  const prefix = ['lookup', '--index', f.index, '--json']
+  const run = (...args: string[]) => spawnSync(process.execPath, cliArgs([...prefix, ...args]),
+    { encoding: 'utf8', windowsHide: true })
+  const single = run('--audit-file', item.path, '--test-modifier-proof')
+  expect(single.status, single.stderr).toBe(0)
+  const response = JSON.parse(single.stdout)
+  expect(response.testModifierProof).toMatchObject({
+    coverage: 'complete',
+    runnerBinding: { kind: 'imported-extended-playwright', wrapper: { path: 'src/b.ts' } },
+    observations: [{ modifier: 'skip', calleeSpan: { path: 'src/a.ts', startLine: 2, startColumn: 0, endLine: 2, endColumn: 9 } }],
+  })
+  const legacy = run('--audit-file', item.path)
+  expect(legacy.status, legacy.stderr).toBe(0)
+  const { testModifierProof: _proof, ...legacyPage } = response
+  expect(JSON.parse(legacy.stdout)).toEqual(legacyPage)
+  const nonzero = run('--audit-file', item.path, '--test-modifier-proof', '--page', '1')
+  expect(nonzero.status).toBe(2)
+  expect(nonzero.stderr).toMatch(/^INVALID_TEST_MODIFIER_PROOF_SELECTOR:/)
+  const file = join(f.root, 'batch.json')
+  fs.writeFileSync(file, JSON.stringify({
+    schemaVersion: '1.0.0', mode: 'audit-batch-request', family: 'lookup', expectedSnapshotId: artifact.source.snapshotId,
+    selectionFingerprint: artifact.source.selectionFingerprint, requests: [legacyItem, item],
+  }))
+  const batch = run('--audit-batch-file', file)
+  expect(batch.status, batch.stderr).toBe(0)
+  const results = [
+    { id: legacyItem.id, selector: legacyItem.selector, status: 'ok', response: legacyPage },
+    { id: item.id, selector: item.selector, status: 'ok', response },
+  ]
+  expect(JSON.parse(batch.stdout).results).toEqual(results)
+  const lookup = open(f.index)
+  try {
+    expect((await lookup.send(frame('initial-modifiers', [legacyItem, item]))).batch.results).toEqual(results)
+    fs.writeFileSync(join(f.target, 'src/b.ts'), 'export const test = makeAnUnknownRunner();\n')
+    expect((await lookup.send(frame('changed-wrapper', [item]))).batch.results).toEqual([
+      { id: item.id, selector: item.selector, status: 'ok', response: legacyPage },
+    ])
+    expect(await lookup.end()).toBe(0)
+  } finally { lookup.kill() }
+}, 30_000)
+
+it('rejects malformed file proof negotiation in the stream request parser', async () => {
+  const f = await fixture()
+  const lookup = open(f.index)
+  try {
+    const result = await lookup.send(frame('invalid-proof', [{ ...fact('src/a.ts'), testModifierProof: false }]))
+    expect(result).toMatchObject({ status: 'incomplete', error: { code: 'INVALID_AUDIT_BATCH', fatal: true } })
+    expect(await lookup.end()).toBe(2)
+  } finally { lookup.kill() }
+}, 30_000)
 
 function open(index: string, family = 'lookup') {
   const processHandle = spawn(process.execPath, cliArgs([family, '--index', index, '--audit-stream', '--json']), { windowsHide: true })

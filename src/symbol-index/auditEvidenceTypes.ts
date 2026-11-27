@@ -1,3 +1,5 @@
+import type { AuditImportTargetProof } from '../lookup/resolveAuditImportTarget.js'
+
 /**
  * v1.15.0 KIT-FACTS-01 source-audit evidence contract (Batch 0).
  *
@@ -262,4 +264,64 @@ export interface SourceAuditFilePage extends SourceAuditPageEnvelope {
   status: 'found' | 'not-selected'
   file: Omit<SourceAuditFile, 'facts'> | null
   facts: SourceAuditFact[]
+  testModifierProof?: TestModifierProof
+}
+
+export const TEST_MODIFIER_PROOF_PROFILE = 'js-ts-playwright-direct-extended-modifiers-v1'
+export const TEST_MODIFIER_PROOF_MAX_OBSERVATIONS = 1024
+export const TEST_MODIFIER_PROOF_MAX_BYTES = 1024 * 1024
+export const TEST_MODIFIER_PROOF_MAX_PATH_BYTES = 4096
+export const TEST_MODIFIER_PROOF_REASONS = [
+  'INCOMPLETE_SOURCE_ANALYSIS',
+  'PROOF_BUDGET_EXCEEDED',
+  'UNQUALIFIED_RUNNER_BINDING',
+  'UNQUALIFIED_WRAPPER_REFERENCE',
+  'UNRESOLVED_BINDING_USE',
+  'UNSUPPORTED_MODIFIER_FORM',
+] as const
+
+export type TestModifierProofReason = (typeof TEST_MODIFIER_PROOF_REASONS)[number]
+export type ExactAuditSpan = SourceAuditSpan & { startColumn: number; endLine: number; endColumn: number }
+
+export interface TestModifierObservation {
+  modifier: 'skip' | 'only'
+  calleeSpan: ExactAuditSpan
+  callSpan: ExactAuditSpan
+}
+
+export interface TestModifierRunnerBinding {
+  kind: 'direct-playwright' | 'local-extended-playwright' | 'imported-extended-playwright'
+  localName: 'test'
+  bindingSpan: ExactAuditSpan
+  baseLocalName: string
+  baseImportSpan: ExactAuditSpan
+  extensionSpan: ExactAuditSpan | null
+  wrapper: {
+    path: string
+    contentSha256: string
+    exportBindingSpan: ExactAuditSpan
+    importTargetProof: AuditImportTargetProof
+  } | null
+}
+
+export interface TestModifierProof {
+  schemaVersion: '1.0.0'
+  profile: typeof TEST_MODIFIER_PROOF_PROFILE
+  snapshotId: string
+  selectionFingerprint: string
+  selectedDomainDigest: string
+  originFile: string
+  originContentSha256: string
+  coverage: 'complete' | 'partial'
+  runnerBinding: TestModifierRunnerBinding
+  observations: TestModifierObservation[]
+  reasonCodes: TestModifierProofReason[]
+}
+
+export function compareTestModifierObservations(a: TestModifierObservation, b: TestModifierObservation): number {
+  return a.calleeSpan.startLine - b.calleeSpan.startLine ||
+    a.calleeSpan.startColumn - b.calleeSpan.startColumn ||
+    a.calleeSpan.endLine - b.calleeSpan.endLine ||
+    a.calleeSpan.endColumn - b.calleeSpan.endColumn ||
+    (a.modifier < b.modifier ? -1 : a.modifier > b.modifier ? 1 : 0)
 }

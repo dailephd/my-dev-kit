@@ -189,9 +189,15 @@ describe('symbol end lines (TypeScript-family extractor)', () => {
     }
   })
 
-  it('does not index destructured or anonymous declarations and tolerates empty files', () => {
+  it('indexes destructured local bindings, omits anonymous identities and tolerates empty files', () => {
     const text = ['export const { a, b } = obj', 'const [c] = arr', 'export default function () {}', 'export default class {}'].join('\n')
-    expect(extractFromSource('src/d.ts', text).symbols).toEqual([])
+    const result = extractFromSource('src/d.ts', text)
+    expect(result.lineCount).toBe(4)
+    expect(result.symbols).toEqual([
+      { name: 'a', nodeId: 'symbol:src/d.ts#a', kind: 'const', exported: true, location: { file: 'src/d.ts', line: 1, endLine: 1 } },
+      { name: 'b', nodeId: 'symbol:src/d.ts#b', kind: 'const', exported: true, location: { file: 'src/d.ts', line: 1, endLine: 1 } },
+      { name: 'c', nodeId: 'symbol:src/d.ts#c', kind: 'const', exported: false, location: { file: 'src/d.ts', line: 2, endLine: 2 } },
+    ])
     const empty = extractFromSource('src/empty.ts', '')
     expect(empty.symbols).toEqual([])
     expect(empty.lineCount).toBe(1)

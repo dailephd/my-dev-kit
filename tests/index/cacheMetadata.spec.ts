@@ -31,13 +31,15 @@ describe('computeConfigFingerprint', () => {
     vi.resetModules()
     vi.doMock('../../src/indexing/buildSourceAuditEvidence.js', async (original) => ({
       ...await original<typeof import('../../src/indexing/buildSourceAuditEvidence.js')>(),
-      SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION: 'source-audit-v1.5.2',
+      SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION: 'source-audit-v1.7.0',
     }))
     try {
       const historicalContract = await import('../../src/indexing/cacheMetadata.js')
       expect(historicalContract.CACHE_SCHEMA_VERSION).toBe('1.5.0')
       expect(CACHE_SCHEMA_VERSION).toBe('1.5.0')
       expect(historicalContract.computeConfigFingerprint(input)).not.toBe(current)
+      const explicit = { ...input, sourceAuditSchema: '1.2.0' as const }
+      expect(historicalContract.computeConfigFingerprint(explicit)).not.toBe(computeConfigFingerprint(explicit))
     } finally {
       vi.doUnmock('../../src/indexing/buildSourceAuditEvidence.js')
       vi.resetModules()

@@ -8,6 +8,77 @@ interface Options {
   links: number
   paths?: { value: Record<string, string[]>; directory: string }
   baseUrl?: string
+  proofOptions?: Pick<ts.CompilerOptions, 'module' | 'moduleResolution' | 'target'>
+  requiresModernProfile?: boolean
+  requiresBundlerProfile?: boolean
+}
+
+// A proof call supplies the same authenticated bytes used to parse each config.
+// This reader is query-local and does not participate in indexed resolution.
+type ProofConfigReader = (relativePath: string) => Buffer | null
+const SOURCE_REFERENCE_COMPILER_OPTIONS = new Set([
+  'paths', 'baseUrl', 'moduleSuffixes', 'moduleResolution',
+  'target', 'module', 'lib', 'jsx', 'strict', 'noEmit', 'skipLibCheck',
+  'allowJs', 'checkJs', 'esModuleInterop', 'allowSyntheticDefaultImports',
+  'forceConsistentCasingInFileNames', 'isolatedModules', 'verbatimModuleSyntax',
+  'declaration', 'declarationMap', 'sourceMap', 'outDir', 'rootDir', 'incremental',
+  'noImplicitAny', 'strictNullChecks', 'noUnusedLocals', 'noUnusedParameters',
+])
+// Language-service plugins do not configure the compiler's local file lookup.
+// JSON resolution is outside the source profile and is checked by the caller's
+// non-source candidate guards.
+// Indexed-access checking and ambient type inclusion leave the explicit local
+// file candidates unchanged.
+const BUNDLER_SOURCE_REFERENCE_OPTIONS = new Set([
+  'plugins', 'resolveJsonModule', 'noUncheckedIndexedAccess', 'types',
+])
+
+type SourceReferenceMode = 'legacy' | 'bundler' | 'nodenext'
+
+function sourceReferenceMode(config: Options | null): SourceReferenceMode | null {
+  const { module, moduleResolution, target } = config?.proofOptions ?? {}
+  // These are the pinned compiler's effective default module and Bundler gate.
+  const effectiveModule = module ?? (
+    (target ?? ts.ScriptTarget.ES5) >= ts.ScriptTarget.ES2015 ? ts.ModuleKind.ES2015 : ts.ModuleKind.CommonJS
+  )
+  // TypeScript 5.9 infers NodeNext resolution from an effective NodeNext
+  // module setting. An explicit override must match the paired mode.
+  if (effectiveModule === ts.ModuleKind.NodeNext) {
+    return (moduleResolution === undefined || moduleResolution === ts.ModuleResolutionKind.NodeNext) &&
+      !config?.requiresBundlerProfile && !config?.baseUrl && !config?.paths ? 'nodenext' : null
+  }
+  if (moduleResolution === ts.ModuleResolutionKind.Bundler ||
+      (moduleResolution === undefined && effectiveModule === ts.ModuleKind.Preserve)) {
+    return effectiveModule === ts.ModuleKind.Preserve ||
+      (effectiveModule >= ts.ModuleKind.ES2015 && effectiveModule <= ts.ModuleKind.ESNext) ? 'bundler' : null
+  }
+  if (config?.requiresModernProfile || (moduleResolution !== undefined && moduleResolution !== ts.ModuleResolutionKind.Node10) ||
+      effectiveModule >= ts.ModuleKind.Node16) return null
+  return 'legacy'
+}
+
+function matchesMapping(key: string, specifier: string): boolean {
+  const star = key.indexOf('*')
+  return star < 0 ? key === specifier : specifier.length >= key.length - 1 &&
+    specifier.startsWith(key.slice(0, star)) && specifier.endsWith(key.slice(star + 1))
+}
+
+// Exact keys outrank wildcards. Equal wildcard prefix lengths are ambiguous.
+function mappingRank(key: string): number {
+  return key.includes('*') ? key.indexOf('*') : Number.MAX_SAFE_INTEGER
+}
+
+function winningMapping(mappings: Record<string, string[]>, specifier: string): string | null | undefined {
+  const matches = Object.keys(mappings).filter(key => matchesMapping(key, specifier))
+    .sort((a, b) => mappingRank(b) - mappingRank(a))
+  if (matches.length > 1 && mappingRank(matches[0]) === mappingRank(matches[1])) return null
+  return matches[0]
+}
+
+function unsupportedConfigPath(value: string): boolean {
+  if (path.isAbsolute(value) || /^[A-Za-z]:/.test(value) || (process.platform !== 'win32' && value.includes('\\'))) return true
+  if (value === '.' || value === '..') return false
+  return value.replace(/\\/g, '/').replace(/^(?:\.\.?\/)+/, '').split('/').some(part => part === '..' || part === '.')
 }
 
 /** Static, repository-contained configuration evidence; never a compiler/module loader. */
@@ -18,7 +89,7 @@ export class ConfiguredImportResolver {
   private readonly configSeen = new Set<string>()
   private readonly diagnostics = new Map<string, string>()
 
-  constructor(repoRoot: string) {
+  constructor(repoRoot: string, private readonly proofReader?: ProofConfigReader) {
     this.root = fs.realpathSync(repoRoot)
   }
 
@@ -49,6 +120,12 @@ export class ConfiguredImportResolver {
 
   private read(file: string): string | null {
     const key = path.relative(this.root, file).replace(/\\/g, '/')
+    if (this.proofReader) {
+      if (!this.contained(file)) { this.evidence.set(key, 'unsafe'); return null }
+      const bytes = this.proofReader(key)
+      this.evidence.set(key, bytes === null ? 'missing' : 'file')
+      return bytes === null ? null : new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    }
     if (!this.safe(file)) { this.evidence.set(key, 'unsafe'); return null }
     try {
       const stat = fs.statSync(file)
@@ -74,23 +151,42 @@ export class ConfiguredImportResolver {
     try { parsed = ts.readConfigFile(file.replace(/\\/g, '/'), () => text) } catch { return null }
     if (parsed.error || !parsed.config || typeof parsed.config !== 'object' || Array.isArray(parsed.config)) return null
     const raw = parsed.config
+    if (this.proofReader && raw.references !== undefined) return null
     let effective: Options = { links: 0 }
     if (raw.extends !== undefined) {
       if (typeof raw.extends !== 'string' || !/^\.\.?[\\/]/.test(raw.extends)) return null
+      if (this.proofReader && unsupportedConfigPath(raw.extends)) return null
       let parent = path.resolve(path.dirname(file), raw.extends)
-      if (!path.extname(parent)) parent += '.json'
+      if (!path.extname(parent)) {
+        if (this.proofReader && (!this.contained(parent) ||
+          this.proofReader(path.relative(this.root, parent).replace(/\\/g, '/')) !== null)) return null
+        parent += '.json'
+      }
       const inherited = this.load(parent, [...chain, file])
       if (!inherited) return null
       effective = { ...inherited, links: inherited.links + 1 }
     }
     const compiler = raw.compilerOptions ?? {}
-    if (!compiler || typeof compiler !== 'object' || Array.isArray(compiler) ||
-        ts.convertCompilerOptionsFromJson(compiler, path.dirname(file)).errors.length) return null
+    if (!compiler || typeof compiler !== 'object' || Array.isArray(compiler)) return null
+    const { options, errors } = ts.convertCompilerOptionsFromJson(compiler, path.dirname(file))
+    if (errors.length) return null
+    if (this.proofReader) {
+      const additional = Object.keys(compiler).filter(key => !SOURCE_REFERENCE_COMPILER_OPTIONS.has(key))
+      if (additional.some(key => !BUNDLER_SOURCE_REFERENCE_OPTIONS.has(key))) return null
+      const proofOptions = { ...effective.proofOptions }
+      if (options.module !== undefined) proofOptions.module = options.module
+      if (options.moduleResolution !== undefined) proofOptions.moduleResolution = options.moduleResolution
+      if (options.target !== undefined) proofOptions.target = options.target
+      effective.proofOptions = proofOptions
+      effective.requiresModernProfile ||= additional.length > 0
+      effective.requiresBundlerProfile ||= additional.some(key => key !== 'types' && key !== 'resolveJsonModule')
+    }
     // Custom suffix probing is outside this selected-source correction. Ignoring
     // it could turn a platform-specific target into an incorrect ordinary edge.
     if (compiler.moduleSuffixes !== undefined && JSON.stringify(compiler.moduleSuffixes) !== '[""]') return null
     if (compiler.baseUrl !== undefined) {
       if (typeof compiler.baseUrl !== 'string') return null
+      if (this.proofReader && unsupportedConfigPath(compiler.baseUrl)) return null
       effective.baseUrl = path.resolve(path.dirname(file), compiler.baseUrl)
       if (!this.safe(effective.baseUrl)) return null
     }
@@ -104,6 +200,58 @@ export class ConfiguredImportResolver {
     }
     this.configs.set(file, effective)
     return effective
+  }
+
+  private *mappedBases(config: Options, key: string, specifier: string): Iterable<string | null> {
+    const star = key.indexOf('*')
+    const wildcard = star < 0 ? '' : specifier.slice(star, specifier.length - (key.length - star - 1))
+    for (const target of config.paths!.value[key]) {
+      if (path.isAbsolute(target) || (!config.baseUrl && !/^\.\.?[\\/]/.test(target)) || (star < 0 && target.includes('*'))) {
+        yield null
+        return
+      }
+      const mapped = this.proofReader ? target.replace('*', () => wildcard) : target.replace('*', wildcard)
+      if (this.proofReader && unsupportedConfigPath(mapped)) { yield null; return }
+      const absolute = path.resolve(config.baseUrl ?? config.paths!.directory, mapped)
+      if (!this.safe(absolute)) { yield null; return }
+      yield path.relative(this.root, absolute).replace(/\\/g, '/')
+    }
+  }
+
+  /** Ordered, lazy mapping bases. A null base blocks all later fallbacks. */
+  sourceReferenceBases(specifier: string, importer: string, relative: boolean): {
+    mode: SourceReferenceMode; bases: Iterable<string | null>
+  } | null {
+    const config = this.applicable(importer)
+    if (!config && this.configSeen.has(importer)) return null
+    const mode = sourceReferenceMode(config)
+    if (!mode) return null
+    if (relative) return { mode, bases: [] }
+    if (!config || mode === 'nodenext') return null
+    const key = config.paths && winningMapping(config.paths.value, specifier)
+    if (key === null) return null
+    const mapped = key ? this.mappedBases(config, key, specifier) : []
+    const fallback = config.baseUrl ? path.resolve(config.baseUrl, specifier) : null
+    const resolver = this
+    const bases = (function* () {
+      yield* mapped
+      if (fallback) yield resolver.safe(fallback) ? path.relative(resolver.root, fallback).replace(/\\/g, '/') : null
+    })()
+    return { mode, bases }
+  }
+
+  externalReferenceOptions(importer: string): { mode: 'nodenext' | 'bundler'; options: ts.CompilerOptions } | null {
+    const config = this.applicable(importer)
+    if (!config || config.baseUrl || config.paths) return null
+    const mode = sourceReferenceMode(config)
+    if (mode !== 'nodenext' && mode !== 'bundler') return null
+    return {
+      mode,
+      options: {
+        ...config.proofOptions,
+        moduleResolution: mode === 'nodenext' ? ts.ModuleResolutionKind.NodeNext : ts.ModuleResolutionKind.Bundler,
+      },
+    }
   }
 
   private applicable(importer: string): Options | null {
@@ -130,24 +278,11 @@ export class ConfiguredImportResolver {
     const unresolved = () => this.diagnostics.set(diagnosticKey, `Configured import unresolved: ${specifier.slice(0, 160)} (missing, ambiguous, excluded, unsupported or unsafe evidence).`)
     if (!config && this.configSeen.has(importer)) unresolved()
     if (!config?.paths) return []
-    const matches = Object.keys(config.paths.value).filter(key => {
-      const star = key.indexOf('*')
-      return star < 0 ? key === specifier : specifier.length >= key.length - 1 &&
-        specifier.startsWith(key.slice(0, star)) && specifier.endsWith(key.slice(star + 1))
-    })
-    // TypeScript documents exact keys and longest wildcard prefix. Ties lack
-    // unique evidence here; object insertion order is not ownership authority.
-    if (matches.length) unresolved()
-    const rank = (key: string) => [key.includes('*') ? 0 : 1, key.split('*')[0].length]
-    matches.sort((a, b) => { const x = rank(a), y = rank(b); return y[0] - x[0] || y[1] - x[1] })
-    if (!matches.length || (matches[1] && JSON.stringify(rank(matches[0])) === JSON.stringify(rank(matches[1])))) return []
-    const key = matches[0]
-    const wildcard = key.includes('*') ? specifier.slice(key.indexOf('*'), specifier.length - (key.length - key.indexOf('*') - 1)) : ''
-    for (const target of config.paths.value[key]) {
-      if (path.isAbsolute(target) || (!config.baseUrl && !/^\.\.?[\\/]/.test(target)) || (!key.includes('*') && target.includes('*'))) return []
-      const absolute = path.resolve(config.baseUrl ?? config.paths.directory, target.replace('*', wildcard))
-      if (!this.safe(absolute)) return []
-      const base = path.relative(this.root, absolute).replace(/\\/g, '/')
+    const key = winningMapping(config.paths.value, specifier)
+    if (key !== undefined) unresolved()
+    if (!key) return []
+    for (const base of this.mappedBases(config, key, specifier)) {
+      if (base === null) return []
       const relative = './' + path.posix.relative(path.posix.dirname(importer), base)
       // Probe only the existing B05 candidate family. Any earlier excluded/untrusted
       // physical target prevents a later selected fallback from becoming evidence.

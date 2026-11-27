@@ -7,7 +7,7 @@ import { buildSourceAuditEvidence, SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION } fr
 import { buildCacheFileEntries, classifyChangedFilePaths, type CacheFileEntry } from '../../src/indexing/cacheMetadata.js'
 import { discoverSourceFiles } from '../../src/indexing/discoverSourceFiles.js'
 import { buildPartialSymbolIndex } from '../../src/indexing/partialRebuild.js'
-import { SOURCE_AUDIT_CAPABILITIES } from '../../src/symbol-index/auditEvidenceTypes.js'
+import { SOURCE_AUDIT_CAPABILITIES, type SourceAuditSchemaVersion } from '../../src/symbol-index/auditEvidenceTypes.js'
 import { validateSourceAuditEvidence } from '../../src/symbol-index/validateAuditEvidence.js'
 import { buildIndex } from '../../src/symbol-index/builder.js'
 import type { FileSummary } from '../../src/symbol-index/types.js'
@@ -51,7 +51,7 @@ function baseline(root: string, excludes: string[] = ['generated']) {
   return { full, cacheEntries, summaries, excludes }
 }
 
-function fullProjection(root: string, excludes: string[] = ['generated']) {
+function fullProjection(root: string, excludes: string[] = ['generated'], schemaVersion?: SourceAuditSchemaVersion) {
   const built = buildIndex({ repoRoot: root, sourceRoots: SRC, excludePatterns: excludes })
   return buildSourceAuditEvidence({
     projectRoot: root,
@@ -61,13 +61,14 @@ function fullProjection(root: string, excludes: string[] = ['generated']) {
     symbolIndex: built.index,
     fileHashes: built.fileContentHashes,
     producerVersion: '1.14.0',
+    schemaVersion,
   })
 }
 
 function partialProjection(
   root: string,
   base: ReturnType<typeof baseline>,
-  opts: { forced?: string[]; cacheEntries?: CacheFileEntry[]; summaries?: Map<string, FileSummary> } = {},
+  opts: { forced?: string[]; cacheEntries?: CacheFileEntry[]; summaries?: Map<string, FileSummary>; schemaVersion?: SourceAuditSchemaVersion } = {},
 ) {
   const discovery = discoverSourceFiles({ repoRoot: root, sourceRoots: SRC, userExcludes: base.excludes })
   const cacheEntries = opts.cacheEntries ?? base.cacheEntries
@@ -90,13 +91,14 @@ function partialProjection(
     symbolIndex: partial.index,
     fileHashes: partial.fileContentHashes,
     producerVersion: '1.14.0',
+    schemaVersion: opts.schemaVersion,
   })
   return { discovery, classification, partial, projection }
 }
 
 describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
   it('versions the extractor snapshot independently of the public schema', () => {
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.6.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.8.0')
     const artifact = fullProjection(makeProject({ 'src/App.kt': 'class App\n' })).artifact
     expect(artifact.schemaVersion).toBe('1.1.0')
     const identity = (revision: string) => sha(JSON.stringify({
@@ -108,12 +110,74 @@ describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
         language: file.language, role: file.role, status: file.status,
       })),
     }))
-    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.6.0'))
+    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.8.0'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.7.0'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.6.0'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.4'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.3'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.2'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.1'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.0'))
+  })
+
+  it('reuses a complete local export inventory and refreshes it when the receiver becomes unowned', () => {
+    const path = 'src/owned.ts'
+    const declared = 'export function keep() {}\n'
+    const root = makeProject({ ...BASE, [path]: declared + 'const exports = {}; mutate(exports); exports[key] = keep' })
+    const base = baseline(root)
+    const warm = partialProjection(root, base)
+    const owned = warm.projection.artifact.files.find(file => file.path === path)!
+    expect(warm.partial.reusedPaths).toContain(path)
+    expect(owned.capabilities.exports).toBe('complete')
+    expect(owned.facts.filter(fact => fact.kind === 'export')).toMatchObject([
+      { name: 'keep', symbolId: 'symbol:src/owned.ts#keep' },
+    ])
+    expect(warm.projection.artifact).toEqual(fullProjection(root).artifact)
+
+    write(root, path, declared + 'mutate(exports); exports[key] = keep')
+    const changed = partialProjection(root, base)
+    const unowned = changed.projection.artifact.files.find(file => file.path === path)!
+    expect(changed.partial.freshlyExtractedPaths).toEqual([path])
+    expect(changed.partial.reusedPaths).toContain('src/c.ts')
+    expect(unowned.capabilities.exports).toBe('partial')
+    expect(unowned.facts.filter(fact => fact.kind === 'export')).toEqual(owned.facts.filter(fact => fact.kind === 'export'))
+    expect(changed.projection.artifact).toEqual(fullProjection(root).artifact)
+  })
+
+  it.each([undefined, '1.2.0'] as const)('preserves import identities and converges with reused binding evidence (schema %s)', (schemaVersion) => {
+    const path = 'src/binding.ts'
+    const prefix = 'const { chosen: local } = '
+    const operand = 'await import("./peer.mjs")'
+    const computed = '\nvoid import(process.env.RUNTIME_TARGET)'
+    const root = makeProject({
+      [path]: ' '.repeat(prefix.length) + operand + computed,
+      'src/peer.mjs': 'export const chosen = 1',
+    })
+    const before = fullProjection(root, ['generated'], schemaVersion).artifact.files.find(file => file.path === path)!
+    write(root, path, prefix + operand + computed)
+    const full = fullProjection(root, ['generated'], schemaVersion)
+    const { partial, projection } = partialProjection(root, baseline(root), { schemaVersion })
+    expect(partial.reusedPaths).toContain(path)
+    expect(partial.freshlyExtractedPaths).toEqual([])
+    expect(projection.artifact).toEqual(full.artifact)
+    expect(full.artifact.schemaVersion).toBe(schemaVersion ?? '1.1.0')
+    expect(() => validateSourceAuditEvidence(full.artifact)).not.toThrow()
+    const file = full.artifact.files.find(file => file.path === path)!
+    const importFacts = (record: typeof file) => record.facts.filter(fact => fact.kind === 'import' || fact.kind === 'dynamic-import-expression')
+    const observations = importFacts(file)
+    expect(observations).toEqual(importFacts(before))
+    const literal = observations.find(fact => fact.kind === 'import')!
+    expect(literal).toMatchObject({ sourceSpecifier: './peer.mjs', importedNames: ['*'], targetPaths: ['src/peer.mjs'] })
+    if (schemaVersion === '1.2.0') {
+      expect(observations.filter(fact => fact.kind === 'dynamic-import-expression')).toMatchObject([
+        { operandForm: 'string-literal', literalImportFactId: literal.id },
+        { operandForm: 'computed' },
+      ])
+      expect(file.capabilities['dynamic-import-expressions']).toBe('complete')
+    }
+    expect(file.facts.filter(fact => fact.kind === 'declaration')).toMatchObject([{ name: 'local', exported: false }])
+    expect(file.facts.filter(fact => fact.kind === 'export')).toEqual([])
+    expect(file.capabilities).toMatchObject({ declarations: 'complete', imports: 'partial' })
   })
 
   it('refreshes changed Kotlin script capabilities and reuses compatible mixed-language evidence', () => {
