@@ -2,12 +2,15 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import ts from 'typescript'
 import { createDefaultRegistry } from '../languages/registry.js'
 import { PythonAdapter } from '../languages/python/adapter.js'
 import { TypeScriptAdapter, enumerateJsTsCandidatePaths } from '../languages/typescript/adapter.js'
 import { ConfiguredImportResolver } from '../languages/typescript/configuredImportResolver.js'
 import type { SourceAuditEvidenceArtifact, SourceAuditFact, SourceAuditFile } from '../symbol-index/auditEvidenceTypes.js'
 import { SOURCE_AUDIT_SCHEMA_VERSION } from '../symbol-index/auditEvidenceTypes.js'
+import { auditSpanAt, parseTypeScriptSource } from '../symbol-index/symbolExtractor.js'
+import { readAuthenticatedAuditBytes } from '../source/readAuthenticatedAuditBytes.js'
 import { assertSourceAuditFileFresh, readSourceAuditEvidence, SourceAuditEvidenceError } from './readSourceAuditEvidence.js'
 import { ensureInsideProjectRoot, readSourceBytes, UnsafeSourceError } from './getSourceSlice.js'
 
@@ -132,8 +135,9 @@ function classifyAbsentCandidates(
 
 /**
  * Read-only existence proof for one indexed import or JS/TS re-export fact. Uses the identity-verified source-audit artifact,
- * the existing language resolvers and the recorded selected inventory; it never reparses source, rebuilds
- * the index or writes anything. Unresolved is never translated into missing without a complete enumerated
+ * the existing language resolvers and the recorded selected inventory. NodeNext checks the mode of an
+ * existing fact using the same parser on authenticated origin bytes. This lookup never rebuilds the
+ * index or writes anything. Unresolved is never translated into missing without a complete enumerated
  * candidate set in a complete selection. Re-export chains are not traversed: a present immediate target
  * says nothing about its exported bindings, cycles, external dependencies or global reference coverage.
  */
@@ -374,7 +378,7 @@ export class ReferencePremises {
       const state = inspectReferencePath(this.root, relative, this.pathStates)
       const bytes = state === 'file' ? readSourceBytes(this.root, relative, limit) : null
       observation = {
-        state, bytes: role === 'config' ? bytes : null,
+        state, bytes: role === 'config' || role === 'package-metadata' ? bytes : null,
         contentSha256: bytes && hashReferenceBytes(bytes), sizeBytes: bytes?.length ?? null,
       }
       this.observations.set(relative, observation)
@@ -412,14 +416,10 @@ function declarationBlockers(base: string): string[] {
   return []
 }
 
-// Use the shared enumeration, then apply the pinned Bundler profile's
-// substitution families. Modern extensions require an explicit suffix.
-function bundlerSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
+// These explicit substitution families are shared by the pinned TypeScript
+// Bundler and NodeNext ESM resolvers. Declaration alternatives stay blockers.
+function explicitSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
   const extension = path.posix.extname(base).toLowerCase()
-  if (!extension) {
-    const modern = /\.[cm][jt]s$/
-    return { paths: candidates.filter(candidate => !modern.test(candidate)), blockers: candidates.filter(candidate => modern.test(candidate)) }
-  }
   const stem = base.slice(0, -extension.length)
   if (/\.d\.[cm]?ts$/i.test(base)) throw new UnqualifiedReference('DECLARATION_RESOLUTION_BLOCKER')
   if (/^(?:\.[jt]sx?)$/.test(extension)) {
@@ -427,6 +427,89 @@ function bundlerSourceCandidates(base: string, candidates: string[]): { paths: s
   }
   const family = extension[1]
   return { paths: [...new Set([...candidates, stem + '.' + family + 'ts', stem + '.' + family + 'js'])], blockers: [stem + '.d.' + family + 'ts'] }
+}
+
+function bundlerSourceCandidates(base: string, candidates: string[]): { paths: string[]; blockers: string[] } {
+  if (path.posix.extname(base)) return explicitSourceCandidates(base, candidates)
+  const modern = /\.[cm][jt]s$/
+  return { paths: candidates.filter(candidate => !modern.test(candidate)), blockers: candidates.filter(candidate => modern.test(candidate)) }
+}
+
+function nearestReferencePackage(premises: ReferencePremises, sourcePath: string): {
+  path: string; type: 'module' | 'commonjs' | undefined
+} | null {
+  let directory = path.posix.dirname(sourcePath)
+  for (;;) {
+    const name = path.posix.join(directory, 'package.json')
+    const metadata = premises.capture('package-metadata', name)
+    if (metadata.state !== 'absent') {
+      if (!metadata.bytes) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(metadata.bytes)
+      let value: unknown
+      try { value = JSON.parse(text) } catch { throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA') }
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      // Reject duplicate top-level keys before relying on JSON's last-key-wins
+      // object. The pinned parser decodes escaped property names as well.
+      const statement = ts.parseJsonText(name, text).statements[0]
+      if (!statement || !ts.isExpressionStatement(statement) || !ts.isObjectLiteralExpression(statement.expression)) {
+        throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      }
+      const keys = new Set<string>()
+      for (const property of statement.expression.properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name) || keys.has(property.name.text)) {
+          throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+        }
+        keys.add(property.name.text)
+      }
+      const type = (value as { type?: unknown }).type
+      if (type !== undefined && type !== 'module' && type !== 'commonjs') throw new UnqualifiedReference('UNQUALIFIED_PACKAGE_METADATA')
+      return { path: name, type }
+    }
+    if (directory === '.') return null
+    directory = path.posix.dirname(directory)
+  }
+}
+
+function isNodeNextEsmReference(
+  artifact: SourceAuditEvidenceArtifact, file: SourceAuditFile, fact: SourceAuditFact,
+  specifier: string, packageType: 'module' | 'commonjs' | undefined,
+): boolean {
+  if (!runtimeProfileIsDefault() || fact.span.endLine === null || fact.span.endColumn === null ||
+      /\.d\.[cm]?ts$/.test(file.path) ||
+      !(file.path.endsWith('.mts') || file.path.endsWith('.mjs') ||
+        packageType === 'module' && /\.[jt]sx?$/.test(file.path))) return false
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+    readAuthenticatedAuditBytes(artifact, file, MAX_REFERENCE_BYTES),
+  )
+  const sf = parseTypeScriptSource(file.path, text)
+  sf.impliedNodeFormat = ts.ModuleKind.ESNext
+  const options = { module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext }
+  const matches = (node: ts.Node) => {
+    const span = auditSpanAt(sf, file.path, node.getStart(sf), node.end, true)
+    return span.path === fact.span.path && span.startLine === fact.span.startLine &&
+      span.startColumn === fact.span.startColumn && span.endLine === fact.span.endLine && span.endColumn === fact.span.endColumn
+  }
+  const qualifies = (operand: ts.Expression | undefined) => operand && ts.isStringLiteral(operand) &&
+    operand.text === specifier && ts.getModeForUsageLocation(sf, operand, options) === ts.ModuleKind.ESNext
+  for (const statement of sf.statements) {
+    if (fact.kind === 'import' && ts.isImportDeclaration(statement) && matches(statement)) {
+      return !!qualifies(statement.moduleSpecifier)
+    }
+    if (fact.kind === 'export' && fact.exportOrigin === 're-export' && ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause
+      const nodes = !clause ? [statement] : ts.isNamespaceExport(clause) ? [clause] : clause.elements
+      if (nodes.some(matches)) return !!qualifies(statement.moduleSpecifier)
+    }
+  }
+  // A linked dynamic expression can supply an ordinary literal-import fact.
+  // Require the literal at the recorded span and leave computed operands to
+  // the separate expression proof profile.
+  if (fact.kind !== 'import' || !file.facts.some(entry => entry.literalImportFactId === fact.id)) return false
+  const literalImport = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    node.arguments.length === 1 && matches(node) && !!qualifies(node.arguments[0]) ||
+    ts.forEachChild(node, literalImport) === true
+  return literalImport(sf)
 }
 
 /** Authenticate the already-enumerated domain for one exact, default-profile relative destination. */
@@ -492,8 +575,8 @@ function buildSourceReferenceProof(
   try {
     const root = fs.realpathSync.native(projectRoot)
     if (inspectReferencePath(root, file.path) !== 'file') return incomplete('UNQUALIFIED_ORIGIN')
-    const normalized = relative ? jsTsPath(projectRoot, file.path, specifier, false) : null
-    if (relative && (!normalized || !('localPath' in normalized))) return incomplete('UNSUPPORTED_RELATIVE_PATH')
+    const localPath = relative ? jsTsPath(projectRoot, file.path, specifier, false)?.localPath : undefined
+    if (relative && !localPath) return incomplete('UNSUPPORTED_RELATIVE_PATH')
     const premises = new ReferencePremises(root)
     const resolver = new ConfiguredImportResolver(root, configPath => {
       const observation = premises.capture('config', configPath)
@@ -502,15 +585,30 @@ function buildSourceReferenceProof(
     })
     const configured = resolver.sourceReferenceBases(specifier, file.path, relative)
     if (!configured) return incomplete('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
-    const bases = normalized && 'localPath' in normalized ? [normalized.localPath] : configured.bases
+    const nodeNext = configured.mode === 'nodenext'
+    if (nodeNext) {
+      if (!localPath || !/\.(?:jsx?|[mc]js)$/.test(localPath) || /\.d\.(?:jsx?|[mc]js)$/i.test(localPath)) {
+        return incomplete('UNSUPPORTED_NODENEXT_SPECIFIER')
+      }
+      const originPackage = nearestReferencePackage(premises, file.path)
+      if (!isNodeNextEsmReference(artifact, file, fact, specifier, originPackage?.type)) {
+        return incomplete('UNQUALIFIED_NODENEXT_ESM_REFERENCE')
+      }
+      if (path.posix.dirname(localPath) !== path.posix.dirname(file.path) &&
+          nearestReferencePackage(premises, localPath)?.path !== originPackage?.path) {
+        return incomplete('UNQUALIFIED_NODENEXT_PACKAGE_BOUNDARY')
+      }
+    }
+    const bases = localPath ? [localPath] : configured.bases
     const domain = new Set<string>()
     const targets: Array<{ path: string; contentSha256: string }> = []
     for (const base of bases) {
       if (!base) return incomplete('UNQUALIFIED_MAPPING_TARGET')
       const enumerated = enumerateJsTsCandidatePaths(relativeCandidate(file.path, base), file.path)
       if (!enumerated?.length) return incomplete('UNSUPPORTED_CANDIDATE_SHAPE')
-      const bundler = configured.mode === 'bundler' ? bundlerSourceCandidates(base, enumerated) : null
-      const candidates = bundler?.paths ?? enumerated
+      const family = nodeNext ? explicitSourceCandidates(base, enumerated)
+        : configured.mode === 'bundler' ? bundlerSourceCandidates(base, enumerated) : null
+      const candidates = family?.paths ?? enumerated
       for (const candidate of candidates) domain.add(candidate)
       if (domain.size > MAX_REFERENCE_CANDIDATES) return incomplete('REFERENCE_CANDIDATE_BUDGET_EXCEEDED')
 
@@ -527,7 +625,7 @@ function buildSourceReferenceProof(
       for (const blocker of declarationBlockers(base)) {
         if (premises.capture('path', blocker).state !== 'absent') return incomplete('DECLARATION_RESOLUTION_BLOCKER')
       }
-      for (const blocker of bundler?.blockers ?? []) {
+      for (const blocker of family?.blockers ?? []) {
         if (premises.capture('path', blocker).state !== 'absent') {
           return incomplete(/\.d\.[cm]?ts$/.test(blocker) ? 'DECLARATION_RESOLUTION_BLOCKER' : 'UNSUPPORTED_CANDIDATE_SHAPE')
         }

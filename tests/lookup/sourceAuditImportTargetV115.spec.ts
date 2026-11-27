@@ -91,6 +91,140 @@ const unknown = (proof: ReturnType<typeof inspect>) => {
   })
 }
 
+const nodeNextOptions = {
+  target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', rootDir: '.', outDir: 'dist',
+  strict: true, esModuleInterop: true, forceConsistentCasingInFileNames: true, skipLibCheck: true,
+  resolveJsonModule: true, types: ['node', 'vitest/globals'],
+}
+const modulePackage = '{"type":"module"}\r\n'
+const nodeNextConfig = JSON.stringify({ compilerOptions: nodeNextOptions })
+
+describe('bounded NodeNext ordinary references', () => {
+  it.each([
+    ['Lab', nodeNextOptions, ['src/**/*.ts', 'scripts/**/*.ts', 'tests/**/*.ts', 'benchmarks/**/*.ts']],
+    ['Kit', { ...nodeNextOptions, lib: ['ES2022'] }, ['src/**/*.ts', 'tests/**/*.ts', 'tsup.config.ts', 'vitest.config.ts']],
+  ] as const)('qualifies the %s configuration and immediate re-export from authenticated bytes', async (_owner, compilerOptions, include) => {
+    const config = JSON.stringify({ compilerOptions, include }, null, 2)
+    const root = makeProject({
+      'package.json': modulePackage, 'tsconfig.json': config,
+      [ordinary]: 'import { value } from "./sub/peer.js"\nexport { value as forwarded } from "./sub/peer.js"\n',
+      'src/sub/peer.ts': selectedSource,
+    })
+    const out = await extended(root)
+    const origin = readSourceAuditEvidence(out).files.find(entry => entry.path === ordinary)!
+    const facts = origin.facts.filter(fact => fact.sourceSpecifier === './sub/peer.js')
+    expect(facts.map(fact => fact.kind)).toEqual(['import', 'export'])
+    for (const fact of facts) {
+      const result = resolveAuditImportTarget(out, fact.id).sourceReferenceProof!
+      expect(result).toMatchObject({
+        profile: 'js-ts-selected-source-reference-v1', candidateEnumerationComplete: true,
+        candidateDomain: ['src/sub/peer.js', 'src/sub/peer.jsx', 'src/sub/peer.ts', 'src/sub/peer.tsx'],
+        qualifiedReference: selectedReference('src/sub/peer.ts'), reasonCode: null,
+      })
+      expect(result.premiseRefs).toEqual(expect.arrayContaining([
+        { role: 'config', path: 'tsconfig.json', state: 'file', contentSha256: rawHash(config) },
+        { role: 'config', path: 'src/jsconfig.json', state: 'absent', contentSha256: null },
+        { role: 'config', path: 'src/tsconfig.json', state: 'absent', contentSha256: null },
+        { role: 'package-metadata', path: 'package.json', state: 'file', contentSha256: rawHash(modulePackage) },
+        { role: 'package-metadata', path: 'src/package.json', state: 'absent', contentSha256: null },
+        { role: 'package-metadata', path: 'src/sub/package.json', state: 'absent', contentSha256: null },
+      ]))
+    }
+  })
+
+  it('admits explicit suffix families and absence under relative inheritance and a paired effective override', async () => {
+    const base = '{/* defaults */"compilerOptions":{"module":"Node16","types":["node"]}}\r\n'
+    const root = makeProject({
+      'tsconfig.json': '{"extends":"./cfg/base","compilerOptions":{"module":"NodeNext"}}',
+      'cfg/base.json': base,
+      'src/main.mts': ['view.jsx', 'esm.mjs', 'cjs.cjs', 'absent.js'].map(name => `import "./${name}"\n`).join(''),
+      'src/view.tsx': selectedSource, 'src/esm.mts': selectedSource, 'src/cjs.cts': selectedSource,
+    })
+    const out = await extended(root)
+    const read = (specifier: string) => resolveAuditImportTarget(out, importId(out, 'src/main.mts', specifier)).sourceReferenceProof!
+    for (const [specifier, target, candidates] of [
+      ['./view.jsx', 'src/view.tsx', ['src/view.js', 'src/view.jsx', 'src/view.ts', 'src/view.tsx']],
+      ['./esm.mjs', 'src/esm.mts', ['src/esm.mjs', 'src/esm.mts']],
+      ['./cjs.cjs', 'src/cjs.cts', ['src/cjs.cjs', 'src/cjs.cts']],
+    ] as const) {
+      expect(read(specifier)).toMatchObject({
+        candidateDomain: candidates, candidateEnumerationComplete: true, qualifiedReference: selectedReference(target),
+      })
+    }
+    expect(read('./absent.js')).toMatchObject({
+      candidateEnumerationComplete: true, qualifiedReference: null, reasonCode: null,
+    })
+    expect(read('./absent.js').premiseRefs).toEqual(expect.arrayContaining([
+      { role: 'config', path: 'cfg/base.json', state: 'file', contentSha256: rawHash(base) },
+      { role: 'config', path: 'cfg/base', state: 'absent', contentSha256: null },
+      { role: 'package-metadata', path: 'package.json', state: 'absent', contentSha256: null },
+    ]))
+    writeFileSync(join(root, 'cfg/base.json'), '{"compilerOptions":{"moduleResolution":"Node16"}}')
+    expect(read('./esm.mjs').reasonCode).toBe('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+  })
+
+  it('conservatively handles incompatible config and fresh, incompatible or ambiguous package changes', async () => {
+    const root = makeProject({
+      [ordinary]: 'import "./nested/peer.js"\n', 'src/nested/peer.ts': selectedSource,
+      'package.json': modulePackage, 'tsconfig.json': nodeNextConfig,
+    })
+    const out = await extended(root)
+    const read = () => inspect(out, './nested/peer.js')
+    const editedPackage = '{"type":"module","name":"edited"}'
+    expect(read().sourceReferenceProof?.qualifiedReference).toEqual(selectedReference('src/nested/peer.ts'))
+    writeFileSync(join(root, 'package.json'), editedPackage)
+    expect(read().sourceReferenceProof?.premiseRefs).toContainEqual({
+      role: 'package-metadata', path: 'package.json', state: 'file', contentSha256: rawHash(editedPackage),
+    })
+    for (const other of ['{}', '{"type":"commonjs"}', '{"type":"esnext"}', '{"type":"commonjs","type":"module"}', '{']) {
+      writeFileSync(join(root, 'src/package.json'), other)
+      unknown(read())
+    }
+    rmSync(join(root, 'src/package.json'))
+    writeFileSync(join(root, 'src/nested/package.json'), modulePackage)
+    expect(read().sourceReferenceProof?.reasonCode).toBe('UNQUALIFIED_NODENEXT_PACKAGE_BOUNDARY')
+    rmSync(join(root, 'src/nested/package.json'))
+    for (const overrides of [
+      { module: 'ESNext' }, { module: 'Node18' }, { moduleResolution: 'Bundler' },
+      { module: 'Node16', moduleResolution: 'Node16' }, { moduleResolution: 'Node10' },
+      { moduleResolution: 'invalid' }, { rootDirs: ['src', 'other'] }, { customConditions: ['custom'] },
+      { moduleSuffixes: ['.native', ''] }, { paths: { alias: ['./src/nested/peer.ts'] } },
+    ]) {
+      writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { ...nodeNextOptions, ...overrides } }))
+      expect(read().sourceReferenceProof?.reasonCode).toBe('UNQUALIFIED_CONFIGURATION_OR_MAPPING')
+    }
+  })
+
+  it('withholds positives for unsupported specifiers, require modes and unqualified candidates', async () => {
+    const root = makeProject({
+      'tsconfig.json': nodeNextConfig, 'package.json': modulePackage,
+      [ordinary]: [
+        'import "./peer"', 'import "./dir.js"', 'import "./multi.js"', 'import "./excluded.js"',
+        'import "./declared.js"', 'import "./alias.d.js"', 'import "outside-package"', 'import "../../escape.js"',
+        'import legacy = require("./peer.js")', 'require("./require-me.js")',
+        'import type { T } from "./typed.js" with { "resolution-mode": "require" }',
+        'export type { T } from "./reexport.js" with { "resolution-mode": "require" }',
+        'const modulePath = "./computed.js"; void import(modulePath)', 'import "./link/peer.js"',
+      ].join('\n'),
+      'src/peer.ts': selectedSource, 'src/dir.js/index.ts': selectedSource, 'src/multi.ts': selectedSource,
+      'src/multi.jsx': selectedSource, 'src/excluded.js': selectedSource, 'src/excluded.ts': selectedSource,
+      'src/declared.d.ts': 'export declare const value: number', 'src/alias.d.ts': 'export {}',
+      'src/require-me.ts': selectedSource, 'src/typed.ts': 'export type T = string',
+      'src/reexport.ts': 'export type T = string', 'src/computed.ts': selectedSource,
+    })
+    const out = await extended(root, ['src/excluded.js'])
+    symlinkSync(realpathSync(join(root, 'src')), join(root, 'src/link'), process.platform === 'win32' ? 'junction' : 'dir')
+    for (const specifier of ['./peer', './dir.js', './excluded.js', './declared.js', './alias.d.js', 'outside-package',
+      '../../escape.js', './peer.js', './require-me.js', './typed.js', './computed.js', './link/peer.js']) unknown(inspect(out, specifier))
+    const reexport = readSourceAuditEvidence(out).files.find(entry => entry.path === ordinary)!.facts
+      .find(fact => fact.sourceSpecifier === './reexport.js')!
+    unknown(resolveAuditImportTarget(out, reexport.id))
+    expect(inspect(out, './multi.js').sourceReferenceProof).toMatchObject({
+      candidateEnumerationComplete: true, qualifiedReference: null, reasonCode: null,
+    })
+  })
+})
+
 describe('ordinary selected-source reference extension', () => {
   it('qualifies Bundler source references with indexed-access checking and ambient type inclusion', async () => {
     const root = makeProject({

@@ -844,6 +844,14 @@ import fact ID to the ordinary target selector. The domain selector excludes
 other lookup modes and paging. The byte selector requires one exact selected
 file and excludes other source modes. See [the proof contract](CONTRACTS.md#coordinated-r3-import-evidence).
 
+On schema `1.2.0`, the ordinary target selector also accepts an authenticated
+immediate re-export fact ID. With an admitted NodeNext configuration and ESM
+origin, `sourceReferenceProof` can qualify an explicit relative reference such
+as `./utility.js` to the selected `utility.ts` source. The proof captures the
+applicable configuration and package metadata. NodeNext coverage excludes
+extensionless and directory-index references, package fallback and runtime
+destinations. See [configured ordinary references](CONTRACTS.md#configured-ordinary-references).
+
 The byte needle is even-length hexadecimal for 1 to 4,096 bytes. The
 selector scans at most 200,000 bytes in that file and returns up to 200
 overlapping match offsets. Read the scan, count and match-completeness

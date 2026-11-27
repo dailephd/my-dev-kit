@@ -864,3 +864,11 @@ This keeps the structural artifacts small enough for most project sizes while al
 The [1.16.1 correction](ROADMAP.md#version-1161) is implemented and unreleased. The TypeScript AST extractor in `src/symbol-index/symbolExtractor.ts` emits local binding leaves and explicit export facts. `buildSourceAuditEvidence.ts`, the artifact validator, and the index cache track the strengthened extraction contract. Declaration and import-expression observation stay independent of destination resolution.
 
 At lookup time, `resolveAuditImportTarget.ts` joins authenticated import facts to the local profile in `configuredImportResolver.ts`, checks candidate and configuration freshness, and returns ordinary source-reference evidence. `resolveAuditImportDomain.ts` adds the exact computed positive when the separate default ESM premises hold. `readSourceAuditEvidence.ts` negotiates page-zero modifier proof and delegates source and wrapper analysis to `resolveAuditTestModifierProof.ts`. These extensions reuse the managed index, source hashes, candidate scope, and validators. Lab owns audit applicability, coverage, findings, and exit policy. See the [proof contracts](CONTRACTS.md#kit-facts-02-proof-boundary).
+
+For bounded NodeNext relative references, the configuration owner checks the
+effective NodeNext pair. The lookup owner captures nearest-package premises,
+uses the existing TypeScript parser and exact recorded span to establish ESM
+usage, and applies explicit substitution families through the shared JS/TS
+candidate enumeration. It rechecks the same premises before returning the
+ordinary proof. Extraction, persisted artifact schemas, and cache identity
+remain governed by the existing indexing owners.

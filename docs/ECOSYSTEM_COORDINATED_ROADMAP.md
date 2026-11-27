@@ -536,6 +536,13 @@ The KIT-FACTS-02 compatibility decision keeps the legacy exact-file page as the 
 
 The authorized A6 producer scope includes bounded static local JS/TS references under authenticated Bundler-compatible TypeScript configurations and independent modifier completeness when general diagnostics reach their cap. Global augmentation extraction and PowerShell source evidence remain separate unimplemented capabilities without release assignments. Runtime-generated import destinations remain unsupported. Implementation-stage exact package qualification and coordinated external regression are complete. Separate Step 5 readiness and release preparation remain pending. The qualified local archives carry the 1.16.0 and 0.11.0 package metadata.
 
+The Gate K correction adds bounded explicit relative NodeNext ESM imports and
+immediate re-exports to the existing ordinary Kit proof. Evidence from
+targeted producer lookups identifies qualified facts and remaining blockers.
+Lab must admit the exact corrected producer and rerun the applicable Gate K
+audits to establish current coverage. Bare package and runtime-generated
+destinations remain outside this correction.
+
 ### 7.2 Orchestrator
 - 1.5.0: published Semantic Continuity and Evidence-to-Implementation Bridge; canonical RSP-NNN responsibility identity is an existing native contract that later evidence references rather than redefines.
 - 1.6.0 / ORC-TELEMETRY: published on 2026-09-26; versioned native run-invocation telemetry and deterministic workflow-economics derivation are now available without claiming target-application observability.

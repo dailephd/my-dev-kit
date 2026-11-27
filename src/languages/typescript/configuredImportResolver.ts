@@ -9,6 +9,7 @@ interface Options {
   paths?: { value: Record<string, string[]>; directory: string }
   baseUrl?: string
   proofOptions?: Pick<ts.CompilerOptions, 'module' | 'moduleResolution' | 'target'>
+  requiresModernProfile?: boolean
   requiresBundlerProfile?: boolean
 }
 
@@ -32,18 +33,26 @@ const BUNDLER_SOURCE_REFERENCE_OPTIONS = new Set([
   'plugins', 'resolveJsonModule', 'noUncheckedIndexedAccess', 'types',
 ])
 
-function sourceReferenceMode(config: Options | null): 'legacy' | 'bundler' | null {
+type SourceReferenceMode = 'legacy' | 'bundler' | 'nodenext'
+
+function sourceReferenceMode(config: Options | null): SourceReferenceMode | null {
   const { module, moduleResolution, target } = config?.proofOptions ?? {}
   // These are the pinned compiler's effective default module and Bundler gate.
   const effectiveModule = module ?? (
     (target ?? ts.ScriptTarget.ES5) >= ts.ScriptTarget.ES2015 ? ts.ModuleKind.ES2015 : ts.ModuleKind.CommonJS
   )
+  // TypeScript 5.9 infers NodeNext resolution from an effective NodeNext
+  // module setting. An explicit override must match the paired mode.
+  if (effectiveModule === ts.ModuleKind.NodeNext) {
+    return (moduleResolution === undefined || moduleResolution === ts.ModuleResolutionKind.NodeNext) &&
+      !config?.requiresBundlerProfile && !config?.baseUrl && !config?.paths ? 'nodenext' : null
+  }
   if (moduleResolution === ts.ModuleResolutionKind.Bundler ||
       (moduleResolution === undefined && effectiveModule === ts.ModuleKind.Preserve)) {
     return effectiveModule === ts.ModuleKind.Preserve ||
       (effectiveModule >= ts.ModuleKind.ES2015 && effectiveModule <= ts.ModuleKind.ESNext) ? 'bundler' : null
   }
-  if (config?.requiresBundlerProfile || (moduleResolution !== undefined && moduleResolution !== ts.ModuleResolutionKind.Node10) ||
+  if (config?.requiresModernProfile || (moduleResolution !== undefined && moduleResolution !== ts.ModuleResolutionKind.Node10) ||
       effectiveModule >= ts.ModuleKind.Node16) return null
   return 'legacy'
 }
@@ -169,7 +178,8 @@ export class ConfiguredImportResolver {
       if (options.moduleResolution !== undefined) proofOptions.moduleResolution = options.moduleResolution
       if (options.target !== undefined) proofOptions.target = options.target
       effective.proofOptions = proofOptions
-      effective.requiresBundlerProfile ||= additional.length > 0
+      effective.requiresModernProfile ||= additional.length > 0
+      effective.requiresBundlerProfile ||= additional.some(key => key !== 'types' && key !== 'resolveJsonModule')
     }
     // Custom suffix probing is outside this selected-source correction. Ignoring
     // it could turn a platform-specific target into an incorrect ordinary edge.
@@ -210,14 +220,14 @@ export class ConfiguredImportResolver {
 
   /** Ordered, lazy mapping bases. A null base blocks all later fallbacks. */
   sourceReferenceBases(specifier: string, importer: string, relative: boolean): {
-    mode: 'legacy' | 'bundler'; bases: Iterable<string | null>
+    mode: SourceReferenceMode; bases: Iterable<string | null>
   } | null {
     const config = this.applicable(importer)
     if (!config && this.configSeen.has(importer)) return null
     const mode = sourceReferenceMode(config)
     if (!mode) return null
     if (relative) return { mode, bases: [] }
-    if (!config) return null
+    if (!config || mode === 'nodenext') return null
     const key = config.paths && winningMapping(config.paths.value, specifier)
     if (key === null) return null
     const mapped = key ? this.mappedBases(config, key, specifier) : []

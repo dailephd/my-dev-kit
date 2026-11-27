@@ -519,9 +519,33 @@ The proof evaluates effective local TypeScript/JavaScript configuration from cap
 
 A6-R1 recognizes `noUncheckedIndexedAccess` and `types` as non-routing in the qualified Bundler profile. Language-service plugin configuration and `resolveJsonModule` are tolerated in that profile, with competing JSON entries guarded separately. Package-based or escaping inheritance, unsupported effective modes, non-default module suffixes, and unsupported routing options such as custom conditions remain outside the proof. Configuration, candidate, and competing-path freshness are required. Full TypeScript compiler and runtime bundler resolution remain outside the profile.
 
+The Gate K extension admits effective `module: NodeNext` with explicit or
+inferred `moduleResolution: NodeNext` under the pinned TypeScript compiler.
+It accepts the local Kit and Lab options, including `types` and
+`resolveJsonModule`, and retains the existing configuration and relative
+inheritance checks. An ESM origin needs an explicit `.mts` or `.mjs` suffix,
+or a `.ts`, `.tsx`, `.js`, or `.jsx` suffix with authenticated nearest
+`package.json` metadata declaring `"type": "module"`. The producer verifies
+ESM mode for the exact recorded usage. The proof includes hashes for applicable
+metadata and absence premises for nearer package files. The origin and
+destination must share the same contained package scope.
+
+The admitted NodeNext reference suffixes are `.js`, `.jsx`, `.mjs`, and
+`.cjs`. The candidate domain includes the pinned compiler's corresponding
+source substitutions and guards declaration alternatives. Singleton selected
+sources can qualify for imports, immediate re-exports, and authenticated
+linked literal import facts. Multiple selected alternatives can yield a
+finite bound without a positive. Unsupported configurations and metadata,
+unselected candidates, linked paths, and candidate or premise conflicts can
+withhold that bound. Extensionless, directory-index, CommonJS-mode,
+cross-package, bare package, alias, and runtime-generated destinations are
+outside the NodeNext proof. A selected source reference establishes source
+identity. Runtime loading, compilation success, and transitive re-export
+ownership remain outside its scope.
+
 ### Computed import domains
 
-`FACTS02-COMPUTED-POSITIVE-REFERENCE/1.0.0` adds the optional `expressionReferenceProof` to the existing import-domain response. Finite operand enumeration can succeed while destination enumeration stays incomplete. The additional positive requires a parsed AST computed import, one qualified complete alternative, one exact selected target, authenticated origin/operand/target premises, and the separate default ESM resolver profile. Existing `qualifiedPositiveWitnesses` for linked literal imports retain their own import fact and target proof. Per-alternative candidate completeness and selected-domain bounds govern exclusion. The explicit disjoint outcome requires authenticated absence premises. Unknown runtime destinations remain indeterminate. Ordinary Bundler qualification does not extend computed destination resolution.
+`FACTS02-COMPUTED-POSITIVE-REFERENCE/1.0.0` adds the optional `expressionReferenceProof` to the existing import-domain response. Finite operand enumeration can succeed while destination enumeration stays incomplete. The additional positive requires a parsed AST computed import, one qualified complete alternative, one exact selected target, authenticated origin/operand/target premises, and the separate default ESM resolver profile. Existing `qualifiedPositiveWitnesses` for linked literal imports retain their own import fact and target proof. Per-alternative candidate completeness and selected-domain bounds govern exclusion. The explicit disjoint outcome requires authenticated absence premises. Unknown runtime destinations remain indeterminate. Computed destination resolution retains its separate default ESM profile.
 
 ### Playwright modifier observation
 

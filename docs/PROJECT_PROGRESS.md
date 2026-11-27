@@ -12,7 +12,7 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 The exact coordinated implementation packages retain metadata Kit 1.16.0 and Lab 0.11.0. Qualification recorded 18 managed exact-package tests with zero skips, 26 published-provider acceptance tests, ten installed controls, and successful raw acquisition from a fresh, unmodified index. All four FACTS02 contracts are qualified. External target audits retained native incomplete outcomes with unsupported capabilities or missing authenticated premises. No supported-profile implementation defect remains demonstrated.
 
-Workflow stage is Step 4 documentation reconciliation. Next action is separate Step 5 pre-release readiness for the documentation successor. The documentation commit carries no new package qualification or publication identity. The v1.17.0 frontend milestone remains allocated.
+Step 5 identified a missing NodeNext ESM premise in the ordinary source-reference profile. The Kit correction qualifies bounded explicit relative imports and immediate re-exports under authenticated NodeNext configuration and package metadata. Coordinated readiness requires Lab admission of the corrected producer and native Gate K evidence. The v1.17.0 frontend milestone remains allocated.
 
 ## Version 1.15.1
 

@@ -2028,6 +2028,7 @@ Authenticate the retained report and inspect any actual retained tool/index stat
 ### Acceptance criteria
 
 - The authorized A6 scope covers bounded static local JS/TS imports and immediate re-exports under authenticated Bundler-compatible TypeScript configurations, including supported relative candidates and the existing local alias profile. Package routing, bundler plugins and runtime destinations remain outside this proof.
+- The Gate K remediation extends the same ordinary proof to explicit relative imports and immediate re-exports in authenticated NodeNext ESM contexts. It requires a complete bounded candidate domain and fresh configuration, package, and source premises. Bare package resolution, CommonJS lookup, and runtime-generated destinations remain outside this addition. Lab admission and native Gate K remeasurement are separate readiness steps.
 - The supplemental Playwright proof checks modifier completeness against authenticated source and retained legacy modifier facts, independently of the general diagnostic cap. These proof-time changes retain the existing negotiation, artifact schemas and extractor/cache identities.
 - Global augmentation extraction and PowerShell source evidence remain separate unimplemented capabilities without assigned release versions. Runtime-generated computed import destinations remain outside the supported profile. The approved corrective-patch reservations are retained.
 
