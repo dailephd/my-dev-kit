@@ -240,6 +240,20 @@ export class ConfiguredImportResolver {
     return { mode, bases }
   }
 
+  externalReferenceOptions(importer: string): { mode: 'nodenext' | 'bundler'; options: ts.CompilerOptions } | null {
+    const config = this.applicable(importer)
+    if (!config || config.baseUrl || config.paths) return null
+    const mode = sourceReferenceMode(config)
+    if (mode !== 'nodenext' && mode !== 'bundler') return null
+    return {
+      mode,
+      options: {
+        ...config.proofOptions,
+        moduleResolution: mode === 'nodenext' ? ts.ModuleResolutionKind.NodeNext : ts.ModuleResolutionKind.Bundler,
+      },
+    }
+  }
+
   private applicable(importer: string): Options | null {
     let directory = path.dirname(path.resolve(this.root, importer))
     if (!this.safe(path.resolve(this.root, importer))) return null

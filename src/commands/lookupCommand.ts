@@ -44,6 +44,7 @@ interface LookupCommandOptions {
   auditFile?: string
   testModifierProof?: true
   auditImportTarget?: string
+  directExternalReferenceProof?: true
   page?: number
 }
 
@@ -66,12 +67,20 @@ export function registerLookupCommand(program: Command): void {
     .option('--audit-file <path>', 'page through recorded source-audit facts for one exact selected path (requires --json)')
     .option('--test-modifier-proof', 'request supplemental Playwright modifier evidence with --audit-file --json on schema 1.2.0 page zero')
     .option('--audit-import-domain <fact-id>', 'prove a bounded selected import expression domain (requires --json)')
+    .option('--direct-external-reference-proof', 'request external exclusion evidence with --audit-import-target --json on schema 1.2.0')
     .option('--audit-import-target <fact-id>', 'prove whether one recorded source-audit import fact has an existing target in the selected inventory (requires --json)')
     .option('--audit-stream', 'read finite authenticated lookup frames from stdin (requires --json)')
     .option('--audit-batch-file <path>', 'read 1–32 authenticated audit lookup requests (requires --json)')
     .option('--page <n>', 'zero-based page for --audit-files or --audit-file (default 0)', parseInteger)
     .option('--json', 'print JSON output')
     .action(function (this: Command, options: LookupCommandOptions) {
+      if (options.directExternalReferenceProof) {
+        const allowed = new Set(['index', 'auditImportTarget', 'json', 'directExternalReferenceProof'])
+        if (!options.auditImportTarget || !options.json ||
+            Object.keys(options).some(key => !allowed.has(key) && this.getOptionValueSource(key) === 'cli')) {
+          throw new Error('--direct-external-reference-proof requires --audit-import-target and --json.')
+        }
+      }
       if (options.testModifierProof) {
         const allowed = new Set(['index', 'auditFile', 'page', 'json', 'testModifierProof'])
         if (options.auditFile === undefined || !options.json ||
@@ -122,7 +131,7 @@ export function registerLookupCommand(program: Command): void {
         if (!options.json) throw new Error('The audit selectors (--audit-files, --audit-file, --audit-import-target) require --json.')
         if (importTargetRequested) {
           // Read-only: derives the proof from the stored, identity-verified artifact and live containment-checked paths.
-          console.log(JSON.stringify(resolveAuditImportTarget(options.index, options.auditImportTarget as string), null, 2))
+          console.log(JSON.stringify(resolveAuditImportTarget(options.index, options.auditImportTarget as string, options.directExternalReferenceProof), null, 2))
           return
         }
         const pageIndex = options.page ?? 0
@@ -239,7 +248,7 @@ function readLookupAuditItem(artifact: SourceAuditEvidenceArtifact, item: Lookup
   switch (item.selector) {
     case 'audit-files': return getSourceAuditInventoryPage(artifact, item.page ?? 0)
     case 'audit-file': return readFreshSourceAuditFilePage(artifact, item.path, item.page ?? 0, resolveAuditImportTargetFromArtifact, item.testModifierProof)
-    case 'audit-import-target': return resolveAuditImportTargetFromArtifact(artifact, item.factId)
+    case 'audit-import-target': return resolveAuditImportTargetFromArtifact(artifact, item.factId, item.directExternalReferenceProof)
     case 'audit-import-domain': return resolveAuditImportDomainFromArtifact(artifact, item.factId)
   }
 }

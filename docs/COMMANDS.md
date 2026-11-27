@@ -283,6 +283,7 @@ npx @dailephd/my-dev-kit lookup --index .my-dev-kit --node "<node-id>" --depth 1
 - Alternative Android selector: `--android-component <name>`.
 - `--depth <n>`: graph traversal depth, default 1.
 - `--resolve-classification`: resolve the full available classification entry for node lookup.
+- `--direct-external-reference-proof` opts into an additive proof with `--audit-import-target <fact-id> --json` on schema 1.2.0. Batch and stream import-target items opt in with `directExternalReferenceProof: true`.
 - `--audit-files`, `--audit-file <relative-path>`, `--audit-import-target <fact-id>` and `--page <n>` (v1.15.0): source-audit selectors, described in [Source-audit selectors](#source-audit-selectors-v1150-unreleased).
 - `--json`: structured result.
 

@@ -556,3 +556,19 @@ ownership remain outside its scope.
 ### Deferred capability boundaries
 
 General package resolution and package subpaths, arbitrary bundler plugins and package mapping, unsupported dotted source basenames, general JSON asset routing, PowerShell source analysis, and semantic global augmentation modeling remain deferred. The computed profile also leaves broader extensionless or alias destinations, runtime-generated module destinations, runtime temporary-path construction, `pathToFileURL` call-result evaluation, worker-location-derived destinations, and unrestricted wrapper parameter analysis outside support. Authenticated finite operands can still lack qualified destination or exclusion premises.
+
+### Bounded direct external selected-source exclusion
+
+`FACTS02-DIRECT-EXTERNAL-REFERENCE-EXCLUSION/1.0.0` is an opt-in lookup
+extension whose `directExternalReferenceProof` envelope uses
+`js-ts-direct-external-selected-exclusion-v1`. It applies to schema 1.2.0
+and leaves the ordinary candidate domain unchanged. The bounded NodeNext
+and Bundler ESM profiles require canonical installed package paths, exact
+exports entries or an explicit root main file, qualified source/type and value routes, and fresh
+configuration, package metadata and entry premises. Unresolved routes,
+redirects, local mappings, and unavailable package bytes omit the extension.
+It describes immediate selected-source disjointness. Package execution and
+transitive behavior are outside its scope.
+
+Source extraction uses `source-audit-v1.8.0`. Earlier extractor outputs
+cannot satisfy the corrected export-inventory identity.

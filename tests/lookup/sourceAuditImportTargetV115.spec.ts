@@ -1034,3 +1034,83 @@ describe('v1.15.0 KIT-FACTS-01 import-target existence proof', () => {
     expect(unknown.stderr).toContain('AUDIT_FACT_NOT_FOUND')
   }, 60_000)
 })
+
+describe('negotiated direct external exclusion', () => {
+  async function fixture() {
+    const root = makeProject({
+      'package.json': JSON.stringify({ name: 'sample', type: 'module', dependencies: { remote: '^1.0.0', '@scope/remote': '1.0.0' } }),
+      'tsconfig.json': JSON.stringify({ compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext' } }),
+      'src/index.ts': "import type { Value } from 'remote'\nimport value from '@scope/remote/sub'\nexport { value }\nexport type { Value } from 'remote'\n",
+      'node_modules/remote/package.json': JSON.stringify({ name: 'remote', version: '1.0.0', type: 'module', exports: { import: { types: './entry.d.ts', default: './entry.js' }, require: './unqualified.cjs' } }),
+      'node_modules/remote/entry.js': 'export const value = 1',
+      'node_modules/remote/entry.d.ts': 'export type Value = number',
+      'node_modules/@scope/remote/package.json': JSON.stringify({ name: '@scope/remote', version: '1.0.0', type: 'module', exports: { './sub': './sub.js' } }),
+      'node_modules/@scope/remote/sub.js': 'export default 1',
+      'node_modules/@scope/remote/sub.d.ts': 'declare const value: number; export default value',
+    })
+    return { root, out: await build(root, ['src'], ['node_modules'], '1.2.0') }
+  }
+
+  it('attests both type and value entries and leaves unnegotiated output unchanged', async () => {
+    const { out } = await fixture()
+    const facts = readSourceAuditEvidence(out).files.find(file => file.path === 'src/index.ts')!.facts
+      .filter(fact => fact.sourceSpecifier === 'remote' || fact.sourceSpecifier === '@scope/remote/sub')
+    expect(facts).toHaveLength(3)
+    for (const fact of facts) {
+      const parent = resolveAuditImportTarget(out, fact.id)
+      const negotiated = resolveAuditImportTarget(out, fact.id, true)
+      const { directExternalReferenceProof: proof, ...rest } = negotiated
+      expect(rest).toEqual(parent)
+      expect(proof).toMatchObject({ selectedDomainExcluded: true, resolutionMode: 'nodenext-esm', importFactId: fact.id })
+      const roles = proof?.resolvedEntries.flatMap(entry => entry.roles)
+      expect(roles).toContain('value')
+      expect(roles).toContain('type')
+    }
+  })
+
+  it.each([
+    ['local alias', { module: 'NodeNext', paths: { remote: ['./src/index.ts'] } }, 'sample', '1.0.0'],
+    ['self name', { module: 'NodeNext' }, 'remote', '1.0.0'],
+    ['file dependency', { module: 'NodeNext' }, 'sample', 'file:../remote'],
+    ['unsupported mode', { module: 'CommonJS' }, 'sample', '1.0.0'],
+  ])('leaves %s unresolved', async (_label, compilerOptions, name, dependency) => {
+    const { root, out } = await fixture()
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions }))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name, type: 'module', dependencies: { remote: dependency } }))
+    expect(resolveAuditImportTarget(out, importId(out, 'src/index.ts', 'remote'), true).directExternalReferenceProof)
+      .toBeUndefined()
+  })
+
+  it('qualifies an explicit main file or an exact Bundler ESM export under authenticated routing', async () => {
+    const { root, out } = await fixture()
+    const factId = importId(out, 'src/index.ts', 'remote')
+    writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { module: 'ESNext', moduleResolution: 'Bundler' } }))
+    expect(resolveAuditImportTarget(out, factId, true).directExternalReferenceProof?.resolutionMode).toBe('bundler-esm')
+    writeFileSync(join(root, 'node_modules/remote/package.json'), JSON.stringify({
+      name: 'remote', version: '1.0.0', main: 'entry.js', types: 'entry.d.ts',
+    }))
+    expect(resolveAuditImportTarget(out, factId, true).directExternalReferenceProof?.resolvedEntries).toHaveLength(2)
+  })
+
+  it('only accepts the flag with an import-target JSON lookup', async () => {
+    const { out } = await fixture()
+    const factId = importId(out, 'src/index.ts', 'remote')
+    const negotiated = runCli(['lookup', '--index', out, '--audit-import-target', factId, '--direct-external-reference-proof', '--json'])
+    expect(negotiated.status, negotiated.stderr).toBe(0)
+    expect(JSON.parse(negotiated.stdout).directExternalReferenceProof?.selectedDomainExcluded).toBe(true)
+    for (const invalid of [
+      ['--audit-import-target', factId],
+      ['--audit-import-domain', factId, '--json'],
+      ['--audit-import-target', factId, '--json', '--depth', '1'],
+    ]) {
+      expect(runCli(['lookup', '--index', out, '--direct-external-reference-proof', ...invalid]).status).not.toBe(0)
+    }
+  })
+
+  it('does not exclude a package when its value entry disappears', async () => {
+    const { out, root } = await fixture()
+    rmSync(join(root, 'node_modules/remote/entry.js'))
+    expect(resolveAuditImportTarget(out, importId(out, 'src/index.ts', 'remote'), true).directExternalReferenceProof)
+      .toBeUndefined()
+  })
+})

@@ -14,7 +14,8 @@ interface AuditBatchItem {
 export type LookupBatchItem = AuditBatchItem & (
   | { selector: 'audit-files'; page?: number }
   | { selector: 'audit-file'; path: string; page?: number; testModifierProof?: true }
-  | { selector: 'audit-import-target' | 'audit-import-domain'; factId: string }
+  | { selector: 'audit-import-target'; factId: string; directExternalReferenceProof?: true }
+  | { selector: 'audit-import-domain'; factId: string }
 )
 
 export type SourceBatchItem = AuditBatchItem & (
@@ -87,6 +88,11 @@ function validateItem(raw: unknown, family: AuditBatchFamily): BatchItem {
         }
         break
       case 'audit-import-target':
+        fields(['factId'], [], [], ['directExternalReferenceProof'])
+        if (Object.hasOwn(item, 'directExternalReferenceProof') && item.directExternalReferenceProof !== true) {
+          invalid('directExternalReferenceProof must be true.')
+        }
+        break
       case 'audit-import-domain': fields(['factId'], [], []); break
       default: invalid('Unsupported lookup selector.')
     }
