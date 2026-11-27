@@ -310,7 +310,7 @@ Arguments and exclusivity:
 - `--page <n>` is valid only with `--audit-files` or `--audit-file`, is zero-based, defaults to `0`, and must be a nonnegative integer. It is rejected with `--audit-import-target` and when no audit selector is present.
 - `--audit-file` takes a canonical, forward-slash, project-root-relative selected path. Absolute paths, `..` traversal, backslashes and non-canonical forms are rejected with `INVALID_AUDIT_PATH`.
 
-#### Supplemental Playwright modifier proof (KIT-FACTS-02, implemented unreleased)
+#### Supplemental Playwright modifier proof (KIT-FACTS-02)
 
 ```text
 my-dev-kit lookup --index <index-dir> --audit-file <relative-path> --page 0 --test-modifier-proof --json

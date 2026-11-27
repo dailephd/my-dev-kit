@@ -511,7 +511,7 @@ For a real workflow gap, retain the exact command, version, root/commit/index id
 
 ## Coordinated binding and computed-import correction
 
-Follow the [v1.16.1 roadmap](ROADMAP.md#version-1161) and [coordinated roadmap](ECOSYSTEM_COORDINATED_ROADMAP.md). The November 25 corrective reservation is implemented and unreleased. Steps 1–3 below describe the completed implementation-stage process. Step 4 documentation reconciliation precedes separate readiness. For the opt-in page-zero request, see the [command reference](COMMANDS.md#supplemental-playwright-modifier-proof-kit-facts-02-implemented-unreleased).
+Follow the [v1.16.1 roadmap](ROADMAP.md#version-1161) and [coordinated roadmap](ECOSYSTEM_COORDINATED_ROADMAP.md). The November 25 corrective scope is included in Kit 1.16.1. Steps 1–3 below describe the completed implementation-stage process. Step 4 documentation reconciliation precedes separate readiness. For the opt-in page-zero request, see the [command reference](COMMANDS.md#supplemental-playwright-modifier-proof-kit-facts-02).
 
 1. Authenticate original local receipts, actual producer and source selection, then reproduce against the current qualified pair and independent synthetic oracle. Private target evidence stays local. Distinguish unsupported proof from a demonstrated defect; if existing behavior suffices, avoid redundant patch work.
 2. Freeze the exact affected responsibilities, owner/test paths, prerequisites, acceptance matrix, compatibility and resource budgets. Use targeted Kit retrieval and direct implementation by default; use full stage context only for an actual unresolved architecture conflict or prior failure requiring it.

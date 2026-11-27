@@ -484,7 +484,7 @@ These reservations were adopted by ECO-00 on 2026-09-25. Published history does 
 - 1.14.0: existing framework expansion, with explicit facts needed by future full-stack contracts; preserve all existing planned framework work.
 - 1.15.0 / KIT-API-01: supported UI/client/API/schema/data relationships and contract-oriented change evidence, building on 1.14.0. No complete static proof of authorization or migrations.
 - 1.16.0: coordinated source-evidence producer (released). Original ECO-00 1.16.0 / KIT-OPS-01 bounded configuration/instrumentation/deployment-source facts remain planned and unimplemented, release unallocated; not required for the initial rollout.
-- 1.16.1 / KIT-FACTS-02: corrective patch, IMPLEMENTED_UNRELEASED; see Section 7.1.4.
+- 1.16.1 / KIT-FACTS-02: corrective patch; see Section 7.1.4.
 - 2.0.0: retained separate larger schema/plugin program; not a prerequisite.
 
 #### 7.1.1 Post-ECO-00 Kit v1.12.5 additive patch decision — 2026-09-28
@@ -524,7 +524,7 @@ This does not move any ECO-00 version, expand KIT-API-01 or KIT-OPS-01, or creat
 
 Later source-evidence decisions superseded the earlier version reservations, not their feature scope: Kit 1.16.0 and Lab 0.11.0 are the released coordinated producer/consumer pair. KIT-OPS-01 and LAB-A11Y-01 remain planned, unimplemented and release-unallocated. The dated 7.1.1–7.1.3 statements preserve their historical mapping. Existing product acceptance and target certification are distinct.
 
-Kit 1.16.1 / KIT-FACTS-02 and Lab 0.11.1 / LAB-FACTS-02 retain their corrective-patch allocations before the next feature releases. Both are IMPLEMENTED_UNRELEASED. Their evidence extensions are additive and legacy compatibility is qualified. The [Kit roadmap](ROADMAP.md#version-1161) and [Lab roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#v0111--predicate-scoped-audit-qualification-correction-lab-facts-02) own detailed scope and acceptance. A newer external report explicitly names the released pair and reports full requested file selection but incomplete mandatory audit coverage. That report and the two-repository retrieval evidence informed the original qualification and obligation classification. The result remains distinct from historical target records.
+Kit 1.16.1 / KIT-FACTS-02 and Lab 0.11.1 / LAB-FACTS-02 retain their corrective-patch allocations before the next feature releases. Lab 0.11.1 remains unpublished and awaits independent authentication of the published Kit 1.16.1 dependency. Their evidence extensions are additive and legacy compatibility is qualified. The [Kit roadmap](ROADMAP.md#version-1161) and [Lab roadmap](https://github.com/dailephd/my-dev-kit-lab/blob/main/docs/ROADMAP.md#v0111--predicate-scoped-audit-qualification-correction-lab-facts-02) own detailed scope and acceptance. A newer external report explicitly names the released pair and reports full requested file selection but incomplete mandatory audit coverage. That report and the two-repository retrieval evidence informed the original qualification and obligation classification. The result remains distinct from historical target records.
 
 The revised investigation explicitly includes ordinary static imports/re-exports and reverse-reference coverage, supported destructured declarations/exports, each reported computed-import site, actual conditional-test syntax and separate package provenance discrepancies. Kit owns qualified observations, supported static resolution profiles and bounded target-domain proofs. Lab owns acquisition integrity, applicability, predicate qualification, target-scoped reference/exclusion use, independent findings, coverage, diagnostics and exit policy. Candidate existence, source references, exact runtime references, finite target bounds and complete relevant-origin coverage are distinct claims. Complete file selection or expression enumeration does not complete an audit. Unresolved mandatory work retains natural exit 2; target findings and claimed false positives require their own adjudication.
 
@@ -614,7 +614,7 @@ The release train preserves the ECO-00 baseline and later adopted ordering, incl
 ```mermaid
 flowchart LR
   subgraph KIT[my-dev-kit]
-    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 coordinated source evidence] --> K161[1.16.1 KIT-FACTS-02 implemented unreleased] --> K17[1.17 frontend retrieval completion]
+    K124[1.12.4] --> K125[1.12.5: affected-neighborhood refresh] --> K126["1.12.6: bounded retrieval precision"] --> K13[1.13 Android proofs] --> K14[1.14 framework expansion] --> K15[1.15 KIT-API-01] --> K16[1.16 coordinated source evidence] --> K161[1.16.1 KIT-FACTS-02 corrective patch] --> K17[1.17 frontend retrieval completion]
     KOPS["KIT-OPS-01: release unallocated"]
   end
 

@@ -132,11 +132,11 @@ npx @dailephd/my-dev-kit view --index .my-dev-kit --format png --out .my-dev-kit
 
 DOT output does not require Graphviz. SVG and PNG output require a local Graphviz installation (the `dot` binary on `PATH`); if Graphviz is not available, use the DOT output with any external Graphviz-compatible renderer instead.
 
-## Version 1.16.0
+## Version 1.16.1
 
-This package represents `@dailephd/my-dev-kit@1.16.0`. It adds bounded import-domain and exact-byte evidence for authenticated selections, audit-only declaration-file selection, and finite batch and stream queries. The default source-audit schema remains `1.1.0`. Opt-in schema `1.2.0` includes the optional direct test-modifier capability. See the [source-evidence commands](docs/COMMANDS.md#coordinated-source-evidence-commands-in-v1160) and [proof limits](docs/CONTRACTS.md#coordinated-r3-import-evidence).
+This package represents `@dailephd/my-dev-kit@1.16.1`. It adds bounded import-domain and exact-byte evidence for authenticated selections, audit-only declaration-file selection, and finite batch and stream queries. The default source-audit schema remains `1.1.0`. Opt-in schema `1.2.0` includes the optional direct test-modifier capability. See the [source-evidence commands](docs/COMMANDS.md#coordinated-source-evidence-commands-in-v1160) and [proof limits](docs/CONTRACTS.md#coordinated-r3-import-evidence).
 
-The current source also contains the implemented, unreleased KIT-FACTS-02 correction for 1.16.1. It adds bounded static source-reference qualification, exact destructured binding evidence, and explicitly requested Playwright modifier evidence. See [implementation status](docs/PROJECT_PROGRESS.md#next-corrective-planning-reservation-2026-11-25) and [proof contracts](docs/CONTRACTS.md#kit-facts-02-proof-boundary).
+KIT-FACTS-02 qualifies binding and export ownership, bounded Bundler and NodeNext source references, computed positives, and explicitly requested Playwright modifier and external selected-domain exclusion proofs. It preserves authenticated raw-content retrieval and legacy artifact compatibility. See [implementation status](docs/PROJECT_PROGRESS.md#next-corrective-planning-reservation-2026-11-25) and [proof contracts](docs/CONTRACTS.md#kit-facts-02-proof-boundary).
 
 ## Version 1.15.1
 

@@ -861,7 +861,7 @@ This keeps the structural artifacts small enough for most project sizes while al
 
 ## KIT-FACTS-02 extension boundary
 
-The [1.16.1 correction](ROADMAP.md#version-1161) is implemented and unreleased. The TypeScript AST extractor in `src/symbol-index/symbolExtractor.ts` emits local binding leaves and explicit export facts. `buildSourceAuditEvidence.ts`, the artifact validator, and the index cache track the strengthened extraction contract. Declaration and import-expression observation stay independent of destination resolution.
+The [1.16.1 correction](ROADMAP.md#version-1161) is included in this version. The TypeScript AST extractor in `src/symbol-index/symbolExtractor.ts` emits local binding leaves and explicit export facts. `buildSourceAuditEvidence.ts`, the artifact validator, and the index cache track the strengthened extraction contract. Declaration and import-expression observation stay independent of destination resolution.
 
 At lookup time, `resolveAuditImportTarget.ts` joins authenticated import facts to the local profile in `configuredImportResolver.ts`, checks candidate and configuration freshness, and returns ordinary source-reference evidence. `resolveAuditImportDomain.ts` adds the exact computed positive when the separate default ESM premises hold. `readSourceAuditEvidence.ts` negotiates page-zero modifier proof and delegates source and wrapper analysis to `resolveAuditTestModifierProof.ts`. These extensions reuse the managed index, source hashes, candidate scope, and validators. Lab owns audit applicability, coverage, findings, and exit policy. See the [proof contracts](CONTRACTS.md#kit-facts-02-proof-boundary).
 

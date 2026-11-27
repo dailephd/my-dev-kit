@@ -1999,7 +1999,7 @@ This milestone is optional for the first ECO-01 executable-evidence integration.
 
 ## Version 1.16.1
 
-**Status: IMPLEMENTED_UNRELEASED.** The corrective-patch allocation is retained for the coordinated evidence correction with additive proof interfaces and compatible legacy requests. **KIT-FACTS-02 — bounded JavaScript/TypeScript audit-evidence correction.** This is an additive continuation of KIT-FACTS-01 and the v1.16.0 source-evidence producer.
+**Status: included in v1.16.1.** The corrective-patch allocation is retained for the coordinated evidence correction with additive proof interfaces and compatible legacy requests. **KIT-FACTS-02 — bounded JavaScript/TypeScript audit-evidence correction.** This is an additive continuation of KIT-FACTS-01 and the v1.16.0 source-evidence producer.
 
 ### Purpose and admission
 

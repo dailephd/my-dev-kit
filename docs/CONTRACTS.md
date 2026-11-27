@@ -505,7 +505,7 @@ Strict older 1.2.0 readers may reject the added capability. Schema 1.1.0 remains
 
 ## KIT-FACTS-02 proof boundary
 
-The [1.16.1 correction](ROADMAP.md#version-1161) is implemented and unreleased. The coordinated version reservation is a corrective patch with additive lookup interfaces and qualified legacy compatibility.
+The [1.16.1 correction](ROADMAP.md#version-1161) is included in this version. The coordinated version reservation is a corrective patch with additive lookup interfaces and qualified legacy compatibility.
 
 ### Bindings and ordinary source references
 
@@ -551,7 +551,7 @@ ownership remain outside its scope.
 
 `FACTS02-PLAYWRIGHT-MODIFIER-PROVENANCE/1.0.0` records bounded named `test` provenance from `@playwright/test`, a local extension using a qualified base binding, or a one-hop import of a qualified extended runner. It binds exact origin and wrapper content identities, import, binding and extension spans, and supported `skip` and `only` observations. Independently accounted legacy modifier facts survive. Unsupported uses, partial source analysis or missing modifier-specific evidence can yield partial coverage while qualified observations survive. General diagnostic truncation alone does not make modifier coverage partial. Conditions remain syntactic observations.
 
-`FACTS02-PLAYWRIGHT-PROOF-REQUEST/1.0.0` requires an explicit page-zero `audit-file` request using artifact schema `1.2.0`. A suitable response can carry the supplemental `testModifierProof` member and retains existing facts and pagination. Closed legacy readers continue to use unnegotiated requests. See the [commands](COMMANDS.md#supplemental-playwright-modifier-proof-kit-facts-02-implemented-unreleased).
+`FACTS02-PLAYWRIGHT-PROOF-REQUEST/1.0.0` requires an explicit page-zero `audit-file` request using artifact schema `1.2.0`. A suitable response can carry the supplemental `testModifierProof` member and retains existing facts and pagination. Closed legacy readers continue to use unnegotiated requests. See the [commands](COMMANDS.md#supplemental-playwright-modifier-proof-kit-facts-02).
 
 ### Deferred capability boundaries
 

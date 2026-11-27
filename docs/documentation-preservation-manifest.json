@@ -111,7 +111,7 @@
       "1.13.0",
       "1.14.0"
     ],
-    "implementedUnreleasedVersions": ["1.16.1"],
+    "implementedUnreleasedVersions": [],
     "futureVersionScopeKeywords": {
       "1.11.0": [
         "Compose semantic retrieval",
@@ -340,7 +340,7 @@
     "documentKeywords": {
       "README.md": [
         "Version 1.15.1",
-        "@dailephd/my-dev-kit@1.16.0",
+        "@dailephd/my-dev-kit@1.16.1",
         "planned scopes",
         "v1.12.6 bounded retrieval precision",
         "## v1.14.0 language, framework and Rust coverage"
@@ -362,7 +362,7 @@
         "**Status: deferred for separate future authorization; not implemented.**"
       ],
       "docs/PROJECT_OVERVIEW.md": [
-        "Version 1.16.0 is the version represented by this package",
+        "Version 1.16.1 is the version represented by this package",
         "### v1.12.6 bounded retrieval precision",
         "Version 1.12.6 was the current release before v1.13.0",
         "### v1.14.0 language and framework coverage"

@@ -4,13 +4,13 @@ This file tracks current implementation and release status for `@dailephd/my-dev
 
 ## Current version
 
-`@dailephd/my-dev-kit@1.16.0` is the version represented by this repository. Version 1.15.1 is the preceding release.
+`@dailephd/my-dev-kit@1.16.1` is the version represented by this repository. Version 1.16.0 is the preceding release.
 
 ## Next corrective planning reservation (2026-11-25)
 
-[KIT-FACTS-02 / v1.16.1](ROADMAP.md#version-1161) is **IMPLEMENTED_UNRELEASED**. The published and tracked package version remains 1.16.0. The original planning intake had only partial architecture retrieval and unauthenticated audit claims. Subsequent bounded retrieval, source and executable authentication, producer qualification, and coordinated external regression resolved the implementation-stage obligations. Historical execution provenance remains scoped to its original evidence.
+[KIT-FACTS-02 / v1.16.1](ROADMAP.md#version-1161) is included in the version represented here. The original planning intake had only partial architecture retrieval and unauthenticated audit claims. Subsequent bounded retrieval, source and executable authentication, producer qualification, and coordinated external regression resolved the implementation-stage obligations. Historical execution provenance remains scoped to its original evidence.
 
-The exact coordinated implementation packages retain metadata Kit 1.16.0 and Lab 0.11.0. Qualification recorded 18 managed exact-package tests with zero skips, 26 published-provider acceptance tests, ten installed controls, and successful raw acquisition from a fresh, unmodified index. All four FACTS02 contracts are qualified. External target audits retained native incomplete outcomes with unsupported capabilities or missing authenticated premises. No supported-profile implementation defect remains demonstrated.
+The exact coordinated implementation packages retain metadata Kit 1.16.0 and Lab 0.11.0. Qualification recorded 18 managed exact-package tests with zero skips, 26 published-provider acceptance tests, ten installed controls, and successful raw acquisition from a fresh, unmodified index. All four FACTS02 contracts are qualified. External target audits retained native incomplete outcomes with unsupported capabilities or missing authenticated premises. No supported-profile implementation defect remains demonstrated. The Kit readiness audit retained native INCOMPLETE, exit 2 and 226 mandatory gaps. Its effective release gate passed as reviewed nonblocking incomplete. The audited targets remain uncertified.
 
 Step 5 identified a missing NodeNext ESM premise in the ordinary source-reference profile. The Kit correction qualifies bounded explicit relative imports and immediate re-exports under authenticated NodeNext configuration and package metadata. Coordinated readiness requires Lab admission of the corrected producer and native Gate K evidence. The v1.17.0 frontend milestone remains allocated.
 

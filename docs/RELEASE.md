@@ -262,8 +262,8 @@ Complete the repository release gates in this order:
 7. Require all merge-triggered `main` CI checks to pass and re-run the final document state gate on merged `main`.
 8. Create and push the annotated version tag from that verified `main` commit, then verify the tagged documentation.
 9. Create the GitHub Release from the same tag, using the matching finalized changelog entry as release notes.
-10. Create the actual npm tarball and verify release-branch, merged-main, annotated-tag, GitHub Release, package metadata, packaged README, and packaged changelog parity; remove the tarball afterward.
-11. Run `npm publish --access public` as the final state-changing command.
+10. Verify parity between the retained Step 6 archive, release branch, merged main, annotated tag, GitHub Release, package metadata, packaged README, and packaged changelog. Preserve the authenticated archive for publication.
+11. Run `npm publish "<verified-step-6-archive>" --access public` as the final state-changing command.
 12. Run read-only verification only.
 
 The pushed release branch, merged `main`, annotated tag, GitHub Release, and npm tarball must resolve to the same release commit and final documentation. Stop if the commit, documentation, package metadata, or validated candidate differ. Do not edit files, pack, install, build, test, commit, push, tag, merge, or create/edit a release after npm publication.
@@ -282,7 +282,7 @@ If this is the first public release, npm info may report that the package does n
 
 Publish the package publicly.
 
-    npm publish --access public
+    npm publish "<verified-step-6-archive>" --access public
 
 Do not publish until local validation, package inspection, and tarball smoke tests have passed, AND a human reviewer has confirmed the readiness checklist above and explicitly authorized the publish step. Do not treat a coding agent's validation pass as that authorization.
 
