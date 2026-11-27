@@ -17,6 +17,7 @@ import {
 import {
   auditSpanAt,
   collectAuditDeclarationCounts,
+  createSourceBindingChecker,
   DIRECT_TEST_IMPORT_MODULES,
   hasParseErrors,
   inspectDirectTestModifierCall,
@@ -102,24 +103,6 @@ function importedName(entry: NamedImport): string {
 
 function isPlaywrightTest(entry: NamedImport): boolean {
   return entry.specifier === PLAYWRIGHT && importedName(entry) === 'test'
-}
-
-/** Ask the TypeScript binder about lexical identity in just these authenticated bytes. */
-function sourceChecker(sf: ts.SourceFile): ts.TypeChecker {
-  const options: ts.CompilerOptions = {
-    allowJs: true, noResolve: true, noLib: true, types: [], target: ts.ScriptTarget.Latest,
-  }
-  return ts.createProgram([sf.fileName], options, {
-    getSourceFile: name => name === sf.fileName ? sf : undefined,
-    getDefaultLibFileName: () => '',
-    getCurrentDirectory: () => '',
-    getCanonicalFileName: name => name,
-    useCaseSensitiveFileNames: () => true,
-    getNewLine: () => '\n',
-    fileExists: name => name === sf.fileName,
-    readFile: name => name === sf.fileName ? sf.text : undefined,
-    writeFile: () => { throw new Error('Test modifier binding inspection cannot emit files.') },
-  }).getTypeChecker()
 }
 
 function identifierSymbol(checker: ts.TypeChecker, identifier: ts.Identifier): ts.Symbol | undefined {
@@ -264,7 +247,7 @@ function importedRunner(
   const wrapperSource = parseSource(wrapper.path, readWrapper(wrapper))
   if (!wrapperSource) return undefined
   const extended = extendedRunner(wrapperSource, namedImports(wrapperSource), moduleDeclarationCounts(wrapperSource),
-    sourceChecker(wrapperSource), true)
+    createSourceBindingChecker(wrapperSource), true)
   if (!extended) return undefined
   return {
     kind: 'imported-extended-playwright', localName: 'test', bindingSpan: sourceSpan(sf, entry.binding),
@@ -370,7 +353,7 @@ export function resolveAuditTestModifierProof(
   if (!entry && !imports.some(isPlaywrightTest)) return undefined
   const moduleDeclared = moduleDeclarationCounts(sf)
   if (moduleDeclared.get('test') !== 1) return undefined
-  const checker = sourceChecker(sf)
+  const checker = createSourceBindingChecker(sf)
 
   let runnerBinding: TestModifierRunnerBinding | undefined
   let identifier: ts.Identifier

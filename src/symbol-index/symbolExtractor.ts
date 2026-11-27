@@ -142,6 +142,24 @@ export function parseTypeScriptSource(filePath: string, sourceText: string, scri
   return ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind)
 }
 
+/** Inspect lexical bindings in the existing AST without loading, checking, or emitting a project. */
+export function createSourceBindingChecker(sf: ts.SourceFile): ts.TypeChecker {
+  const options: ts.CompilerOptions = {
+    allowJs: true, noResolve: true, noLib: true, types: [], target: ts.ScriptTarget.Latest,
+  }
+  return ts.createProgram([sf.fileName], options, {
+    getSourceFile: name => name === sf.fileName ? sf : undefined,
+    getDefaultLibFileName: () => '',
+    getCurrentDirectory: () => '',
+    getCanonicalFileName: name => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: name => name === sf.fileName,
+    readFile: name => name === sf.fileName ? sf.text : undefined,
+    writeFile: () => { throw new Error('Source binding inspection cannot emit files.') },
+  }).getTypeChecker()
+}
+
 /** Extracts audit evidence without constructing ordinary symbols or graph inputs. */
 export function extractDeclarationFileAudit(filePath: string, sourceText: string): ExtractionResult {
   const sourceFile = parseTypeScriptSource(filePath, sourceText, ts.ScriptKind.TS)
@@ -788,12 +806,44 @@ function extractJsFrameworkEvidence(sf: ts.SourceFile, file: string, symbols: Sy
   return facts
 }
 
+function commonJsReceiverOwner(identifier: ts.Identifier, checker: ts.TypeChecker, sf: ts.SourceFile): 'local' | 'receiver' | 'ambiguous' {
+  for (let node: ts.Node = identifier; node !== sf; node = node.parent) {
+    if (ts.isWithStatement(node.parent) && node.parent.statement === node) return 'ambiguous'
+  }
+  // Resolve the lexical name, not the synthetic JS property symbol the checker
+  // may expose for identifiers used in CommonJS or expando property assignments.
+  const symbol = checker.resolveName(identifier.text, identifier, ts.SymbolFlags.Value | ts.SymbolFlags.Alias, false)
+  if (!symbol) return 'receiver'
+  const declaration = symbol.declarations?.[0]
+  if (!declaration || symbol.declarations?.length !== 1) return 'ambiguous'
+  if (declaration === sf || ts.isIdentifier(declaration)) return 'receiver'
+  if (declaration.getSourceFile() !== sf || ts.getCombinedModifierFlags(declaration) & ts.ModifierFlags.Ambient ||
+      ts.isTypeOnlyImportDeclaration(declaration)) return 'ambiguous'
+  // A script's wrapper-level var or function may share/rebind the injected
+  // CommonJS parameter. A lexical block or an inner function has its own owner.
+  if (!ts.isExternalModule(sf) && (symbol.flags & ts.SymbolFlags.FunctionScopedVariable || ts.isFunctionDeclaration(declaration)) &&
+      !ts.isParameter(declaration)) {
+    let scope = declaration.parent
+    while (scope !== sf && !ts.isFunctionLike(scope) && !ts.isModuleBlock(scope) && !ts.isClassStaticBlockDeclaration(scope)) scope = scope.parent
+    if (scope === sf) return 'ambiguous'
+  }
+  return 'local'
+}
+
 function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], imports: string[], exports: string[], bindings: ImportBinding[], facts: CommonJsExportFact[], warnings: string[], audit?: TsAuditCollector): void {
   const shadowed = new Set<string>()
   const mutated = new Set<string>()
   let unsupportedExportMutation = false
   let wholeModuleAssignments = 0
-  const exportReceiver = (n: ts.Node): boolean => ts.isIdentifier(n) && n.text === 'exports' || ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
+  let checker: ts.TypeChecker | undefined
+  const receiverName = (node: ts.Node, name: 'exports' | 'module'): boolean => {
+    if (!ts.isIdentifier(node) || node.text !== name) return false
+    const owner = commonJsReceiverOwner(node, checker ??= createSourceBindingChecker(sf), sf)
+    if (owner === 'ambiguous') unsupportedExportMutation = true
+    return owner !== 'local'
+  }
+  const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && n.name.text === 'exports' && receiverName(n.expression, 'module')
+  const exportReceiver = (n: ts.Node): boolean => receiverName(n, 'exports') || isModule(n)
   const exportRoot = (n: ts.Node): boolean => exportReceiver(n) || (ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n)) && exportRoot(n.expression)
   const bindNames = (n: ts.BindingName): string[] => ts.isIdentifier(n) ? [n.text] : n.elements.flatMap(e => ts.isOmittedExpression(e) ? [] : bindNames(e.name))
   function scan(n: ts.Node): void {
@@ -808,8 +858,14 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
     if ((ts.isFunctionDeclaration(n) || ts.isClassDeclaration(n)) && n.name) shadowed.add(n.name.text)
     if (ts.isImportClause(n) && n.name) shadowed.add(n.name.text)
     if (ts.isImportSpecifier(n) || ts.isNamespaceImport(n)) shadowed.add(n.name.text)
-    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) mutated.add(n.left.text)
-    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand)) mutated.add(n.operand.text)
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && n.operatorToken.kind <= ts.SyntaxKind.LastAssignment && ts.isIdentifier(n.left)) {
+      mutated.add(n.left.text)
+      if (receiverName(n.left, 'exports') || receiverName(n.left, 'module')) unsupportedExportMutation = true
+    }
+    if ((ts.isPostfixUnaryExpression(n) || ts.isPrefixUnaryExpression(n)) && ts.isIdentifier(n.operand)) {
+      mutated.add(n.operand.text)
+      if (receiverName(n.operand, 'module')) unsupportedExportMutation = true
+    }
     ts.forEachChild(n, scan)
   }
   scan(sf)
@@ -857,22 +913,20 @@ function extractModuleEvidence(sf: ts.SourceFile, symbols: SymbolDefinition[], i
       if (spec !== undefined) { imports.push(spec); binding(n, '', '', spec, 'commonjs'); audit?.requires.push({ node: n, specifier: spec, names: [] }) }
     }
   }
-  const isModule = (n: ts.Node): boolean => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'module' && n.name.text === 'exports'
   function visit(n: ts.Node): void {
     if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
       const left = n.left
       let kind: CommonJsExportFact['assignmentKind'] | undefined
       let name: string | null = null
-      let global = ''
-      if (isModule(left)) { kind = 'module-exports'; global = 'module' }
+      if (isModule(left)) kind = 'module-exports'
       else if (ts.isPropertyAccessExpression(left)) {
-        if (ts.isIdentifier(left.expression) && left.expression.text === 'exports') { kind = 'exports-member'; global = 'exports'; name = left.name.text }
-        else if (isModule(left.expression)) { kind = 'module-exports-member'; global = 'module'; name = left.name.text }
+        if (receiverName(left.expression, 'exports')) { kind = 'exports-member'; name = left.name.text }
+        else if (isModule(left.expression)) { kind = 'module-exports-member'; name = left.name.text }
       }
       if (kind) {
         if (kind === 'module-exports') wholeModuleAssignments++
         const unconditional = ts.isExpressionStatement(n.parent) && ts.isSourceFile(n.parent.parent)
-        const safe = unconditional && !shadowed.has(global) && !mutated.has(global)
+        const safe = unconditional
         const add = (exportedName: string | null, rhs: ts.Node) => {
           facts.push({ exportedName, ...(ts.isIdentifier(rhs) ? { bindingName: rhs.text } : {}), assignmentKind: kind!, ...span(n), resolutionStatus: safe ? 'observed' : 'unresolved', ...(!safe ? { reason: 'Conditional or shadowed CommonJS assignment.' } : {}) })
           audit?.commonJsExports.push({ node: n, fact: facts[facts.length - 1]! })

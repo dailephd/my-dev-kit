@@ -151,6 +151,47 @@ describe('B05 CommonJS', () => {
     expect(r.commonJsExports?.filter(f => f.resolutionStatus === 'resolved-local')).toEqual([])
     expect(r.symbols.filter(s => s.exported)).toEqual([])
   })
+  it.each([
+    'const exports = {}; mutate(exports); exports[key] = 1; exports.member = kept',
+    'const module = { exports: {} }; mutate(module.exports); module.exports.member = kept',
+    'function read(exports, module) { delete exports[key]; mutate(module.exports) }',
+    'import { table as exports, config as module } from "./peer"; mutate(exports); module.exports.member = kept',
+    'function collect({ exports }) { return Object.keys(exports) }; for (const { module } of entries) mutate(module.exports)',
+  ])('preserves an exact ESM inventory for locally owned receivers: %s', source => {
+    const r = adapter.extractFromSource('a.ts', 'export function kept() {}\n' + source)
+    expect(r.commonJsExports).toEqual([])
+    expect(r.sourceAudit?.capabilities.exports).toBe('complete')
+    expect(r.sourceAudit?.facts.filter(fact => fact.kind === 'export')).toMatchObject([
+      { name: 'kept', exportOrigin: 'declared-export' },
+    ])
+  })
+  it('uses the surrounding receiver outside a shadowing block in mixed JS', () => {
+    const r = adapter.extractFromSource('a.js', [
+      'export function kept() {}',
+      '{ const exports = {}; exports[key] = 1; exports.local = kept; }',
+      'function f(module) { module = {}; module.exports = kept }',
+      'exports.publicMember = kept',
+      'module.exports.secondMember = kept',
+    ].join('\n'))
+    expect(r.commonJsExports).toMatchObject([
+      { exportedName: 'publicMember', assignmentKind: 'exports-member', resolutionStatus: 'resolved-local' },
+      { exportedName: 'secondMember', assignmentKind: 'module-exports-member', resolutionStatus: 'resolved-local' },
+    ])
+    expect(r.sourceAudit?.capabilities.exports).toBe('complete')
+  })
+  it.each([
+    ['a.ts', 'declare const exports: any; exports.member = kept'],
+    ['a.ts', 'import type { exports } from "./peer"; exports.member = kept'],
+    ['a.js', 'var exports; exports.member = kept'],
+    ['a.js', 'with (scope) { exports.member = kept }'],
+    ['a.js', 'exports.member = kept; function f(module) { module.exports.x = 1 }; module.exports[key] = 1'],
+    ['a.ts', 'exports.member = kept; const alias = module.exports; alias.member = 1'],
+  ])('keeps a partial inventory for unsupported or ambiguous receivers (%s): %s', (path, source) => {
+    const r = adapter.extractFromSource(path, 'function kept() {}\n' + source)
+    expect(r.commonJsExports?.filter(f => f.resolutionStatus === 'resolved-local')).toEqual([])
+    expect(r.sourceAudit?.capabilities.exports).toBe('partial')
+    expect(r.sourceAudit?.diagnostics).toContainEqual(expect.objectContaining({ code: 'commonjs-export-uncertain' }))
+  })
   it('does not create a physical symbol for anonymous expressions', () => {
     const r = adapter.extractFromSource('a.cjs', 'module.exports = () => 1')
     expect(r.symbols).toEqual([])

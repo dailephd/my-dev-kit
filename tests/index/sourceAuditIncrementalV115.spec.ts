@@ -98,7 +98,7 @@ function partialProjection(
 
 describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
   it('versions the extractor snapshot independently of the public schema', () => {
-    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.7.0')
+    expect(SOURCE_AUDIT_EXTRACTOR_CONTRACT_REVISION).toBe('source-audit-v1.8.0')
     const artifact = fullProjection(makeProject({ 'src/App.kt': 'class App\n' })).artifact
     expect(artifact.schemaVersion).toBe('1.1.0')
     const identity = (revision: string) => sha(JSON.stringify({
@@ -110,13 +110,38 @@ describe('v1.15.0 Batch 1 full/incremental audit projection', () => {
         language: file.language, role: file.role, status: file.status,
       })),
     }))
-    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.7.0'))
+    expect(artifact.source.snapshotId).toBe(identity('source-audit-v1.8.0'))
+    expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.7.0'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.6.0'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.4'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.3'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.2'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.1'))
     expect(artifact.source.snapshotId).not.toBe(identity('source-audit-v1.5.0'))
+  })
+
+  it('reuses a complete local export inventory and refreshes it when the receiver becomes unowned', () => {
+    const path = 'src/owned.ts'
+    const declared = 'export function keep() {}\n'
+    const root = makeProject({ ...BASE, [path]: declared + 'const exports = {}; mutate(exports); exports[key] = keep' })
+    const base = baseline(root)
+    const warm = partialProjection(root, base)
+    const owned = warm.projection.artifact.files.find(file => file.path === path)!
+    expect(warm.partial.reusedPaths).toContain(path)
+    expect(owned.capabilities.exports).toBe('complete')
+    expect(owned.facts.filter(fact => fact.kind === 'export')).toMatchObject([
+      { name: 'keep', symbolId: 'symbol:src/owned.ts#keep' },
+    ])
+    expect(warm.projection.artifact).toEqual(fullProjection(root).artifact)
+
+    write(root, path, declared + 'mutate(exports); exports[key] = keep')
+    const changed = partialProjection(root, base)
+    const unowned = changed.projection.artifact.files.find(file => file.path === path)!
+    expect(changed.partial.freshlyExtractedPaths).toEqual([path])
+    expect(changed.partial.reusedPaths).toContain('src/c.ts')
+    expect(unowned.capabilities.exports).toBe('partial')
+    expect(unowned.facts.filter(fact => fact.kind === 'export')).toEqual(owned.facts.filter(fact => fact.kind === 'export'))
+    expect(changed.projection.artifact).toEqual(fullProjection(root).artifact)
   })
 
   it.each([undefined, '1.2.0'] as const)('preserves import identities and converges with reused binding evidence (schema %s)', (schemaVersion) => {
